@@ -308,6 +308,9 @@ def solve_VIE_1(*,
                 coll_choices=[1,2,3], 
                 return_polys=False, 
                 force_continuous=False):
+    '''
+    Solve a Volterra Integral Equation (VIE) of the first kind.
+    '''
     assert g_values.shape == kernel_values.shape
     assert len(g_values.shape) == 1
     assert 0 not in coll_choices
@@ -367,6 +370,9 @@ def solve_VIE_2(*,
                 coll_divs=2, 
                 coll_choices=[0,1,2], 
                 return_polys=False):
+    '''
+    Solve a Volterra Integral Equation (VIE) of the second kind.
+    '''
     assert g_values.shape == kernel_values.shape
     assert len(g_values.shape) == 1
 
