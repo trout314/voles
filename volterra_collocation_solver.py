@@ -35,18 +35,14 @@ def combinations(pool, r):
 
 @ncjit
 def lagrange_f(x, node_index, nodes):
-    other_nodes = np.array([n for i, n in enumerate(nodes) if not i==node_index])
-    denom = np.prod(nodes[node_index] - other_nodes)
-    numer = np.prod(x - other_nodes)
-    return numer / denom
+    other_nodes = np.array([n for i, n in enumerate(nodes) if i != node_index])
+    return np.prod(x - other_nodes) / np.prod(nodes[node_index] - other_nodes)
 
 @ncjit
 def lagrange_integ_f(x, index, nodes):
-    ans = 0
     coefs = lagrange_integ_coefs(index=index, nodes=nodes)
-    for i, coef in enumerate(coefs):
-        ans += coef * x ** (i + 1)
-    return ans
+    terms = [coefs[i] * x ** (i + 1) for i in range(len(coefs))]
+    return np.sum(np.array(terms))
 
 @ncjit
 def lagrange_coefs(index, nodes):
@@ -56,11 +52,10 @@ def lagrange_coefs(index, nodes):
     denominator = np.prod(np.array(
         [nodes[index] - node for node in nodes_used]))
     
-    coefs = np.zeros(len(nodes)) #stored from lowest power to highest
+    coefs = np.zeros(len(nodes)) # stored from lowest power to highest
     for degree in range(len(nodes)):
-        # We need to special case the top degree coef, since the numba-friendly
-        # version of the function for finding combinations can't handle the
-        # subsets of size zero case
+        # We special-case the top degree coef, since the numba-friendly version 
+        # of the function for finding combinations can't handle subsets of size zero
         if degree == len(nodes) - 1:
             coef = 1.0
         else:
@@ -107,7 +102,6 @@ def solve_VIE_2_trapz(*, g_values, kernel_values, omega, dt):
 def A(coll_info):
     coll_params = coll_info.params
     num_coll_params = len(coll_params)
-
     matrix = np.zeros((num_coll_params, num_coll_params))
     for i,j in np.ndindex(matrix.shape):
         integ_at_zero = lagrange_integ_f(0.0, j, coll_params)
@@ -120,7 +114,6 @@ def a(n, a_data, coll_info):
     coll_divs = coll_info.divs
     coll_choices = coll_info.choices
     an_indices = [n * coll_divs**2 + c * coll_divs for c in coll_choices]
-    # return np.array(a_data[an_indices]) # NUMBA didn't like this
     return np.array([a_data[i] for i in an_indices])
     
 @ncjit
@@ -306,7 +299,6 @@ def g(n, g_data, coll_info):
     coll_divs = coll_info.divs
     coll_choices = coll_info.choices
     gn_indices = [n * coll_divs**2 + c * coll_divs for c in coll_choices]
-    # return np.array(g_data[gn_indices]) # NUMBA didn't like this
     return np.array([g_data[i] for i in gn_indices])
 
 @ncjit
@@ -331,8 +323,7 @@ def poly_piece_VIDE_f(rel_x, mesh_indx, solution_Y, coll_info, init_value, dt):
         value += dt * y *lagrange_integ_f(rel_x, indx, coll_params)
     return value
 
-# TO DO: @njit seems to mess with default named arguments. Find fix maybe?
-@ncjit
+# TO DO: Finish documentation
 def solve_VIDE(*, g_values, kernel_values, a_values, soln_init_value, time_step,
                coll_divs=2, coll_choices=[0,1,2], return_polys=False):
     '''
@@ -342,26 +333,56 @@ def solve_VIDE(*, g_values, kernel_values, a_values, soln_init_value, time_step,
     function y(t).
 
         y'(t) = a(t)y(t) + g(t) + integral[K(t-s)y(s)ds from s=0 to s=t]
-    
-    Returns a two element tuple (soln_values, polys) where soln_values is a
-    numpy array of solution values and polys is a 
-    
-    (of the same length as g_values, kernel_values, and a_values)
-    containing the y-values of the solution, and polys is a list of polynomial
-    functions [f_1, f_2, ..., f_N] one for each mesh interval.
+
+    By default, this function returns a numpy array of solution values y(t). If
+    return_polys is set to true, then it returns a two-element tuple containing
+    these y(t) values, followed by the list of polynomial functions that define
+    the solution. ... TO DO: IMPROVE DESCRIPTION OF RETURNED POLYS ...
 
     Keyword Arguments:
-        g_values (numpy array): An array of 
-        kernel_values (numpy array): Another decimal integer
-
+        kernel_values (iterable): Kernel values K(s) at times s starting from
+            zero and increasing in increments of time_step.
+        a_values (iterable): Values for the function a(t) given at a set of times
+            t that increase in increments of time_step. a_values must have the same
+            length as kernel_values and g_values. The default is all zeros.
+        g_values (iterable): Values for the function g(t) given at a set of times
+            t that increase in increments of time_step. g_values must have the same
+            length as kernel_values and a_values. The default is all zeros.
+        soln_init_value (number): The desired initial value of the soltion y(t).
+        time_step (number): The separation between the times t where the functions
+            a(t), g(t), etc. are defined. time_step must be positive.
+        coll_divs (number): The number of collocation divisions used when specifying
+            the collocation parameters. coll_divs must be a positive integer. The
+            default is 2.
+        coll_choices (iterable): List of non-negative integers that define the
+            collocation parameters. Each such integer k corresponds to the
+            collocation parameter k/coll_divs. The default is [0,1,2].
+        return_polys (boolean): Specify if the solver should also return the list of
+            polynomials defining the solution. By default, return_poly is false and
+            only the numpy array of solution values is returned. See the "Returns"
+            section of this docstring for details.
+    
     The solver uses the collocation method described in the book:
         Brunner H. "Collocation Methods for Volterra Integral and Related
         Functional Differential Equations." Cambridge University Press; 2004.
     See Chapter 3 pages 160-167 for details.
 
     Returns:
-        TO DO:
+        If return_polys is set to false, this function returns a numpy array of
+        solution values y(t) having the same length as the input parameters
+        kernel_values, a_values, and g_values.
+        
+        If return_polys is set to true then this function returns a two element tuple
+        (soln_values, polys) where soln_values contains the solution values y(t) as
+        described above, and polys is a list of polynomials given in the form
+        ... TO DO: FINISH THIS ...
     '''
+    return solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step,
+                          coll_divs, coll_choices, return_polys)
+    
+@ncjit
+def solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step,
+               coll_divs, coll_choices, return_polys):
     assert g_values.shape == kernel_values.shape
     assert a_values.shape == kernel_values.shape
     assert len(kernel_values.shape) == 1
@@ -386,9 +407,6 @@ def solve_VIDE(*, g_values, kernel_values, a_values, soln_init_value, time_step,
                         - dt*(An(n, a_values, coll_info) \
                     + dt*CN(kernel_values, coll_info))
         solution_Y[n] = np.linalg.solve(coef_matrix, rhs_vector)
-
-        # TO DO: Get rid of call to poly_piece_VIDE here, replace with @njit friendly stuff
-        # boundary_vals[n+1] = poly_piece_VIDE(n, solution_Y, coll_info, boundary_vals[n], dt)(1.0)
         boundary_vals[n+1] = poly_piece_VIDE_f(1.0, n, solution_Y, coll_info, boundary_vals[n], dt)
 
     soln_values = np.zeros_like(g_values)
@@ -411,25 +429,75 @@ def solve_VIDE(*, g_values, kernel_values, a_values, soln_init_value, time_step,
     return soln_values
 
 
-# TO DO: @njit seems to mess with default named arguments. Find fix maybe?
-@ncjit
-def solve_VIE_1(*, 
-                g_values, 
-                kernel_values,
-                soln_init_value=None, 
-                time_step, 
-                coll_divs=3, 
-                coll_choices=[1,2,3], 
-                return_polys=False, 
-                force_continuous=False):
+def solve_VIE_1(*, g_values, kernel_values, soln_init_value=None, time_step, coll_divs=3,
+                coll_choices=[1,2,3], return_polys=False, force_continuous=False):
+    '''
+    Solve a Volterra integral equation of "Type 1."
+      
+    Solve the following Volterra integral equation (of Type 1) for the unknown
+    function y(t).
+    
+        g(t) = integral[K(t-s)y(s)ds from s=0 to s=t]
+
+    By default, this function returns a numpy array of solution values y(t). If
+    return_polys is set to true, then it returns a two-element tuple containing
+    these y(t) values, followed by the list of polynomial functions that define
+    the solution. ... TO DO: IMPROVE DESCRIPTION OF RETURNED POLYS ...
+
+    Keyword Arguments:
+        kernel_values (iterable): Kernel values K(s) at times s starting from
+            zero and increasing in increments of time_step.
+        g_values (iterable): Values for the function g(t) given at a set of times t
+            that increase in increments of time_step. g_values must have the same
+            length as kernel_values. The default is all zeros.
+        time_step (number): The separation between the times t where the functions
+            a(t), g(t), etc. are defined. time_step must be positive.
+        force_continuous (boolean): Specify if the piecewise polynomial solution
+            used to compute the returned values y(t) must be continuous. The default
+            is false.
+        soln_init_value (number): The desired initial value of the soltion y(t) when
+            a continuous solution is desired. May only be set if force_continuous is
+            true. (See the force_continuous parameter.)
+        coll_divs (number): The number of collocation divisions used when specifying
+            the collocation parameters. coll_divs must be a positive integer. The
+            default is 3.
+        coll_choices (iterable): List of positive integers that define the
+            collocation parameters. Each such integer k corresponds to the
+            collocation parameter k/coll_divs. The default is [1,2,3].
+        return_polys (boolean): Specify if the solver should also return the list of
+            polynomials defining the solution. By default, return_poly is false and
+            only the numpy array of solution values is returned. See the "Returns"
+            section of this docstring for details.
+    
+    The solver uses the collocation method described in the book:
+        Brunner H. "Collocation Methods for Volterra Integral and Related
+        Functional Differential Equations." Cambridge University Press; 2004.
+    See TO DO: REFERENCE APPROPRIATE SECTION for details.
+
+    Returns:
+        If return_polys is set to false, this function returns a numpy array of
+        solution values y(t) having the same length as the input parameters
+        kernel_values, a_values, and g_values.
+        
+        If return_polys is set to true then this function returns a two element tuple
+        (soln_values, polys) where soln_values contains the solution values y(t) as
+        described above, and polys is a list of polynomials given in the form
+        ... TO DO: FINISH THIS ...
+    '''
+    
     if force_continuous:
         assert soln_init_value is not None, \
             "must specify an initial value for continuous solutions"
-
     assert g_values.shape == kernel_values.shape
     assert len(g_values.shape) == 1
-    assert 0 not in coll_choices
+    assert 0 not in coll_choices    
+    
+    return solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step,
+                           coll_divs, coll_choices, return_polys, force_continuous)
 
+@ncjit
+def solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step, coll_divs,
+                    coll_choices, return_polys, force_continuous):
     coll_info = get_coll_info(coll_divs, coll_choices)
     num_coll_params = len(coll_info.params)
     dt = time_step * coll_divs**2
@@ -453,9 +521,6 @@ def solve_VIE_1(*,
                 + dt*boundary_vals[n]*rho(n, kernel_values, coll_info)
             coef_matrix = dt*BN(kernel_values, coll_info, add_zero_node=True)
             solution_U[n] = np.linalg.solve(coef_matrix, rhs_vector)
-            
-            # TO DO: Get rid of call to poly_piece here, replace with @njit friendly stuff
-            # boundary_vals[n+1] = poly_piece(n, solution_U, coll_info, boundary_vals[n])(1.0)
             poly_val = poly_piece_f(1.0, n, solution_U, coll_info, boundary_vals[n])
     
     soln_values = np.zeros_like(g_values)
@@ -475,22 +540,68 @@ def solve_VIE_1(*,
     for n in range(1, mesh_divs):
         soln_values[n*coll_divs**2] *= 0.5
 
+    # TO DO: Fix this functionality
     # if return_polys:
     #     return (soln_values, soln_polys)
     return soln_values
 
-# TO DO: @njit seems to mess with default named arguments. Find fix maybe?
-@ncjit
-def solve_VIE_2(*, 
-                g_values, 
-                kernel_values, 
-                time_step, 
-                coll_divs=2, 
-                coll_choices=[0,1,2], 
-                return_polys=False):
+def solve_VIE_2(*, g_values, kernel_values, time_step, coll_divs=2,
+                coll_choices=[0,1,2], return_polys=False):
+    '''
+    Solve a Volterra integral equation of "Type 2."
+      
+    Solve the following Volterra integral equation (of Type 2) for the unknown
+    function y(t).
+    
+        y(t) = g(t) + integral[K(t-s)y(s)ds from s=0 to s=t]
+
+    By default, this function returns a numpy array of solution values y(t). If
+    return_polys is set to true, then it returns a two-element tuple containing
+    these y(t) values, followed by the list of polynomial functions that define
+    the solution. ... TO DO: IMPROVE DESCRIPTION OF RETURNED POLYS ...
+
+    Keyword Arguments:
+        kernel_values (iterable): Kernel values K(s) at times s starting from zero
+            and increasing in increments of time_step.
+        g_values (iterable): Values for the function g(t) given at a set of times t
+            that increase in increments of time_step. g_values must have the same
+            length as kernel_values and a_values. The default is all zeros.
+        time_step (number): The separation between the times where the functions
+            K(s), g(t), etc. are defined. time_step must be positive.
+        coll_divs (number): The number of collocation divisions used when specifying
+            the collocation parameters. coll_divs must be a positive integer. The
+            default is 2.
+        coll_choices (iterable): List of positive integers that define the
+            collocation parameters. Each such integer k corresponds to the
+            collocation parameter k/coll_divs. The default is [0,1,2].
+        return_polys (boolean): Specify if the solver should also return the list of
+            polynomials defining the solution. By default, return_poly is false and
+            only the numpy array of solution values is returned. See the "Returns"
+            section of this docstring for details.
+    
+    The solver uses the collocation method described in the book:
+        Brunner H. "Collocation Methods for Volterra Integral and Related
+        Functional Differential Equations." Cambridge University Press; 2004.
+    See TO DO: REFERENCE APPROPRIATE SECTION for details.
+
+    Returns:
+        If return_polys is set to false, this function returns a numpy array of
+        solution values y(t) having the same length as the input parameters
+        kernel_values, a_values, and g_values.
+        
+        If return_polys is set to true then this function returns a two element tuple
+        (soln_values, polys) where soln_values contains the solution values y(t) as
+        described above, and polys is a list of polynomials given in the form
+        ... TO DO: FINISH THIS ...
+    '''
     assert g_values.shape == kernel_values.shape
     assert len(g_values.shape) == 1
+    return solve_VIE_2_jit(g_values, kernel_values, time_step, coll_divs,
+                    coll_choices, return_polys)
 
+@ncjit
+def solve_VIE_2_jit(g_values, kernel_values, time_step, coll_divs,
+                    coll_choices, return_polys):
     coll_info = get_coll_info(coll_divs, coll_choices)
     num_coll_params = len(coll_choices)
     dt = time_step * coll_divs**2
@@ -517,6 +628,7 @@ def solve_VIE_2(*,
     for n in range(1, mesh_divs):
         soln_values[n*coll_divs**2] *= 0.5
 
+    # TO DO: Fix this functionality
     # if return_polys:
     #     return (soln_values, soln_polys)
     return soln_values
