@@ -34,9 +34,9 @@ def combinations(pool, r):
             yield result
 
 @ncjit
-def lagrange_f(x, node_index, nodes):
-    other_nodes = np.array([n for i, n in enumerate(nodes) if i != node_index])
-    return np.prod(x - other_nodes) / np.prod(nodes[node_index] - other_nodes)
+def lagrange_f(x, index, nodes):
+    other_nodes = np.array([n for i, n in enumerate(nodes) if i != index])
+    return np.prod(x - other_nodes) / np.prod(nodes[index] - other_nodes)
 
 @ncjit
 def lagrange_integ_f(x, index, nodes):
@@ -377,16 +377,15 @@ def solve_VIDE(*, g_values, kernel_values, a_values, soln_init_value, time_step,
         described above, and polys is a list of polynomials given in the form
         ... TO DO: FINISH THIS ...
     '''
+    assert g_values.shape == kernel_values.shape
+    assert a_values.shape == kernel_values.shape
+    assert len(kernel_values.shape) == 1
     return solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step,
                           coll_divs, coll_choices, return_polys)
     
 @ncjit
 def solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step,
                coll_divs, coll_choices, return_polys):
-    assert g_values.shape == kernel_values.shape
-    assert a_values.shape == kernel_values.shape
-    assert len(kernel_values.shape) == 1
-
     coll_info = get_coll_info(coll_divs, coll_choices)
     num_coll_params = len(coll_info.params)
     dt = time_step * coll_divs**2
