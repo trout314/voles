@@ -377,9 +377,25 @@ def solve_VIDE(*, g_values, kernel_values, a_values, soln_init_value, time_step,
         described above, and polys is a list of polynomials given in the form
         ... TO DO: FINISH THIS ...
     '''
-    assert g_values.shape == kernel_values.shape
-    assert a_values.shape == kernel_values.shape
-    assert len(kernel_values.shape) == 1
+    kernel_values_ = np.array(kernel_values)    
+    assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
+
+    g_values_ = np.array(g_values)
+    assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"    
+    assert len(g_values_) == len(kernel_values_), \
+        "kernel_values and g_values must have the same length"
+
+    a_values_ = np.array(a_values)
+    assert len(a_values_.shape) == 1, "a_values must be a 1-dim array"    
+    assert len(a_values_) == len(kernel_values_), \
+        "kernel_values and a_values must have the same length"
+
+    assert coll_divs > 0, "coll_divs must be a positive integer"
+    for choice in coll_choices:
+        assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
+
+    # TO DO: Truncate input data with warning if it isnt correct size for coll_divs
+    
     return solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step,
                           coll_divs, coll_choices, return_polys)
     
@@ -483,15 +499,30 @@ def solve_VIE_1(*, g_values, kernel_values, soln_init_value=None, time_step, col
         described above, and polys is a list of polynomials given in the form
         ... TO DO: FINISH THIS ...
     '''
+
+    kernel_values_ = np.array(kernel_values)    
+    assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
+
+    g_values_ = np.array(g_values)
+    assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"
+    
+    assert len(g_values_) == len(kernel_values_), \
+        "kernel_values and g_values must have the same length"
     
     if force_continuous:
         assert soln_init_value is not None, \
             "must specify an initial value for continuous solutions"
-    assert g_values.shape == kernel_values.shape
-    assert len(g_values.shape) == 1
-    assert 0 not in coll_choices    
+    else:
+        soln_init_value = float('nan')
+        
+    assert 0 not in coll_choices, "zero cannot be a collocation parameter"
+    assert coll_divs > 0, "coll_divs must be a positive integer"
+    for choice in coll_choices:
+        assert 1 <= choice <= coll_divs, "coll_choices must contain only integers from 1 to coll_divs"
+
+    # TO DO: Truncate input data with warning if it isnt correct size for coll_divs
     
-    return solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step,
+    return solve_VIE_1_jit(g_values_, kernel_values_, soln_init_value, time_step,
                            coll_divs, coll_choices, return_polys, force_continuous)
 
 @ncjit
@@ -501,7 +532,9 @@ def solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step, coll_di
     num_coll_params = len(coll_info.params)
     dt = time_step * coll_divs**2
 
+    # TO DO: remove this after putting in truncation code
     assert (len(kernel_values) - 1) % coll_divs**2 == 0
+    
     mesh_divs = int((len(kernel_values)-1) / coll_divs**2)
     num_mesh_points = mesh_divs + 1
 
@@ -535,7 +568,7 @@ def solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step, coll_di
             soln_values[n*coll_divs**2 + i] += poly_val
 
     # At each mesh point (other than the first and last), we have added the value of 
-    # the two adjacent polynomials. Now, we turn this into the average.
+    # the two adjacent polynomials. Now, we turn this into the average. \
     for n in range(1, mesh_divs):
         soln_values[n*coll_divs**2] *= 0.5
 
@@ -593,9 +626,21 @@ def solve_VIE_2(*, g_values, kernel_values, time_step, coll_divs=2,
         described above, and polys is a list of polynomials given in the form
         ... TO DO: FINISH THIS ...
     '''
-    assert g_values.shape == kernel_values.shape
-    assert len(g_values.shape) == 1
-    return solve_VIE_2_jit(g_values, kernel_values, time_step, coll_divs,
+    kernel_values_ = np.array(kernel_values)    
+    assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
+
+    g_values_ = np.array(g_values)
+    assert len(g_values_.shape) == 1, "only 1-dimensional g functions are supported"
+    
+    assert len(g_values_) == len(kernel_values_), "kernel_values and g_values must have the same length"
+
+    assert coll_divs > 0, "coll_divs must be a positive integer"
+    for choice in coll_choices:
+        assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
+
+    # TO DO: Truncate input data with warning if it isnt correct size for coll_divs
+
+    return solve_VIE_2_jit(g_values_, kernel_values_, time_step, coll_divs,
                     coll_choices, return_polys)
 
 @ncjit
