@@ -34,17 +34,6 @@ def combinations(pool, r):
             yield result
 
 @ncjit
-def lagrange_f(x, index, nodes):
-    other_nodes = np.array([n for i, n in enumerate(nodes) if i != index])
-    return np.prod(x - other_nodes) / np.prod(nodes[index] - other_nodes)
-
-@ncjit
-def lagrange_integ_f(x, index, nodes):
-    coefs = lagrange_integ_coefs(index=index, nodes=nodes)
-    terms = [coefs[i] * x ** (i + 1) for i in range(len(coefs))]
-    return np.sum(np.array(terms))
-
-@ncjit
 def lagrange_coefs(index, nodes):
     indices_used = [k for k in range(len(nodes)) if k != index]
     nodes_used = [nodes[k] for k in indices_used]
@@ -67,13 +56,25 @@ def lagrange_coefs(index, nodes):
     return coefs
 
 @ncjit
+def lagrange_f(x, index, nodes):
+    other_nodes = np.array([n for i, n in enumerate(nodes) if i != index])
+    return np.prod(x - other_nodes) / np.prod(nodes[index] - other_nodes)
+
+@ncjit
 def lagrange_integ_coefs(index, nodes):
     original_coefs = lagrange_coefs(index, nodes)
     integ_coefs = np.zeros_like(original_coefs)
     for power in range(len(original_coefs)):
         integ_coefs[power] = 1.0 / (power + 1) * original_coefs[power]
     return integ_coefs
-    
+
+@ncjit
+def lagrange_integ_f(x, index, nodes):
+    coefs = lagrange_integ_coefs(index=index, nodes=nodes)
+    terms = [coefs[i] * x ** (i + 1) for i in range(len(coefs))]
+    return np.sum(np.array(terms))
+
+# TO DO: Decide what to do with this function. Keep?
 @ncjit
 def solve_VIE_1_trapz(*, g_values, kernel_values, dt):
     assert np.isclose(g_values[0], 0.0), "g(0) must be zero"
@@ -86,6 +87,7 @@ def solve_VIE_1_trapz(*, g_values, kernel_values, dt):
         soln_y[t_indx] = (2.0/(k0*dt))*g_values[t_indx] - (1.0/k0)*first_term - (2.0/k0)*middle_terms
     return soln_y        
 
+# TO DO: Decide what to do with this function. Keep?
 @ncjit
 def solve_VIE_2_trapz(*, g_values, kernel_values, omega, dt):
     assert np.isclose(g_values[0], 0.0), "g(0) must be zero"
@@ -283,7 +285,6 @@ def get_coll_info(divs, choices):
     weights = quad_weights(params)
     return CollInfo(divs, choices, params, weights)
 
-
 @ncjit
 def quad_weights(coll_params):
     num_coll_params = len(coll_params)
@@ -302,17 +303,46 @@ def g(n, g_data, coll_info):
     return np.array([g_data[i] for i in gn_indices])
 
 @ncjit
-def poly_piece_f(rel_x, mesh_indx, solution_U, coll_info, init_val=None):
+def continuous_poly_piece_coefs(mesh_indx, solution_U, coll_info, init_val):
     nodes = [0] + list(coll_info.params)
-    if init_val is not None:
-        value = init_val * lagrange_f(rel_x, 0, nodes)
-        for i, u in enumerate(solution_U[mesh_indx]):
-            value += u * lagrange_f(rel_x,i+1, nodes)
-    else:
-        value = 0.0
-        for i, u in enumerate(solution_U[mesh_indx]):
-            value += u * lagrange_f(rel_x, i, coll_info.params)
+    coefs = init_val*lagrange_coefs(0, nodes)
+    for i, u in enumerate(solution_U[mesh_indx]):
+        coefs += u * lagrange_coefs(i+1, nodes)
+    return coefs
+
+@ncjit
+def poly_piece_coefs(mesh_indx, solution_U, coll_info):
+    nodes = list(coll_info.params)
+    coefs = np.zeros((len(nodes)))
+    for i, u in enumerate(solution_U[mesh_indx]):
+        coefs += u * lagrange_coefs(i, nodes)
+    return coefs
+
+@ncjit
+def poly_piece_f(rel_x, mesh_indx, solution_U, coll_info):
+    nodes = list(coll_info.params)
+    value = 0.0
+    for i, u in enumerate(solution_U[mesh_indx]):
+        value += u * lagrange_f(rel_x, i, nodes)
     return value
+
+@ncjit
+def poly_piece_f_continuous(rel_x, mesh_indx, solution_U, coll_info, init_val):
+    nodes = list(coll_info.params)
+    value = init_val * lagrange_f(rel_x, 0, [0.0] + nodes)
+    for i, u in enumerate(solution_U[mesh_indx]):
+        value += u * (rel_x / nodes[i]) * lagrange_f(rel_x,i, nodes)
+    return value
+
+@ncjit
+def VIDE_poly_piece_coefs(mesh_indx, solution_Y, coll_info, init_value, dt):
+    nodes = list(coll_info.params)
+    coefs = np.zeros((len(nodes) + 1))
+    coefs[0] = init_value
+    for indx, y in enumerate(solution_Y[mesh_indx]):
+        for j in range(len(nodes)):        
+            coefs[indx+1] += (dt * y) * lagrange_integ_coefs(j, nodes)[indx]
+    return coefs
 
 @ncjit
 def poly_piece_VIDE_f(rel_x, mesh_indx, solution_Y, coll_info, init_value, dt):
@@ -320,11 +350,10 @@ def poly_piece_VIDE_f(rel_x, mesh_indx, solution_Y, coll_info, init_value, dt):
     num_coll_params = len(coll_params)
     value = init_value
     for indx, y in enumerate(solution_Y[mesh_indx]):
-        value += dt * y *lagrange_integ_f(rel_x, indx, coll_params)
+        value += dt * y * lagrange_integ_f(rel_x, indx, coll_params)
     return value
 
-# TO DO: Finish documentation
-def solve_VIDE(*, g_values, kernel_values, a_values, soln_init_value, time_step,
+def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, time_step=1.0,
                coll_divs=2, coll_choices=[0,1,2], return_polys=False):
     '''
     Solve a Volterra integro-differential equation (VIDE.)
@@ -336,25 +365,26 @@ def solve_VIDE(*, g_values, kernel_values, a_values, soln_init_value, time_step,
 
     By default, this function returns a numpy array of solution values y(t). If
     return_polys is set to true, then it returns a two-element tuple containing
-    these y(t) values, followed by the list of polynomial functions that define
-    the solution. ... TO DO: IMPROVE DESCRIPTION OF RETURNED POLYS ...
+    these y(t) values, followed by the list of numpy polynomial functions that define
+    the piecewise solution.
 
     Keyword Arguments:
         kernel_values (iterable): Kernel values K(s) at times s starting from
             zero and increasing in increments of time_step.
-        a_values (iterable): Values for the function a(t) given at a set of times
-            t that increase in increments of time_step. a_values must have the same
-            length as kernel_values and g_values. The default is all zeros.
-        g_values (iterable): Values for the function g(t) given at a set of times
-            t that increase in increments of time_step. g_values must have the same
-            length as kernel_values and a_values. The default is all zeros.
-        soln_init_value (number): The desired initial value of the soltion y(t).
+        a_values (iterable): Values for the function a(t) given at a set of times t
+            starting from zero and increasing in increments of time_step. a_values
+            must have the same length as kernel_values. The default is all zeros.
+        g_values (iterable): Values for the function g(t) given at a set of times t
+            starting from zero and increasing in increments of time_step. g_values
+            must have the same length as kernel_values. The default is all zeros.
         time_step (number): The separation between the times t where the functions
-            a(t), g(t), etc. are defined. time_step must be positive.
+            K(t) and g(t) are defined. The value of time_step must be positive. The 
+            default is 1.0.
+        soln_init_value (number): The desired initial value of the soltion y(t).
         coll_divs (number): The number of collocation divisions used when specifying
-            the collocation parameters. coll_divs must be a positive integer. The
-            default is 2.
-        coll_choices (iterable): List of non-negative integers that define the
+            the collocation parameters. The value of coll_divs must be a positive 
+            integer. The default is 2.
+        coll_choices (iterable): List of positive integers that define the
             collocation parameters. Each such integer k corresponds to the
             collocation parameter k/coll_divs. The default is [0,1,2].
         return_polys (boolean): Specify if the solver should also return the list of
@@ -369,35 +399,62 @@ def solve_VIDE(*, g_values, kernel_values, a_values, soln_init_value, time_step,
 
     Returns:
         If return_polys is set to false, this function returns a numpy array of
-        solution values y(t) having the same length as the input parameters
+        solution values y(t) for the same times t used in the input parameters
         kernel_values, a_values, and g_values.
         
         If return_polys is set to true then this function returns a two element tuple
         (soln_values, polys) where soln_values contains the solution values y(t) as
-        described above, and polys is a list of polynomials given in the form
-        ... TO DO: FINISH THIS ...
+        described above, and polys is a list of numpy polynomial objects defining the
+        piecewise polynomial solution.
     '''
     kernel_values_ = np.array(kernel_values)    
     assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
 
-    g_values_ = np.array(g_values)
-    assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"    
-    assert len(g_values_) == len(kernel_values_), \
-        "kernel_values and g_values must have the same length"
-
-    a_values_ = np.array(a_values)
-    assert len(a_values_.shape) == 1, "a_values must be a 1-dim array"    
-    assert len(a_values_) == len(kernel_values_), \
-        "kernel_values and a_values must have the same length"
-
+    if g_values is not None:
+        g_values_ = np.array(g_values)
+        assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"    
+        assert len(g_values_) == len(kernel_values_), \
+            "kernel_values and g_values must have the same length"
+    else:
+        g_values_ = np.zeros_like(kernel_values_)
+    
+    if a_values is not None:
+        a_values_ = np.array(a_values)
+        assert len(a_values_.shape) == 1, "a_values must be a 1-dim array"    
+        assert len(a_values_) == len(kernel_values_), \
+            "kernel_values and a_values must have the same length"
+    else:
+        a_values_ = np.zeros_like(kernel_values_)
+    
+    if not len(kernel_values) % (coll_divs**2) == 1:
+        ans_len = int((len(kernel_values) / coll_divs**2)) * coll_divs**2 + 1
+        assert ans_len < len(kernel_values)
+        print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
+              f"is not of the form: (multiple of coll_divs**2) + 1. " + 
+              f"All input data lists will be truncated to the next smaller number " +
+              f"of this form ({ans_len}) which will also be the length of the " +
+              f"returned list of solution values.")
+        kernel_values_ = kernel_values_[:ans_len]
+        g_values_ = g_values_[:ans_len]
+        a_values_ = a_values_[:ans_len]
+    
     assert coll_divs > 0, "coll_divs must be a positive integer"
     for choice in coll_choices:
         assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
-
-    # TO DO: Truncate input data with warning if it isnt correct size for coll_divs
+    coll_choices.sort()
     
-    return solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step,
-                          coll_divs, coll_choices, return_polys)
+    soln_vals, poly_coefs = solve_VIDE_jit(g_values_, kernel_values_, a_values_, soln_init_value,
+                                           time_step, coll_divs, coll_choices, return_polys)
+    if return_polys:
+        polys = []
+        for i, coefs in enumerate(poly_coefs):
+            domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
+            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0))
+            poly = poly.convert(domain=domain, window=domain)
+            polys.append(poly.trim())
+        return (soln_vals, polys) 
+    else:
+        return soln_vals
     
 @ncjit
 def solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step,
@@ -426,9 +483,10 @@ def solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step
 
     soln_values = np.zeros_like(g_values)
     
-    # soln_polys = []
+    soln_polys = []
     for n in range(mesh_divs):
-        # soln_polys.append(poly)
+        if return_polys:
+            soln_polys.append(VIDE_poly_piece_coefs(n, solution_Y , coll_info, boundary_vals[n], dt))
         for i in range(coll_divs**2 + 1):
             poly_val = poly_piece_VIDE_f(i*(1.0/coll_divs**2), n, 
                                          solution_Y, coll_info, boundary_vals[n], dt)
@@ -439,15 +497,15 @@ def solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step
     for n in range(1, mesh_divs):
         soln_values[n*coll_divs**2] *= 0.5
 
-    # if return_polys:
-    #     return (soln_values, soln_polys)
-    return soln_values
+    if not return_polys:
+        return (soln_values, None)
+    return (soln_values, soln_polys)
 
 
-def solve_VIE_1(*, g_values, kernel_values, soln_init_value=None, time_step, coll_divs=3,
+def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step=1.0, coll_divs=3,
                 coll_choices=[1,2,3], return_polys=False, force_continuous=False):
     '''
-    Solve a Volterra integral equation of "Type 1."
+    Solve a "Type 1" Volterra integral equation.
       
     Solve the following Volterra integral equation (of Type 1) for the unknown
     function y(t).
@@ -456,26 +514,27 @@ def solve_VIE_1(*, g_values, kernel_values, soln_init_value=None, time_step, col
 
     By default, this function returns a numpy array of solution values y(t). If
     return_polys is set to true, then it returns a two-element tuple containing
-    these y(t) values, followed by the list of polynomial functions that define
-    the solution. ... TO DO: IMPROVE DESCRIPTION OF RETURNED POLYS ...
+    these y(t) values, followed by the list of numpy polynomial functions that define
+    the piecewise solution.
 
     Keyword Arguments:
         kernel_values (iterable): Kernel values K(s) at times s starting from
             zero and increasing in increments of time_step.
         g_values (iterable): Values for the function g(t) given at a set of times t
-            that increase in increments of time_step. g_values must have the same
-            length as kernel_values. The default is all zeros.
+            starting from zero and increasing in increments of time_step. g_values
+            must have the same length as kernel_values. The default is all zeros.
         time_step (number): The separation between the times t where the functions
-            a(t), g(t), etc. are defined. time_step must be positive.
+            K(t) and g(t) are defined. The value of time_step must be positive. The 
+            default is 1.0
         force_continuous (boolean): Specify if the piecewise polynomial solution
             used to compute the returned values y(t) must be continuous. The default
             is false.
         soln_init_value (number): The desired initial value of the soltion y(t) when
             a continuous solution is desired. May only be set if force_continuous is
-            true. (See the force_continuous parameter.)
+            true. See the force_continuous parameter.
         coll_divs (number): The number of collocation divisions used when specifying
-            the collocation parameters. coll_divs must be a positive integer. The
-            default is 3.
+            the collocation parameters. The value of coll_divs must be a positive 
+            integer. The default is 3.
         coll_choices (iterable): List of positive integers that define the
             collocation parameters. Each such integer k corresponds to the
             collocation parameter k/coll_divs. The default is [1,2,3].
@@ -484,47 +543,80 @@ def solve_VIE_1(*, g_values, kernel_values, soln_init_value=None, time_step, col
             only the numpy array of solution values is returned. See the "Returns"
             section of this docstring for details.
     
-    The solver uses the collocation method described in the book:
+    The solver uses the methods described in Sections 2.4.1, 2.4.3, and 2.4.5 of the
+    book:
         Brunner H. "Collocation Methods for Volterra Integral and Related
         Functional Differential Equations." Cambridge University Press; 2004.
-    See TO DO: REFERENCE APPROPRIATE SECTION for details.
 
     Returns:
         If return_polys is set to false, this function returns a numpy array of
-        solution values y(t) having the same length as the input parameters
-        kernel_values, a_values, and g_values.
+        solution values y(t) for the same times t used in the input parameters
+        kernel_values and g_values.
         
         If return_polys is set to true then this function returns a two element tuple
         (soln_values, polys) where soln_values contains the solution values y(t) as
-        described above, and polys is a list of polynomials given in the form
-        ... TO DO: FINISH THIS ...
+        described above, and polys is a list of numpy polynomial objects defining the
+        piecewise polynomial solution.
     '''
-
     kernel_values_ = np.array(kernel_values)    
     assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
 
-    g_values_ = np.array(g_values)
-    assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"
-    
-    assert len(g_values_) == len(kernel_values_), \
-        "kernel_values and g_values must have the same length"
-    
-    if force_continuous:
-        assert soln_init_value is not None, \
-            "must specify an initial value for continuous solutions"
+    if g_values is not None:
+        g_values_ = np.array(g_values)
+        assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"    
+        assert len(g_values_) == len(kernel_values_), \
+            "kernel_values and g_values must have the same length"
     else:
-        soln_init_value = float('nan')
-        
+        g_values_ = np.zeros_like(kernel_values_)
+
+    assert time_step > 0.0, "time_step must be positive"
+
+    if not len(kernel_values) % (coll_divs**2) == 1:
+        ans_len = int((len(kernel_values) / coll_divs**2)) * coll_divs**2 + 1
+        assert ans_len < len(kernel_values)
+        print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
+              f"is not of the form: (multiple of coll_divs**2) + 1. " + 
+              f"All input data lists will be truncated to the next smaller number " +
+              f"of this form ({ans_len}) which will also be the length of the " +
+              f"returned list of solution values.")
+        kernel_values_ = kernel_values_[:ans_len]
+        g_values_ = g_values_[:ans_len]
+
+    if soln_init_value is None:
+        assert not force_continuous, \
+            "must specify an initial value for continuous solutions"
+        # We still need a value to pass into the JIT version. It shouldn't be used!
+        soln_init_value_ = 0.0
+    else:
+        if not force_continuous:
+            print("warning: setting soln_init_value has no effect, since "
+                  "force_continuous is set to false.")
+            soln_init_value_ = 0.0
+        else:
+            soln_init_value_ = float(soln_init_value)
+    
     assert 0 not in coll_choices, "zero cannot be a collocation parameter"
     assert coll_divs > 0, "coll_divs must be a positive integer"
     for choice in coll_choices:
-        assert 1 <= choice <= coll_divs, "coll_choices must contain only integers from 1 to coll_divs"
+        assert 1 <= choice <= coll_divs, \
+            "coll_choices must contain only integers from 1 to coll_divs"
+    coll_choices.sort()
 
-    # TO DO: Truncate input data with warning if it isnt correct size for coll_divs
-    
-    return solve_VIE_1_jit(g_values_, kernel_values_, soln_init_value, time_step,
-                           coll_divs, coll_choices, return_polys, force_continuous)
+    soln_vals, poly_coefs = solve_VIE_1_jit(
+        g_values_, kernel_values_, soln_init_value_, time_step,
+        coll_divs, coll_choices, return_polys, force_continuous)
 
+    if return_polys:
+        polys = []
+        for i, coefs in enumerate(poly_coefs):
+            domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
+            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0))
+            poly = poly.convert(domain=domain, window=domain)
+            polys.append(poly.trim())
+        return (soln_vals, polys) 
+    else:
+        return soln_vals
+        
 @ncjit
 def solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step, coll_divs,
                     coll_choices, return_polys, force_continuous):
@@ -532,9 +624,7 @@ def solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step, coll_di
     num_coll_params = len(coll_info.params)
     dt = time_step * coll_divs**2
 
-    # TO DO: remove this after putting in truncation code
-    assert (len(kernel_values) - 1) % coll_divs**2 == 0
-    
+    assert (len(kernel_values) - 1) % coll_divs**2 == 0    
     mesh_divs = int((len(kernel_values)-1) / coll_divs**2)
     num_mesh_points = mesh_divs + 1
 
@@ -553,34 +643,37 @@ def solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step, coll_di
                 + dt*boundary_vals[n]*rho(n, kernel_values, coll_info)
             coef_matrix = dt*BN(kernel_values, coll_info, add_zero_node=True)
             solution_U[n] = np.linalg.solve(coef_matrix, rhs_vector)
-            poly_val = poly_piece_f(1.0, n, solution_U, coll_info, boundary_vals[n])
-    
+            boundary_vals[n+1] = poly_piece_f_continuous(1.0, n, solution_U, coll_info, boundary_vals[n])
+
     soln_values = np.zeros_like(g_values)
-    # soln_polys = []
+    poly_coefs = np.zeros((mesh_divs, num_coll_params + 1))
     for n in range(mesh_divs):
-        # soln_polys.append(poly)
+        if return_polys and force_continuous:
+            poly_coefs[n, :] = continuous_poly_piece_coefs(n, solution_U , coll_info, boundary_vals[n])
+        elif return_polys:
+            poly_coefs[n, :-1] = poly_piece_coefs(n, solution_U , coll_info)
+        
         for i in range(coll_divs**2 + 1):
             rel_x = i*(1.0/coll_divs**2)
             if force_continuous:
-                poly_val = poly_piece_f(rel_x, n, solution_U, coll_info, boundary_vals[n])
+                poly_val = poly_piece_f_continuous(rel_x, n, solution_U, coll_info, boundary_vals[n])
             else:
                 poly_val = poly_piece_f(rel_x, n, solution_U, coll_info)
             soln_values[n*coll_divs**2 + i] += poly_val
 
     # At each mesh point (other than the first and last), we have added the value of 
-    # the two adjacent polynomials. Now, we turn this into the average. \
+    # the two adjacent polynomials. Now, we turn this into the average.
     for n in range(1, mesh_divs):
         soln_values[n*coll_divs**2] *= 0.5
 
-    # TO DO: Fix this functionality
-    # if return_polys:
-    #     return (soln_values, soln_polys)
-    return soln_values
+    if not return_polys:
+        return (soln_values, None)
+    return (soln_values, poly_coefs)
 
-def solve_VIE_2(*, g_values, kernel_values, time_step, coll_divs=2,
+def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                 coll_choices=[0,1,2], return_polys=False):
     '''
-    Solve a Volterra integral equation of "Type 2."
+    Solve a "Type 2" Volterra integral equation.
       
     Solve the following Volterra integral equation (of Type 2) for the unknown
     function y(t).
@@ -589,20 +682,21 @@ def solve_VIE_2(*, g_values, kernel_values, time_step, coll_divs=2,
 
     By default, this function returns a numpy array of solution values y(t). If
     return_polys is set to true, then it returns a two-element tuple containing
-    these y(t) values, followed by the list of polynomial functions that define
-    the solution. ... TO DO: IMPROVE DESCRIPTION OF RETURNED POLYS ...
+    these y(t) values, followed by the list of numpy polynomial functions that define
+    the piecewise solution.
 
     Keyword Arguments:
-        kernel_values (iterable): Kernel values K(s) at times s starting from zero
-            and increasing in increments of time_step.
+        kernel_values (iterable): Kernel values K(s) at times s starting from
+            zero and increasing in increments of time_step.
         g_values (iterable): Values for the function g(t) given at a set of times t
-            that increase in increments of time_step. g_values must have the same
-            length as kernel_values and a_values. The default is all zeros.
-        time_step (number): The separation between the times where the functions
-            K(s), g(t), etc. are defined. time_step must be positive.
+            starting from zero and increasing in increments of time_step. g_values
+            must have the same length as kernel_values. The default is all zeros.
+        time_step (number): The separation between the times t where the functions
+            K(t) and g(t) are defined. The value of time_step must be positive. The 
+            default is 1.0.
         coll_divs (number): The number of collocation divisions used when specifying
-            the collocation parameters. coll_divs must be a positive integer. The
-            default is 2.
+            the collocation parameters. The value of coll_divs must be a positive 
+            integer. The default is 2.
         coll_choices (iterable): List of positive integers that define the
             collocation parameters. Each such integer k corresponds to the
             collocation parameter k/coll_divs. The default is [0,1,2].
@@ -611,37 +705,60 @@ def solve_VIE_2(*, g_values, kernel_values, time_step, coll_divs=2,
             only the numpy array of solution values is returned. See the "Returns"
             section of this docstring for details.
     
-    The solver uses the collocation method described in the book:
+    The solver uses the collocation method described in Section 2.2 of the book:
         Brunner H. "Collocation Methods for Volterra Integral and Related
         Functional Differential Equations." Cambridge University Press; 2004.
-    See TO DO: REFERENCE APPROPRIATE SECTION for details.
 
     Returns:
         If return_polys is set to false, this function returns a numpy array of
-        solution values y(t) having the same length as the input parameters
-        kernel_values, a_values, and g_values.
+        solution values y(t) for the same times t used in the input parameters
+        kernel_values and g_values.
         
         If return_polys is set to true then this function returns a two element tuple
         (soln_values, polys) where soln_values contains the solution values y(t) as
-        described above, and polys is a list of polynomials given in the form
-        ... TO DO: FINISH THIS ...
+        described above, and polys is a list of numpy polynomial objects defining the
+        piecewise polynomial solution.
     '''
     kernel_values_ = np.array(kernel_values)    
     assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
 
-    g_values_ = np.array(g_values)
-    assert len(g_values_.shape) == 1, "only 1-dimensional g functions are supported"
-    
-    assert len(g_values_) == len(kernel_values_), "kernel_values and g_values must have the same length"
+    if g_values is not None:
+        g_values_ = np.array(g_values)
+        assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"    
+        assert len(g_values_) == len(kernel_values_), \
+            "kernel_values and g_values must have the same length"
+    else:
+        g_values_ = np.zeros_like(kernel_values_)
 
+    if not len(kernel_values) % (coll_divs**2) == 1:
+        ans_len = int((len(kernel_values) / coll_divs**2)) * coll_divs**2 + 1
+        assert ans_len < len(kernel_values)
+        print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
+              f"is not of the form: (multiple of coll_divs**2) + 1. " + 
+              f"All input data lists will be truncated to the next smaller number " +
+              f"of this form ({ans_len}) which will also be the length of the " +
+              f"returned list of solution values.")
+        kernel_values_ = kernel_values_[:ans_len]
+        g_values_ = g_values_[:ans_len]
+    
     assert coll_divs > 0, "coll_divs must be a positive integer"
     for choice in coll_choices:
         assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
-
-    # TO DO: Truncate input data with warning if it isnt correct size for coll_divs
-
-    return solve_VIE_2_jit(g_values_, kernel_values_, time_step, coll_divs,
-                    coll_choices, return_polys)
+    coll_choices.sort()
+    
+    soln_vals, poly_coefs = solve_VIE_2_jit(g_values_, kernel_values_, time_step,
+                                            coll_divs, coll_choices, return_polys)
+    
+    if return_polys:
+        polys = []
+        for i, coefs in enumerate(poly_coefs):
+            domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
+            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0))
+            poly = poly.convert(domain=domain, window=domain)
+            polys.append(poly.trim())
+        return (soln_vals, polys) 
+    else:
+        return soln_vals
 
 @ncjit
 def solve_VIE_2_jit(g_values, kernel_values, time_step, coll_divs,
@@ -659,10 +776,11 @@ def solve_VIE_2_jit(g_values, kernel_values, time_step, coll_divs,
         rhs_vector = g(n, g_values, coll_info) + G(n, solution_U, kernel_values, coll_info, dt)
         solution_U[n] = np.linalg.solve(coef_matrix, rhs_vector)
 
-    soln_values = np.zeros_like(g_values)
-    # soln_polys = []
+    soln_values = np.zeros_like(g_values)    
+    
+    soln_polys = []
     for n in range(mesh_divs):
-        # soln_polys.append(poly)
+        soln_polys.append(poly_piece_coefs(n, solution_U , coll_info))
         for i in range(coll_divs**2 + 1):
             poly_val = poly_piece_f(i*(1.0/coll_divs**2), n, solution_U , coll_info)
             soln_values[n*coll_divs**2 + i] += poly_val
@@ -672,7 +790,6 @@ def solve_VIE_2_jit(g_values, kernel_values, time_step, coll_divs,
     for n in range(1, mesh_divs):
         soln_values[n*coll_divs**2] *= 0.5
 
-    # TO DO: Fix this functionality
-    # if return_polys:
-    #     return (soln_values, soln_polys)
-    return soln_values
+    if not return_polys:
+        return (soln_values, None)
+    return (soln_values, soln_polys)
