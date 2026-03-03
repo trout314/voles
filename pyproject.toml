@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "volterra-equation-solvers"
+version = "0.1.0"
+description = "Collocation-method solvers for Volterra integral and integro-differential equations"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "numba",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
+docs = [
+    "mkdocs-material",
+    "mkdocstrings[python]",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/volterra_equation_solvers"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

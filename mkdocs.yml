@@ -1,0 +1,27 @@
+site_name: volterra-equation-solvers
+site_description: Collocation-method solvers for Volterra integral and integro-differential equations
+repo_url: https://github.com/trout314/volterra-equation-solvers
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+
+nav:
+  - Home: index.md
+  - Getting Started: getting_started.md
+  - API Reference:
+      - Solvers: api/solvers.md
+  - Examples:
+      - VIE Type 1: examples/vie1.md
+      - VIE Type 2: examples/vie2.md
+      - VIDE: examples/vide.md
