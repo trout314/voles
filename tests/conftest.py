@@ -7,7 +7,7 @@ TOLERANCE = 1e-3
 @pytest.fixture
 def vie1_data():
     """VIE-1 test data: g(t)=sin(t), K(x)=exp(x), exact=cos(t)-sin(t)."""
-    time_step = 0.1
+    time_step = 0.01
     coll_divs = 3
     num_pts = 10 * coll_divs**2 + 1  # 91
     times = np.array([i * time_step for i in range(num_pts)])

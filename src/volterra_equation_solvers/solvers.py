@@ -4,34 +4,15 @@ from numba import jit
 
 ncjit = jit(nopython=True, cache=True)
 
-# Unfortunately, itertools.combinations isn't supported by numba, so we need our own version, copied
-# from: https://stackoverflow.com/questions/61262188/numba-safe-version-of-itertools-combinations
-# Note that this function does not correctly handle combinations of length zero (i.e. r=0) since it
-# returns [] rather than the correct [[]].  I think the author may have done this because Numba has
-# trouble inferring the type of empty lists.
 @ncjit
-def combinations(pool, r):
-    n = len(pool)
-    indices = list(range(r))
-    empty = not(n and (0 < r <= n))
-
-    if not empty:
-        result = [pool[i] for i in indices]
-        yield result
-
-    while not empty:
-        i = r - 1
-        while i >= 0 and indices[i] == i + n - r:
-            i -= 1
-        if i < 0:
-            empty = True
-        else:
-            indices[i] += 1
-            for j in range(i+1, r):
-                indices[j] = indices[j-1] + 1
-
-            result = [pool[i] for i in indices]
-            yield result
+def _poly_mul_linear(coefs, root):
+    """Multiply polynomial (coefficients stored lowest-power-first) by (x - root)."""
+    n = len(coefs)
+    result = np.zeros(n + 1)
+    for i in range(n):
+        result[i] -= root * coefs[i]
+        result[i + 1] += coefs[i]
+    return result
 
 @ncjit
 def lagrange_coefs(index, nodes):
@@ -40,20 +21,15 @@ def lagrange_coefs(index, nodes):
 
     denominator = np.prod(np.array(
         [nodes[index] - node for node in nodes_used]))
-    
-    coefs = np.zeros(len(nodes)) # stored from lowest power to highest
-    for degree in range(len(nodes)):
-        # We special-case the top degree coef, since the numba-friendly version 
-        # of the function for finding combinations can't handle subsets of size zero
-        if degree == len(nodes) - 1:
-            coef = 1.0
-        else:
-            coef = 0.0
-            
-        for factors in combinations(nodes_used, len(nodes_used) - degree):
-            coef += float(np.prod(-1.0*np.array(factors)))
-        coefs[degree] = coef / denominator
-    return coefs
+
+    # Build numerator polynomial prod(x - node for node in nodes_used)
+    # by iteratively multiplying in each linear factor.
+    # Coefficients stored from lowest power to highest.
+    poly = np.array([1.0])
+    for node in nodes_used:
+        poly = _poly_mul_linear(poly, node)
+
+    return poly / denominator
 
 @ncjit
 def lagrange_f(x, index, nodes):
