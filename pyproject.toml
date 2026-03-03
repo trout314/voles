@@ -28,5 +28,18 @@ docs = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/volterra_equation_solvers"]
 
+# ---------------------------------------------------------------------------
+# Building the optional D extension (libvolterra_dlang.so)
+#
+# Requires a D compiler (ldc2 or dmd) and meson:
+#
+#   meson setup dlang/build dlang
+#   meson compile -C dlang/build
+#   cp dlang/build/libvolterra_dlang.so src/volterra_equation_solvers/
+#
+# Once copied, `from volterra_equation_solvers._dlang import available` → True.
+# If the .so is absent the package works normally via Numba.
+# ---------------------------------------------------------------------------
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
