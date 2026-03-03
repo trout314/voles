@@ -22,7 +22,7 @@ Collocation-method solvers for Volterra integral and integro-differential equati
 pip install git+https://github.com/trout314/volterra-equation-solvers
 ```
 
-**Requirements:** Python ≥ 3.10, numpy, numba
+**Requirements:** Python ≥ 3.10, numpy, numba, scipy
 
 ## Quick start
 
