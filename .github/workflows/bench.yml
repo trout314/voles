@@ -1,0 +1,37 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write      # needed to push results to gh-pages
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run benchmarks
+        run: |
+          pytest benchmarks/ \
+            --benchmark-json output.json \
+            --benchmark-warmup=on \
+            --benchmark-warmup-iterations=1
+
+      - name: Store benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: pytest
+          output-file-path: output.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
