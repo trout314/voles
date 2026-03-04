@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write      # needed to push results to gh-pages
+  contents: write      # needed to push results to gh-pages and commit chart PNG
 
 jobs:
   benchmark:
@@ -19,7 +19,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev]" matplotlib
 
       - name: Run benchmarks
         run: |
@@ -35,3 +35,15 @@ jobs:
           output-file-path: output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+
+      - name: Generate benchmark chart
+        run: python benchmarks/plot_results.py output.json benchmarks/results.png
+
+      - name: Commit benchmark chart
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase
+          git add benchmarks/results.png
+          git diff --cached --quiet || git commit -m "Update benchmark chart [skip ci]"
+          git push

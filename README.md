@@ -52,6 +52,10 @@ print(f"Max error: {max(abs(soln - np.sin(times))):.2e}")
 
 All solvers accept `return_polys=True` to also return the piecewise polynomial solution as a list of `numpy.polynomial.Polynomial` objects.
 
+## Benchmarks
+
+![Benchmarks](benchmarks/results.png)
+
 ## Input format
 
 - `kernel_values`: array of `K(s)` values from `s=0`, spaced by `time_step`
