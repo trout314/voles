@@ -2,7 +2,7 @@
 
 Solve the VIE-1
 
-$$g(t) = \int_0^t K(t-s)\,y(s)\,ds$$
+$$g(t) = \int_0^t K(t-s)y(s)ds$$
 
 with $K(s) = e^s$, $g(t) = \sin(t)$, whose exact solution is $y(t) = \cos(t) - \sin(t)$.
 

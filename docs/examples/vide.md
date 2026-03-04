@@ -2,7 +2,7 @@
 
 Solve the VIDE
 
-$$y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds$$
+$$y'(t) = a(t)y(t) + g(t) + \int_0^t K(t-s)y(s)ds$$
 
 with $a(t) = \frac{1}{1+t^2}$, $K(s) = e^{-s}$, and $g(t)$ chosen so the exact solution is $y(t) = \sin(t)$.
 

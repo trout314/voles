@@ -8,9 +8,9 @@ Collocation-method solvers for Volterra integral and integro-differential equati
 
 | Function | Equation |
 |----------|----------|
-| `solve_VIE_1` | $g(t) = \int_0^t K(t-s)\,y(s)\,ds$ |
-| `solve_VIE_2` | $y(t) = g(t) + \int_0^t K(t-s)\,y(s)\,ds$ |
-| `solve_VIDE`  | $y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds$ |
+| `solve_VIE_1` | $g(t) = \int_0^t K(t-s)y(s)ds$ |
+| `solve_VIE_2` | $y(t) = g(t) + \int_0^t K(t-s)y(s)ds$ |
+| `solve_VIDE`  | $y'(t) = a(t)y(t) + g(t) + \int_0^t K(t-s)y(s)ds$ |
 
 ## Quick install
 
