@@ -425,13 +425,13 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         polys = []
         for i, coefs in enumerate(poly_coefs):
             domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
-            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0))
+            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
             poly = poly.convert(domain=domain, window=domain)
-            polys.append(poly.trim())
-        return (soln_vals, polys) 
+            polys.append(poly)
+        return (soln_vals, polys)
     else:
         return soln_vals
-    
+
 @ncjit
 def solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step,
                coll_divs, coll_choices, return_polys):
@@ -479,7 +479,7 @@ def solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step
 
 
 def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step=1.0, coll_divs=3,
-                coll_choices=[1,2,3], return_polys=False, force_continuous=False):
+                coll_choices=[1,2,3], return_polys=False, force_continuous=False, show_warnings=True):
     '''
     Solve a "Type 1" Volterra integral equation.
       
@@ -547,11 +547,11 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
 
     assert time_step > 0.0, "time_step must be positive"
 
-    if not len(kernel_values) % (coll_divs**2) == 1:
-        ans_len = int((len(kernel_values) / coll_divs**2)) * coll_divs**2 + 1
+    if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
+        ans_len = int(len(kernel_values) / coll_divs**2 - 1) * coll_divs**2 + 1
         assert ans_len < len(kernel_values)
         print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
-              f"is not of the form: (multiple of coll_divs**2) + 1. " + 
+              f"is not of the form: (multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. " +
               f"All input data lists will be truncated to the next smaller number " +
               f"of this form ({ans_len}) which will also be the length of the " +
               f"returned list of solution values.")
@@ -564,7 +564,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         # We still need a value to pass into the JIT version. It shouldn't be used!
         soln_init_value_ = 0.0
     else:
-        if not force_continuous:
+        if (not force_continuous) and show_warnings:
             print("warning: setting soln_init_value has no effect, since "
                   "force_continuous is set to false.")
             soln_init_value_ = 0.0
@@ -586,13 +586,13 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         polys = []
         for i, coefs in enumerate(poly_coefs):
             domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
-            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0))
+            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
             poly = poly.convert(domain=domain, window=domain)
             polys.append(poly.trim())
-        return (soln_vals, polys) 
+        return (soln_vals, polys)
     else:
         return soln_vals
-        
+
 @ncjit
 def solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step, coll_divs,
                     coll_choices, return_polys, force_continuous):
@@ -706,17 +706,17 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     else:
         g_values_ = np.zeros_like(kernel_values_)
 
-    if not len(kernel_values) % (coll_divs**2) == 1:
-        ans_len = int((len(kernel_values) / coll_divs**2)) * coll_divs**2 + 1
+    if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
+        ans_len = int(len(kernel_values) / coll_divs**2 - 1) * coll_divs**2 + 1
         assert ans_len < len(kernel_values)
         print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
-              f"is not of the form: (multiple of coll_divs**2) + 1. " + 
+              f"is not of the form: (multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. " +
               f"All input data lists will be truncated to the next smaller number " +
               f"of this form ({ans_len}) which will also be the length of the " +
               f"returned list of solution values.")
         kernel_values_ = kernel_values_[:ans_len]
         g_values_ = g_values_[:ans_len]
-    
+
     assert coll_divs > 0, "coll_divs must be a positive integer"
     for choice in coll_choices:
         assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
@@ -729,10 +729,10 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         polys = []
         for i, coefs in enumerate(poly_coefs):
             domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
-            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0))
+            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
             poly = poly.convert(domain=domain, window=domain)
             polys.append(poly.trim())
-        return (soln_vals, polys) 
+        return (soln_vals, polys)
     else:
         return soln_vals
 
