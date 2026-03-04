@@ -2,11 +2,9 @@
 
 Solve the VIE-2
 
-```
-y(t) = g(t) + ∫₀ᵗ K(t−s) y(s) ds
-```
+$$y(t) = g(t) + \int_0^t K(t-s)\,y(s)\,ds$$
 
-with `K(s) = e⁻ˢ` and `g(t)` chosen so the exact solution is `y(t) = sin(t)`.
+with $K(s) = e^{-s}$ and $g(t)$ chosen so the exact solution is $y(t) = \sin(t)$.
 
 ```python
 import numpy as np

@@ -14,7 +14,7 @@ All three solvers accept keyword-only arguments. The key input is `kernel_values
 
 ## solve_VIE_1
 
-Solves `g(t) = ∫₀ᵗ K(t−s) y(s) ds` for unknown `y(t)`.
+Solves $g(t) = \int_0^t K(t-s)\,y(s)\,ds$ for unknown $y(t)$.
 
 ```python
 import numpy as np
@@ -38,7 +38,7 @@ soln = solve_VIE_1(
 
 ## solve_VIE_2
 
-Solves `y(t) = g(t) + ∫₀ᵗ K(t−s) y(s) ds` for unknown `y(t)`.
+Solves $y(t) = g(t) + \int_0^t K(t-s)\,y(s)\,ds$ for unknown $y(t)$.
 
 ```python
 import numpy as np
@@ -61,7 +61,7 @@ soln = solve_VIE_2(
 
 ## solve_VIDE
 
-Solves `y′(t) = a(t)y(t) + g(t) + ∫₀ᵗ K(t−s) y(s) ds` for unknown `y(t)`.
+Solves $y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds$ for unknown $y(t)$.
 
 ```python
 import numpy as np

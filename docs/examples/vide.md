@@ -2,11 +2,9 @@
 
 Solve the VIDE
 
-```
-y′(t) = a(t)y(t) + g(t) + ∫₀ᵗ K(t−s) y(s) ds
-```
+$$y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds$$
 
-with `a(t) = 1/(1+t²)`, `K(s) = e⁻ˢ`, and `g(t)` chosen so the exact solution is `y(t) = sin(t)`.
+with $a(t) = \frac{1}{1+t^2}$, $K(s) = e^{-s}$, and $g(t)$ chosen so the exact solution is $y(t) = \sin(t)$.
 
 ```python
 import numpy as np
