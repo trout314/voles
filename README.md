@@ -20,7 +20,7 @@ $$y(t) = g(t) + \int_0^t K(t-s)\, y(s)\, ds$$
 
 **`solve_VIDE`** — Volterra integro-differential equation:
 
-$$y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\, y(s)\, ds$$
+$$y'(t) = g(t) + \int_0^t K(t-s)\, y(s)\, ds$$
 
 ## Installation
 
