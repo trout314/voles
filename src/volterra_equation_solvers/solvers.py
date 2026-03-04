@@ -434,11 +434,14 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     for choice in coll_choices:
         assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
     coll_choices.sort()
-    if (coll_divs, coll_choices) not in _fast_settings_VIDE:
+    if (coll_divs, coll_choices) in _fast_settings_VIDE:
+        soln_vals, poly_coefs = _dlang_module.solve_vide_d(
+            g_values_, kernel_values_, a_values_, soln_init_value,
+            time_step, coll_divs, coll_choices, return_polys)
+    else:
         print("warning: falling back to slower python/numba code")
-
-    soln_vals, poly_coefs = solve_VIDE_jit(g_values_, kernel_values_, a_values_, soln_init_value,
-                                           time_step, coll_divs, coll_choices, return_polys)
+        soln_vals, poly_coefs = solve_VIDE_jit(g_values_, kernel_values_, a_values_, soln_init_value,
+                                               time_step, coll_divs, coll_choices, return_polys)
     if return_polys:
         polys = []
         for i, coefs in enumerate(poly_coefs):
@@ -623,12 +626,15 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         assert 1 <= choice <= coll_divs, \
             "coll_choices must contain only integers from 1 to coll_divs"
     coll_choices.sort()
-    if (coll_divs, coll_choices) not in _fast_settings_VIE_1:
+    if (coll_divs, coll_choices) in _fast_settings_VIE_1:
+        soln_vals, poly_coefs = _dlang_module.solve_vie1_d(
+            g_values_, kernel_values_, soln_init_value_, time_step,
+            coll_divs, coll_choices, return_polys, force_continuous)
+    else:
         print("warning: falling back to slower python/numba code")
-
-    soln_vals, poly_coefs = solve_VIE_1_jit(
-        g_values_, kernel_values_, soln_init_value_, time_step,
-        coll_divs, coll_choices, return_polys, force_continuous)
+        soln_vals, poly_coefs = solve_VIE_1_jit(
+            g_values_, kernel_values_, soln_init_value_, time_step,
+            coll_divs, coll_choices, return_polys, force_continuous)
 
     if return_polys:
         polys = []
@@ -773,11 +779,13 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     for choice in coll_choices:
         assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
     coll_choices.sort()
-    if (coll_divs, coll_choices) not in _fast_settings_VIE_2:
+    if (coll_divs, coll_choices) in _fast_settings_VIE_2:
+        soln_vals, poly_coefs = _dlang_module.solve_vie2_d(
+            g_values_, kernel_values_, time_step, coll_divs, coll_choices, return_polys)
+    else:
         print("warning: falling back to slower python/numba code")
-
-    soln_vals, poly_coefs = solve_VIE_2_jit(g_values_, kernel_values_, time_step,
-                                            coll_divs, coll_choices, return_polys)
+        soln_vals, poly_coefs = solve_VIE_2_jit(g_values_, kernel_values_, time_step,
+                                                coll_divs, coll_choices, return_polys)
     
     if return_polys:
         polys = []
