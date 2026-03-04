@@ -414,18 +414,18 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     else:
         a_values_ = np.zeros_like(kernel_values_)
     
-    if not len(kernel_values) % (coll_divs**2) == 1:
-        ans_len = int((len(kernel_values) / coll_divs**2)) * coll_divs**2 + 1
+    if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
+        ans_len = int(len(kernel_values) / coll_divs**2 - 1) * coll_divs**2 + 1
         assert ans_len < len(kernel_values)
         print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
-              f"is not of the form: (multiple of coll_divs**2) + 1. " + 
+              f"is not of the form: (multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. " +
               f"All input data lists will be truncated to the next smaller number " +
               f"of this form ({ans_len}) which will also be the length of the " +
               f"returned list of solution values.")
         kernel_values_ = kernel_values_[:ans_len]
         g_values_ = g_values_[:ans_len]
         a_values_ = a_values_[:ans_len]
-    
+
     assert coll_divs > 0, "coll_divs must be a positive integer"
     assert all([isinstance(choice, int) for choice in coll_choices]), \
         "coll_choices must be a list of integers"
