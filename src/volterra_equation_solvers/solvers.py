@@ -1,6 +1,18 @@
 import numpy as np
 from collections import namedtuple
 from numba import jit
+from . import _dlang as _dlang_module
+
+if _dlang_module.available:
+    _all_fast = _dlang_module.supported_coll_settings_d()
+    _fast_settings_VIE_1 = [(d, c) for d, c in _all_fast if 0 not in c]
+    _fast_settings_VIE_2 = _all_fast
+    _fast_settings_VIDE  = _all_fast
+    del _all_fast
+else:
+    _fast_settings_VIE_1 = []
+    _fast_settings_VIE_2 = []
+    _fast_settings_VIDE  = []
 
 ncjit = jit(nopython=True, cache=True)
 
@@ -415,10 +427,16 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         a_values_ = a_values_[:ans_len]
     
     assert coll_divs > 0, "coll_divs must be a positive integer"
+    assert all([isinstance(choice, int) for choice in coll_choices]), \
+        "coll_choices must be a list of integers"
+    assert all([coll_choices.count(c) <= 1 for c in coll_choices]), \
+        "all integers in coll_choices must be distinct"
     for choice in coll_choices:
         assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
     coll_choices.sort()
-    
+    if (coll_divs, coll_choices) not in _fast_settings_VIDE:
+        print("warning: falling back to slower python/numba code")
+
     soln_vals, poly_coefs = solve_VIDE_jit(g_values_, kernel_values_, a_values_, soln_init_value,
                                            time_step, coll_divs, coll_choices, return_polys)
     if return_polys:
@@ -597,10 +615,16 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     
     assert 0 not in coll_choices, "zero cannot be a collocation parameter"
     assert coll_divs > 0, "coll_divs must be a positive integer"
+    assert all([isinstance(choice, int) for choice in coll_choices]), \
+        "coll_choices must be a list of integers"
+    assert all([coll_choices.count(c) <= 1 for c in coll_choices]), \
+        "all integers in coll_choices must be distinct"
     for choice in coll_choices:
         assert 1 <= choice <= coll_divs, \
             "coll_choices must contain only integers from 1 to coll_divs"
     coll_choices.sort()
+    if (coll_divs, coll_choices) not in _fast_settings_VIE_1:
+        print("warning: falling back to slower python/numba code")
 
     soln_vals, poly_coefs = solve_VIE_1_jit(
         g_values_, kernel_values_, soln_init_value_, time_step,
@@ -742,10 +766,16 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         g_values_ = g_values_[:ans_len]
 
     assert coll_divs > 0, "coll_divs must be a positive integer"
+    assert all([isinstance(choice, int) for choice in coll_choices]), \
+        "coll_choices must be a list of integers"
+    assert all([coll_choices.count(c) <= 1 for c in coll_choices]), \
+        "all integers in coll_choices must be distinct"
     for choice in coll_choices:
         assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
     coll_choices.sort()
-    
+    if (coll_divs, coll_choices) not in _fast_settings_VIE_2:
+        print("warning: falling back to slower python/numba code")
+
     soln_vals, poly_coefs = solve_VIE_2_jit(g_values_, kernel_values_, time_step,
                                             coll_divs, coll_choices, return_polys)
     
