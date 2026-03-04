@@ -12,15 +12,15 @@ Collocation-method solvers for Volterra integral and integro-differential equati
 
 **`solve_VIE_1`** — Type-1 Volterra integral equation:
 
-$$g(t) = \int_0^t K(t-s)\, y(s)\, ds$$
+$$g(t) = \int_0^t K(t-s) y(s) ds$$
 
 **`solve_VIE_2`** — Type-2 Volterra integral equation:
 
-$$y(t) = g(t) + \int_0^t K(t-s)\, y(s)\, ds$$
+$$y(t) = g(t) + \int_0^t K(t-s) y(s) ds$$
 
 **`solve_VIDE`** — Volterra integro-differential equation:
 
-$$y'(t) = g(t) + \int_0^t K(t-s)\, y(s)\, ds$$
+$$y'(t) = a(t) y(t) + g(t) + \int_0^t K(t-s) y(s) ds$$
 
 ## Installation
 
