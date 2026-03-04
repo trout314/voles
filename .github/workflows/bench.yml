@@ -23,7 +23,7 @@ jobs:
 
       - name: Run benchmarks
         run: |
-          pytest benchmarks/ \
+          pytest benchmarks/bench_solvers.py \
             --benchmark-json output.json \
             --benchmark-warmup=on \
             --benchmark-warmup-iterations=1
