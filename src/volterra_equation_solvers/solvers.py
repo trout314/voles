@@ -478,6 +478,30 @@ def solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step
     return (soln_values, soln_polys)
 
 
+def solve_VIE_1_trapz(*, g_values, kernel_values, dt):
+    assert np.isclose(g_values[0], 0.0), "g(0) must be zero"
+    soln_y = np.zeros_like(g_values)
+    k0 = kernel_values[0]
+    for t_indx in range(0, len(soln_y)):
+        first_term = kernel_values[t_indx]*soln_y[0]
+        middle_terms = np.sum(np.array([kernel_values[t_indx - i]*soln_y[i]
+                               for i in range(1, t_indx-1)]))
+        soln_y[t_indx] = (2.0/(k0*dt))*g_values[t_indx] - (1.0/k0)*first_term - (2.0/k0)*middle_terms
+    return soln_y
+
+
+def solve_VIE_2_trapz(*, g_values, kernel_values, omega, dt):
+    assert np.isclose(g_values[0], 0.0), "g(0) must be zero"
+    soln_y = np.zeros_like(g_values)
+    k0 = kernel_values[0]
+    for t_indx in range(0, len(soln_y)):
+        first_term = (dt/2.0)*kernel_values[t_indx]*soln_y[0]
+        middle_terms = dt*np.sum(np.array([kernel_values[t_indx - i]*soln_y[i]
+                                  for i in range(1, t_indx-1)]))
+        soln_y[t_indx] = (2.0/(k0*dt))*(g_values[t_indx] - first_term - middle_terms)
+    return soln_y
+
+
 def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step=1.0, coll_divs=3,
                 coll_choices=[1,2,3], return_polys=False, force_continuous=False, show_warnings=True):
     '''
