@@ -38,7 +38,7 @@ from volterra_equation_solvers import solve_VIE_2
 
 # y(t) = sin(t) satisfies this VIE-2 with K(s) = exp(-s)
 time_step = 0.05
-times = np.arange(0, 4.55, time_step)          # 91 pts = 10×3² + 1
+times = np.arange(0, 2.05, time_step)          # 41 pts = 10×2² + 1
 kernel = np.exp(-times)
 g = np.sin(times) - 0.5*(np.exp(-times) + np.sin(times) - np.cos(times))
 
@@ -46,8 +46,6 @@ soln = solve_VIE_2(
     kernel_values=kernel,
     g_values=g,
     time_step=time_step,
-    coll_divs=3,
-    coll_choices=[0, 1, 2, 3],
 )
 print(f"Max error: {max(abs(soln - np.sin(times))):.2e}")
 ```
