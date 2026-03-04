@@ -19,6 +19,12 @@ _ip = ctypes.POINTER(ctypes.c_int)
 
 
 def _setup_argtypes() -> None:
+    _lib.volterra_num_supported_settings.restype = ctypes.c_int
+    _lib.volterra_num_supported_settings.argtypes = []
+
+    _lib.volterra_get_supported_settings.restype = None
+    _lib.volterra_get_supported_settings.argtypes = [_ip]
+
     _lib.volterra_solve_vie1.restype = ctypes.c_int
     _lib.volterra_solve_vie1.argtypes = [
         _dp, _dp, ctypes.c_int,           # g_values, kernel_values, n
@@ -207,3 +213,21 @@ def solve_vide_d(g_values, kernel_values, a_values, soln_init_value, time_step,
     if return_polys:
         return (out_soln, out_poly_coefs.reshape(mesh_divs, num_choices + 1))
     return (out_soln, None)
+
+
+def supported_coll_settings_d():
+    """Return list of (coll_divs, coll_choices) for all settings compiled into the D library."""
+    if not available:
+        raise RuntimeError("D extension not available")
+
+    num = _lib.volterra_num_supported_settings()
+    ncols = 4  # max_coll_params + 1
+    buf = np.zeros(num * ncols, dtype=np.int32)
+    _lib.volterra_get_supported_settings(buf.ctypes.data_as(_ip))
+    rows = buf.reshape(num, ncols)
+    result = []
+    for row in rows:
+        coll_divs = int(row[0])
+        choices = [int(x) for x in row[1:] if x != -1]
+        result.append((coll_divs, choices))
+    return result

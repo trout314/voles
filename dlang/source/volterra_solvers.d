@@ -1190,3 +1190,24 @@ int volterra_solve_vide(
     *out_mesh_divs = md;
     return 0;
 }
+
+int volterra_num_supported_settings()
+{
+    static immutable settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
+    return cast(int) settings.length;
+}
+
+void volterra_get_supported_settings(int* out_data)
+{
+    // Each row is (max_coll_params + 1) wide: [coll_divs, c1, c2, ..., -1, ...]
+    static immutable settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
+    foreach (i, s; settings)
+    {
+        out_data[cast(int)i * (max_coll_params + 1)] = s[0];
+        foreach (j; 0 .. max_coll_params)
+        {
+            int slot = cast(int)i * (max_coll_params + 1) + j + 1;
+            out_data[slot] = (j + 1 < cast(int) s.length) ? s[j + 1] : -1;
+        }
+    }
+}
