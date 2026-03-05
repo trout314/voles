@@ -54,7 +54,11 @@ All solvers accept `return_polys=True` to also return the piecewise polynomial s
 
 ## Benchmarks
 
-![Benchmarks](benchmarks/results.png)
+Benchmarked on **12th Gen Intel(R) Core(TM) i5-12600KF**.
+
+![VIE-1 benchmarks](benchmarks/results_vie1.png)
+![VIE-2 benchmarks](benchmarks/results_vie2.png)
+![VIDE benchmarks](benchmarks/results_vide.png)
 
 ## Input format
 
