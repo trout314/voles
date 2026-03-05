@@ -36,7 +36,7 @@ def main(json_path, output_path):
 
     colors = ["#4C72B0", "#55A868", "#C44E52", "#8172B2", "#937860"]
 
-    fig, axes = plt.subplots(3, 1, figsize=(5, 9))
+    fig, axes = plt.subplots(3, 1, figsize=(5, 9), sharex=True)
 
     for ax, (solver_name, cases) in zip(axes, groups):
         x = np.arange(len(cases))
@@ -45,14 +45,14 @@ def main(json_path, output_path):
         bars = ax.bar(x, bar_times, color=colors)
         ax.set_title(solver_name)
         ax.set_xticks([])
-        ax.set_ylabel("Mean time (ms)")
         ax.yaxis.set_minor_locator(plt.matplotlib.ticker.AutoMinorLocator())
 
         for bar, (_, n) in zip(bars, cases):
             ax.text(bar.get_x() + bar.get_width() / 2,
                     bar.get_height(), f"n={n}",
-                    ha="center", va="bottom", fontsize=7)
+                    ha="center", va="bottom", fontsize=9)
 
+    fig.supylabel("Mean time (ms)")
     fig.tight_layout()
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
