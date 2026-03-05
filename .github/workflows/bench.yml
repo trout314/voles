@@ -44,6 +44,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git pull --rebase
-          git add benchmarks/results_vie1.png benchmarks/results_vie2.png benchmarks/results_vide.png
-          git diff --cached --quiet || git commit -m "Update benchmark charts [skip ci]"
+          git add benchmarks/results.png
+          git diff --cached --quiet || git commit -m "Update benchmark chart [skip ci]"
           git push
