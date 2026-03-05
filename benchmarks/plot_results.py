@@ -42,14 +42,13 @@ def main(json_path, output_path):
 
     for solver_name, suffix, cases in groups:
         x = np.arange(len(cases))
-        x_labels = [f"n={n}" for _, n in cases]
         bar_times = [times[name] * 1e3 for name, _ in cases]
 
         fig, ax = plt.subplots(figsize=(5, 4))
         bars = ax.bar(x, bar_times, color=colors)
         ax.set_title(solver_name)
-        ax.set_xticks(x)
-        ax.set_xticklabels(x_labels, rotation=30, ha="right", fontsize=8)
+        ax.set_xticks([])
+
         ax.set_ylabel("Mean time (ms)")
         ax.yaxis.set_minor_locator(plt.matplotlib.ticker.AutoMinorLocator())
 
