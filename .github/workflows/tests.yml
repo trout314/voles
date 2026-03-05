@@ -109,7 +109,8 @@ jobs:
           LDC_VERSION="1.41.0"
           curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-${LDC_ARCH}.tar.gz" \
             | tar -xz -C "$HOME"
-          echo "$HOME/ldc2-${LDC_VERSION}-osx-${LDC_ARCH}/bin" >> $GITHUB_PATH
+          LDC_DIR=$(ls -d "$HOME"/ldc2-*/ | head -1)
+          echo "${LDC_DIR}bin" >> $GITHUB_PATH
 
       - name: Build D extension
         run: |
