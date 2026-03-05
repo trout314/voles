@@ -20,6 +20,9 @@ _ip = ctypes.POINTER(ctypes.c_int)
 
 
 def _setup_argtypes() -> None:
+    _lib.volterra_max_coll_params.restype = ctypes.c_int
+    _lib.volterra_max_coll_params.argtypes = []
+
     _lib.volterra_num_supported_settings.restype = ctypes.c_int
     _lib.volterra_num_supported_settings.argtypes = []
 
@@ -230,7 +233,7 @@ def supported_coll_settings_d():
         raise RuntimeError("D extension not available")
 
     num = _lib.volterra_num_supported_settings()
-    ncols = 4  # max_coll_params + 1
+    ncols = _lib.volterra_max_coll_params() + 1
     buf = np.zeros(num * ncols, dtype=np.int32)
     _lib.volterra_get_supported_settings(buf.ctypes.data_as(_ip))
     rows = buf.reshape(num, ncols)

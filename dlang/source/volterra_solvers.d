@@ -1150,6 +1150,11 @@ int volterra_solve_vide(
     return 0;
 }
 
+int volterra_max_coll_params()
+{
+    return max_coll_params;
+}
+
 int volterra_num_supported_settings()
 {
     static immutable settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
