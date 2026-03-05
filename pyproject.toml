@@ -29,16 +29,20 @@ docs = [
 packages = ["src/volterra_equation_solvers"]
 
 # ---------------------------------------------------------------------------
-# Building the optional D extension (libvolterra_dlang.so)
+# Building the optional D extension (volterra_dlang.so / .dylib / .dll)
 #
-# Requires a D compiler (ldc2 or dmd) and meson:
+# Requires a D compiler (ldc2) and meson+ninja:
 #
 #   meson setup dlang/build dlang
 #   meson compile -C dlang/build
-#   cp dlang/build/libvolterra_dlang.so src/volterra_equation_solvers/
+#
+# Then copy the shared library into the package:
+#   Linux:   cp dlang/build/volterra_dlang.so   src/volterra_equation_solvers/
+#   macOS:   cp dlang/build/volterra_dlang.dylib src/volterra_equation_solvers/
+#   Windows: copy dlang\build\volterra_dlang.dll src\volterra_equation_solvers\
 #
 # Once copied, `from volterra_equation_solvers._dlang import available` → True.
-# If the .so is absent the package works normally via Numba.
+# If the library is absent the package works normally via Numba.
 # ---------------------------------------------------------------------------
 
 [tool.pytest.ini_options]

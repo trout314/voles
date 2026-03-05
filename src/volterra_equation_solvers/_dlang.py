@@ -7,6 +7,7 @@ wrapper functions raise RuntimeError.  The rest of the package is unaffected.
 
 import ctypes
 import os
+import sys
 
 import numpy as np
 
@@ -55,9 +56,17 @@ def _setup_argtypes() -> None:
 def _load() -> None:
     global _lib, available
     here = os.path.dirname(os.path.abspath(__file__))
+
+    if sys.platform == "win32":
+        lib_name = "volterra_dlang.dll"
+    elif sys.platform == "darwin":
+        lib_name = "volterra_dlang.dylib"
+    else:
+        lib_name = "volterra_dlang.so"
+
     candidates = [
-        os.path.join(here, "libvolterra_dlang.so"),
-        os.path.normpath(os.path.join(here, "..", "..", "..", "dlang", "build", "libvolterra_dlang.so")),
+        os.path.join(here, lib_name),
+        os.path.normpath(os.path.join(here, "..", "..", "..", "dlang", "build", lib_name)),
     ]
     for path in candidates:
         if os.path.exists(path):
