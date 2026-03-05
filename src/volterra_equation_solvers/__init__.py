@@ -17,4 +17,5 @@ __all__ = [
     "solve_VIE_1_trapz", "solve_VIE_2_trapz",
     "fast_coll_settings_VIE_1", "fast_coll_settings_VIE_2", "fast_coll_settings_VIDE",
 ]
-__version__ = "0.1.0"
+from importlib.metadata import version
+__version__ = version("volterra-equation-solvers")
