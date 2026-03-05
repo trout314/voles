@@ -51,7 +51,7 @@ def main(json_path, output_path):
             ax.annotate(f"n={n}",
                         xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
                         xytext=(0, 4), textcoords="offset points",
-                        ha="center", va="bottom", fontsize=10)
+                        ha="center", va="bottom", fontsize=9)
 
         ax.set_ylim(top=max(bar_times) * 1.18)
 
