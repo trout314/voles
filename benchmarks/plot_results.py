@@ -20,38 +20,32 @@ def main(json_path, output_path):
 
     # (solver, [(benchmark_name, actual_n_pts), ...])
     groups = [
-        ("VIE-1", [("test_vie1_1000", 1000), ("test_vie1_2000", 1999),
-                   ("test_vie1_3000", 2998), ("test_vie1_4000", 3997)]),
-        ("VIE-2", [("test_vie2_1000",  997), ("test_vie2_2000", 1997),
-                   ("test_vie2_3000", 2997), ("test_vie2_4000", 3997)]),
-        ("VIDE",  [("test_vide_1000",  997), ("test_vide_2000", 1997),
-                   ("test_vide_3000", 2997), ("test_vide_4000", 3997)]),
+        ("VIE-1", [("test_vie1_500",   496), ("test_vie1_1000", 1000),
+                   ("test_vie1_2000", 1999), ("test_vie1_3000", 2998),
+                   ("test_vie1_4000", 3997)]),
+        ("VIE-2", [("test_vie2_500",   497), ("test_vie2_1000",  997),
+                   ("test_vie2_2000", 1997), ("test_vie2_3000", 2997),
+                   ("test_vie2_4000", 3997)]),
+        ("VIDE",  [("test_vide_500",   497), ("test_vide_1000",  997),
+                   ("test_vide_2000", 1997), ("test_vide_3000", 2997),
+                   ("test_vide_4000", 3997)]),
     ]
 
-    n_solvers = len(groups)
-    n_sizes = 4
-    width = 0.18
-    offsets = np.linspace(-(n_sizes - 1) / 2, (n_sizes - 1) / 2, n_sizes) * width
-    colors = ["#4C72B0", "#55A868", "#C44E52", "#8172B2"]
-    labels = ["≈1000 pts", "≈2000 pts", "≈3000 pts", "≈4000 pts"]
+    colors = ["#4C72B0", "#55A868", "#C44E52", "#8172B2", "#937860"]
+    x = np.arange(len(groups[0][1]))
+    x_labels = [f"n={n}" for _, n in groups[0][1]]
 
-    x = np.arange(n_solvers)
-    fig, ax = plt.subplots(figsize=(9, 4))
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=False)
+    fig.suptitle("Solver benchmarks (latest CI run)")
 
-    for size_idx, (offset, color, label) in enumerate(zip(offsets, colors, labels)):
-        bar_times = [times[groups[s][1][size_idx][0]] * 1e3 for s in range(n_solvers)]
-        actual_pts = [groups[s][1][size_idx][1] for s in range(n_solvers)]
-        bars = ax.bar(x + offset, bar_times, width, color=color, label=label)
-        for bar, n in zip(bars, actual_pts):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                    f"n={n}", ha="center", va="bottom", fontsize=6.5)
-
-    ax.set_ylabel("Mean time (ms)")
-    ax.set_title("Solver benchmarks (latest CI run)")
-    ax.set_xticks(x)
-    ax.set_xticklabels([g[0] for g in groups])
-    ax.legend()
-    ax.yaxis.set_minor_locator(plt.matplotlib.ticker.AutoMinorLocator())
+    for ax, (solver_name, cases) in zip(axes, groups):
+        bar_times = [times[name] * 1e3 for name, _ in cases]
+        bars = ax.bar(x, bar_times, color=colors)
+        ax.set_title(solver_name)
+        ax.set_xticks(x)
+        ax.set_xticklabels(x_labels, rotation=30, ha="right", fontsize=8)
+        ax.set_ylabel("Mean time (ms)")
+        ax.yaxis.set_minor_locator(plt.matplotlib.ticker.AutoMinorLocator())
 
     fig.tight_layout()
     fig.savefig(output_path, dpi=150)

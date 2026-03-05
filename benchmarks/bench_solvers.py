@@ -12,6 +12,10 @@ def _vie2_inputs(n_intervals):
     g = np.sin(times) - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
     return kernel, g, time_step
 
+def test_vie2_500(benchmark):
+    kernel, g, dt = _vie2_inputs(124)          # 497 pts
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+
 def test_vie2_1000(benchmark):
     kernel, g, dt = _vie2_inputs(249)          # 997 pts
     benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
@@ -37,6 +41,10 @@ def _vie1_inputs(n_intervals):
     kernel = np.exp(times)
     g = np.sin(times); g[0] = 0.0
     return kernel, g, time_step
+
+def test_vie1_500(benchmark):
+    kernel, g, dt = _vie1_inputs(55)           # 496 pts
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
 
 def test_vie1_1000(benchmark):
     kernel, g, dt = _vie1_inputs(111)          # 1000 pts
@@ -66,6 +74,11 @@ def _vide_inputs(n_intervals):
          - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
          - np.sin(times) / (1.0 + times**2))
     return kernel, g, a, time_step
+
+def test_vide_500(benchmark):
+    kernel, g, a, dt = _vide_inputs(124)       # 497 pts
+    benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
+              soln_init_value=0.0, time_step=dt)
 
 def test_vide_1000(benchmark):
     kernel, g, a, dt = _vide_inputs(249)       # 997 pts
