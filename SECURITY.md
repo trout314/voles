@@ -1,7 +1,5 @@
 # Security Policy
 
-## Scope
-
 This library performs numerical computation on caller-supplied arrays. There are no
 network calls, no file I/O, no authentication, and no persistent state beyond the
 calling process's memory.
