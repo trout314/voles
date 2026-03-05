@@ -36,7 +36,7 @@ def main(json_path, output_path):
 
     colors = ["#4C72B0", "#55A868", "#C44E52", "#8172B2", "#937860"]
 
-    fig, axes = plt.subplots(3, 1, figsize=(2.5, 3.5), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=(5, 7), sharex=True)
 
     for ax, (solver_name, cases) in zip(axes, groups):
         x = np.arange(len(cases))
