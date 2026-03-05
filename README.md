@@ -30,6 +30,50 @@ pip install git+https://github.com/trout314/volterra-equation-solvers
 
 **Requirements:** Python ≥ 3.10, numpy, numba
 
+### Optional D extension (faster backend)
+
+The package includes a fast D-language backend. Without it the solvers fall back to Numba automatically. To enable it, build the shared library with [ldc2](https://github.com/ldc-developers/ldc/releases) and [meson](https://mesonbuild.com/) + [ninja](https://ninja-build.org/), then copy it into the package.
+
+**Linux**
+
+```bash
+pip install meson ninja
+# install ldc2 from https://github.com/ldc-developers/ldc/releases and put it on PATH
+git clone https://github.com/trout314/volterra-equation-solvers && cd volterra-equation-solvers
+meson setup dlang/build dlang && ninja -C dlang/build
+cp dlang/build/volterra_dlang.so "$(python -c 'import volterra_equation_solvers, os; print(os.path.dirname(volterra_equation_solvers.__file__))')"
+```
+
+**macOS**
+
+```bash
+pip install meson ninja
+# download ldc2 from https://github.com/ldc-developers/ldc/releases (pick osx-arm64 or osx-x86_64)
+# extract and add ldc2-*/bin to PATH, then:
+git clone https://github.com/trout314/volterra-equation-solvers && cd volterra-equation-solvers
+meson setup dlang/build dlang && ninja -C dlang/build
+cp dlang/build/volterra_dlang.dylib "$(python -c 'import volterra_equation_solvers, os; print(os.path.dirname(volterra_equation_solvers.__file__))')"
+```
+
+**Windows** (PowerShell, requires Visual Studio Build Tools or MSVC for compiler detection)
+
+```powershell
+pip install meson ninja
+# download ldc2-*-windows-x64.7z from https://github.com/ldc-developers/ldc/releases
+# extract and add ldc2-*\bin to PATH, then:
+git clone https://github.com/trout314/volterra-equation-solvers; cd volterra-equation-solvers
+meson setup dlang\build dlang; ninja -C dlang\build
+$pkg = python -c "import volterra_equation_solvers, os; print(os.path.dirname(volterra_equation_solvers.__file__))"
+Copy-Item dlang\build\volterra_dlang.dll $pkg
+```
+
+Verify the extension loaded:
+
+```python
+from volterra_equation_solvers._dlang import available
+print(available)  # True if the library was found
+```
+
 ## Quick start
 
 ```python
