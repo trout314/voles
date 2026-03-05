@@ -25,7 +25,7 @@ def main(json_path, output_path):
          [("test_vie1_500",   496), ("test_vie1_1000", 1000),
           ("test_vie1_2000", 1999), ("test_vie1_3000", 2998),
           ("test_vie1_4000", 3997)]),
-        ("VIE-1 (force_continuous)",
+        ("VIE-1 (continuous)",
          [("test_vie1_fc_500",   496), ("test_vie1_fc_1000", 1000),
           ("test_vie1_fc_2000", 1999), ("test_vie1_fc_3000", 2998),
           ("test_vie1_fc_4000", 3997)]),
