@@ -48,9 +48,10 @@ def main(json_path, output_path):
         ax.yaxis.set_minor_locator(plt.matplotlib.ticker.AutoMinorLocator())
 
         for bar, (_, n) in zip(bars, cases):
-            ax.text(bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() * 1.02, f"n={n}",
-                    ha="center", va="bottom", fontsize=10)
+            ax.annotate(f"n={n}",
+                        xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                        xytext=(0, 4), textcoords="offset points",
+                        ha="center", va="bottom", fontsize=10)
 
     fig.supylabel("Mean time (ms)")
     fig.tight_layout()
