@@ -28,7 +28,7 @@ $$y'(t) = a(t) y(t) + g(t) + \int_0^t K(t-s) y(s) ds$$
 pip install git+https://github.com/trout314/volterra-equation-solvers
 ```
 
-**Requirements:** Python ≥ 3.10, numpy, numba, scipy
+**Requirements:** Python ≥ 3.10, numpy, numba
 
 ## Quick start
 
