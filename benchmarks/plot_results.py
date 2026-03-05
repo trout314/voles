@@ -21,8 +21,6 @@ def main(json_path, output_path):
     times = {b["name"].split("::")[-1]: b["stats"]["mean"]
              for b in data["benchmarks"]}
 
-    cpu = data["machine_info"]["cpu"]["brand_raw"]
-
     # (solver, output_suffix, [(benchmark_name, actual_n_pts), ...])
     groups = [
         ("VIE-1", "vie1",
@@ -48,12 +46,17 @@ def main(json_path, output_path):
         bar_times = [times[name] * 1e3 for name, _ in cases]
 
         fig, ax = plt.subplots(figsize=(5, 4))
-        ax.bar(x, bar_times, color=colors)
-        ax.set_title(f"{solver_name} — {cpu}")
+        bars = ax.bar(x, bar_times, color=colors)
+        ax.set_title(solver_name)
         ax.set_xticks(x)
         ax.set_xticklabels(x_labels, rotation=30, ha="right", fontsize=8)
         ax.set_ylabel("Mean time (ms)")
         ax.yaxis.set_minor_locator(plt.matplotlib.ticker.AutoMinorLocator())
+
+        for bar, (_, n) in zip(bars, cases):
+            ax.text(bar.get_x() + bar.get_width() / 2,
+                    bar.get_height(), f"n={n}",
+                    ha="center", va="bottom", fontsize=7)
 
         fig.tight_layout()
         path = f"{stem}_{suffix}{ext}"

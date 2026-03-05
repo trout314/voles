@@ -54,7 +54,7 @@ All solvers accept `return_polys=True` to also return the piecewise polynomial s
 
 ## Benchmarks
 
-Benchmarked on **12th Gen Intel(R) Core(TM) i5-12600KF**.
+Run on a **12th Gen Intel(R) Core(TM) i5-12600KF**. Mean time is averaged over a variable number of automatically-calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
 
 ![VIE-1 benchmarks](benchmarks/results_vie1.png)
 ![VIE-2 benchmarks](benchmarks/results_vie2.png)
