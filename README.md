@@ -28,6 +28,10 @@ Given functions $K$, $a$, and $g$ and an initial value $y(0)$, solves for the fu
 
 $$y'(t) = a(t) y(t) + g(t) + \int_0^t K(t-s) y(s) ds$$
 
+**`solve_VIE_1_trapz`, `solve_VIE_2_trapz`** *(legacy)*
+
+Lower-order trapezoidal-rule solvers for VIE-1 and VIE-2. Retained for backward compatibility; the collocation solvers above are preferred for new code.
+
 ## Installation
 
 ```bash
