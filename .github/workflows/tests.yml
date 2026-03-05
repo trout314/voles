@@ -40,8 +40,8 @@ jobs:
         run: pytest tests/ -v
 
   # Build the D extension inside an Ubuntu 20.04 container (glibc 2.31)
-  # using ldc2 1.30.0 (which itself only requires glibc >= 2.27).
-  # Linking on glibc 2.31 ensures the resulting .so references only
+  # using ldc2 1.41.0. Linking on glibc 2.31 ensures the resulting .so
+  # references only
   # glibc symbols up to 2.31, covering Ubuntu 20.04+, Debian 11+,
   # RHEL/AlmaLinux 8+, and Fedora 32+.
   test-dlang:
@@ -57,10 +57,10 @@ jobs:
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
             apt-get install -y -qq curl xz-utils ninja-build python3-pip
-            pip3 install -q meson
-            curl -sL https://github.com/ldc-developers/ldc/releases/download/v1.40.1/ldc2-1.40.1-linux-x86_64.tar.xz \
+            pip3 install -q 'meson==1.5.2'
+            curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.41.0/ldc2-1.41.0-linux-x86_64.tar.xz \
               | tar -xJ -C /tmp
-            export PATH=/tmp/ldc2-1.40.1-linux-x86_64/bin:\$PATH
+            export PATH=/tmp/ldc2-1.41.0-linux-x86_64/bin:\$PATH
             cd /work/dlang
             meson setup build --wipe
             ninja -C build
@@ -105,8 +105,8 @@ jobs:
         run: |
           ARCH=$(uname -m)
           [ "$ARCH" = "arm64" ] && LDC_ARCH="arm64" || LDC_ARCH="x86_64"
-          LDC_VERSION="1.40.1"
-          curl -sL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-${LDC_ARCH}.tar.gz" \
+          LDC_VERSION="1.41.0"
+          curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-${LDC_ARCH}.tar.gz" \
             | tar -xz -C "$HOME"
           echo "$HOME/ldc2-${LDC_VERSION}-osx-${LDC_ARCH}/bin" >> $GITHUB_PATH
 
@@ -143,7 +143,7 @@ jobs:
       - name: Download and extract ldc2
         shell: pwsh
         run: |
-          $LDC_VERSION = "1.40.1"
+          $LDC_VERSION = "1.41.0"
           $archive = "ldc2-${LDC_VERSION}-windows-x64.7z"
           Invoke-WebRequest -Uri "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/$archive" -OutFile "$env:TEMP\$archive"
           7z x "$env:TEMP\$archive" -o"$env:USERPROFILE"
