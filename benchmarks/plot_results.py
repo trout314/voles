@@ -43,7 +43,8 @@ def main(json_path, output_path):
         bar_times = [times[name] * 1e3 for name, _ in cases]
 
         bars = ax.bar(x, bar_times, color=colors)
-        ax.set_title(solver_name)
+        ax.text(0.5, 0.95, solver_name, transform=ax.transAxes,
+                ha="center", va="top", fontsize=10)
         ax.set_xticks([])
         ax.yaxis.set_minor_locator(plt.matplotlib.ticker.AutoMinorLocator())
 
