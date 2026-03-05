@@ -19,11 +19,16 @@ def main(json_path, output_path):
              for b in data["benchmarks"]}
 
     # (solver, [(benchmark_name, actual_n_pts), ...])
+    # Order is column-major: left column first (top→bottom), then right column
     groups = [
         ("VIE-1",
          [("test_vie1_500",   496), ("test_vie1_1000", 1000),
           ("test_vie1_2000", 1999), ("test_vie1_3000", 2998),
           ("test_vie1_4000", 3997)]),
+        ("VIE-1 (force_continuous)",
+         [("test_vie1_fc_500",   496), ("test_vie1_fc_1000", 1000),
+          ("test_vie1_fc_2000", 1999), ("test_vie1_fc_3000", 2998),
+          ("test_vie1_fc_4000", 3997)]),
         ("VIE-2",
          [("test_vie2_500",   497), ("test_vie2_1000",  997),
           ("test_vie2_2000", 1997), ("test_vie2_3000", 2997),
@@ -32,17 +37,13 @@ def main(json_path, output_path):
          [("test_vide_500",   497), ("test_vide_1000",  997),
           ("test_vide_2000", 1997), ("test_vide_3000", 2997),
           ("test_vide_4000", 3997)]),
-        ("VIE-1 (force_continuous)",
-         [("test_vie1_fc_500",   496), ("test_vie1_fc_1000", 1000),
-          ("test_vie1_fc_2000", 1999), ("test_vie1_fc_3000", 2998),
-          ("test_vie1_fc_4000", 3997)]),
     ]
 
     colors = ["#4C72B0", "#55A868", "#C44E52", "#8172B2", "#937860"]
 
-    fig, axes = plt.subplots(4, 1, figsize=(5, 9), sharex=True)
+    fig, axes = plt.subplots(2, 2, figsize=(7, 5), sharex=True)
 
-    for ax, (solver_name, cases) in zip(axes, groups):
+    for ax, (solver_name, cases) in zip(axes.T.flat, groups):
         x = np.arange(len(cases))
         bar_times = [times[name] * 1e3 for name, _ in cases]
 
