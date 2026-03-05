@@ -1010,7 +1010,7 @@ int find_coll_info_id(int max_cd, int max_cp)(int coll_divs, int[] coll_choices)
 // extern(C) entry points
 // ---------------------------------------------------------------------------
 
-extern(C):
+export extern(C):
 
 int volterra_solve_vie1(
     double* g_values, double* kernel_values, int n,

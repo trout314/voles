@@ -50,9 +50,9 @@ jobs:
             apt-get update -qq
             apt-get install -y -qq curl xz-utils ninja-build python3-pip
             pip3 install -q meson
-            curl -sL https://github.com/ldc-developers/ldc/releases/download/v1.30.0/ldc2-1.30.0-linux-x86_64.tar.xz \
+            curl -sL https://github.com/ldc-developers/ldc/releases/download/v1.40.1/ldc2-1.40.1-linux-x86_64.tar.xz \
               | tar -xJ -C /tmp
-            export PATH=/tmp/ldc2-1.30.0-linux-x86_64/bin:\$PATH
+            export PATH=/tmp/ldc2-1.40.1-linux-x86_64/bin:\$PATH
             cd /work/dlang
             meson setup build --wipe
             ninja -C build
@@ -91,7 +91,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install meson and ninja
-        run: pip3 install meson ninja
+        run: brew install meson ninja
 
       - name: Download and extract ldc2
         run: |
