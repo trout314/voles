@@ -53,6 +53,8 @@ def main(json_path, output_path):
                         xytext=(0, 4), textcoords="offset points",
                         ha="center", va="bottom", fontsize=10)
 
+        ax.set_ylim(top=max(bar_times) * 1.18)
+
     fig.supylabel("Mean time (ms)")
     fig.tight_layout()
     fig.savefig(output_path, dpi=150)
