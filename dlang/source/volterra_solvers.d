@@ -994,8 +994,8 @@ int[][] supported_coll_settings_internal(int max_coll_divs, int max_coll_params)
 // Runtime dispatch
 // ---------------------------------------------------------------------------
 
-enum max_coll_divs = 4;
-enum max_coll_params = 3;
+enum max_coll_divs = 5;
+enum max_coll_params = 6;
 
 int find_coll_info_id(int max_cd, int max_cp)(int coll_divs, int[] coll_choices)
 {
