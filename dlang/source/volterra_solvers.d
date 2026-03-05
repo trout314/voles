@@ -10,96 +10,51 @@ import std.stdio : writeln;
 import utility : subsetsOfSize;
 
 // ---------------------------------------------------------------------------
-// Linear solvers (Cramer's rule)
+// Linear solver (LU factorization with partial pivoting)
 // ---------------------------------------------------------------------------
 
+// a and b are passed by value so the originals are not modified.
+// All loop bounds are compile-time constants (dim is a template parameter),
+// allowing the compiler to fully unroll and inline for each distinct dim.
 double[dim] lin_solve(int dim)(
-    double[dim][dim] coef_matrix,
-    double[dim] rhs_vector)
+    double[dim][dim] a,
+    double[dim] b)
 {
-    static if (dim == 3)
+    foreach (k; 0 .. dim)
     {
-        return solve3(coef_matrix, rhs_vector);
-    }
-    else static if (dim == 2)
-    {
-        return solve2(coef_matrix, rhs_vector);
-    }
-    else static if (dim == 1)
-    {
-        return [rhs_vector[0] / coef_matrix[0][0]];
-    }
-    else
-    {
-        static assert(0, "not implemented");
-    }
-}
-
-double determinant2()(
-    double[2][2] mat)
-{
-    return mat[0][0] * mat[1][1] - mat[0][1] * mat[1][0];
-}
-
-double[2] solve2()(
-    double[2][2] coef_matrix,
-    double[2] rhs_vector)
-{
-    auto det = determinant2(coef_matrix);
-    assert(det != 0, "error: solver got a non-invertible coefficient matrix");
-
-    double[2][2] det_x;
-    double[2][2] det_y;
-
-    for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < 2; j++) {
-            det_x[i][j] = coef_matrix[i][j];
-            det_y[i][j] = coef_matrix[i][j];
+        // find pivot row: max absolute value in column k at or below row k
+        int pivot = k;
+        double max_val = a[k][k] < 0 ? -a[k][k] : a[k][k];
+        foreach (i; k + 1 .. dim)
+        {
+            immutable v = a[i][k] < 0 ? -a[i][k] : a[i][k];
+            if (v > max_val) { max_val = v; pivot = i; }
+        }
+        if (pivot != k)
+        {
+            double[dim] tmp = a[k]; a[k] = a[pivot]; a[pivot] = tmp;
+            double tmp_b = b[k]; b[k] = b[pivot]; b[pivot] = tmp_b;
+        }
+        assert(a[k][k] != 0.0, "error: solver got a non-invertible coefficient matrix");
+        foreach (i; k + 1 .. dim)
+        {
+            a[i][k] /= a[k][k];
+            foreach (j; k + 1 .. dim)
+                a[i][j] -= a[i][k] * a[k][j];
         }
     }
-
-    for (int i = 0; i < 2; i++) {
-        det_x[i][0] = rhs_vector[i];
-        det_y[i][1] = rhs_vector[i];
+    // forward substitution: L has unit diagonal; multipliers stored in lower triangle of a
+    foreach (i; 1 .. dim)
+        foreach (k; 0 .. i)
+            b[i] -= a[i][k] * b[k];
+    // back substitution
+    foreach_reverse (i; 0 .. dim)
+    {
+        foreach (k; i + 1 .. dim)
+            b[i] -= a[i][k] * b[k];
+        b[i] /= a[i][i];
     }
-
-    return [determinant2(det_x) / det, determinant2(det_y) / det];
-}
-
-double determinant3()(
-    double[3][3] mat)
-{
-    return mat[0][0] * (mat[1][1] * mat[2][2] - mat[1][2] * mat[2][1])
-           - mat[0][1] * (mat[1][0] * mat[2][2] - mat[1][2] * mat[2][0])
-           + mat[0][2] * (mat[1][0] * mat[2][1] - mat[1][1] * mat[2][0]);
-}
-
-double[3] solve3()(
-    double[3][3] coef_matrix,
-    double[3] rhs_vector)
-{
-    auto det = determinant3(coef_matrix);
-    assert(det != 0, "error: solver got a non-invertible coefficient matrix");
-
-    double[3][3] det_x;
-    double[3][3] det_y;
-    double[3][3] det_z;
-
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
-            det_x[i][j] = coef_matrix[i][j];
-            det_y[i][j] = coef_matrix[i][j];
-            det_z[i][j] = coef_matrix[i][j];
-        }
-    }
-
-    for (int i = 0; i < 3; i++) {
-        det_x[i][0] = rhs_vector[i];
-        det_y[i][1] = rhs_vector[i];
-        det_z[i][2] = rhs_vector[i];
-    }
-
-    return [determinant3(det_x) / det, determinant3(det_y) / det, determinant3(det_z) / det];
+    return b;
 }
 
 // ---------------------------------------------------------------------------
