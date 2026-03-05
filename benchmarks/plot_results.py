@@ -49,8 +49,8 @@ def main(json_path, output_path):
 
         for bar, (_, n) in zip(bars, cases):
             ax.text(bar.get_x() + bar.get_width() / 2,
-                    bar.get_height(), f"n={n}",
-                    ha="center", va="bottom", fontsize=9)
+                    bar.get_height() * 1.02, f"n={n}",
+                    ha="center", va="bottom", fontsize=10)
 
     fig.supylabel("Mean time (ms)")
     fig.tight_layout()
