@@ -3,6 +3,10 @@ name: Benchmarks
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'notebooks/**'
 
 permissions:
   contents: write      # needed to push results to gh-pages and commit chart PNG
