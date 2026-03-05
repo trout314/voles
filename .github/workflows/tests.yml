@@ -7,7 +7,11 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  # Test the Numba path across all supported Python versions.
+  # This job does not build the D extension, so it also serves as the
+  # regression test for the automatic Numba fallback on older distros
+  # (glibc < 2.34: Ubuntu 20.04, Debian 11, RHEL 8, etc.).
+  test-numba:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -24,5 +28,58 @@ jobs:
       - name: Install package and dev dependencies
         run: pip install -e ".[dev]"
 
-      - name: Run tests
+      - name: Run tests (Numba path)
+        run: pytest tests/ -v
+
+  # Build the D extension inside an Ubuntu 20.04 container (glibc 2.31)
+  # using ldc2 1.30.0 (which itself only requires glibc >= 2.27).
+  # Linking on glibc 2.31 ensures the resulting .so references only
+  # glibc symbols up to 2.31, covering Ubuntu 20.04+, Debian 11+,
+  # RHEL/AlmaLinux 8+, and Fedora 32+.
+  test-dlang:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build D extension in Ubuntu 20.04 container
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/work" ubuntu:20.04 bash -c "
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq curl xz-utils ninja-build python3-pip
+            pip3 install -q meson
+            curl -sL https://github.com/ldc-developers/ldc/releases/download/v1.30.0/ldc2-1.30.0-linux-x86_64.tar.xz \
+              | tar -xJ -C /tmp
+            export PATH=/tmp/ldc2-1.30.0-linux-x86_64/bin:\$PATH
+            cd /work/dlang
+            meson setup build --wipe
+            ninja -C build
+            cp build/volterra_dlang.so /work/src/volterra_equation_solvers/
+          "
+
+      - name: Verify glibc requirement
+        run: |
+          max=$(objdump -T src/volterra_equation_solvers/volterra_dlang.so \
+            | awk '/GLIBC/{match($0,/GLIBC_([0-9.]+)/,a); print a[1]}' \
+            | sort -V | tail -1)
+          echo "Max glibc version required: $max"
+          # Fail if the requirement has crept above 2.31
+          python3 -c "
+          from functools import reduce
+          def ver(s): return tuple(int(x) for x in s.split('.'))
+          assert ver('$max') <= ver('2.31'), f'glibc {max!r} > 2.31'
+          print('glibc requirement OK')
+          "
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package and dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run tests (D solver path)
         run: pytest tests/ -v
