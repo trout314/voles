@@ -40,7 +40,7 @@ jobs:
         run: pytest tests/ -v
 
   # Build the D extension inside an Ubuntu 20.04 container (glibc 2.31)
-  # using ldc2 1.41.0. Linking on glibc 2.31 ensures the resulting .so
+  # using ldc2 1.36.0. Linking on glibc 2.31 ensures the resulting .so
   # references only
   # glibc symbols up to 2.31, covering Ubuntu 20.04+, Debian 11+,
   # RHEL/AlmaLinux 8+, and Fedora 32+.
@@ -56,16 +56,17 @@ jobs:
             set -e
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
-            apt-get install -y -qq curl xz-utils ninja-build python3-pip
+            apt-get install -y -qq curl xz-utils ninja-build python3-pip libxml2
             pip3 install -q 'meson==1.5.2'
-            curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.41.0/ldc2-1.41.0-linux-x86_64.tar.xz \
+            curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.36.0/ldc2-1.36.0-linux-x86_64.tar.xz \
               | tar -xJ -C /tmp
-            export PATH=/tmp/ldc2-1.41.0-linux-x86_64/bin:\$PATH
+            export PATH=/tmp/ldc2-1.36.0-linux-x86_64/bin:\$PATH
             cd /work/dlang
             meson setup build --wipe
             ninja -C build
             cp build/volterra_dlang.so /work/src/volterra_equation_solvers/
           "
+
 
       - name: Verify glibc requirement
         run: |
