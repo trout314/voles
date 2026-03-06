@@ -45,6 +45,20 @@ def test_vie1_poly_accuracy(vie1_poly_data):
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
+def test_vie1_poly_force_continuous(vie1_poly_data):
+    d = vie1_poly_data
+    soln = solve_VIE_1(
+        kernel_values=d["kernel"],
+        g_values=d["g"],
+        time_step=d["time_step"],
+        coll_divs=d["coll_divs"],
+        coll_choices=d["coll_choices"],
+        soln_init_value=float(d["exact"][0]),
+        force_continuous=True,
+    )
+    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+
+
 def test_vie1_force_continuous(vie1_data):
     d = vie1_data
     soln = solve_VIE_1(
