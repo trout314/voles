@@ -255,3 +255,27 @@ def test_list_kernel_values(solver):
 @pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
 def test_list_g_values(solver):
     solver(g_values=_list_inputs())
+
+
+# ---------------------------------------------------------------------------
+# coll_choices must not be mutated
+# ---------------------------------------------------------------------------
+
+def test_coll_choices_not_mutated_vie1():
+    # coll_divs=2, choices [1,2] but supplied reversed; _K has 9 pts = 2*4+1
+    choices = [2, 1]
+    solve_VIE_1(kernel_values=_K, g_values=_G, coll_divs=2, coll_choices=choices)
+    assert choices == [2, 1]
+
+
+def test_coll_choices_not_mutated_vie2():
+    choices = [2, 0, 1]
+    solve_VIE_2(kernel_values=_K, g_values=_G, coll_divs=2, coll_choices=choices)
+    assert choices == [2, 0, 1]
+
+
+def test_coll_choices_not_mutated_vide():
+    choices = [2, 0, 1]
+    solve_VIDE(kernel_values=_K, g_values=_G, a_values=_A,
+               soln_init_value=0.0, coll_divs=2, coll_choices=choices)
+    assert choices == [2, 0, 1]

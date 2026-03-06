@@ -433,7 +433,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         "all integers in coll_choices must be distinct"
     for choice in coll_choices:
         assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
-    coll_choices.sort()
+    coll_choices = sorted(coll_choices)
     if (coll_divs, coll_choices) in _fast_settings_VIDE:
         soln_vals, poly_coefs = _dlang_module.solve_vide_d(
             g_values_, kernel_values_, a_values_, soln_init_value,
@@ -625,7 +625,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     for choice in coll_choices:
         assert 1 <= choice <= coll_divs, \
             "coll_choices must contain only integers from 1 to coll_divs"
-    coll_choices.sort()
+    coll_choices = sorted(coll_choices)
     if (coll_divs, coll_choices) in _fast_settings_VIE_1:
         soln_vals, poly_coefs = _dlang_module.solve_vie1_d(
             g_values_, kernel_values_, soln_init_value_, time_step,
@@ -778,7 +778,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         "all integers in coll_choices must be distinct"
     for choice in coll_choices:
         assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
-    coll_choices.sort()
+    coll_choices = sorted(coll_choices)
     if (coll_divs, coll_choices) in _fast_settings_VIE_2:
         soln_vals, poly_coefs = _dlang_module.solve_vie2_d(
             g_values_, kernel_values_, time_step, coll_divs, coll_choices, return_polys)
