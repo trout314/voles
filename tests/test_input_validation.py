@@ -236,3 +236,22 @@ def test_nan_a_at_coll_point_vide():
     assert _nan_raises_or_propagates(
         solve_VIDE, kernel_values=_Knan, g_values=_Gnan, a_values=a,
         soln_init_value=0.0, coll_divs=5, coll_choices=[1, 2, 3])
+
+
+# ---------------------------------------------------------------------------
+# Plain Python lists accepted for array inputs
+# ---------------------------------------------------------------------------
+
+def _list_inputs():
+    """9-point float lists, valid for coll_divs=2."""
+    return [float(x) for x in range(9)]
+
+
+@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
+def test_list_kernel_values(solver):
+    solver(kernel_values=_list_inputs(), g_values=_list_inputs())
+
+
+@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
+def test_list_g_values(solver):
+    solver(g_values=_list_inputs())
