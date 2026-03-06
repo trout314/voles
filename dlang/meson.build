@@ -16,7 +16,7 @@ if lapack_dep.found()
   lapack_link_args += ['-llapack']
 endif
 
-shared_library(
+lib = shared_library(
   'volterra_dlang',
   ['source/volterra_solvers.d', 'source/utility.d'],
   include_directories: include_directories('source'),
@@ -25,3 +25,15 @@ shared_library(
   name_prefix: '',
   install: false,
 )
+
+# Strip debug symbols to keep the .so well under GitHub's 100 MB limit.
+strip = find_program('strip', required: false)
+if strip.found()
+  custom_target(
+    'strip-volterra_dlang',
+    input: lib,
+    output: 'volterra_dlang.so.stripped',
+    command: [strip, '--strip-unneeded', '@INPUT@'],
+    build_by_default: true,
+  )
+endif
