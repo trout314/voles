@@ -395,25 +395,90 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         described above, and polys is a list of numpy polynomial objects defining the
         piecewise polynomial solution.
     '''
-    kernel_values_ = np.array(kernel_values)    
+    kernel_values_ = np.asarray(kernel_values, dtype=float)
+    ndim = kernel_values_.ndim
+
+    if ndim not in (1, 3):
+        raise ValueError(
+            f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
+
+    # ------------------------------------------------------------------ vector path
+    if ndim == 3:
+        N, d1, d2 = kernel_values_.shape
+        if d1 != d2:
+            raise ValueError(f"kernel_values must have shape (N, d, d), got {kernel_values_.shape}")
+        d = d1
+
+        if g_values is not None:
+            g_values_ = np.asarray(g_values, dtype=float)
+            if g_values_.shape != (N, d):
+                raise ValueError(
+                    f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+        else:
+            g_values_ = np.zeros((N, d), dtype=float)
+
+        if a_values is not None:
+            a_values_ = np.asarray(a_values, dtype=float)
+            if a_values_.shape != (N, d, d):
+                raise ValueError(
+                    f"a_values shape {a_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+        else:
+            a_values_ = np.zeros((N, d, d), dtype=float)
+
+        soln_init_values_ = np.asarray(soln_init_value, dtype=float).ravel()
+        if soln_init_values_.shape != (d,):
+            raise ValueError(
+                f"soln_init_value must be a scalar or length-{d} array for d={d}")
+
+        if (coll_divs > 1) and (N % coll_divs**2 != 1):
+            ans_len = int(N / coll_divs**2 - 1) * coll_divs**2 + 1
+            assert ans_len < N
+            print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
+                  f"Truncating to {ans_len}.")
+            kernel_values_ = kernel_values_[:ans_len]
+            g_values_ = g_values_[:ans_len]
+            a_values_ = a_values_[:ans_len]
+
+        assert coll_divs > 0, "coll_divs must be a positive integer"
+        assert all(isinstance(c, int) for c in coll_choices), "coll_choices must be a list of integers"
+        assert all(coll_choices.count(c) <= 1 for c in coll_choices), \
+            "all integers in coll_choices must be distinct"
+        for choice in coll_choices:
+            assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
+        coll_choices = sorted(coll_choices)
+
+        if not _dlang_module.available:
+            raise RuntimeError("D extension required for vector-valued VIDE; not available.")
+        if (coll_divs, coll_choices) not in _fast_settings_VIDE:
+            raise RuntimeError(
+                f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
+                f"not supported by D extension.")
+
+        k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
+        g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
+        a_c = np.ascontiguousarray(a_values_, dtype=np.float64)
+        return _dlang_module.solve_vide_vec_d(
+            g_c, k_c, a_c, soln_init_values_, time_step, coll_divs, coll_choices)
+
+    # ------------------------------------------------------------------ scalar path
     assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
 
     if g_values is not None:
         g_values_ = np.array(g_values)
-        assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"    
+        assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"
         assert len(g_values_) == len(kernel_values_), \
             "kernel_values and g_values must have the same length"
     else:
         g_values_ = np.zeros_like(kernel_values_)
-    
+
     if a_values is not None:
         a_values_ = np.array(a_values)
-        assert len(a_values_.shape) == 1, "a_values must be a 1-dim array"    
+        assert len(a_values_.shape) == 1, "a_values must be a 1-dim array"
         assert len(a_values_) == len(kernel_values_), \
             "kernel_values and a_values must have the same length"
     else:
         a_values_ = np.zeros_like(kernel_values_)
-    
+
     if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
         ans_len = int(len(kernel_values) / coll_divs**2 - 1) * coll_divs**2 + 1
         assert ans_len < len(kernel_values)
@@ -767,10 +832,10 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                 coll_choices=[0,1,2], return_polys=False):
     '''
     Solve a "Type 2" Volterra integral equation.
-      
+
     Solve the following Volterra integral equation (of Type 2) for the unknown
     function y(t).
-    
+
         y(t) = g(t) + integral[K(t-s)y(s)ds from s=0 to s=t]
 
     By default, this function returns a numpy array of solution values y(t). If
@@ -785,10 +850,10 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
             starting from zero and increasing in increments of time_step. g_values
             must have the same length as kernel_values. The default is all zeros.
         time_step (number): The separation between the times t where the functions
-            K(t) and g(t) are defined. The value of time_step must be positive. The 
+            K(t) and g(t) are defined. The value of time_step must be positive. The
             default is 1.0.
         coll_divs (number): The number of collocation divisions used when specifying
-            the collocation parameters. The value of coll_divs must be a positive 
+            the collocation parameters. The value of coll_divs must be a positive
             integer. The default is 2.
         coll_choices (iterable): List of positive integers that define the
             collocation parameters. Each such integer k corresponds to the
@@ -797,7 +862,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
             polynomials defining the solution. By default, return_poly is false and
             only the numpy array of solution values is returned. See the "Returns"
             section of this docstring for details.
-    
+
     The solver uses the collocation method described in Section 2.2 of the book:
         Brunner H. "Collocation Methods for Volterra Integral and Related
         Functional Differential Equations." Cambridge University Press; 2004.
@@ -806,18 +871,66 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         If return_polys is set to false, this function returns a numpy array of
         solution values y(t) for the same times t used in the input parameters
         kernel_values and g_values.
-        
+
         If return_polys is set to true then this function returns a two element tuple
         (soln_values, polys) where soln_values contains the solution values y(t) as
         described above, and polys is a list of numpy polynomial objects defining the
         piecewise polynomial solution.
     '''
-    kernel_values_ = np.array(kernel_values)    
+    kernel_values_ = np.asarray(kernel_values, dtype=float)
+    ndim = kernel_values_.ndim
+
+    if ndim not in (1, 3):
+        raise ValueError(
+            f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
+
+    # ------------------------------------------------------------------ vector path
+    if ndim == 3:
+        N, d1, d2 = kernel_values_.shape
+        if d1 != d2:
+            raise ValueError(f"kernel_values must have shape (N, d, d), got {kernel_values_.shape}")
+        d = d1
+        if g_values is not None:
+            g_values_ = np.asarray(g_values, dtype=float)
+            if g_values_.shape != (N, d):
+                raise ValueError(
+                    f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+        else:
+            g_values_ = np.zeros((N, d), dtype=float)
+
+        if (coll_divs > 1) and (N % coll_divs**2 != 1):
+            ans_len = int(N / coll_divs**2 - 1) * coll_divs**2 + 1
+            assert ans_len < N
+            print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
+                  f"Truncating to {ans_len}.")
+            kernel_values_ = kernel_values_[:ans_len]
+            g_values_ = g_values_[:ans_len]
+
+        assert coll_divs > 0, "coll_divs must be a positive integer"
+        assert all(isinstance(c, int) for c in coll_choices), "coll_choices must be a list of integers"
+        assert all(coll_choices.count(c) <= 1 for c in coll_choices), \
+            "all integers in coll_choices must be distinct"
+        for choice in coll_choices:
+            assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
+        coll_choices = sorted(coll_choices)
+
+        if not _dlang_module.available:
+            raise RuntimeError("D extension required for vector-valued VIE-2; not available.")
+        if (coll_divs, coll_choices) not in _fast_settings_VIE_2:
+            raise RuntimeError(
+                f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
+                f"not supported by D extension.")
+
+        k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
+        g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
+        return _dlang_module.solve_vie2_vec_d(g_c, k_c, time_step, coll_divs, coll_choices)
+
+    # ------------------------------------------------------------------ scalar path
     assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
 
     if g_values is not None:
         g_values_ = np.array(g_values)
-        assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"    
+        assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"
         assert len(g_values_) == len(kernel_values_), \
             "kernel_values and g_values must have the same length"
     else:
@@ -849,7 +962,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         print("warning: falling back to slower python/numba code")
         soln_vals, poly_coefs = solve_VIE_2_jit(g_values_, kernel_values_, time_step,
                                                 coll_divs, coll_choices, return_polys)
-    
+
     if return_polys:
         polys = []
         for i, coefs in enumerate(poly_coefs):

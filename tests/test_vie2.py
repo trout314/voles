@@ -4,6 +4,69 @@ from volterra_equation_solvers import solve_VIE_2
 from conftest import TOLERANCE
 
 
+# ---------------------------------------------------------------------------
+# Vector-valued VIE-2 tests
+# ---------------------------------------------------------------------------
+
+def test_vie2_vec_diagonal_matches_scalar():
+    """Diagonal 2×2 kernel: vector result equals two independent scalar solves.
+
+    K_rs(t) = delta_rs, g_r(t) = t - t^2/2, exact y_r(t) = t.
+    """
+    time_step = 0.1
+    coll_divs = 2
+    num_pts = 10 * coll_divs**2 + 1
+    times = np.arange(num_pts) * time_step
+    K0 = np.ones(num_pts)
+    kernel = np.zeros((num_pts, 2, 2))
+    kernel[:, 0, 0] = K0
+    kernel[:, 1, 1] = K0
+    g = np.zeros((num_pts, 2))
+    g[:, 0] = times - times**2 / 2
+    g[:, 1] = times - times**2 / 2
+    exact = np.zeros((num_pts, 2))
+    exact[:, 0] = times
+    exact[:, 1] = times
+
+    soln_vec = solve_VIE_2(
+        kernel_values=kernel, g_values=g,
+        time_step=time_step, coll_divs=coll_divs,
+        coll_choices=[0, 1, 2])
+    assert soln_vec.shape == exact.shape
+
+    soln_s = solve_VIE_2(
+        kernel_values=K0, g_values=g[:, 0],
+        time_step=time_step, coll_divs=coll_divs,
+        coll_choices=[0, 1, 2])
+
+    assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < TOLERANCE
+    assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < TOLERANCE
+    assert np.max(np.abs(soln_vec - exact)) < TOLERANCE
+
+
+def test_vie2_vec_analytic_2d():
+    """2×2 case with known analytic solution; K_rs=delta_rs, g_r=t-t²/2, y_r=t."""
+    time_step = 0.1
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1
+    times = np.arange(num_pts) * time_step
+    kernel = np.zeros((num_pts, 2, 2))
+    kernel[:, 0, 0] = 1.0
+    kernel[:, 1, 1] = 1.0
+    g = np.zeros((num_pts, 2))
+    g[:, 0] = times - times**2 / 2
+    g[:, 1] = times - times**2 / 2
+    exact = np.zeros((num_pts, 2))
+    exact[:, 0] = times
+    exact[:, 1] = times
+
+    soln = solve_VIE_2(
+        kernel_values=kernel, g_values=g,
+        time_step=time_step, coll_divs=coll_divs,
+        coll_choices=[0, 1, 2, 3])
+    assert np.max(np.abs(soln - exact)) < TOLERANCE
+
+
 def test_vie2_accuracy(vie2_data):
     d = vie2_data
     soln = solve_VIE_2(
