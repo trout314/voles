@@ -74,32 +74,34 @@ def test_vide_vec_analytic_2d():
 
 
 def test_vide_vec_coupled_a_matrix():
-    """2×2 VIDE with off-diagonal (coupled) a-matrix and K=0; exact = cosh/sinh.
+    """2×2 VIDE with fully coupled a, K, and g; exact solution is polynomial.
 
-    Constructed via similarity transform P=[[1,1],[1,-1]] on a diagonal ODE
-    system with a_diag=diag(1,-1), K=0, g=0, y=[e^t, e^{-t}], y(0)=[1,1]:
+    Constructed via similarity transform P=[[1,1],[1,-1]] on a diagonal system
+    with a_diag=diag(1,2), K_diag=diag(1,2), y_diag=[t, t²], y(0)=[0,0]:
 
-      ã = P diag(1,-1) P⁻¹ = [[0, 1], [1, 0]]   (off-diagonal swap matrix)
-      K̃ = 0,  g̃ = 0
-      z_exact = [e^t+e^{-t}, e^t-e^{-t}] = [2cosh(t), 2sinh(t)],  z(0)=[2,0]
+      ã = K̃ = P diag(1,2) P⁻¹ = [[3/2,-1/2],[-1/2,3/2]]  (all entries non-zero)
+      z_exact = P [t, t²]ᵀ = [t+t², t-t²],  z(0) = [0, 0]
+      g̃₀ = 1 + t - 5t²/2 - 2t³/3
+      g̃₁ = 1 - 3t + 3t²/2 + 2t³/3
     """
-    time_step = 0.01
+    time_step = 0.1
     coll_divs = 2
     num_pts = 10 * coll_divs**2 + 1
     times = np.arange(num_pts) * time_step
 
-    a = np.zeros((num_pts, 2, 2))
-    a[:, 0, 1] = 1.0
-    a[:, 1, 0] = 1.0
-    kernel = np.zeros((num_pts, 2, 2))
+    M = np.array([[1.5, -0.5], [-0.5, 1.5]])
+    a = np.zeros((num_pts, 2, 2));  a[:] = M
+    kernel = np.zeros((num_pts, 2, 2));  kernel[:] = M
     g = np.zeros((num_pts, 2))
+    g[:, 0] = 1 + times - 2.5 * times**2 - (2/3) * times**3
+    g[:, 1] = 1 - 3 * times + 1.5 * times**2 + (2/3) * times**3
     exact = np.zeros((num_pts, 2))
-    exact[:, 0] = 2 * np.cosh(times)
-    exact[:, 1] = 2 * np.sinh(times)
+    exact[:, 0] = times + times**2
+    exact[:, 1] = times - times**2
 
     soln = solve_VIDE(
         kernel_values=kernel, a_values=a, g_values=g,
-        soln_init_value=np.array([2.0, 0.0]),
+        soln_init_value=np.array([0.0, 0.0]),
         time_step=time_step, coll_divs=coll_divs,
         coll_choices=[0, 1, 2])
     assert np.max(np.abs(soln - exact)) < TOLERANCE
