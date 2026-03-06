@@ -73,3 +73,82 @@ def vide_data():
         coll_choices=[1, 2, 3],
         soln_init_value=0.0,
     )
+
+
+@pytest.fixture
+def vie1_poly_data():
+    """VIE-1 polynomial test: K(s)=2+s, g(t)=t²+t³/6, exact=t.
+
+    Verification: ∫₀ᵗ (2+(t-s))·s ds = t² + t³/6. ✓
+    The solution is degree-1 polynomial, so collocation gives near-exact results.
+    """
+    time_step = 0.1
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1  # 91
+    times = np.array([i * time_step for i in range(num_pts)])
+    kernel = 2 + times
+    g = times**2 + times**3 / 6
+    exact = times
+    return dict(
+        times=times,
+        kernel=kernel,
+        g=g,
+        exact=exact,
+        time_step=time_step,
+        coll_divs=coll_divs,
+        coll_choices=[1, 2, 3],
+    )
+
+
+@pytest.fixture
+def vie2_exp_data():
+    """VIE-2 exponential test: K(s)=2cos(s), g(t)=cos(t)-sin(t), exact=exp(t).
+
+    Verification: ∫₀ᵗ 2cos(t-s)eˢ ds = eᵗ - cos(t) + sin(t),
+    so y = (cos t - sin t) + (eᵗ - cos t + sin t) = eᵗ. ✓
+    """
+    time_step = 0.02
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1  # 91
+    times = np.array([i * time_step for i in range(num_pts)])
+    kernel = 2 * np.cos(times)
+    g = np.cos(times) - np.sin(times)
+    exact = np.exp(times)
+    return dict(
+        times=times,
+        kernel=kernel,
+        g=g,
+        exact=exact,
+        time_step=time_step,
+        coll_divs=coll_divs,
+        coll_choices=[0, 1, 2, 3],
+    )
+
+
+@pytest.fixture
+def vide_ode_data():
+    """VIDE pure-ODE test: K=0, a(t)=-1, g(t)=t, y(0)=2, exact=3exp(-t)+t-1.
+
+    With K=0 the integral term vanishes, leaving y'=-y+t, y(0)=2.
+    Verification: y'=−3e⁻ᵗ+1, −y+t=−(3e⁻ᵗ+t−1)+t=−3e⁻ᵗ+1. ✓
+    Tests the a(t)·y(t)+g(t) part of the solver independently of the kernel.
+    """
+    time_step = 0.01
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1  # 91
+    times = np.array([i * time_step for i in range(num_pts)])
+    kernel = np.zeros_like(times)
+    a = -np.ones_like(times)
+    g = times
+    exact = 3 * np.exp(-times) + times - 1
+    return dict(
+        times=times,
+        kernel=kernel,
+        a=a,
+        g=g,
+        exact=exact,
+        time_step=time_step,
+        coll_divs=coll_divs,
+        coll_choices=[1, 2, 3],
+        soln_init_value=float(exact[0]),  # = 2.0
+    )
