@@ -33,13 +33,19 @@ def _vide(**kw):
 
 
 # ---------------------------------------------------------------------------
-# kernel_values must be 1-D
+# kernel_values must be 1-D (VIE-2/VIDE) or 1-D/3-D (VIE-1)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
+@pytest.mark.parametrize("solver", [_vie2, _vide])
 def test_kernel_2d(solver):
     with pytest.raises(AssertionError, match="kernel_values must be a 1-dim array"):
         solver(kernel_values=np.ones((3, 3)))
+
+
+def test_kernel_2d_vie1():
+    # 2-D kernel is invalid for VIE-1 (accepts 1-D scalar or 3-D matrix only)
+    with pytest.raises(ValueError, match="kernel_values must be 1-D"):
+        _vie1(kernel_values=np.ones((3, 3)))
 
 
 # ---------------------------------------------------------------------------

@@ -6,11 +6,22 @@ project('volterra-dlang', 'd', version: '0.1.0')
 # Note: -boundscheck=on is an ldc2-specific flag; the project requires ldc2.
 add_project_arguments('-boundscheck=on', language: 'd')
 
+# LAPACK is optional — used for vector VIE-1 with d > max_d_compile.
+# When found, the Have_lapack version flag enables the dgesv_ call path.
+lapack_dep = dependency('lapack', required: false)
+d_version_flags = []
+lapack_link_args = []
+if lapack_dep.found()
+  d_version_flags += ['-d-version=Have_lapack']
+  lapack_link_args += ['-llapack']
+endif
+
 shared_library(
   'volterra_dlang',
   ['source/volterra_solvers.d', 'source/utility.d'],
   include_directories: include_directories('source'),
-  link_args: ['-link-defaultlib-shared=false'],
+  d_args: d_version_flags,
+  link_args: ['-link-defaultlib-shared=false'] + lapack_link_args,
   name_prefix: '',
   install: false,
 )

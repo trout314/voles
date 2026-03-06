@@ -4,6 +4,111 @@ from volterra_equation_solvers import solve_VIE_1
 from conftest import TOLERANCE
 
 
+# ---------------------------------------------------------------------------
+# Vector-valued VIE-1 tests
+# ---------------------------------------------------------------------------
+
+def _make_vec_data(time_step=0.01, coll_divs=3, n_mesh=10):
+    """Diagonal 2x2 kernel: each component is an independent scalar VIE-1.
+
+    K_rs(t) = exp(t) * delta_rs, g_r(t) = sin(t), exact y_r(t) = cos(t)-sin(t).
+    """
+    num_pts = n_mesh * coll_divs**2 + 1
+    times = np.arange(num_pts) * time_step
+    K0 = np.exp(times)
+    # kernel (N, 2, 2) — diagonal
+    kernel = np.zeros((num_pts, 2, 2))
+    kernel[:, 0, 0] = K0
+    kernel[:, 1, 1] = K0
+    g = np.zeros((num_pts, 2))
+    g[:, 0] = np.sin(times)
+    g[:, 1] = np.sin(times)
+    g[0, :] = 0.0
+    exact = np.zeros((num_pts, 2))
+    exact[:, 0] = np.cos(times) - np.sin(times)
+    exact[:, 1] = np.cos(times) - np.sin(times)
+    return dict(times=times, kernel=kernel, g=g, exact=exact,
+                time_step=time_step, coll_divs=coll_divs, coll_choices=[1, 2, 3])
+
+
+def test_vie1_vec_diagonal_matches_scalar():
+    """Diagonal 2×2 kernel: vector result equals two independent scalar solves."""
+    d = _make_vec_data()
+    times = d["times"]
+
+    # Vector solve
+    soln_vec = solve_VIE_1(
+        kernel_values=d["kernel"], g_values=d["g"],
+        time_step=d["time_step"], coll_divs=d["coll_divs"],
+        coll_choices=d["coll_choices"])
+    assert soln_vec.shape == d["exact"].shape
+
+    # Scalar solve for component 0
+    soln_s = solve_VIE_1(
+        kernel_values=d["kernel"][:, 0, 0], g_values=d["g"][:, 0],
+        time_step=d["time_step"], coll_divs=d["coll_divs"],
+        coll_choices=d["coll_choices"])
+
+    assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < TOLERANCE
+    assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < TOLERANCE
+    assert np.max(np.abs(soln_vec - d["exact"])) < TOLERANCE
+
+
+def test_vie1_vec_analytic_2d():
+    """2×2 case with known analytic solution; K_rs=2+t, g_r=t²+t³/6, y_r=t."""
+    time_step = 0.1
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1
+    times = np.arange(num_pts) * time_step
+    # Diagonal kernel K_rs = (2+t) * delta_rs
+    K0 = 2 + times
+    kernel = np.zeros((num_pts, 2, 2))
+    kernel[:, 0, 0] = K0
+    kernel[:, 1, 1] = K0
+    g = np.zeros((num_pts, 2))
+    g[:, 0] = times**2 + times**3 / 6
+    g[:, 1] = times**2 + times**3 / 6
+    exact = np.zeros((num_pts, 2))
+    exact[:, 0] = times
+    exact[:, 1] = times
+
+    soln = solve_VIE_1(
+        kernel_values=kernel, g_values=g,
+        time_step=time_step, coll_divs=coll_divs,
+        coll_choices=[1, 2, 3])
+    assert np.max(np.abs(soln - exact)) < TOLERANCE
+
+
+def test_vie1_vec_force_continuous():
+    """Vector force_continuous=True: result should still match analytic solution.
+
+    K=2+t, g=t²+t³/6, exact=t — exact solution starts at 0, consistent with
+    the force_continuous initial value.
+    """
+    time_step = 0.1
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1
+    times = np.arange(num_pts) * time_step
+    K0 = 2 + times
+    kernel = np.zeros((num_pts, 2, 2))
+    kernel[:, 0, 0] = K0
+    kernel[:, 1, 1] = K0
+    g = np.zeros((num_pts, 2))
+    g[:, 0] = times**2 + times**3 / 6
+    g[:, 1] = times**2 + times**3 / 6
+    exact = np.zeros((num_pts, 2))
+    exact[:, 0] = times
+    exact[:, 1] = times
+
+    soln = solve_VIE_1(
+        kernel_values=kernel, g_values=g,
+        time_step=time_step, coll_divs=coll_divs,
+        coll_choices=[1, 2, 3],
+        soln_init_value=0.0, force_continuous=True)
+    assert soln.shape == exact.shape
+    assert np.max(np.abs(soln - exact)) < TOLERANCE
+
+
 def test_vie1_accuracy(vie1_data):
     d = vie1_data
     soln = solve_VIE_1(

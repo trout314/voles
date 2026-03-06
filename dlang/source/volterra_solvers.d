@@ -9,6 +9,36 @@ import std.format : format;
 import utility : subsetsOfSize;
 
 // ---------------------------------------------------------------------------
+// LAPACK (optional — used for d > max_d_compile)
+// ---------------------------------------------------------------------------
+
+version (Have_lapack)
+{
+    extern(C) void dgesv_(int* n, int* nrhs, double* a, int* lda,
+                          int* ipiv, double* b, int* ldb, int* info);
+}
+
+// Solve A*x = b in-place (b overwritten with solution).
+// a_colmaj: dm*dm flat column-major buffer (overwritten with LU).
+// b:        dm vector (overwritten with solution).
+// ipiv:     scratch int[dm] buffer.
+void lin_solve_lapack(double[] a_colmaj, double[] b, int dm, int[] ipiv)
+{
+    version (Have_lapack)
+    {
+        int nrhs = 1;
+        int info;
+        dgesv_(&dm, &nrhs, a_colmaj.ptr, &dm, ipiv.ptr, b.ptr, &dm, &info);
+        assert(info == 0, "dgesv_ failed: matrix is singular or near-singular");
+    }
+    else
+    {
+        assert(false, "LAPACK not available: d exceeds the compile-time threshold. "
+                    ~ "Rebuild the D extension with LAPACK to support large d.");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Linear solver (LU factorization with partial pivoting)
 // ---------------------------------------------------------------------------
 
@@ -321,7 +351,7 @@ auto beta_3_index(int coll_divs, int[] coll_choices)()
 }
 
 // ---------------------------------------------------------------------------
-// Collocation matrices C, B, kappa, G, rho, g
+// Collocation matrices for VIE-2 and VIDE
 // ---------------------------------------------------------------------------
 
 auto CNL(int coll_divs, int[] coll_choices)(
@@ -467,6 +497,10 @@ auto G_VIDE(int coll_divs, int[] coll_choices)(
     return returned_vector;
 }
 
+// ---------------------------------------------------------------------------
+// VIE-2 collocation helpers (shared with old scalar VIE-1 path; kept for VIE-2)
+// ---------------------------------------------------------------------------
+
 auto BNL(int coll_divs, int[] coll_choices)(
     int mesh_index_n,
     int mesh_index_ell,
@@ -559,38 +593,6 @@ auto G(int coll_divs, int[] coll_choices)(
     return returned_vector;
 }
 
-auto rho(int coll_divs, int[] coll_choices)(
-    int mesh_index_n,
-    double[] kernel_data)
-{
-    enum int num_c_params = coll_choices.length;
-    static immutable double[num_c_params] c_params
-        = coll_choices.map!(c => double(c)/coll_divs).array;
-    static immutable int[num_c_params] c_choices = coll_choices;
-    static immutable b = quad_weights!(coll_divs, coll_choices)();
-    static immutable coll_choices_with_zero = [0] ~ coll_choices;
-
-    double[num_c_params][num_c_params] poly_vals;
-    foreach (i; 0 .. num_c_params)
-    {
-        foreach (k; 0 .. num_c_params)
-        {
-            poly_vals[i][k] = lagrange_f!(coll_divs, coll_choices_with_zero)(c_params[i] * c_params[k], 0);
-        }
-    }
-
-    double[num_c_params] returned_vector = 0;
-    foreach (i; 0 .. num_c_params)
-    {
-        foreach (k; 0 .. num_c_params)
-        {
-            auto kernel_index = c_choices[i] * coll_divs - c_choices[i] * c_choices[k];
-            returned_vector[i] -= c_params[i] * b[k] * kernel_data[kernel_index] * poly_vals[i][k];
-        }
-    }
-    return returned_vector;
-}
-
 auto g(int coll_divs, int[] coll_choices)(
     int mesh_index,
     double[] g_data)
@@ -608,10 +610,9 @@ auto g(int coll_divs, int[] coll_choices)(
 }
 
 // ---------------------------------------------------------------------------
-// Polynomial piece helpers
+// Polynomial piece helpers (used by VIE-2, and by VIE-1 vec impl for d=1)
 // ---------------------------------------------------------------------------
 
-// Bug fix: was double[][] solution_U (wrong type)
 auto continuous_poly_piece_coefs(int coll_divs, int[] coll_choices)(
     int mesh_index,
     double[coll_choices.length][] solution_U,
@@ -659,28 +660,10 @@ auto poly_piece_f(int coll_divs, int[] coll_choices)(
     return value;
 }
 
-auto poly_piece_f_continuous(int coll_divs, int[] coll_choices)(
-    double rel_x,
-    int mesh_index,
-    double[coll_choices.length][] solution_U,
-    double init_val)
-{
-    enum int num_c_params = coll_choices.length;
-    static immutable double[num_c_params] c_params
-        = coll_choices.map!(c => double(c)/coll_divs).array;
-    static immutable coll_choices_with_zero = [0] ~ coll_choices;
-    alias coll_info = AliasSeq!(coll_divs, coll_choices);
+// ---------------------------------------------------------------------------
+// VIDE polynomial piece helpers
+// ---------------------------------------------------------------------------
 
-    double value = init_val * lagrange_f!(coll_divs, coll_choices_with_zero)(rel_x, 0);
-
-    foreach (i; 0 .. num_c_params)
-    {
-        value += solution_U[mesh_index][i] * (rel_x / c_params[i]) * lagrange_f!coll_info(rel_x, i);
-    }
-    return value;
-}
-
-// Bug fixes: added coll_info alias; was double[][] solution_Y (wrong type)
 auto VIDE_poly_piece_coefs(int coll_divs, int[] coll_choices)(
     int mesh_index,
     double[coll_choices.length][] solution_Y,
@@ -722,118 +705,585 @@ auto poly_piece_VIDE_f(int coll_divs, int[] coll_choices)(
 }
 
 // ---------------------------------------------------------------------------
-// Solver _impl functions (write into caller-supplied output buffers)
+// VIE-1 vector helpers — compile-time d
+//
+// Kernel layout (C-contiguous, matching NumPy):
+//   kernel_data[k * d*d + r*d + s]  =  K_rs(k * time_step)
+// g/solution layout:
+//   g_data[k * d + r]               =  g_r(k * time_step)
+//   out_soln[k * d + r]             =  y_r(k * time_step)
+//
+// Component-major ordering for the dm-vector (dm = d*m):
+//   index r*m + j  =  component r, collocation node j
 // ---------------------------------------------------------------------------
 
-void solve_VIE_1_impl(int coll_divs, int[] coll_choices)(
+// BN_vec_ct: local coefficient matrix for VIE-1, shape dm x dm.
+// add_zero_node=true for force_continuous, false otherwise.
+auto BN_vec_ct(int coll_divs, int[] coll_choices, int d, bool add_zero_node = false)(
+    double[] kernel_data)
+{
+    enum int m  = coll_choices.length;
+    enum int dm = d * m;
+    static immutable double[m] c_params
+        = coll_choices.map!(c => double(c)/coll_divs).array;
+    static immutable int[m] c_choices = coll_choices;
+    alias coll_info = AliasSeq!(coll_divs, coll_choices);
+    static immutable double[m] b = quad_weights!coll_info();
+    static immutable int[] czero = [0] ~ coll_choices;
+
+    double[m][m][m] poly_vals;
+    foreach (j; 0 .. m)
+    foreach (i; 0 .. m)
+    foreach (k; 0 .. m)
+    {
+        static if (add_zero_node)
+            poly_vals[j][i][k] = lagrange_f!(coll_divs, czero)(c_params[i] * c_params[k], j + 1);
+        else
+            poly_vals[j][i][k] = lagrange_f!coll_info(c_params[i] * c_params[k], j);
+    }
+
+    double[dm][dm] mat = 0;
+    foreach (r; 0 .. d)
+    foreach (s; 0 .. d)
+    foreach (i; 0 .. m)
+    foreach (j; 0 .. m)
+    foreach (k; 0 .. m)
+    {
+        auto kern_idx = c_choices[i] * coll_divs - c_choices[i] * c_choices[k];
+        mat[r*m + i][s*m + j] +=
+            c_params[i] * b[k] * kernel_data[kern_idx * d*d + r*d + s] * poly_vals[j][i][k];
+    }
+    return mat;
+}
+
+// BNL_vec_ct: history block matrix for interval pair (n, ell), shape dm x dm.
+auto BNL_vec_ct(int coll_divs, int[] coll_choices, int d)(
+    int n, int ell, double[] kernel_data)
+{
+    enum int m  = coll_choices.length;
+    enum int dm = d * m;
+    static immutable int[m] c_choices = coll_choices;
+    alias coll_info = AliasSeq!(coll_divs, coll_choices);
+    static immutable double[m] weights = quad_weights!coll_info();
+
+    double[dm][dm] mat = 0;
+    immutable int mesh_pt_idx = (n - ell) * coll_divs^^2;
+    foreach (r; 0 .. d)
+    foreach (s; 0 .. d)
+    foreach (i; 0 .. m)
+    foreach (j; 0 .. m)
+    {
+        auto sub_idx = (c_choices[i] - c_choices[j]) * coll_divs;
+        mat[r*m + i][s*m + j] =
+            weights[j] * kernel_data[(mesh_pt_idx + sub_idx) * d*d + r*d + s];
+    }
+    return mat;
+}
+
+// G_vec_ct: accumulated history vector for mesh interval n, length dm.
+auto G_vec_ct(int coll_divs, int[] coll_choices, int d)(
+    int n,
+    double[d * coll_choices.length][] current_solution,
+    double[] kernel_data,
+    double dt)
+{
+    enum int m  = coll_choices.length;
+    enum int dm = d * m;
+
+    double[dm] vec = 0;
+    foreach (ell; 0 .. n)
+    {
+        auto BNL_mat  = BNL_vec_ct!(coll_divs, coll_choices, d)(n, ell, kernel_data);
+        double[dm] cs = current_solution[ell];
+        vec[] += dt * matrix_vec_multiply(BNL_mat, cs)[];
+    }
+    return vec;
+}
+
+// g_vec_ct: RHS vector sampled at collocation points, length dm.
+auto g_vec_ct(int coll_divs, int[] coll_choices, int d)(
+    int mesh_index, double[] g_data)
+{
+    enum int m  = coll_choices.length;
+    enum int dm = d * m;
+    static immutable int[m] c_choices = coll_choices;
+
+    double[dm] vec;
+    foreach (r; 0 .. d)
+    foreach (j; 0 .. m)
+        vec[r*m + j] = g_data[(mesh_index * coll_divs^^2 + c_choices[j] * coll_divs) * d + r];
+    return vec;
+}
+
+// rho_mat_ct: force_continuous RHS contribution matrix, shape dm x d.
+// (dm rows indexed by r*m+i, d columns indexed by s)
+// Contribution to RHS: dt * rho_mat * boundary_val_vector
+auto rho_mat_ct(int coll_divs, int[] coll_choices, int d)(
+    double[] kernel_data)
+{
+    enum int m  = coll_choices.length;
+    enum int dm = d * m;
+    static immutable double[m] c_params
+        = coll_choices.map!(c => double(c)/coll_divs).array;
+    static immutable int[m] c_choices = coll_choices;
+    alias coll_info = AliasSeq!(coll_divs, coll_choices);
+    static immutable double[m] b = quad_weights!coll_info();
+    static immutable int[] czero = [0] ~ coll_choices;
+
+    double[m][m] L0_vals;
+    foreach (i; 0 .. m)
+    foreach (k; 0 .. m)
+        L0_vals[i][k] = lagrange_f!(coll_divs, czero)(c_params[i] * c_params[k], 0);
+
+    // double[d][dm]: dm elements each of type double[d], so mat[row][col]
+    double[d][dm] mat = 0;
+    foreach (r; 0 .. d)
+    foreach (s; 0 .. d)
+    foreach (i; 0 .. m)
+    foreach (k; 0 .. m)
+    {
+        auto kern_idx = c_choices[i] * coll_divs - c_choices[i] * c_choices[k];
+        mat[r*m + i][s] -=
+            c_params[i] * b[k] * kernel_data[kern_idx * d*d + r*d + s] * L0_vals[i][k];
+    }
+    return mat;
+}
+
+// ---------------------------------------------------------------------------
+// VIE-1 vector helpers — runtime d (for LAPACK path)
+//
+// All matrices stored flat. BN_vec_rt uses column-major (for LAPACK).
+// BNL_vec_rt and rho_mat_rt use row-major (for mat-vec multiply only).
+// ---------------------------------------------------------------------------
+
+void BN_vec_rt(int coll_divs, int[] coll_choices)(
+    double[] kernel_data, int d, bool add_zero_node, double[] out_colmaj)
+{
+    enum int m = coll_choices.length;
+    static immutable double[m] c_params
+        = coll_choices.map!(c => double(c)/coll_divs).array;
+    static immutable int[m] c_choices = coll_choices;
+    alias coll_info = AliasSeq!(coll_divs, coll_choices);
+    static immutable double[m] b = quad_weights!coll_info();
+    static immutable int[] czero = [0] ~ coll_choices;
+
+    int dm = d * m;
+    out_colmaj[] = 0;
+
+    double[m][m][m] poly_vals;
+    foreach (j; 0 .. m)
+    foreach (i; 0 .. m)
+    foreach (k; 0 .. m)
+    {
+        if (add_zero_node)
+            poly_vals[j][i][k] = lagrange_f!(coll_divs, czero)(c_params[i] * c_params[k], j + 1);
+        else
+            poly_vals[j][i][k] = lagrange_f!coll_info(c_params[i] * c_params[k], j);
+    }
+
+    foreach (r; 0 .. d)
+    foreach (s; 0 .. d)
+    foreach (i; 0 .. m)
+    foreach (j; 0 .. m)
+    foreach (k; 0 .. m)
+    {
+        auto kern_idx = c_choices[i] * coll_divs - c_choices[i] * c_choices[k];
+        int row = r*m + i;
+        int col = s*m + j;
+        out_colmaj[col * dm + row] +=
+            c_params[i] * b[k] * kernel_data[kern_idx * d*d + r*d + s] * poly_vals[j][i][k];
+    }
+}
+
+// BNL_vec_rt: row-major flat, length dm*dm.
+void BNL_vec_rt(int coll_divs, int[] coll_choices)(
+    int n, int ell, double[] kernel_data, int d, double[] out_rowmaj)
+{
+    enum int m = coll_choices.length;
+    static immutable int[m] c_choices = coll_choices;
+    alias coll_info = AliasSeq!(coll_divs, coll_choices);
+    static immutable double[m] weights = quad_weights!coll_info();
+
+    int dm = d * m;
+    out_rowmaj[] = 0;
+    immutable int mesh_pt_idx = (n - ell) * coll_divs^^2;
+
+    foreach (r; 0 .. d)
+    foreach (s; 0 .. d)
+    foreach (i; 0 .. m)
+    foreach (j; 0 .. m)
+    {
+        auto sub_idx = (c_choices[i] - c_choices[j]) * coll_divs;
+        int row = r*m + i;
+        int col = s*m + j;
+        out_rowmaj[row * dm + col] =
+            weights[j] * kernel_data[(mesh_pt_idx + sub_idx) * d*d + r*d + s];
+    }
+}
+
+// G_vec_rt: accumulated history vector, written into out_G.
+// solution_U_flat: flat array, interval ell occupies [ell*dm .. (ell+1)*dm].
+// BNL_buf: scratch row-major buffer of length dm*dm.
+void G_vec_rt(int coll_divs, int[] coll_choices)(
+    int n, double[] solution_U_flat, double[] kernel_data,
+    int d, double dt, double[] out_G, double[] BNL_buf)
+{
+    enum int m = coll_choices.length;
+    alias coll_info = AliasSeq!(coll_divs, coll_choices);
+    int dm = d * m;
+    out_G[] = 0;
+
+    foreach (ell; 0 .. n)
+    {
+        BNL_vec_rt!coll_info(n, ell, kernel_data, d, BNL_buf);
+        foreach (i; 0 .. dm)
+            foreach (j; 0 .. dm)
+                out_G[i] += dt * BNL_buf[i * dm + j] * solution_U_flat[ell * dm + j];
+    }
+}
+
+// g_vec_rt: RHS sampled at collocation points, written into out_vec.
+void g_vec_rt(int coll_divs, int[] coll_choices)(
+    int mesh_index, double[] g_data, int d, double[] out_vec)
+{
+    enum int m = coll_choices.length;
+    static immutable int[m] c_choices = coll_choices;
+
+    foreach (r; 0 .. d)
+    foreach (j; 0 .. m)
+        out_vec[r*m + j] = g_data[(mesh_index * coll_divs^^2 + c_choices[j] * coll_divs) * d + r];
+}
+
+// rho_mat_rt: force_continuous contribution matrix, row-major flat, dm rows x d cols.
+// out_rowmaj has length dm*d, index [row*d + col].
+void rho_mat_rt(int coll_divs, int[] coll_choices)(
+    double[] kernel_data, int d, double[] out_rowmaj)
+{
+    enum int m = coll_choices.length;
+    static immutable double[m] c_params
+        = coll_choices.map!(c => double(c)/coll_divs).array;
+    static immutable int[m] c_choices = coll_choices;
+    alias coll_info = AliasSeq!(coll_divs, coll_choices);
+    static immutable double[m] b = quad_weights!coll_info();
+    static immutable int[] czero = [0] ~ coll_choices;
+
+    int dm = d * m;
+    out_rowmaj[] = 0;
+
+    double[m][m] L0_vals;
+    foreach (i; 0 .. m)
+    foreach (k; 0 .. m)
+        L0_vals[i][k] = lagrange_f!(coll_divs, czero)(c_params[i] * c_params[k], 0);
+
+    foreach (r; 0 .. d)
+    foreach (s; 0 .. d)
+    foreach (i; 0 .. m)
+    foreach (k; 0 .. m)
+    {
+        auto kern_idx = c_choices[i] * coll_divs - c_choices[i] * c_choices[k];
+        out_rowmaj[(r*m + i) * d + s] -=
+            c_params[i] * b[k] * kernel_data[kern_idx * d*d + r*d + s] * L0_vals[i][k];
+    }
+}
+
+// ---------------------------------------------------------------------------
+// VIE-1 solver implementation — compile-time d
+// ---------------------------------------------------------------------------
+
+void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
     double[] g_values, double[] kernel_values,
     double soln_init_value, double time_step,
     bool return_polys, bool force_continuous,
     double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
 {
-    enum int num_c_params = coll_choices.length;
-    double dt = time_step * coll_divs^^2;
+    enum int m  = coll_choices.length;
+    enum int dm = d * m;
     alias coll_info = AliasSeq!(coll_divs, coll_choices);
+    static immutable double[m] c_params
+        = coll_choices.map!(c => double(c)/coll_divs).array;
+    static immutable int[] czero = [0] ~ coll_choices;
 
-    auto mesh_divs = (kernel_values.length.to!int - 1) / coll_divs^^2;
-    auto num_mesh_points = mesh_divs + 1;
-    out_mesh_divs = mesh_divs;
+    double dt      = time_step * coll_divs^^2;
+    int N          = cast(int)(kernel_values.length) / (d * d);
+    int mesh_divs  = (N - 1) / coll_divs^^2;
+    out_mesh_divs  = mesh_divs;
 
-    double[num_c_params][] solution_U;
+    double[dm][] solution_U;
     solution_U.length = mesh_divs;
-    double[num_c_params] zeros = 0.0;
-    solution_U[] = zeros;
-    double[] boundary_values;
+    double[dm] zeros_dm = 0.0;
+    solution_U[] = zeros_dm;
+
+    // Declared here so it's in scope for poly/evaluation code below.
+    double[d][] boundary_vals;
 
     if (!force_continuous)
     {
-        bool add_zero_node = false;
-        auto coef_matrix = BN!coll_info(kernel_values, add_zero_node);
-        foreach (i; 0 .. num_c_params)
-        {
-            foreach (j; 0 .. num_c_params)
-            {
+        auto coef_matrix = BN_vec_ct!(coll_divs, coll_choices, d, false)(kernel_values);
+        foreach (i; 0 .. dm)
+            foreach (j; 0 .. dm)
                 coef_matrix[i][j] *= dt;
-            }
-        }
 
         foreach (n; 0 .. mesh_divs)
         {
-            auto rhs_vector = g!coll_info(n, g_values);
-            auto G_vector = G!coll_info(n, solution_U, kernel_values, dt);
-            rhs_vector[] -= G_vector[];
-            solution_U[n] = lin_solve(coef_matrix, rhs_vector);
+            auto rhs      = g_vec_ct!(coll_divs, coll_choices, d)(n, g_values);
+            auto G_vector = G_vec_ct!(coll_divs, coll_choices, d)(n, solution_U, kernel_values, dt);
+            rhs[] -= G_vector[];
+            solution_U[n] = lin_solve!(dm)(coef_matrix, rhs);
         }
     }
     else
     {
-        boundary_values.length = num_mesh_points;
-        boundary_values[] = 0;
-        boundary_values[0] = soln_init_value;
+        // force_continuous: boundary value at each mesh point is a d-vector.
+        boundary_vals.length = mesh_divs + 1;
+        double[d] zeros_d = 0.0;
+        boundary_vals[] = zeros_d;
+        foreach (r; 0 .. d)
+            boundary_vals[0][r] = soln_init_value;  // scalar broadcast (TBD: d-vector API)
 
-        bool add_zero_node = true;
-        auto coef_matrix = BN!coll_info(kernel_values, add_zero_node);
-        foreach (i; 0 .. num_c_params)
-        {
-            foreach (j; 0 .. num_c_params)
-            {
+        // Precompute scalars for boundary propagation: p(1) = bv*L0ext(1) + sum_j U_j*(1/c_j)*L_j(1)
+        double L0ext_at_1 = lagrange_f!(coll_divs, czero)(1.0, 0);
+        double[m] Lj_scaled_at_1;
+        foreach (j; 0 .. m)
+            Lj_scaled_at_1[j] = lagrange_f!coll_info(1.0, j) / c_params[j];
+
+        auto coef_matrix = BN_vec_ct!(coll_divs, coll_choices, d, true)(kernel_values);
+        foreach (i; 0 .. dm)
+            foreach (j; 0 .. dm)
                 coef_matrix[i][j] *= dt;
-            }
-        }
+
+        auto rho_m = rho_mat_ct!(coll_divs, coll_choices, d)(kernel_values);
 
         foreach (n; 0 .. mesh_divs)
         {
-            double[num_c_params] rhs_vector;
-            auto g_vector = g!coll_info(n, g_values);
-            auto G_vector = G!coll_info(n, solution_U, kernel_values, dt);
-            auto rho_vector = rho!coll_info(n, kernel_values);
-            foreach (k; 0 .. num_c_params)
+            auto g_vec_   = g_vec_ct!(coll_divs, coll_choices, d)(n, g_values);
+            auto G_vector = G_vec_ct!(coll_divs, coll_choices, d)(n, solution_U, kernel_values, dt);
+
+            double[dm] rhs;
+            foreach (ri; 0 .. dm)
             {
-                rhs_vector[k] = g_vector[k] - G_vector[k] + dt * boundary_values[n] * rho_vector[k];
+                rhs[ri] = g_vec_[ri] - G_vector[ri];
+                foreach (s; 0 .. d)
+                    rhs[ri] += dt * rho_m[ri][s] * boundary_vals[n][s];
             }
-            solution_U[n] = lin_solve(coef_matrix, rhs_vector);
-            boundary_values[n+1] = poly_piece_f_continuous!coll_info(1.0, n, solution_U, boundary_values[n]);
+
+            solution_U[n] = lin_solve!(dm)(coef_matrix, rhs);
+
+            // Propagate boundary value to next mesh point
+            foreach (r; 0 .. d)
+            {
+                boundary_vals[n+1][r] = boundary_vals[n][r] * L0ext_at_1;
+                foreach (j; 0 .. m)
+                    boundary_vals[n+1][r] += solution_U[n][r*m + j] * Lj_scaled_at_1[j];
+            }
         }
     }
 
-    out_soln[] = 0;
-
-    foreach (n; 0 .. mesh_divs)
+    // Write poly_coefs (d=1 only)
+    static if (d == 1)
     {
-        if (return_polys && force_continuous)
+        foreach (n; 0 .. mesh_divs)
         {
-            out_poly_coefs[n*(num_c_params+1) .. (n+1)*(num_c_params+1)]
-                = continuous_poly_piece_coefs!coll_info(n, solution_U, boundary_values[n])[];
+            if (return_polys && force_continuous)
+            {
+                out_poly_coefs[n*(m+1) .. (n+1)*(m+1)]
+                    = continuous_poly_piece_coefs!coll_info(n, solution_U, boundary_vals[n][0])[];
+            }
+            else if (return_polys)
+            {
+                out_poly_coefs[n*(m+1) .. n*(m+1)+m]
+                    = poly_piece_coefs!coll_info(n, solution_U)[];
+                // last slot stays 0 (caller pre-allocates with zeros)
+            }
         }
-        else if (return_polys)
-        {
-            out_poly_coefs[n*(num_c_params+1) .. n*(num_c_params+1)+num_c_params]
-                = poly_piece_coefs!coll_info(n, solution_U)[];
-            // last slot of each block stays 0 (Python pre-allocates with np.zeros)
-        }
+    }
 
-        foreach (i; 0 .. coll_divs^^2 + 1)
+    // Evaluate polynomial on fine grid
+    out_soln[] = 0;
+    foreach (n; 0 .. mesh_divs)
+    foreach (i; 0 .. coll_divs^^2 + 1)
+    {
+        double rel_x = double(i) / coll_divs^^2;
+        foreach (r; 0 .. d)
         {
-            double rel_x = double(i) / coll_divs^^2;
-            double poly_val = 0;
+            double val = 0;
             if (force_continuous)
             {
-                poly_val = poly_piece_f_continuous!coll_info(rel_x, n, solution_U, boundary_values[n]);
+                val = boundary_vals[n][r] * lagrange_f!(coll_divs, czero)(rel_x, 0);
+                foreach (j; 0 .. m)
+                    val += solution_U[n][r*m + j] * (rel_x / c_params[j])
+                           * lagrange_f!coll_info(rel_x, j);
             }
             else
             {
-                poly_val = poly_piece_f!coll_info(rel_x, n, solution_U);
+                foreach (j; 0 .. m)
+                    val += solution_U[n][r*m + j] * lagrange_f!coll_info(rel_x, j);
             }
-            out_soln[n * coll_divs^^2 + i] += poly_val;
+            out_soln[(n * coll_divs^^2 + i) * d + r] += val;
         }
     }
 
-    // Average at overlapping mesh points
-    foreach (m; 1 .. mesh_divs)
+    // Average at shared mesh-point boundaries
+    foreach (p; 1 .. mesh_divs)
+    foreach (r; 0 .. d)
+        out_soln[p * coll_divs^^2 * d + r] *= 0.5;
+}
+
+// ---------------------------------------------------------------------------
+// VIE-1 solver implementation — runtime d (LAPACK path)
+// ---------------------------------------------------------------------------
+
+void solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
+    double[] g_values, double[] kernel_values,
+    int d, double soln_init_value, double time_step,
+    bool return_polys, bool force_continuous,
+    double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
+{
+    enum int m = coll_choices.length;
+    alias coll_info = AliasSeq!(coll_divs, coll_choices);
+    static immutable double[m] c_params
+        = coll_choices.map!(c => double(c)/coll_divs).array;
+    static immutable int[] czero = [0] ~ coll_choices;
+
+    int dm        = d * m;
+    double dt     = time_step * coll_divs^^2;
+    int N         = cast(int)(kernel_values.length) / (d * d);
+    int mesh_divs = (N - 1) / coll_divs^^2;
+    out_mesh_divs = mesh_divs;
+
+    double[] solution_U_flat = new double[mesh_divs * dm];
+    solution_U_flat[] = 0;
+
+    double[] coef_orig = new double[dm * dm];
+    double[] coef_work = new double[dm * dm];
+    double[] BNL_buf   = new double[dm * dm];
+    double[] rhs       = new double[dm];
+    double[] G_buf     = new double[dm];
+    int[]    ipiv      = new int[dm];
+
+    BN_vec_rt!coll_info(kernel_values, d, force_continuous, coef_orig);
+    foreach (i; 0 .. dm * dm)
+        coef_orig[i] *= dt;
+
+    if (!force_continuous)
     {
-        out_soln[m * coll_divs^^2] *= 0.5;
+        foreach (n; 0 .. mesh_divs)
+        {
+            g_vec_rt!coll_info(n, g_values, d, rhs);
+            G_vec_rt!coll_info(n, solution_U_flat, kernel_values, d, dt, G_buf, BNL_buf);
+            foreach (i; 0 .. dm)
+                rhs[i] -= G_buf[i];
+            coef_work[] = coef_orig[];
+            lin_solve_lapack(coef_work, rhs, dm, ipiv);
+            solution_U_flat[n*dm .. (n+1)*dm] = rhs[];
+        }
+    }
+    else
+    {
+        double[] boundary_flat = new double[(mesh_divs + 1) * d];
+        boundary_flat[] = 0;
+        foreach (r; 0 .. d)
+            boundary_flat[r] = soln_init_value;
+
+        double[] rho_buf = new double[dm * d];
+        rho_mat_rt!coll_info(kernel_values, d, rho_buf);
+
+        double L0ext_at_1 = lagrange_f!(coll_divs, czero)(1.0, 0);
+        double[] Lj_scaled_at_1 = new double[m];
+        foreach (j; 0 .. m)
+            Lj_scaled_at_1[j] = lagrange_f!coll_info(1.0, j) / c_params[j];
+
+        foreach (n; 0 .. mesh_divs)
+        {
+            g_vec_rt!coll_info(n, g_values, d, rhs);
+            G_vec_rt!coll_info(n, solution_U_flat, kernel_values, d, dt, G_buf, BNL_buf);
+            foreach (ri; 0 .. dm)
+            {
+                rhs[ri] -= G_buf[ri];
+                foreach (s; 0 .. d)
+                    rhs[ri] += dt * rho_buf[ri * d + s] * boundary_flat[n*d + s];
+            }
+            coef_work[] = coef_orig[];
+            lin_solve_lapack(coef_work, rhs, dm, ipiv);
+            solution_U_flat[n*dm .. (n+1)*dm] = rhs[];
+
+            foreach (r; 0 .. d)
+            {
+                boundary_flat[(n+1)*d + r] = boundary_flat[n*d + r] * L0ext_at_1;
+                foreach (j; 0 .. m)
+                    boundary_flat[(n+1)*d + r] +=
+                        solution_U_flat[n*dm + r*m + j] * Lj_scaled_at_1[j];
+            }
+        }
+
+        out_soln[] = 0;
+        foreach (n; 0 .. mesh_divs)
+        foreach (i; 0 .. coll_divs^^2 + 1)
+        {
+            double rel_x = double(i) / coll_divs^^2;
+            foreach (r; 0 .. d)
+            {
+                double val = boundary_flat[n*d + r] * lagrange_f!(coll_divs, czero)(rel_x, 0);
+                foreach (j; 0 .. m)
+                    val += solution_U_flat[n*dm + r*m + j] * (rel_x / c_params[j])
+                           * lagrange_f!coll_info(rel_x, j);
+                out_soln[(n * coll_divs^^2 + i) * d + r] += val;
+            }
+        }
+        foreach (p; 1 .. mesh_divs)
+        foreach (r; 0 .. d)
+            out_soln[p * coll_divs^^2 * d + r] *= 0.5;
+        return;
+    }
+
+    // Evaluate (force_continuous=false)
+    out_soln[] = 0;
+    foreach (n; 0 .. mesh_divs)
+    foreach (i; 0 .. coll_divs^^2 + 1)
+    {
+        double rel_x = double(i) / coll_divs^^2;
+        foreach (r; 0 .. d)
+        {
+            double val = 0;
+            foreach (j; 0 .. m)
+                val += solution_U_flat[n*dm + r*m + j] * lagrange_f!coll_info(rel_x, j);
+            out_soln[(n * coll_divs^^2 + i) * d + r] += val;
+        }
+    }
+    foreach (p; 1 .. mesh_divs)
+    foreach (r; 0 .. d)
+        out_soln[p * coll_divs^^2 * d + r] *= 0.5;
+}
+
+// ---------------------------------------------------------------------------
+// VIE-1 dispatch helper: selects compile-time or runtime impl based on d
+// ---------------------------------------------------------------------------
+
+void dispatch_VIE_1_vec(int coll_divs, int[] coll_choices)(
+    double[] gv, double[] kv, int d,
+    double soln_init_value, double time_step,
+    bool rp, bool fc,
+    double[] out_soln_slice, double[] poly_slice, ref int md)
+{
+    switch (d)
+    {
+        static foreach (di; 1 .. max_d_compile + 1)
+        {
+            case di:
+                solve_VIE_1_vec_impl!(coll_divs, coll_choices, di)(
+                    gv, kv, soln_init_value, time_step, rp, fc,
+                    out_soln_slice, poly_slice, md);
+                return;
+        }
+        default:
+            solve_VIE_1_vec_runtime_impl!(coll_divs, coll_choices)(
+                gv, kv, d, soln_init_value, time_step, rp, fc,
+                out_soln_slice, poly_slice, md);
     }
 }
+
+// ---------------------------------------------------------------------------
+// VIE-2 solver implementation
+// ---------------------------------------------------------------------------
 
 void solve_VIE_2_impl(int coll_divs, int[] coll_choices)(
     double[] g_values, double[] kernel_values,
@@ -897,6 +1347,10 @@ void solve_VIE_2_impl(int coll_divs, int[] coll_choices)(
         out_soln[m * coll_divs^^2] *= 0.5;
     }
 }
+
+// ---------------------------------------------------------------------------
+// VIDE solver implementation
+// ---------------------------------------------------------------------------
 
 void solve_VIDE_impl(int coll_divs, int[] coll_choices)(
     double[] g_values, double[] kernel_values, double[] a_values,
@@ -993,8 +1447,9 @@ int[][] supported_coll_settings_internal(int max_coll_divs, int max_coll_params)
 // Runtime dispatch
 // ---------------------------------------------------------------------------
 
-enum max_coll_divs = 5;
-enum max_coll_params = 6;
+enum max_coll_divs  = 4;
+enum max_coll_params = 5;
+enum max_d_compile  = 8;
 
 int find_coll_info_id(int max_cd, int max_cp)(int coll_divs, int[] coll_choices)
 {
@@ -1011,30 +1466,36 @@ int find_coll_info_id(int max_cd, int max_cp)(int coll_divs, int[] coll_choices)
 
 export extern(C):
 
-int volterra_solve_vie1(
-    double* g_values, double* kernel_values, int n,
+// volterra_solve_vie1_vec: primary VIE-1 entry point, handles all d.
+// kernel_values: (n, d, d) C-contiguous flat array of length n*d*d
+// g_values:      (n, d)   C-contiguous flat array of length n*d
+// out_soln:      (n, d)   caller-allocated flat array of length n*d
+int volterra_solve_vie1_vec(
+    double* g_values, double* kernel_values, int n, int d,
     double soln_init_value, double time_step,
     int coll_divs, int* coll_choices, int num_choices,
     int return_polys, int force_continuous,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    double[] gv = g_values[0..n];
-    double[] kv = kernel_values[0..n];
-    int[] choices = coll_choices[0..num_choices];
+    double[] gv      = g_values[0 .. n * d];
+    double[] kv      = kernel_values[0 .. n * d * d];
+    int[]    choices = coll_choices[0 .. num_choices];
 
     auto id = find_coll_info_id!(max_coll_divs, max_coll_params)(coll_divs, choices);
     if (id < 0)
         return 1;
 
     int mesh_divs = (n - 1) / (coll_divs * coll_divs);
-    double[] out_soln_slice = out_soln[0..n];
+    double[] out_soln_slice = out_soln[0 .. n * d];
+
+    // poly_coefs only populated for d=1 (deferred for d>1)
     double[] poly_slice;
-    if (out_poly_coefs !is null)
+    if (out_poly_coefs !is null && d == 1)
         poly_slice = out_poly_coefs[0 .. mesh_divs * (num_choices + 1)];
 
     bool rp = return_polys != 0;
     bool fc = force_continuous != 0;
-    int md = 0;
+    int  md = 0;
 
     static immutable all_settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
 
@@ -1044,8 +1505,8 @@ int volterra_solve_vie1(
         {
             mixin(format(
                 "case %s:
-                    solve_VIE_1_impl!(settings[0], settings[1..$])(
-                        gv, kv, soln_init_value, time_step, rp, fc,
+                    dispatch_VIE_1_vec!(settings[0], settings[1..$])(
+                        gv, kv, d, soln_init_value, time_step, rp, fc,
                         out_soln_slice, poly_slice, md);
                     break outer;", idx));
         }
@@ -1055,6 +1516,23 @@ int volterra_solve_vie1(
 
     *out_mesh_divs = md;
     return 0;
+}
+
+// volterra_solve_vie1: scalar wrapper — delegates to volterra_solve_vie1_vec with d=1.
+// kernel_values and g_values are (n,) arrays; d=1 layout is identical.
+int volterra_solve_vie1(
+    double* g_values, double* kernel_values, int n,
+    double soln_init_value, double time_step,
+    int coll_divs, int* coll_choices, int num_choices,
+    int return_polys, int force_continuous,
+    double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
+{
+    return volterra_solve_vie1_vec(
+        g_values, kernel_values, n, 1,
+        soln_init_value, time_step,
+        coll_divs, coll_choices, num_choices,
+        return_polys, force_continuous,
+        out_soln, out_poly_coefs, out_mesh_divs);
 }
 
 int volterra_solve_vie2(

@@ -579,12 +579,75 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         described above, and polys is a list of numpy polynomial objects defining the
         piecewise polynomial solution.
     '''
-    kernel_values_ = np.array(kernel_values)    
+    kernel_values_ = np.asarray(kernel_values, dtype=float)
+    ndim = kernel_values_.ndim
+
+    if ndim not in (1, 3):
+        raise ValueError(
+            f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
+
+    # ------------------------------------------------------------------ vector path
+    if ndim == 3:
+        N, d1, d2 = kernel_values_.shape
+        if d1 != d2:
+            raise ValueError(f"kernel_values must have shape (N, d, d), got {kernel_values_.shape}")
+        d = d1
+        if g_values is not None:
+            g_values_ = np.asarray(g_values, dtype=float)
+            if g_values_.shape != (N, d):
+                raise ValueError(
+                    f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+        else:
+            g_values_ = np.zeros((N, d), dtype=float)
+
+        assert time_step > 0.0, "time_step must be positive"
+
+        if (coll_divs > 1) and (N % coll_divs**2 != 1):
+            ans_len = int(N / coll_divs**2 - 1) * coll_divs**2 + 1
+            assert ans_len < N
+            if show_warnings:
+                print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
+                      f"Truncating to {ans_len}.")
+            kernel_values_ = kernel_values_[:ans_len]
+            g_values_ = g_values_[:ans_len]
+
+        soln_init_value_ = 0.0
+        if soln_init_value is not None:
+            if (not force_continuous) and show_warnings:
+                print("warning: setting soln_init_value has no effect when force_continuous=False.")
+            else:
+                soln_init_value_ = float(soln_init_value)
+        else:
+            assert not force_continuous, "must specify soln_init_value for continuous solutions"
+
+        assert 0 not in coll_choices, "zero cannot be a collocation parameter"
+        assert coll_divs > 0, "coll_divs must be a positive integer"
+        assert all(isinstance(c, int) for c in coll_choices), "coll_choices must be a list of integers"
+        assert all(coll_choices.count(c) <= 1 for c in coll_choices), "coll_choices must be distinct"
+        for choice in coll_choices:
+            assert 1 <= choice <= coll_divs, "coll_choices must contain only integers from 1 to coll_divs"
+        coll_choices = sorted(coll_choices)
+
+        if not _dlang_module.available:
+            raise RuntimeError("D extension required for vector-valued VIE-1; not available.")
+        if (coll_divs, coll_choices) not in _fast_settings_VIE_1:
+            raise RuntimeError(
+                f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
+                f"not supported by D extension.")
+
+        # kernel must be C-contiguous (N, d, d) and g (N, d)
+        k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
+        g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
+        return _dlang_module.solve_vie1_vec_d(
+            g_c, k_c, soln_init_value_, time_step,
+            coll_divs, coll_choices, force_continuous)
+
+    # ------------------------------------------------------------------ scalar path
     assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
 
     if g_values is not None:
         g_values_ = np.array(g_values)
-        assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"    
+        assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"
         assert len(g_values_) == len(kernel_values_), \
             "kernel_values and g_values must have the same length"
     else:
@@ -615,7 +678,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             soln_init_value_ = 0.0
         else:
             soln_init_value_ = float(soln_init_value)
-    
+
     assert 0 not in coll_choices, "zero cannot be a collocation parameter"
     assert coll_divs > 0, "coll_divs must be a positive integer"
     assert all([isinstance(choice, int) for choice in coll_choices]), \
