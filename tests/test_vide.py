@@ -73,6 +73,38 @@ def test_vide_vec_analytic_2d():
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
+def test_vide_vec_coupled_a_matrix():
+    """2×2 VIDE with off-diagonal (coupled) a-matrix and K=0; exact = cosh/sinh.
+
+    Constructed via similarity transform P=[[1,1],[1,-1]] on a diagonal ODE
+    system with a_diag=diag(1,-1), K=0, g=0, y=[e^t, e^{-t}], y(0)=[1,1]:
+
+      ã = P diag(1,-1) P⁻¹ = [[0, 1], [1, 0]]   (off-diagonal swap matrix)
+      K̃ = 0,  g̃ = 0
+      z_exact = [e^t+e^{-t}, e^t-e^{-t}] = [2cosh(t), 2sinh(t)],  z(0)=[2,0]
+    """
+    time_step = 0.01
+    coll_divs = 2
+    num_pts = 10 * coll_divs**2 + 1
+    times = np.arange(num_pts) * time_step
+
+    a = np.zeros((num_pts, 2, 2))
+    a[:, 0, 1] = 1.0
+    a[:, 1, 0] = 1.0
+    kernel = np.zeros((num_pts, 2, 2))
+    g = np.zeros((num_pts, 2))
+    exact = np.zeros((num_pts, 2))
+    exact[:, 0] = 2 * np.cosh(times)
+    exact[:, 1] = 2 * np.sinh(times)
+
+    soln = solve_VIDE(
+        kernel_values=kernel, a_values=a, g_values=g,
+        soln_init_value=np.array([2.0, 0.0]),
+        time_step=time_step, coll_divs=coll_divs,
+        coll_choices=[0, 1, 2])
+    assert np.max(np.abs(soln - exact)) < TOLERANCE
+
+
 def test_vide_accuracy(vide_data):
     d = vide_data
     soln = solve_VIDE(

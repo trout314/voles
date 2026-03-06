@@ -109,6 +109,37 @@ def test_vie1_vec_force_continuous():
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
+def test_vie1_vec_coupled_kernel():
+    """2×2 VIE-1 with off-diagonal (coupled) constant kernel; exact solution is polynomial.
+
+    Constructed via similarity transform P=[[1,1],[1,-1]] on a diagonal system
+    with K_diag=diag(1,2) and y_diag=[1+t, t]:
+
+      K̃ = P diag(1,2) P⁻¹ = [[3/2, -1/2], [-1/2, 3/2]]
+      z_exact = P [1+t, t]ᵀ = [1+2t, 1]
+      g_z     = P [t+t²/2, t²]ᵀ = [t+3t²/2, t-t²/2]
+    """
+    time_step = 0.1
+    coll_divs = 2
+    num_pts = 10 * coll_divs**2 + 1
+    times = np.arange(num_pts) * time_step
+
+    kernel = np.zeros((num_pts, 2, 2))
+    kernel[:] = [[1.5, -0.5], [-0.5, 1.5]]
+    g = np.zeros((num_pts, 2))
+    g[:, 0] = times + 1.5 * times**2
+    g[:, 1] = times - 0.5 * times**2
+    exact = np.zeros((num_pts, 2))
+    exact[:, 0] = 1 + 2 * times
+    exact[:, 1] = 1.0
+
+    soln = solve_VIE_1(
+        kernel_values=kernel, g_values=g,
+        time_step=time_step, coll_divs=coll_divs,
+        coll_choices=[1, 2])
+    assert np.max(np.abs(soln - exact)) < TOLERANCE
+
+
 def test_vie1_accuracy(vie1_data):
     d = vie1_data
     soln = solve_VIE_1(
