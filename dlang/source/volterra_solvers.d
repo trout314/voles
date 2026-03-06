@@ -5,7 +5,6 @@ import std.conv : to;
 import std.meta : AliasSeq;
 import std.range : array, iota, enumerate;
 import std.format : format;
-import std.stdio : writeln;
 
 import utility : subsetsOfSize;
 
@@ -1019,7 +1018,6 @@ int volterra_solve_vie1(
     int return_polys, int force_continuous,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    writeln("D solver: volterra_solve_vie1 called");
     double[] gv = g_values[0..n];
     double[] kv = kernel_values[0..n];
     int[] choices = coll_choices[0..num_choices];
@@ -1065,7 +1063,6 @@ int volterra_solve_vie2(
     int* coll_choices, int num_choices, int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    writeln("D solver: volterra_solve_vie2 called");
     double[] gv = g_values[0..n];
     double[] kv = kernel_values[0..n];
     int[] choices = coll_choices[0..num_choices];
@@ -1110,7 +1107,6 @@ int volterra_solve_vide(
     int coll_divs, int* coll_choices, int num_choices, int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    writeln("D solver: volterra_solve_vide called");
     double[] gv = g_values[0..n];
     double[] kv = kernel_values[0..n];
     double[] av = a_values[0..n];
