@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772811804729,
+  "lastUpdate": 1772812197816,
   "repoUrl": "https://github.com/trout314/volterra-equation-solvers",
   "entries": {
     "Benchmark": [
@@ -6376,6 +6376,170 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.01489731598574314",
             "extra": "mean: 4.009660032199998 sec\nrounds: 5"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "atrout@chatham.edu",
+            "name": "Aaron D. Trout",
+            "username": "trout314"
+          },
+          "committer": {
+            "email": "atrout@chatham.edu",
+            "name": "Aaron D. Trout",
+            "username": "trout314"
+          },
+          "distinct": true,
+          "id": "4ca341b6097cd2e6c2c67706ba305ade1e66e1c0",
+          "message": "Add tests verifying solvers accept plain Python lists as inputs\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>",
+          "timestamp": "2026-03-06T10:46:59-05:00",
+          "tree_id": "e8a1c22ab4d958116585b91e6d6ef6572a8805cb",
+          "url": "https://github.com/trout314/volterra-equation-solvers/commit/4ca341b6097cd2e6c2c67706ba305ade1e66e1c0"
+        },
+        "date": 1772812197259,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie2_500",
+            "value": 50.29968691541969,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00011484678008204072",
+            "extra": "mean: 19.880839450979636 msec\nrounds: 51"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie2_1000",
+            "value": 12.539351450891594,
+            "unit": "iter/sec",
+            "range": "stddev: 0.005804993575222573",
+            "extra": "mean: 79.74894107692438 msec\nrounds: 13"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie2_2000",
+            "value": 3.261676335186445,
+            "unit": "iter/sec",
+            "range": "stddev: 0.001775865942406606",
+            "extra": "mean: 306.59081319999757 msec\nrounds: 5"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie2_3000",
+            "value": 1.4493450195208846,
+            "unit": "iter/sec",
+            "range": "stddev: 0.002386606784514642",
+            "extra": "mean: 689.9668377999973 msec\nrounds: 5"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie2_4000",
+            "value": 0.8184610946521441,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0061563703244494035",
+            "extra": "mean: 1.2218051737999986 sec\nrounds: 5"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie1_500",
+            "value": 230.84367569288315,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00003479889992618504",
+            "extra": "mean: 4.331935873913264 msec\nrounds: 230"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie1_1000",
+            "value": 61.711052115608986,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00009610983784198864",
+            "extra": "mean: 16.20455276190411 msec\nrounds: 63"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie1_2000",
+            "value": 16.152816253205177,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00030042897541883256",
+            "extra": "mean: 61.90870894117746 msec\nrounds: 17"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie1_3000",
+            "value": 7.263896547091394,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0008552961644519921",
+            "extra": "mean: 137.6671588750007 msec\nrounds: 8"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie1_4000",
+            "value": 3.1960901109762623,
+            "unit": "iter/sec",
+            "range": "stddev: 0.001258157842086055",
+            "extra": "mean: 312.88229219999835 msec\nrounds: 5"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie1_fc_500",
+            "value": 164.51338555313814,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0006031354298037969",
+            "extra": "mean: 6.078532738462172 msec\nrounds: 130"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie1_fc_1000",
+            "value": 51.12555791563776,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00025984985971885593",
+            "extra": "mean: 19.55968875000052 msec\nrounds: 52"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie1_fc_2000",
+            "value": 14.585254731994347,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0002948091744941577",
+            "extra": "mean: 68.5623952666655 msec\nrounds: 15"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie1_fc_3000",
+            "value": 6.752825569367904,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0004019947758827237",
+            "extra": "mean: 148.0861588571441 msec\nrounds: 7"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vie1_fc_4000",
+            "value": 3.886345534826023,
+            "unit": "iter/sec",
+            "range": "stddev: 0.000965794225288679",
+            "extra": "mean: 257.3111400000016 msec\nrounds: 5"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vide_500",
+            "value": 15.745121809949465,
+            "unit": "iter/sec",
+            "range": "stddev: 0.00026841828286171694",
+            "extra": "mean: 63.51173475000316 msec\nrounds: 16"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vide_1000",
+            "value": 3.9725761973662492,
+            "unit": "iter/sec",
+            "range": "stddev: 0.001038245046960958",
+            "extra": "mean: 251.7258198000036 msec\nrounds: 5"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vide_2000",
+            "value": 0.9974884875763905,
+            "unit": "iter/sec",
+            "range": "stddev: 0.0044575735236152625",
+            "extra": "mean: 1.002517836000004 sec\nrounds: 5"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vide_3000",
+            "value": 0.4464177882467567,
+            "unit": "iter/sec",
+            "range": "stddev: 0.004476429599115652",
+            "extra": "mean: 2.2400541069999917 sec\nrounds: 5"
+          },
+          {
+            "name": "benchmarks/bench_solvers.py::test_vide_4000",
+            "value": 0.24919416439623637,
+            "unit": "iter/sec",
+            "range": "stddev: 0.010007997501210366",
+            "extra": "mean: 4.012935063800006 sec\nrounds: 5"
           }
         ]
       }
