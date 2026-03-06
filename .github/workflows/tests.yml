@@ -62,7 +62,7 @@ jobs:
               | tar -xJ -C /tmp
             export PATH=/tmp/ldc2-1.36.0-linux-x86_64/bin:\$PATH
             cd /work/dlang
-            meson setup build --wipe
+            meson setup build --wipe --buildtype=release
             ninja -C build
             cp build/volterra_dlang.so /work/src/volterra_equation_solvers/
           "
@@ -116,7 +116,7 @@ jobs:
       - name: Build D extension
         run: |
           cd dlang
-          meson setup build --wipe
+          meson setup build --wipe --buildtype=release
           ninja -C build
           cp build/volterra_dlang.dylib ../src/volterra_equation_solvers/
 
@@ -156,7 +156,7 @@ jobs:
         shell: pwsh
         run: |
           cd dlang
-          meson setup build --wipe
+          meson setup build --wipe --buildtype=release
           ninja -C build
           Copy-Item build\volterra_dlang.dll ..\src\volterra_equation_solvers\
 
