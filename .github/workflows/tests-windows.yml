@@ -1,0 +1,56 @@
+name: Tests (Windows)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'notebooks/**'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'notebooks/**'
+
+jobs:
+  test-dlang-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install meson and ninja
+        run: pip install meson ninja
+
+      - name: Download and extract ldc2
+        shell: pwsh
+        run: |
+          $LDC_VERSION = "1.41.0"
+          $archive = "ldc2-${LDC_VERSION}-windows-x64.7z"
+          Invoke-WebRequest -Uri "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/$archive" -OutFile "$env:TEMP\$archive"
+          7z x "$env:TEMP\$archive" -o"$env:USERPROFILE"
+          echo "$env:USERPROFILE\ldc2-${LDC_VERSION}-windows-x64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build D extension
+        shell: pwsh
+        run: |
+          cd dlang
+          meson setup build --wipe --buildtype=release
+          ninja -C build
+          Copy-Item build\volterra_dlang.dll ..\src\volterra_equation_solvers\
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package and dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest tests/ -v
