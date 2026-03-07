@@ -81,6 +81,38 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             raise ValueError(f"kernel_values must have shape (N, d, d), got {kernel_values_.shape}")
         d = d1
 
+        # ---- matrix case: detect via soln_init_value shape (d, m) ----
+        soln_init_values_ = np.asarray(soln_init_value, dtype=float)
+        if soln_init_values_.ndim == 2:
+            if return_polys:
+                raise NotImplementedError(
+                    "return_polys is not supported for matrix-valued solutions")
+            d_init, m = soln_init_values_.shape
+            if d_init != d:
+                raise ValueError(
+                    f"soln_init_value shape {soln_init_values_.shape} incompatible with d={d}")
+            if g_values is not None:
+                g_mat = np.asarray(g_values, dtype=float)
+                if g_mat.ndim == 3:
+                    if g_mat.shape != (N, d, m):
+                        raise ValueError(
+                            f"g_values shape {g_mat.shape} incompatible with kernel/soln_init shapes")
+                    g_cols = [g_mat[:, :, j] for j in range(m)]
+                else:
+                    g_cols = [g_values] * m
+            else:
+                g_cols = [None] * m
+            cols = [solve_VIDE(kernel_values=kernel_values,
+                               a_values=a_values,
+                               g_values=g_cols[j],
+                               soln_init_value=soln_init_values_[:, j],
+                               time_step=time_step, coll_divs=coll_divs,
+                               coll_choices=coll_choices,
+                               return_polys=False,
+                               show_warnings=show_warnings)
+                    for j in range(m)]
+            return np.stack(cols, axis=2)
+
         if g_values is not None:
             g_values_ = np.asarray(g_values, dtype=float)
             if g_values_.shape != (N, d):
@@ -97,7 +129,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         else:
             a_values_ = np.zeros((N, d, d), dtype=float)
 
-        soln_init_values_ = np.asarray(soln_init_value, dtype=float).ravel()
+        soln_init_values_ = soln_init_values_.ravel()
         if soln_init_values_.shape != (d,):
             raise ValueError(
                 f"soln_init_value must be a scalar or length-{d} array for d={d}")
@@ -292,9 +324,35 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         if d1 != d2:
             raise ValueError(f"kernel_values must have shape (N, d, d), got {kernel_values_.shape}")
         d = d1
+
         if g_values is not None:
             g_values_ = np.asarray(g_values, dtype=float)
-            if g_values_.shape != (N, d):
+            if g_values_.ndim == 3:  # matrix case: shape (N, d, m)
+                if return_polys:
+                    raise NotImplementedError(
+                        "return_polys is not supported for matrix-valued solutions")
+                m = g_values_.shape[2]
+                if g_values_.shape[:2] != (N, d):
+                    raise ValueError(
+                        f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+                if soln_init_value is not None:
+                    init_cols = np.asarray(soln_init_value, dtype=float)
+                    if init_cols.shape != (d, m):
+                        raise ValueError(
+                            f"soln_init_value must have shape ({d}, {m}) for matrix-valued g_values")
+                else:
+                    init_cols = np.zeros((d, m))
+                cols = [solve_VIE_1(kernel_values=kernel_values,
+                                    g_values=g_values_[:, :, j],
+                                    soln_init_value=init_cols[:, j],
+                                    time_step=time_step, coll_divs=coll_divs,
+                                    coll_choices=coll_choices,
+                                    return_polys=False,
+                                    force_continuous=force_continuous,
+                                    show_warnings=show_warnings)
+                        for j in range(m)]
+                return np.stack(cols, axis=2)
+            elif g_values_.shape != (N, d):
                 raise ValueError(
                     f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
         else:
@@ -481,9 +539,26 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         if d1 != d2:
             raise ValueError(f"kernel_values must have shape (N, d, d), got {kernel_values_.shape}")
         d = d1
+
         if g_values is not None:
             g_values_ = np.asarray(g_values, dtype=float)
-            if g_values_.shape != (N, d):
+            if g_values_.ndim == 3:  # matrix case: shape (N, d, m)
+                if return_polys:
+                    raise NotImplementedError(
+                        "return_polys is not supported for matrix-valued solutions")
+                m = g_values_.shape[2]
+                if g_values_.shape[:2] != (N, d):
+                    raise ValueError(
+                        f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+                cols = [solve_VIE_2(kernel_values=kernel_values,
+                                    g_values=g_values_[:, :, j],
+                                    time_step=time_step, coll_divs=coll_divs,
+                                    coll_choices=coll_choices,
+                                    return_polys=False,
+                                    show_warnings=show_warnings)
+                        for j in range(m)]
+                return np.stack(cols, axis=2)
+            elif g_values_.shape != (N, d):
                 raise ValueError(
                     f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
         else:
