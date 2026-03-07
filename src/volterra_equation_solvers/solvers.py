@@ -160,6 +160,9 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
                 f"not supported by D extension.")
 
+        if return_polys:
+            raise NotImplementedError(
+                "return_polys is not supported for vector-valued solutions")
         k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
         g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
         a_c = np.ascontiguousarray(a_values_, dtype=np.float64)
@@ -399,6 +402,9 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
                 f"not supported by D extension.")
 
+        if return_polys:
+            raise NotImplementedError(
+                "return_polys is not supported for vector-valued solutions")
         # kernel must be C-contiguous (N, d, d) and g (N, d)
         k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
         g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
@@ -593,6 +599,9 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
                 f"not supported by D extension.")
 
+        if return_polys:
+            raise NotImplementedError(
+                "return_polys is not supported for vector-valued solutions")
         k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
         g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
         return _dlang_module.solve_vie2_vec_d(g_c, k_c, time_step, coll_divs, coll_choices)
