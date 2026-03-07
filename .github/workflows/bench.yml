@@ -12,11 +12,45 @@ permissions:
   contents: write      # needed to push results to gh-pages and commit chart PNG
 
 jobs:
-  benchmark:
-    runs-on: ubuntu-latest
+  build-dlang:
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Build D extension in Ubuntu 20.04 container
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/work" ubuntu:20.04 bash -c "
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq curl xz-utils ninja-build python3-pip libxml2
+            pip3 install -q 'meson==1.5.2'
+            curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.36.0/ldc2-1.36.0-linux-x86_64.tar.xz \
+              | tar -xJ -C /tmp
+            export PATH=/tmp/ldc2-1.36.0-linux-x86_64/bin:\$PATH
+            cd /work/dlang
+            meson setup build --wipe --buildtype=release
+            ninja -C build
+            cp build/volterra_dlang.so /work/src/volterra_equation_solvers/
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: volterra_dlang_so_bench
+          path: src/volterra_equation_solvers/volterra_dlang.so
+
+  benchmark:
+    needs: build-dlang
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: volterra_dlang_so_bench
+          path: src/volterra_equation_solvers/
 
       - uses: actions/setup-python@v5
         with:
