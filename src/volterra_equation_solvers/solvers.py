@@ -2,6 +2,29 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from . import _dlang as _dlang_module
 
+
+def _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step):
+    """Convert (mesh_divs, m+1, d) poly coef array to list of (d,) Polynomial arrays.
+
+    poly_coefs[n, :, r] are coefficients in rel_x ∈ [0,1] for component r on interval n.
+    Returns a list of length mesh_divs where each element is a (d,) object array of
+    numpy.polynomial.Polynomial objects mapped to actual time.
+    """
+    d = poly_coefs.shape[2]
+    h = coll_divs ** 2 * time_step
+    polys = []
+    for n in range(mesh_divs):
+        t_start = n * h
+        t_end = (n + 1) * h
+        domain = (t_start, t_end)
+        arr = np.empty(d, dtype=object)
+        for r in range(d):
+            coefs = poly_coefs[n, :, r]
+            p = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
+            arr[r] = p.convert(domain=domain, window=domain).trim()
+        polys.append(arr)
+    return polys
+
 _all_fast = _dlang_module.supported_coll_settings_d()
 _fast_settings_VIE_1 = [(d, c) for d, c in _all_fast if 0 not in c]
 _fast_settings_VIE_2 = _all_fast
@@ -82,27 +105,24 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             raise ValueError(f"kernel_values must have shape (N, d, d), got {kernel_values_.shape}")
         d = d1
 
-        # ---- matrix case: detect via soln_init_value shape (d, m) ----
+        # ---- matrix case: detect via soln_init_value shape (d, m_cols) ----
         soln_init_values_ = np.asarray(soln_init_value, dtype=float)
         if soln_init_values_.ndim == 2:
-            if return_polys:
-                raise NotImplementedError(
-                    "return_polys is not supported for matrix-valued solutions")
-            d_init, m = soln_init_values_.shape
+            d_init, m_cols = soln_init_values_.shape
             if d_init != d:
                 raise ValueError(
                     f"soln_init_value shape {soln_init_values_.shape} incompatible with d={d}")
             if g_values is not None:
                 g_mat = np.asarray(g_values, dtype=float)
                 if g_mat.ndim == 3:
-                    if g_mat.shape != (N, d, m):
+                    if g_mat.shape != (N, d, m_cols):
                         raise ValueError(
                             f"g_values shape {g_mat.shape} incompatible with kernel/soln_init shapes")
-                    g_cols = [g_mat[:, :, j] for j in range(m)]
+                    g_cols = [g_mat[:, :, j] for j in range(m_cols)]
                 else:
-                    g_cols = [g_values] * m
+                    g_cols = [g_values] * m_cols
             else:
-                g_cols = [None] * m
+                g_cols = [None] * m_cols
             def _col_vide(j):
                 return solve_VIDE(kernel_values=kernel_values,
                                   a_values=a_values,
@@ -110,11 +130,23 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
                                   soln_init_value=soln_init_values_[:, j],
                                   time_step=time_step, coll_divs=coll_divs,
                                   coll_choices=coll_choices,
-                                  return_polys=False,
+                                  return_polys=return_polys,
                                   show_warnings=show_warnings)
-            with ThreadPoolExecutor(max_workers=m) as ex:
-                cols = list(ex.map(_col_vide, range(m)))
-            return np.stack(cols, axis=2)
+            with ThreadPoolExecutor(max_workers=m_cols) as ex:
+                results = list(ex.map(_col_vide, range(m_cols)))
+            if return_polys:
+                col_solns = [r[0] for r in results]
+                col_polys = [r[1] for r in results]
+                soln = np.stack(col_solns, axis=2)
+                mesh_divs = len(col_polys[0])
+                mat_polys = []
+                for n in range(mesh_divs):
+                    arr = np.empty((d, m_cols), dtype=object)
+                    for j in range(m_cols):
+                        arr[:, j] = col_polys[j][n]
+                    mat_polys.append(arr)
+                return (soln, mat_polys)
+            return np.stack(results, axis=2)
 
         if g_values is not None:
             g_values_ = np.asarray(g_values, dtype=float)
@@ -160,14 +192,16 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
                 f"not supported by D extension.")
 
-        if return_polys:
-            raise NotImplementedError(
-                "return_polys is not supported for vector-valued solutions")
         k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
         g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
         a_c = np.ascontiguousarray(a_values_, dtype=np.float64)
-        return _dlang_module.solve_vide_vec_d(
-            g_c, k_c, a_c, soln_init_values_, time_step, coll_divs, coll_choices)
+        N_used = len(k_c)
+        mesh_divs = (N_used - 1) // coll_divs**2
+        soln_vals, poly_coefs = _dlang_module.solve_vide_vec_d(
+            g_c, k_c, a_c, soln_init_values_, time_step, coll_divs, coll_choices, return_polys)
+        if return_polys:
+            return (soln_vals, _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step))
+        return soln_vals
 
     # ------------------------------------------------------------------ scalar path
     assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
@@ -333,33 +367,42 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
 
         if g_values is not None:
             g_values_ = np.asarray(g_values, dtype=float)
-            if g_values_.ndim == 3:  # matrix case: shape (N, d, m)
-                if return_polys:
-                    raise NotImplementedError(
-                        "return_polys is not supported for matrix-valued solutions")
-                m = g_values_.shape[2]
+            if g_values_.ndim == 3:  # matrix case: shape (N, d, m_cols)
+                m_cols = g_values_.shape[2]
                 if g_values_.shape[:2] != (N, d):
                     raise ValueError(
                         f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
                 if soln_init_value is not None:
                     init_cols = np.asarray(soln_init_value, dtype=float)
-                    if init_cols.shape != (d, m):
+                    if init_cols.shape != (d, m_cols):
                         raise ValueError(
-                            f"soln_init_value must have shape ({d}, {m}) for matrix-valued g_values")
+                            f"soln_init_value must have shape ({d}, {m_cols}) for matrix-valued g_values")
                 else:
-                    init_cols = np.zeros((d, m))
+                    init_cols = np.zeros((d, m_cols))
                 def _col_vie1(j):
                     return solve_VIE_1(kernel_values=kernel_values,
                                        g_values=g_values_[:, :, j],
                                        soln_init_value=init_cols[:, j],
                                        time_step=time_step, coll_divs=coll_divs,
                                        coll_choices=coll_choices,
-                                       return_polys=False,
+                                       return_polys=return_polys,
                                        force_continuous=force_continuous,
                                        show_warnings=show_warnings)
-                with ThreadPoolExecutor(max_workers=m) as ex:
-                    cols = list(ex.map(_col_vie1, range(m)))
-                return np.stack(cols, axis=2)
+                with ThreadPoolExecutor(max_workers=m_cols) as ex:
+                    results = list(ex.map(_col_vie1, range(m_cols)))
+                if return_polys:
+                    col_solns = [r[0] for r in results]
+                    col_polys = [r[1] for r in results]
+                    soln = np.stack(col_solns, axis=2)
+                    mesh_divs = len(col_polys[0])
+                    mat_polys = []
+                    for n in range(mesh_divs):
+                        arr = np.empty((d, m_cols), dtype=object)
+                        for j in range(m_cols):
+                            arr[:, j] = col_polys[j][n]
+                        mat_polys.append(arr)
+                    return (soln, mat_polys)
+                return np.stack(results, axis=2)
             elif g_values_.shape != (N, d):
                 raise ValueError(
                     f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
@@ -402,15 +445,17 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
                 f"not supported by D extension.")
 
-        if return_polys:
-            raise NotImplementedError(
-                "return_polys is not supported for vector-valued solutions")
         # kernel must be C-contiguous (N, d, d) and g (N, d)
         k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
         g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
-        return _dlang_module.solve_vie1_vec_d(
+        N_used = len(k_c)
+        mesh_divs = (N_used - 1) // coll_divs**2
+        soln_vals, poly_coefs = _dlang_module.solve_vie1_vec_d(
             g_c, k_c, soln_init_value_, time_step,
-            coll_divs, coll_choices, force_continuous)
+            coll_divs, coll_choices, return_polys, force_continuous)
+        if return_polys:
+            return (soln_vals, _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step))
+        return soln_vals
 
     # ------------------------------------------------------------------ scalar path
     assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
@@ -553,11 +598,8 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
 
         if g_values is not None:
             g_values_ = np.asarray(g_values, dtype=float)
-            if g_values_.ndim == 3:  # matrix case: shape (N, d, m)
-                if return_polys:
-                    raise NotImplementedError(
-                        "return_polys is not supported for matrix-valued solutions")
-                m = g_values_.shape[2]
+            if g_values_.ndim == 3:  # matrix case: shape (N, d, m_cols)
+                m_cols = g_values_.shape[2]
                 if g_values_.shape[:2] != (N, d):
                     raise ValueError(
                         f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
@@ -566,11 +608,23 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                                        g_values=g_values_[:, :, j],
                                        time_step=time_step, coll_divs=coll_divs,
                                        coll_choices=coll_choices,
-                                       return_polys=False,
+                                       return_polys=return_polys,
                                        show_warnings=show_warnings)
-                with ThreadPoolExecutor(max_workers=m) as ex:
-                    cols = list(ex.map(_col_vie2, range(m)))
-                return np.stack(cols, axis=2)
+                with ThreadPoolExecutor(max_workers=m_cols) as ex:
+                    results = list(ex.map(_col_vie2, range(m_cols)))
+                if return_polys:
+                    col_solns = [r[0] for r in results]
+                    col_polys = [r[1] for r in results]
+                    soln = np.stack(col_solns, axis=2)
+                    mesh_divs = len(col_polys[0])
+                    mat_polys = []
+                    for n in range(mesh_divs):
+                        arr = np.empty((d, m_cols), dtype=object)
+                        for j in range(m_cols):
+                            arr[:, j] = col_polys[j][n]
+                        mat_polys.append(arr)
+                    return (soln, mat_polys)
+                return np.stack(results, axis=2)
             elif g_values_.shape != (N, d):
                 raise ValueError(
                     f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
@@ -599,12 +653,15 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
                 f"not supported by D extension.")
 
-        if return_polys:
-            raise NotImplementedError(
-                "return_polys is not supported for vector-valued solutions")
         k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
         g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
-        return _dlang_module.solve_vie2_vec_d(g_c, k_c, time_step, coll_divs, coll_choices)
+        N_used = len(k_c)
+        mesh_divs = (N_used - 1) // coll_divs**2
+        soln_vals, poly_coefs = _dlang_module.solve_vie2_vec_d(
+            g_c, k_c, time_step, coll_divs, coll_choices, return_polys)
+        if return_polys:
+            return (soln_vals, _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step))
+        return soln_vals
 
     # ------------------------------------------------------------------ scalar path
     assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"

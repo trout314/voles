@@ -51,7 +51,8 @@ def _setup_argtypes() -> None:
         _dp, _dp, ctypes.c_int, ctypes.c_int,  # g_values, kernel_values, n, d
         ctypes.c_double,                         # time_step
         ctypes.c_int, _ip, ctypes.c_int,         # coll_divs, coll_choices, num_choices
-        _dp, _ip,                                # out_soln, out_mesh_divs
+        ctypes.c_int,                            # return_polys
+        _dp, _dp, _ip,                           # out_soln, out_poly_coefs, out_mesh_divs
     ]
 
     _lib.volterra_solve_vie2.restype = ctypes.c_int
@@ -68,7 +69,8 @@ def _setup_argtypes() -> None:
         _dp,                                          # soln_init_values (length d)
         ctypes.c_double,                              # time_step
         ctypes.c_int, _ip, ctypes.c_int,             # coll_divs, coll_choices, num_choices
-        _dp, _ip,                                     # out_soln, out_mesh_divs
+        ctypes.c_int,                                # return_polys
+        _dp, _dp, _ip,                               # out_soln, out_poly_coefs, out_mesh_divs
     ]
 
     _lib.volterra_solve_vide.restype = ctypes.c_int
@@ -164,7 +166,7 @@ def solve_vie1_d(g_values, kernel_values, soln_init_value, time_step,
 
 
 def solve_vie1_vec_d(g_values, kernel_values, soln_init_value, time_step,
-                     coll_divs, coll_choices, force_continuous):
+                     coll_divs, coll_choices, return_polys, force_continuous):
     """Call the D VIE-1 vector solver.
 
     Parameters
@@ -175,6 +177,7 @@ def solve_vie1_vec_d(g_values, kernel_values, soln_init_value, time_step,
     Returns
     -------
     out_soln : ndarray, shape (N, d)
+    poly_coefs : ndarray, shape (mesh_divs, num_choices+1, d) or None
     """
 
     g = np.ascontiguousarray(g_values, dtype=np.float64)
@@ -186,6 +189,7 @@ def solve_vie1_vec_d(g_values, kernel_values, soln_init_value, time_step,
     n, d = g.shape
     choices = np.ascontiguousarray(coll_choices, dtype=np.int32)
     num_choices = len(choices)
+    mesh_divs = (n - 1) // (coll_divs ** 2)
 
     init = np.ascontiguousarray(
         np.broadcast_to(np.asarray(soln_init_value, dtype=np.float64), (d,)),
@@ -193,6 +197,13 @@ def solve_vie1_vec_d(g_values, kernel_values, soln_init_value, time_step,
 
     out_soln = np.zeros((n, d), dtype=np.float64)
     out_mesh_divs = ctypes.c_int(0)
+
+    if return_polys:
+        out_poly_coefs = np.zeros(mesh_divs * (num_choices + 1) * d, dtype=np.float64)
+        poly_ptr = out_poly_coefs.ctypes.data_as(_dp)
+    else:
+        out_poly_coefs = None
+        poly_ptr = None
 
     ret = _lib.volterra_solve_vie1_vec(
         g.ctypes.data_as(_dp),
@@ -204,18 +215,21 @@ def solve_vie1_vec_d(g_values, kernel_values, soln_init_value, time_step,
         ctypes.c_int(coll_divs),
         choices.ctypes.data_as(_ip),
         ctypes.c_int(num_choices),
-        ctypes.c_int(0),           # return_polys (not yet supported for d>1)
+        ctypes.c_int(int(return_polys)),
         ctypes.c_int(int(force_continuous)),
         out_soln.ctypes.data_as(_dp),
-        None,                      # out_poly_coefs
+        poly_ptr,
         ctypes.byref(out_mesh_divs),
     )
     if ret != 0:
         raise RuntimeError(f"volterra_solve_vie1_vec returned error code {ret}")
-    return out_soln
+
+    if return_polys:
+        return (out_soln, out_poly_coefs.reshape(mesh_divs, num_choices + 1, d))
+    return (out_soln, None)
 
 
-def solve_vie2_vec_d(g_values, kernel_values, time_step, coll_divs, coll_choices):
+def solve_vie2_vec_d(g_values, kernel_values, time_step, coll_divs, coll_choices, return_polys):
     """Call the D VIE-2 vector solver.
 
     Parameters
@@ -226,6 +240,7 @@ def solve_vie2_vec_d(g_values, kernel_values, time_step, coll_divs, coll_choices
     Returns
     -------
     out_soln : ndarray, shape (N, d)
+    poly_coefs : ndarray, shape (mesh_divs, num_choices+1, d) or None
     """
 
     g = np.ascontiguousarray(g_values, dtype=np.float64)
@@ -237,9 +252,17 @@ def solve_vie2_vec_d(g_values, kernel_values, time_step, coll_divs, coll_choices
     n, d = g.shape
     choices = np.ascontiguousarray(coll_choices, dtype=np.int32)
     num_choices = len(choices)
+    mesh_divs = (n - 1) // (coll_divs ** 2)
 
     out_soln = np.zeros((n, d), dtype=np.float64)
     out_mesh_divs = ctypes.c_int(0)
+
+    if return_polys:
+        out_poly_coefs = np.zeros(mesh_divs * (num_choices + 1) * d, dtype=np.float64)
+        poly_ptr = out_poly_coefs.ctypes.data_as(_dp)
+    else:
+        out_poly_coefs = None
+        poly_ptr = None
 
     ret = _lib.volterra_solve_vie2_vec(
         g.ctypes.data_as(_dp),
@@ -250,12 +273,17 @@ def solve_vie2_vec_d(g_values, kernel_values, time_step, coll_divs, coll_choices
         ctypes.c_int(coll_divs),
         choices.ctypes.data_as(_ip),
         ctypes.c_int(num_choices),
+        ctypes.c_int(int(return_polys)),
         out_soln.ctypes.data_as(_dp),
+        poly_ptr,
         ctypes.byref(out_mesh_divs),
     )
     if ret != 0:
         raise RuntimeError(f"volterra_solve_vie2_vec returned error code {ret}")
-    return out_soln
+
+    if return_polys:
+        return (out_soln, out_poly_coefs.reshape(mesh_divs, num_choices + 1, d))
+    return (out_soln, None)
 
 
 def solve_vie2_d(g_values, kernel_values, time_step, coll_divs,
@@ -346,7 +374,7 @@ def solve_vide_d(g_values, kernel_values, a_values, soln_init_value, time_step,
 
 
 def solve_vide_vec_d(g_values, kernel_values, a_values, soln_init_values, time_step,
-                     coll_divs, coll_choices):
+                     coll_divs, coll_choices, return_polys):
     """Call the D VIDE vector solver.
 
     Parameters
@@ -359,6 +387,7 @@ def solve_vide_vec_d(g_values, kernel_values, a_values, soln_init_values, time_s
     Returns
     -------
     out_soln : ndarray, shape (N, d)
+    poly_coefs : ndarray, shape (mesh_divs, num_choices+1, d) or None
     """
 
     g = np.ascontiguousarray(g_values, dtype=np.float64)
@@ -376,9 +405,17 @@ def solve_vide_vec_d(g_values, kernel_values, a_values, soln_init_values, time_s
         raise ValueError(f"soln_init_values must have shape ({d},), got {init.shape}")
     choices = np.ascontiguousarray(coll_choices, dtype=np.int32)
     num_choices = len(choices)
+    mesh_divs = (n - 1) // (coll_divs ** 2)
 
     out_soln = np.zeros((n, d), dtype=np.float64)
     out_mesh_divs = ctypes.c_int(0)
+
+    if return_polys:
+        out_poly_coefs = np.zeros(mesh_divs * (num_choices + 1) * d, dtype=np.float64)
+        poly_ptr = out_poly_coefs.ctypes.data_as(_dp)
+    else:
+        out_poly_coefs = None
+        poly_ptr = None
 
     ret = _lib.volterra_solve_vide_vec(
         g.ctypes.data_as(_dp),
@@ -391,12 +428,17 @@ def solve_vide_vec_d(g_values, kernel_values, a_values, soln_init_values, time_s
         ctypes.c_int(coll_divs),
         choices.ctypes.data_as(_ip),
         ctypes.c_int(num_choices),
+        ctypes.c_int(int(return_polys)),
         out_soln.ctypes.data_as(_dp),
+        poly_ptr,
         ctypes.byref(out_mesh_divs),
     )
     if ret != 0:
         raise RuntimeError(f"volterra_solve_vide_vec returned error code {ret}")
-    return out_soln
+
+    if return_polys:
+        return (out_soln, out_poly_coefs.reshape(mesh_divs, num_choices + 1, d))
+    return (out_soln, None)
 
 
 def supported_coll_settings_d():

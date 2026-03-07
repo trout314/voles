@@ -1408,21 +1408,29 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
         }
     }
 
-    // Write poly_coefs (d=1 only)
-    static if (d == 1)
+    // Write poly_coefs for all d: layout (mesh_divs, m+1, d)
+    // out_poly_coefs[(n*(m+1) + ci)*d + r] = coefficient ci for component r on interval n
+    if (return_polys)
     {
         foreach (n; 0 .. mesh_divs)
+        foreach (r; 0 .. d)
         {
-            if (return_polys && force_continuous)
+            if (force_continuous)
             {
-                out_poly_coefs[n*(m+1) .. (n+1)*(m+1)]
-                    = continuous_poly_piece_coefs!coll_info(n, solution_U, boundary_vals[n][0])[];
+                double[m+1] coefs = boundary_vals[n][r] * lagrange_coefs!(coll_divs, czero)(0)[];
+                foreach (j; 0 .. m)
+                    coefs[] += solution_U[n][r*m + j] * lagrange_coefs!(coll_divs, czero)(j + 1)[];
+                foreach (ci; 0 .. m+1)
+                    out_poly_coefs[(n*(m+1) + ci)*d + r] = coefs[ci];
             }
-            else if (return_polys)
+            else
             {
-                out_poly_coefs[n*(m+1) .. n*(m+1)+m]
-                    = poly_piece_coefs!coll_info(n, solution_U)[];
-                // last slot stays 0 (caller pre-allocates with zeros)
+                double[m] coefs = 0;
+                foreach (j; 0 .. m)
+                    coefs[] += solution_U[n][r*m + j] * lagrange_coefs!coll_info(j)[];
+                foreach (ci; 0 .. m)
+                    out_poly_coefs[(n*(m+1) + ci)*d + r] = coefs[ci];
+                // slot m stays 0
             }
         }
     }
@@ -1617,8 +1625,8 @@ void dispatch_VIE_1_vec(int coll_divs, int[] coll_choices)(
 
 void solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
     double[] g_values, double[] kernel_values,
-    double time_step,
-    double[] out_soln, ref int out_mesh_divs)
+    double time_step, bool return_polys,
+    double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
 {
     enum int m  = coll_choices.length;
     enum int dm = d * m;
@@ -1652,6 +1660,22 @@ void solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
         auto G_v = G_vec_ct!(coll_divs, coll_choices, d)(n, solution_U, kernel_values, dt);
         rhs[] += G_v[];
         solution_U[n] = lin_solve!(dm)(coef_matrix, rhs);
+    }
+
+    // Write poly_coefs: layout (mesh_divs, m+1, d)
+    // out_poly_coefs[(n*(m+1) + ci)*d + r] = coefficient ci for component r on interval n
+    if (return_polys)
+    {
+        foreach (n; 0 .. mesh_divs)
+        foreach (r; 0 .. d)
+        {
+            double[m] coefs = 0;
+            foreach (j; 0 .. m)
+                coefs[] += solution_U[n][r*m + j] * lagrange_coefs!coll_info(j)[];
+            foreach (ci; 0 .. m)
+                out_poly_coefs[(n*(m+1) + ci)*d + r] = coefs[ci];
+            // slot m stays 0
+        }
     }
 
     out_soln[] = 0;
@@ -1742,8 +1766,8 @@ void solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
 // ---------------------------------------------------------------------------
 
 void dispatch_VIE_2_vec(int coll_divs, int[] coll_choices)(
-    double[] gv, double[] kv, int d, double time_step,
-    double[] out_soln_slice, ref int md)
+    double[] gv, double[] kv, int d, double time_step, bool rp,
+    double[] out_soln_slice, double[] poly_slice, ref int md)
 {
     switch (d)
     {
@@ -1751,7 +1775,7 @@ void dispatch_VIE_2_vec(int coll_divs, int[] coll_choices)(
         {
             case di:
                 solve_VIE_2_vec_impl!(coll_divs, coll_choices, di)(
-                    gv, kv, time_step, out_soln_slice, md);
+                    gv, kv, time_step, rp, out_soln_slice, poly_slice, md);
                 return;
         }
         default:
@@ -1767,8 +1791,8 @@ void dispatch_VIE_2_vec(int coll_divs, int[] coll_choices)(
 void solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
     double[] g_values, double[] kernel_values, double[] a_values,
     double[] soln_init_values,      // length d
-    double time_step,
-    double[] out_soln, ref int out_mesh_divs)
+    double time_step, bool return_polys,
+    double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
 {
     enum int m  = coll_choices.length;
     enum int dm = d * m;
@@ -1830,6 +1854,26 @@ void solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
             boundary_vals[n+1][r] = boundary_vals[n][r];
             foreach (j; 0 .. m)
                 boundary_vals[n+1][r] += dt * solution_Y[n][r*m + j] * w[j];
+        }
+    }
+
+    // Write poly_coefs: layout (mesh_divs, m+1, d)
+    // y_r(rel_x) = boundary_vals[n][r] + dt * Σ_j Y[n][r*m+j] * lagrange_integ_f(rel_x, j)
+    if (return_polys)
+    {
+        foreach (n; 0 .. mesh_divs)
+        foreach (r; 0 .. d)
+        {
+            double[m+1] coefs = 0;
+            coefs[0] = boundary_vals[n][r];
+            foreach (j; 0 .. m)
+            {
+                auto integ_coefs = lagrange_integ_coefs!coll_info(j);
+                foreach (power; 0 .. m+1)
+                    coefs[power] += dt * solution_Y[n][r*m + j] * integ_coefs[power];
+            }
+            foreach (ci; 0 .. m+1)
+                out_poly_coefs[(n*(m+1) + ci)*d + r] = coefs[ci];
         }
     }
 
@@ -1950,8 +1994,8 @@ void solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
 
 void dispatch_VIDE_vec(int coll_divs, int[] coll_choices)(
     double[] gv, double[] kv, double[] av, int d,
-    double[] soln_init_values, double time_step,
-    double[] out_soln_slice, ref int md)
+    double[] soln_init_values, double time_step, bool rp,
+    double[] out_soln_slice, double[] poly_slice, ref int md)
 {
     switch (d)
     {
@@ -1959,7 +2003,7 @@ void dispatch_VIDE_vec(int coll_divs, int[] coll_choices)(
         {
             case di:
                 solve_VIDE_vec_impl!(coll_divs, coll_choices, di)(
-                    gv, kv, av, soln_init_values, time_step, out_soln_slice, md);
+                    gv, kv, av, soln_init_values, time_step, rp, out_soln_slice, poly_slice, md);
                 return;
         }
         default:
@@ -2176,10 +2220,9 @@ int volterra_solve_vie1_vec(
     int mesh_divs = (n - 1) / (coll_divs * coll_divs);
     double[] out_soln_slice = out_soln[0 .. n * d];
 
-    // poly_coefs only populated for d=1 (deferred for d>1)
     double[] poly_slice;
-    if (out_poly_coefs !is null && d == 1)
-        poly_slice = out_poly_coefs[0 .. mesh_divs * (num_choices + 1)];
+    if (out_poly_coefs !is null)
+        poly_slice = out_poly_coefs[0 .. mesh_divs * (num_choices + 1) * d];
 
     bool rp = return_polys != 0;
     bool fc = force_continuous != 0;
@@ -2316,11 +2359,13 @@ int volterra_solve_vide(
 // kernel_values: (n, d, d) C-contiguous flat, length n*d*d
 // g_values:      (n, d)   C-contiguous flat, length n*d
 // out_soln:      (n, d)   caller-allocated flat, length n*d
+// out_poly_coefs: caller-allocated flat, length mesh_divs*(num_choices+1)*d (if return_polys)
 int volterra_solve_vie2_vec(
     double* g_values, double* kernel_values, int n, int d,
     double time_step,
     int coll_divs, int* coll_choices, int num_choices,
-    double* out_soln, int* out_mesh_divs)
+    int return_polys,
+    double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
     double[] gv      = g_values[0 .. n * d];
     double[] kv      = kernel_values[0 .. n * d * d];
@@ -2330,7 +2375,12 @@ int volterra_solve_vie2_vec(
     if (id < 0)
         return 1;
 
+    int mesh_divs = (n - 1) / (coll_divs * coll_divs);
     double[] out_soln_slice = out_soln[0 .. n * d];
+    double[] poly_slice;
+    if (out_poly_coefs !is null)
+        poly_slice = out_poly_coefs[0 .. mesh_divs * (num_choices + 1) * d];
+    bool rp = return_polys != 0;
     int md = 0;
 
     static immutable all_settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
@@ -2342,7 +2392,7 @@ int volterra_solve_vie2_vec(
             mixin(format(
                 "case %s:
                     dispatch_VIE_2_vec!(settings[0], settings[1..$])(
-                        gv, kv, d, time_step, out_soln_slice, md);
+                        gv, kv, d, time_step, rp, out_soln_slice, poly_slice, md);
                     break outer;", idx));
         }
         default:
@@ -2359,13 +2409,15 @@ int volterra_solve_vie2_vec(
 // g_values:          (n, d)   C-contiguous flat, length n*d
 // soln_init_values:  (d,)     flat, length d
 // out_soln:          (n, d)   caller-allocated flat, length n*d
+// out_poly_coefs:    caller-allocated flat, length mesh_divs*(num_choices+1)*d (if return_polys)
 int volterra_solve_vide_vec(
     double* g_values, double* kernel_values, double* a_values,
     int n, int d,
     double* soln_init_values,
     double time_step,
     int coll_divs, int* coll_choices, int num_choices,
-    double* out_soln, int* out_mesh_divs)
+    int return_polys,
+    double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
     double[] gv   = g_values[0 .. n * d];
     double[] kv   = kernel_values[0 .. n * d * d];
@@ -2377,7 +2429,12 @@ int volterra_solve_vide_vec(
     if (id < 0)
         return 1;
 
+    int mesh_divs = (n - 1) / (coll_divs * coll_divs);
     double[] out_soln_slice = out_soln[0 .. n * d];
+    double[] poly_slice;
+    if (out_poly_coefs !is null)
+        poly_slice = out_poly_coefs[0 .. mesh_divs * (num_choices + 1) * d];
+    bool rp = return_polys != 0;
     int md = 0;
 
     static immutable all_settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
@@ -2389,7 +2446,7 @@ int volterra_solve_vide_vec(
             mixin(format(
                 "case %s:
                     dispatch_VIDE_vec!(settings[0], settings[1..$])(
-                        gv, kv, av, d, init, time_step, out_soln_slice, md);
+                        gv, kv, av, d, init, time_step, rp, out_soln_slice, poly_slice, md);
                     break outer;", idx));
         }
         default:

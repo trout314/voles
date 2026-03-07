@@ -91,11 +91,20 @@ class TestVIE2Matrix:
                                    coll_choices=self.coll_choices)
             assert np.max(np.abs(soln[:, :, j] - col_soln)) < 1e-12
 
-    def test_return_polys_raises(self):
-        with pytest.raises(NotImplementedError):
-            solve_VIE_2(kernel_values=self.kernel, g_values=self.g_matrix,
-                        time_step=self.time_step, coll_divs=self.coll_divs,
-                        coll_choices=self.coll_choices, return_polys=True)
+    def test_return_polys(self):
+        result = solve_VIE_2(kernel_values=self.kernel, g_values=self.g_matrix,
+                             time_step=self.time_step, coll_divs=self.coll_divs,
+                             coll_choices=self.coll_choices, return_polys=True)
+        assert isinstance(result, tuple) and len(result) == 2
+        soln, polys = result
+        assert soln.shape == self.exact.shape
+        assert len(polys) > 0
+        assert polys[0].shape == (2, 2)
+        # Evaluate each polynomial at the left endpoint of the first interval
+        t0 = 0.0
+        for r in range(2):
+            for j in range(2):
+                assert hasattr(polys[0][r, j], '__call__')
 
 
 # ---------------------------------------------------------------------------
@@ -157,11 +166,18 @@ class TestVIE1Matrix:
                                    coll_choices=self.coll_choices)
             assert np.max(np.abs(soln[:, :, j] - col_soln)) < 1e-12
 
-    def test_return_polys_raises(self):
-        with pytest.raises(NotImplementedError):
-            solve_VIE_1(kernel_values=self.kernel, g_values=self.g_matrix,
-                        time_step=self.time_step, coll_divs=self.coll_divs,
-                        coll_choices=self.coll_choices, return_polys=True)
+    def test_return_polys(self):
+        result = solve_VIE_1(kernel_values=self.kernel, g_values=self.g_matrix,
+                             time_step=self.time_step, coll_divs=self.coll_divs,
+                             coll_choices=self.coll_choices, return_polys=True)
+        assert isinstance(result, tuple) and len(result) == 2
+        soln, polys = result
+        assert soln.shape == self.exact.shape
+        assert len(polys) > 0
+        assert polys[0].shape == (2, 2)
+        for r in range(2):
+            for j in range(2):
+                assert hasattr(polys[0][r, j], '__call__')
 
 
 # ---------------------------------------------------------------------------
@@ -234,12 +250,19 @@ class TestVIDEMatrix:
                                   coll_choices=self.coll_choices)
             assert np.max(np.abs(soln[:, :, j] - col_soln)) < 1e-12
 
-    def test_return_polys_raises(self):
-        with pytest.raises(NotImplementedError):
-            solve_VIDE(kernel_values=self.kernel, a_values=self.a_values,
-                       g_values=self.g_matrix, soln_init_value=self.soln_init,
-                       time_step=self.time_step, coll_divs=self.coll_divs,
-                       coll_choices=self.coll_choices, return_polys=True)
+    def test_return_polys(self):
+        result = solve_VIDE(kernel_values=self.kernel, a_values=self.a_values,
+                            g_values=self.g_matrix, soln_init_value=self.soln_init,
+                            time_step=self.time_step, coll_divs=self.coll_divs,
+                            coll_choices=self.coll_choices, return_polys=True)
+        assert isinstance(result, tuple) and len(result) == 2
+        soln, polys = result
+        assert soln.shape == self.exact.shape
+        assert len(polys) > 0
+        assert polys[0].shape == (2, 2)
+        for r in range(2):
+            for j in range(2):
+                assert hasattr(polys[0][r, j], '__call__')
 
     def test_g_values_none(self):
         """Matrix case with g_values=None (zero forcing): y'=ay, y(0)=soln_init."""
@@ -256,3 +279,88 @@ class TestVIDEMatrix:
         # y should be constant = init for each column
         for j in range(2):
             assert np.max(np.abs(soln[:, :, j] - init[:, j])) < TOLERANCE
+
+
+# ---------------------------------------------------------------------------
+# Vector return_polys tests
+# ---------------------------------------------------------------------------
+
+class TestVectorReturnPolys:
+    """Vector-valued (d=2) return_polys: verify shape, callability, and accuracy."""
+
+    def setup_method(self):
+        self.time_step = 0.05
+        self.coll_divs = 3
+        num_pts = 10 * self.coll_divs**2 + 1
+        self.times = np.arange(num_pts) * self.time_step
+        kernel_1d = np.exp(-self.times)
+        self.kernel = np.zeros((num_pts, 2, 2))
+        self.kernel[:, 0, 0] = kernel_1d
+        self.kernel[:, 1, 1] = kernel_1d
+        # VIE-2: K(s)=exp(-s)*I₂, g gives y=sin(t) in both components
+        g0 = np.sin(self.times) - 0.5 * (
+            np.exp(-self.times) + np.sin(self.times) - np.cos(self.times))
+        self.g_vec = np.column_stack([g0, g0])
+        self.coll_choices = [0, 1, 2, 3]
+        self.mesh_divs = (num_pts - 1) // self.coll_divs**2
+
+    def test_vie2_vec_return_polys_shape(self):
+        soln, polys = solve_VIE_2(
+            kernel_values=self.kernel, g_values=self.g_vec,
+            time_step=self.time_step, coll_divs=self.coll_divs,
+            coll_choices=self.coll_choices, return_polys=True)
+        assert soln.shape == (len(self.times), 2)
+        assert len(polys) == self.mesh_divs
+        assert polys[0].shape == (2,)
+        assert hasattr(polys[0][0], '__call__')
+        assert hasattr(polys[0][1], '__call__')
+
+    def test_vie2_vec_return_polys_accuracy(self):
+        soln, polys = solve_VIE_2(
+            kernel_values=self.kernel, g_values=self.g_vec,
+            time_step=self.time_step, coll_divs=self.coll_divs,
+            coll_choices=self.coll_choices, return_polys=True)
+        h = self.coll_divs**2 * self.time_step
+        for n, poly_arr in enumerate(polys):
+            t_mid = (n + 0.5) * h
+            for r in range(2):
+                assert abs(poly_arr[r](t_mid) - np.sin(t_mid)) < TOLERANCE
+
+    def test_vie1_vec_return_polys_shape(self):
+        # VIE-1: K(s)=exp(s)*I₂, g=sin(t), exact y=cos(t)-sin(t)
+        kernel_1d = np.exp(self.times)
+        kernel = np.zeros((len(self.times), 2, 2))
+        kernel[:, 0, 0] = kernel_1d
+        kernel[:, 1, 1] = kernel_1d
+        g_vec = np.zeros((len(self.times), 2))
+        g_vec[:, 0] = np.sin(self.times)
+        g_vec[0, 0] = 0.0
+        g_vec[:, 1] = g_vec[:, 0]
+        soln, polys = solve_VIE_1(
+            kernel_values=kernel, g_values=g_vec,
+            time_step=self.time_step, coll_divs=self.coll_divs,
+            coll_choices=[1, 2, 3], return_polys=True)
+        assert soln.shape == (len(self.times), 2)
+        assert len(polys) == self.mesh_divs
+        assert polys[0].shape == (2,)
+        assert hasattr(polys[0][0], '__call__')
+
+    def test_vide_vec_return_polys_shape(self):
+        a_1d = 1.0 / (1.0 + self.times**2)
+        g_1d = (np.cos(self.times)
+                - 0.5 * (np.exp(-self.times) + np.sin(self.times) - np.cos(self.times))
+                - np.sin(self.times) / (1.0 + self.times**2))
+        a_values = np.zeros((len(self.times), 2, 2))
+        a_values[:, 0, 0] = a_1d
+        a_values[:, 1, 1] = a_1d
+        g_vec = np.column_stack([g_1d, g_1d])
+        soln_init = np.zeros(2)
+        soln, polys = solve_VIDE(
+            kernel_values=self.kernel, a_values=a_values,
+            g_values=g_vec, soln_init_value=soln_init,
+            time_step=self.time_step, coll_divs=self.coll_divs,
+            coll_choices=[1, 2, 3], return_polys=True)
+        assert soln.shape == (len(self.times), 2)
+        assert len(polys) == self.mesh_divs
+        assert polys[0].shape == (2,)
+        assert hasattr(polys[0][0], '__call__')
