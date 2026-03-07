@@ -21,7 +21,7 @@ Given functions $K$ and $g$, solves for $y(t)$ in the Type-1 Volterra integral e
 $$g(t) = \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 The solver handles the following cases:
-- $y(t)$, $g(t)$, and $K(t)$ are scalar.
+- All functions are scalar-valued.
 - $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ is a $d \times d$ matrix.
 - $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ is a $d \times d$ matrix.
 
@@ -32,7 +32,7 @@ Given functions $K$ and $g$, solves for $y(t)$ in the Type-2 Volterra integral e
 $$y(t) = g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 The solver handles the following cases:
-- $y(t)$, $g(t)$, and $K(t)$ are scalar.
+- All functions are scalar-valued.
 - $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ is a $d \times d$ matrix.
 - $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ is a $d \times d$ matrix.
 
@@ -43,7 +43,7 @@ Given functions $K$, $a$, and $g$ and an initial value $y(0)$, solves for $y(t)$
 $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 The solver handles the following cases:
-- $y(t)$, $g(t)$, $K(t)$, and $a(t)$ are scalar.
+- All functions are scalar-valued.
 - $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ and $a(t)$ are $d \times d$ matrices.
 - $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ and $a(t)$ are $d \times d$ matrices.
 
