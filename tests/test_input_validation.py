@@ -286,3 +286,72 @@ def test_coll_choices_not_mutated_vide():
     solve_VIDE(kernel_values=_K, g_values=_G, a_values=_A,
                soln_init_value=0.0, coll_divs=2, coll_choices=choices)
     assert choices == [2, 0, 1]
+
+
+# ---------------------------------------------------------------------------
+# Plain Python lists accepted for vector- and matrix-valued inputs
+# ---------------------------------------------------------------------------
+
+# 9-point (2,2) kernel and (2,) g, as various list-like types
+_K2_list      = [[[1.0, 0.0], [0.0, 1.0]]] * 9        # list of lists of lists
+_K2_listarray = [np.eye(2)] * 9                         # list of numpy arrays
+_G2_list      = [[float(i), float(i)] for i in range(9)]  # list of lists
+_G2_listarray = [np.array([float(i), float(i)]) for i in range(9)]  # list of arrays
+_G22_list     = [[[float(i), float(i)], [float(i), float(i)]] for i in range(9)]  # (9,2,2)
+
+
+def test_vec_list_kernel_vie1():
+    solve_VIE_1(kernel_values=_K2_list, g_values=_G2_list, coll_divs=2, coll_choices=[1, 2])
+
+
+def test_vec_listarray_kernel_vie1():
+    solve_VIE_1(kernel_values=_K2_listarray, g_values=_G2_list, coll_divs=2, coll_choices=[1, 2])
+
+
+def test_vec_list_g_vie1():
+    solve_VIE_1(kernel_values=_K2_list, g_values=_G2_listarray, coll_divs=2, coll_choices=[1, 2])
+
+
+def test_vec_list_kernel_vie2():
+    solve_VIE_2(kernel_values=_K2_list, g_values=_G2_list, coll_divs=2, coll_choices=[0, 1, 2])
+
+
+def test_vec_listarray_kernel_vie2():
+    solve_VIE_2(kernel_values=_K2_listarray, g_values=_G2_list, coll_divs=2, coll_choices=[0, 1, 2])
+
+
+def test_vec_list_g_vie2():
+    solve_VIE_2(kernel_values=_K2_list, g_values=_G2_listarray, coll_divs=2, coll_choices=[0, 1, 2])
+
+
+def test_vec_list_kernel_vide():
+    solve_VIDE(kernel_values=_K2_list, g_values=_G2_list, a_values=_K2_list,
+               soln_init_value=[0.0, 0.0], coll_divs=2, coll_choices=[0, 1, 2])
+
+
+def test_vec_listarray_kernel_vide():
+    solve_VIDE(kernel_values=_K2_listarray, g_values=_G2_list, a_values=_K2_listarray,
+               soln_init_value=np.array([0.0, 0.0]), coll_divs=2, coll_choices=[0, 1, 2])
+
+
+def test_vec_list_soln_init_vide():
+    solve_VIDE(kernel_values=_K2_list, g_values=_G2_list, a_values=_K2_list,
+               soln_init_value=[0.0, 0.0], coll_divs=2, coll_choices=[0, 1, 2])
+
+
+def test_vec_list_soln_init_vie1_force_continuous():
+    solve_VIE_1(kernel_values=_K2_list, g_values=_G2_list, coll_divs=2, coll_choices=[1, 2],
+                soln_init_value=[0.0, 0.0], force_continuous=True)
+
+
+def test_matrix_list_g_vie1():
+    solve_VIE_1(kernel_values=_K2_list, g_values=_G22_list, coll_divs=2, coll_choices=[1, 2])
+
+
+def test_matrix_list_g_vie2():
+    solve_VIE_2(kernel_values=_K2_list, g_values=_G22_list, coll_divs=2, coll_choices=[0, 1, 2])
+
+
+def test_matrix_list_g_vide():
+    solve_VIDE(kernel_values=_K2_list, g_values=_G22_list, a_values=_K2_list,
+               soln_init_value=[[0.0, 0.0], [0.0, 0.0]], coll_divs=2, coll_choices=[0, 1, 2])
