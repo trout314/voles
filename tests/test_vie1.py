@@ -214,6 +214,66 @@ def test_vie1_polys_continuous_at_mesh_boundaries(vie1_data):
         assert abs(polys[n](t_boundary) - polys[n + 1](t_boundary)) < 1e-12
 
 
+def test_vie1_vec_polys_continuous_at_mesh_boundaries():
+    """Vector force_continuous=True: each component poly must be continuous at mesh boundaries."""
+    time_step = 0.1
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1
+    times = np.arange(num_pts) * time_step
+    K0 = 2 + times
+    kernel = np.zeros((num_pts, 2, 2))
+    kernel[:, 0, 0] = K0
+    kernel[:, 1, 1] = K0
+    g = np.zeros((num_pts, 2))
+    g[:, 0] = times**2 + times**3 / 6
+    g[:, 1] = times**2 + times**3 / 6
+
+    _, polys = solve_VIE_1(
+        kernel_values=kernel, g_values=g,
+        time_step=time_step, coll_divs=coll_divs,
+        coll_choices=[1, 2, 3],
+        soln_init_value=0.0, force_continuous=True,
+        return_polys=True)
+
+    h = coll_divs**2 * time_step
+    for n in range(len(polys) - 1):
+        t_boundary = (n + 1) * h
+        for r in range(2):
+            assert abs(polys[n][r](t_boundary) - polys[n + 1][r](t_boundary)) < 1e-12
+
+
+def test_vie1_matrix_polys_continuous_at_mesh_boundaries():
+    """Matrix force_continuous=True: each (component, column) poly must be continuous at mesh boundaries."""
+    time_step = 0.1
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1
+    times = np.arange(num_pts) * time_step
+    K0 = 2 + times
+    kernel = np.zeros((num_pts, 2, 2))
+    kernel[:, 0, 0] = K0
+    kernel[:, 1, 1] = K0
+    g_col = times**2 + times**3 / 6
+    g_matrix = np.zeros((num_pts, 2, 2))
+    g_matrix[:, 0, 0] = g_col
+    g_matrix[:, 1, 0] = g_col
+    g_matrix[:, 0, 1] = g_col
+    g_matrix[:, 1, 1] = g_col
+
+    _, polys = solve_VIE_1(
+        kernel_values=kernel, g_values=g_matrix,
+        time_step=time_step, coll_divs=coll_divs,
+        coll_choices=[1, 2, 3],
+        soln_init_value=np.zeros((2, 2)), force_continuous=True,
+        return_polys=True)
+
+    h = coll_divs**2 * time_step
+    for n in range(len(polys) - 1):
+        t_boundary = (n + 1) * h
+        for r in range(2):
+            for j in range(2):
+                assert abs(polys[n][r, j](t_boundary) - polys[n + 1][r, j](t_boundary)) < 1e-12
+
+
 def test_vie1_force_continuous(vie1_data):
     d = vie1_data
     soln = solve_VIE_1(
