@@ -423,11 +423,10 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         if soln_init_value is not None:
             if (not force_continuous) and show_warnings:
                 print("warning: setting soln_init_value has no effect when force_continuous=False.")
-            soln_init_value_ = np.asarray(soln_init_value, dtype=float).ravel()
-            if soln_init_value_.shape not in ((), (1,), (d,)):
+            soln_init_value_ = np.asarray(soln_init_value, dtype=float)
+            if soln_init_value_.shape != (d,):
                 raise ValueError(
-                    f"soln_init_value must be a scalar or length-{d} array for d={d}")
-            soln_init_value_ = np.broadcast_to(soln_init_value_, (d,))
+                    f"soln_init_value must have shape ({d},) for d={d}")
         else:
             assert not force_continuous, "must specify soln_init_value for continuous solutions"
             soln_init_value_ = np.zeros(d)

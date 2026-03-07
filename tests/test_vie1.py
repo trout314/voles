@@ -104,7 +104,7 @@ def test_vie1_vec_force_continuous():
         kernel_values=kernel, g_values=g,
         time_step=time_step, coll_divs=coll_divs,
         coll_choices=[1, 2, 3],
-        soln_init_value=0.0, force_continuous=True)
+        soln_init_value=np.array([0.0, 0.0]), force_continuous=True)
     assert soln.shape == exact.shape
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
@@ -232,7 +232,7 @@ def test_vie1_vec_polys_continuous_at_mesh_boundaries():
         kernel_values=kernel, g_values=g,
         time_step=time_step, coll_divs=coll_divs,
         coll_choices=[1, 2, 3],
-        soln_init_value=0.0, force_continuous=True,
+        soln_init_value=np.array([0.0, 0.0]), force_continuous=True,
         return_polys=True)
 
     h = coll_divs**2 * time_step
