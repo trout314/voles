@@ -59,7 +59,8 @@ pip install volterra-equation-solvers
 
 Pre-built wheels are provided for Linux x86_64, macOS (arm64 and x86_64), and Windows x64. The D extension is bundled in the wheel and requires no extra tooling.
 
-**Requirements:** Python ≥ 3.10, numpy, numba, scipy
+**Requirements:** Python ≥ 3.10, numpy
+**Optional:** numba, scipy (only needed for unusual, non-standard collocation settings not supported by the D extension; the default settings do not require them)
 
 To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -117,8 +118,6 @@ soln = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=time_step)
 exact = np.column_stack([1 + 2*times, np.ones(N)])
 print(f"Max error: {np.max(np.abs(soln - exact)):.2e}")
 ```
-
-> **Note:** The D extension is a required part of the package. The Numba fallback is only used for scalar solvers when a collocation setting is not supported by the D extension.
 
 ## Benchmarks
 
