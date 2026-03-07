@@ -62,11 +62,49 @@ print(f"Max error: {max(abs(soln - np.sin(times))):.2e}")
 
 All solvers accept `return_polys=True` to also return the piecewise polynomial solution as a list of `numpy.polynomial.Polynomial` objects.
 
+## Vector-valued systems
+
+`solve_VIE_1`, `solve_VIE_2`, and `solve_VIDE` also solve for vector-valued unknowns $\mathbf{y}(t) \in \mathbb{R}^d$, where the kernel $K$ and coefficient $a$ become $d \times d$ matrix-valued functions:
+
+$$\mathbf{y}(t) = \mathbf{g}(t) + \int_0^t K(t-s)\,\mathbf{y}(s)\,ds$$
+
+Pass `kernel_values` as an `(N, d, d)` array and `g_values` as an `(N, d)` array:
+
+```python
+import numpy as np
+from volterra_equation_solvers import solve_VIE_2
+
+# 2×2 system: y_j(t) = sin(t), j = 0, 1
+# K(s) = exp(-s) * I₂,  exact solution y = [sin t, sin t]
+d = 2
+time_step = 0.05
+times = np.arange(0, 2.05, time_step)
+N = len(times)
+
+kernel = np.zeros((N, d, d))
+kernel[:, 0, 0] = np.exp(-times)
+kernel[:, 1, 1] = np.exp(-times)
+
+g = np.zeros((N, d))
+g[:, 0] = np.sin(times) - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
+g[:, 1] = g[:, 0]
+
+soln = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=time_step)
+# soln shape: (N, 2);  soln[:, j] ≈ sin(times) for j = 0, 1
+print(f"Max error: {np.max(np.abs(soln - np.sin(times)[:, None])):.2e}")
+```
+
+> **Note:** Vector-valued solvers require the D extension and are not available through the Numba fallback.
+
 ## Benchmarks
 
 Run on a **12th Gen Intel(R) Core(TM) i5-12600KF**. Mean time is averaged over a variable number of automatically-calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
 
-![Benchmarks](benchmarks/results.png)
+![Scalar benchmarks](benchmarks/results.png)
+
+**Vector solvers** (D extension, d=2):
+
+![Vector benchmarks](benchmarks/results_vec.png)
 
 ## Input format
 
