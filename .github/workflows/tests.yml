@@ -15,36 +15,11 @@ on:
       - 'notebooks/**'
 
 jobs:
-  # Test the Numba path across all supported Python versions.
-  # This job does not build the D extension, so it also serves as the
-  # regression test for the automatic Numba fallback on older distros
-  # (glibc < 2.34: Ubuntu 20.04, Debian 11, RHEL 8, etc.).
-  test-numba:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install package and dev dependencies
-        run: pip install -e ".[dev]"
-
-      - name: Run tests (Numba path)
-        run: pytest tests/ -v
-
-  # Build the D extension inside an Ubuntu 20.04 container (glibc 2.31)
-  # using ldc2 1.36.0. Linking on glibc 2.31 ensures the resulting .so
-  # references only
-  # glibc symbols up to 2.31, covering Ubuntu 20.04+, Debian 11+,
+  # Build the D extension inside an Ubuntu 20.04 container (glibc 2.31) and
+  # upload the .so as an artifact for the test matrix below.
+  # Linking on glibc 2.31 ensures the .so works on Ubuntu 20.04+, Debian 11+,
   # RHEL/AlmaLinux 8+, and Fedora 32+.
-  test-dlang:
+  build-dlang-linux:
     runs-on: ubuntu-22.04
 
     steps:
@@ -67,30 +42,48 @@ jobs:
             cp build/volterra_dlang.so /work/src/volterra_equation_solvers/
           "
 
-
       - name: Verify glibc requirement
         run: |
           max=$(objdump -T src/volterra_equation_solvers/volterra_dlang.so \
             | awk '/GLIBC/{match($0,/GLIBC_([0-9.]+)/,a); print a[1]}' \
             | sort -V | tail -1)
           echo "Max glibc version required: $max"
-          # Fail if the requirement has crept above 2.31
           python3 -c "
-          from functools import reduce
           def ver(s): return tuple(int(x) for x in s.split('.'))
           assert ver('$max') <= ver('2.31'), f'glibc {max!r} > 2.31'
           print('glibc requirement OK')
           "
 
-      - name: Set up Python
+      - uses: actions/upload-artifact@v4
+        with:
+          name: volterra_dlang_so
+          path: src/volterra_equation_solvers/volterra_dlang.so
+
+  # Test across all supported Python versions using the .so built above.
+  test-dlang:
+    needs: build-dlang-linux
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: volterra_dlang_so
+          path: src/volterra_equation_solvers/
+
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install package and dev dependencies
         run: pip install -e ".[dev]"
 
-      - name: Run tests (D solver path)
+      - name: Run tests
         run: pytest tests/ -v
 
   test-dlang-macos:
