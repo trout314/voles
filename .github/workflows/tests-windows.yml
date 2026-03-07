@@ -15,7 +15,7 @@ on:
       - 'notebooks/**'
 
 jobs:
-  test-dlang-windows:
+  build-dlang-windows:
     runs-on: windows-latest
 
     steps:
@@ -44,10 +44,30 @@ jobs:
           ninja -C build
           Copy-Item build\volterra_dlang.dll ..\src\volterra_equation_solvers\
 
-      - name: Set up Python
+      - uses: actions/upload-artifact@v4
+        with:
+          name: volterra_dlang_dll
+          path: src/volterra_equation_solvers/volterra_dlang.dll
+
+  test-dlang-windows:
+    needs: build-dlang-windows
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: volterra_dlang_dll
+          path: src/volterra_equation_solvers/
+
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install package and dev dependencies
         run: pip install -e ".[dev]"
