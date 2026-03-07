@@ -195,6 +195,25 @@ def test_vie1_poly_force_continuous(vie1_poly_data):
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
+def test_vie1_polys_continuous_at_mesh_boundaries(vie1_data):
+    """force_continuous=True: adjacent polynomial pieces must agree at shared endpoints."""
+    d = vie1_data
+    _, polys = solve_VIE_1(
+        kernel_values=d["kernel"],
+        g_values=d["g"],
+        time_step=d["time_step"],
+        coll_divs=d["coll_divs"],
+        coll_choices=d["coll_choices"],
+        soln_init_value=float(d["exact"][0]),
+        force_continuous=True,
+        return_polys=True,
+    )
+    h = d["coll_divs"] ** 2 * d["time_step"]
+    for n in range(len(polys) - 1):
+        t_boundary = (n + 1) * h
+        assert abs(polys[n](t_boundary) - polys[n + 1](t_boundary)) < 1e-12
+
+
 def test_vie1_force_continuous(vie1_data):
     d = vie1_data
     soln = solve_VIE_1(
