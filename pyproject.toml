@@ -23,11 +23,13 @@ classifiers = [
 ]
 dependencies = [
     "numpy",
-    "numba",
-    "scipy",
 ]
 
 [project.optional-dependencies]
+numba = [
+    "numba",
+    "scipy",
+]
 dev = [
     "pytest",
     "pytest-cov",
