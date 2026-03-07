@@ -60,7 +60,7 @@ pip install volterra-equation-solvers
 Pre-built wheels are provided for Linux x86_64, macOS (arm64 and x86_64), and Windows x64. The D extension is bundled in the wheel and requires no extra tooling.
 
 **Requirements:** Python ≥ 3.10, numpy
-**Optional:** numba, scipy (only needed for unusual, non-standard collocation settings not supported by the D extension; the default settings do not require them)
+**Optional:** numba, scipy (only needed for non-standard collocation settings not supported by the D extension; the default settings do not require them)
 
 To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
