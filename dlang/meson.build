@@ -26,14 +26,17 @@ lib = shared_library(
   install: false,
 )
 
-# Strip debug symbols to keep the .so well under GitHub's 100 MB limit.
-strip = find_program('strip', required: false)
-if strip.found()
-  custom_target(
-    'strip-volterra_dlang',
-    input: lib,
-    output: 'volterra_dlang.so.stripped',
-    command: [strip, '--strip-unneeded', '@INPUT@'],
-    build_by_default: true,
-  )
+# Strip debug symbols on Linux to keep the .so well under GitHub's 100 MB limit.
+# macOS strip does not support --strip-unneeded; the dylib is smaller there anyway.
+if host_machine.system() == 'linux'
+  strip = find_program('strip', required: false)
+  if strip.found()
+    custom_target(
+      'strip-volterra_dlang',
+      input: lib,
+      output: 'volterra_dlang.so.stripped',
+      command: [strip, '--strip-unneeded', '@INPUT@'],
+      build_by_default: true,
+    )
+  endif
 endif
