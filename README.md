@@ -25,6 +25,8 @@ The solver handles the following cases:
 - **Vector:** $y, g \in \mathbb{R}^d$ and $K \in \mathbb{R}^{d \times d}$.
 - **Matrix:** $y, g \in \mathbb{R}^{d \times m}$ and $K \in \mathbb{R}^{d \times d}$.
 
+<hr style="width:40%; border-color: lightgray; margin-left:0;">
+
 **`solve_VIE_2`**
 
 Given functions $K$ and $g$, solves for $y(t)$ in the Type-2 Volterra integral equation (VIE-2):
@@ -35,6 +37,8 @@ The solver handles the following cases:
 - **Scalar:** $y$, $g$, and $K$ are scalar functions.
 - **Vector:** $y, g \in \mathbb{R}^d$ and $K \in \mathbb{R}^{d \times d}$.
 - **Matrix:** $y, g \in \mathbb{R}^{d \times m}$ and $K \in \mathbb{R}^{d \times d}$.
+
+<hr style="width:40%; border-color: lightgray; margin-left:0;">
 
 **`solve_VIDE`**
 
