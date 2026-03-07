@@ -71,20 +71,20 @@ def generate_scalar_chart(times, output_path):
 
 
 def generate_vec_chart(times, output_path):
-    # Column-major order (matches scalar chart layout): left col top→bottom, then right col
+    # Column-major order matching scalar chart: top-left, bottom-left, top-right, bottom-right
     groups = [
         ("VIE-1 (vector, d=2)",
          [("test_vie1_vec_500",   496), ("test_vie1_vec_1000", 1000),
           ("test_vie1_vec_2000", 1999), ("test_vie1_vec_3000", 2998),
           ("test_vie1_vec_4000", 3997)]),
-        ("VIE-2 (vector, d=2)",
-         [("test_vie2_vec_500",   497), ("test_vie2_vec_1000",  997),
-          ("test_vie2_vec_2000", 1997), ("test_vie2_vec_3000", 2997),
-          ("test_vie2_vec_4000", 3997)]),
         ("VIE-1 continuous (vector, d=2)",
          [("test_vie1_vec_fc_500",   496), ("test_vie1_vec_fc_1000", 1000),
           ("test_vie1_vec_fc_2000", 1999), ("test_vie1_vec_fc_3000", 2998),
           ("test_vie1_vec_fc_4000", 3997)]),
+        ("VIE-2 (vector, d=2)",
+         [("test_vie2_vec_500",   497), ("test_vie2_vec_1000",  997),
+          ("test_vie2_vec_2000", 1997), ("test_vie2_vec_3000", 2997),
+          ("test_vie2_vec_4000", 3997)]),
         ("VIDE (vector, d=2)",
          [("test_vide_vec_500",   497), ("test_vide_vec_1000",  997),
           ("test_vide_vec_2000", 1997), ("test_vide_vec_3000", 2997),
