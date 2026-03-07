@@ -66,6 +66,9 @@ jobs:
             --benchmark-warmup=on \
             --benchmark-warmup-iterations=1
 
+      - name: Remove D library before gh-pages branch switch
+        run: rm -f src/volterra_equation_solvers/volterra_dlang.so
+
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@v1
         with:
