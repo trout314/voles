@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Generate benchmark bar charts from pytest-benchmark JSON output.
+"""Generate benchmark line charts from pytest-benchmark JSON output.
 
 Produces two files:
-  <output_path>          — scalar solvers (2×2 grid)
-  <stem>_vec<suffix>     — vector solvers (1×3 row)
+  <output_path>          — scalar solvers
+  <stem>_vec<suffix>     — vector solvers (d=2)
 
 Usage: python benchmarks/plot_results.py output.json benchmarks/results.png
 """
@@ -13,26 +13,39 @@ import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 
 
-COLORS = ["#4C72B0", "#55A868", "#C44E52", "#8172B2", "#937860"]
+COLOR = "#4C72B0"
+MARKER = "o"
 
 
-def _bar_subplot(ax, title, cases, times):
-    x = np.arange(len(cases))
-    bar_times = [times[name] * 1e3 for name, _ in cases]
-    bars = ax.bar(x, bar_times, color=COLORS)
-    ax.text(0.5, 0.95, title, transform=ax.transAxes,
-            ha="center", va="top", fontsize=10)
-    ax.set_xticks([])
-    ax.yaxis.set_minor_locator(plt.matplotlib.ticker.AutoMinorLocator())
-    for bar, (_, n) in zip(bars, cases):
-        ax.annotate(f"n={n}",
-                    xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
-                    xytext=(0, 4), textcoords="offset points",
-                    ha="center", va="bottom", fontsize=9)
-    ax.set_ylim(top=max(bar_times) * 1.18)
+def _panel_chart(times, groups, output_path, title):
+    if not all(name in times for _, cases in groups for name, _ in cases):
+        print(f"Skipping {title} chart: some benchmarks missing")
+        return
+
+    fig, axes = plt.subplots(2, 2, figsize=(6, 5.5))
+    for i, (ax, (label, cases)) in enumerate(zip(axes.flat, groups)):
+        ns = [n for _, n in cases]
+        ms = [times[name] * 1e3 for name, _ in cases]
+        ax.plot(ns, ms, color=COLOR, marker=MARKER, linewidth=1.5, markersize=5)
+        ax.text(0.5, 0.97, label, transform=ax.transAxes,
+                ha="center", va="top", fontsize=9,
+                bbox=dict(facecolor="white", alpha=0.7, edgecolor="none", pad=2))
+        ax.set_box_aspect(1)
+        ax.set_xticks([1000, 2000, 3000, 4000])
+        ax.yaxis.set_minor_locator(plt.matplotlib.ticker.AutoMinorLocator())
+        ax.tick_params(labelsize=8)
+        if i < 2:
+            ax.tick_params(labelbottom=False)
+
+    fig.supxlabel("Input length", fontsize=12, y=0.03)
+    fig.supylabel("Mean execution time (ms)", fontsize=12, x=0.03)
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0.07, wspace=0.1)
+    fig.savefig(output_path, dpi=150)
+    plt.close(fig)
+    print(f"Saved {title} chart to {output_path}")
 
 
 def generate_scalar_chart(times, output_path):
@@ -54,24 +67,10 @@ def generate_scalar_chart(times, output_path):
           ("test_vide_2000", 1997), ("test_vide_3000", 2997),
           ("test_vide_4000", 3997)]),
     ]
-
-    # Skip if any benchmark is missing (e.g. partial run)
-    if not all(name in times for _, cases in groups for name, _ in cases):
-        print("Skipping scalar chart: some benchmarks missing")
-        return
-
-    fig, axes = plt.subplots(2, 2, figsize=(7, 5), sharex=True)
-    for ax, (solver_name, cases) in zip(axes.T.flat, groups):
-        _bar_subplot(ax, solver_name, cases, times)
-    fig.supylabel("Mean time (ms)")
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
-    plt.close(fig)
-    print(f"Saved scalar chart to {output_path}")
+    _panel_chart(times, groups, output_path, "scalar")
 
 
 def generate_vec_chart(times, output_path):
-    # Column-major order matching scalar chart: top-left, bottom-left, top-right, bottom-right
     groups = [
         ("VIE-1 (d=2)",
          [("test_vie1_vec_500",   496), ("test_vie1_vec_1000", 1000),
@@ -90,19 +89,7 @@ def generate_vec_chart(times, output_path):
           ("test_vide_vec_2000", 1997), ("test_vide_vec_3000", 2997),
           ("test_vide_vec_4000", 3997)]),
     ]
-
-    if not all(name in times for _, cases in groups for name, _ in cases):
-        print("Skipping vector chart: some benchmarks missing (D extension required)")
-        return
-
-    fig, axes = plt.subplots(2, 2, figsize=(7, 5), sharex=True)
-    for ax, (solver_name, cases) in zip(axes.T.flat, groups):
-        _bar_subplot(ax, solver_name, cases, times)
-    fig.supylabel("Mean time (ms)")
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
-    plt.close(fig)
-    print(f"Saved vector chart to {output_path}")
+    _panel_chart(times, groups, output_path, "vector")
 
 
 def main(json_path, output_path):
