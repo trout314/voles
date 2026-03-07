@@ -28,7 +28,10 @@ nav:
   - Home: index.md
   - Getting Started: getting_started.md
   - API Reference:
-      - Solvers: api/solvers.md
+      - Overview: api/solvers.md
+      - solve_VIE_1: api/solve_vie1.md
+      - solve_VIE_2: api/solve_vie2.md
+      - solve_VIDE: api/solve_vide.md
   - Examples:
       - VIE Type 1: examples/vie1.md
       - VIE Type 2: examples/vie2.md
