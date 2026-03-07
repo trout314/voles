@@ -12,7 +12,7 @@ Collocation-method solvers for Volterra integral and integro-differential equati
 
 The solvers are implemented as a compiled extension written in the [D language](https://dlang.org) for maximum performance.
 
-## Solvers
+### Solvers
 
 <hr style="border: none; border-top: 3px solid lightgray;">
 
@@ -53,7 +53,7 @@ The solver handles the following cases:
 
 Lower-order trapezoidal-rule solvers for VIE-1 and VIE-2. Retained for backward compatibility; the collocation solvers above are preferred for new code.
 
-## Installation
+### Installation
 
 <hr style="border: none; border-top: 3px solid lightgray;">
 
@@ -67,7 +67,7 @@ Pre-built wheels are provided for Linux x86_64, macOS (arm64 and x86_64), and Wi
 
 To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Quick start
+### Quick start
 
 <hr style="border: none; border-top: 3px solid lightgray;">
 
@@ -91,7 +91,7 @@ print(f"Max error: {max(abs(soln - np.sin(times))):.2e}")
 
 All solvers accept `return_polys=True` to also return the piecewise polynomial solution as a list of `numpy.polynomial.Polynomial` objects.
 
-## Vector-valued systems
+### Vector-valued systems
 
 <hr style="border: none; border-top: 3px solid lightgray;">
 
@@ -128,7 +128,7 @@ print(f"Max error: {np.max(np.abs(soln - exact)):.2e}")
 
 > **Note:** The D extension is a required part of the package. The Numba fallback is only used for scalar solvers when a collocation setting is not supported by the D extension.
 
-## Benchmarks
+### Benchmarks
 
 <hr style="border: none; border-top: 3px solid lightgray;">
 
@@ -140,7 +140,7 @@ Run on a **GitHub Actions `ubuntu-22.04` runner** (2-core x86_64 VM on an Intel 
 
 ![Vector benchmarks](benchmarks/results_vec.png)
 
-## Input format
+### Input format
 
 <hr style="border: none; border-top: 3px solid lightgray;">
 
