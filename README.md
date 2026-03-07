@@ -99,7 +99,7 @@ Pass `kernel_values` as an `(N, d, d)` array and `g_values` as an `(N, d)` array
 import numpy as np
 from volterra_equation_solvers import solve_VIE_1
 
-# 2×2 VIE-1 with a fully coupled (all non-zero) constant kernel
+# 2×2 VIE-1 with a constant kernel
 # K = [[3/2, -1/2], [-1/2, 3/2]],  exact solution y = [1+2t, 1]
 time_step = 0.1
 times = np.arange(0, 9.1, time_step)   # 91 pts = 10×3² + 1
