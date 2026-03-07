@@ -10,27 +10,6 @@ on:
 jobs:
 
   # -------------------------------------------------------------------------
-  # Pure-Python sdist (no D extension).  Works on any platform via Numba.
-  # -------------------------------------------------------------------------
-  build-sdist:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Remove D library so it is not bundled in the sdist
-        run: rm -f src/volterra_equation_solvers/volterra_dlang.so
-
-      - name: Build sdist
-        run: |
-          pip install build
-          python -m build --sdist
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sdist
-          path: dist/*.tar.gz
-
-  # -------------------------------------------------------------------------
   # Linux x86_64 — built inside Ubuntu 20.04 (glibc 2.31) Docker container,
   # guaranteeing the .so works on Ubuntu 20.04 / Debian 11 / RHEL 8 and later.
   # Tagged manylinux_2_31_x86_64 so pip selects it on compatible systems.
@@ -202,7 +181,12 @@ jobs:
           path: dist/*.whl
 
   # -------------------------------------------------------------------------
-  # Publish all wheels + sdist to PyPI using OIDC trusted publishing.
+  # Publish wheels to PyPI using OIDC trusted publishing.
+  #
+  # This package distributes as wheels only; there is no sdist on PyPI because
+  # the D extension is a required component and cannot be built by pip from
+  # source without a D compiler.  Users on unsupported platforms should build
+  # from source following CONTRIBUTING.md.
   #
   # One-time PyPI setup required (no secrets needed after this):
   #   1. Go to pypi.org → Your projects → volterra-equation-solvers → Publishing
@@ -214,7 +198,6 @@ jobs:
   # -------------------------------------------------------------------------
   publish:
     needs:
-      - build-sdist
       - build-wheel-linux-x86_64
       - build-wheel-macos-arm64
       - build-wheel-macos-x86_64

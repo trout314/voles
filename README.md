@@ -37,10 +37,14 @@ Lower-order trapezoidal-rule solvers for VIE-1 and VIE-2. Retained for backward 
 ## Installation
 
 ```bash
-pip install git+https://github.com/trout314/volterra-equation-solvers
+pip install volterra-equation-solvers
 ```
 
-**Requirements:** Python ≥ 3.10, numpy, numba
+Pre-built wheels are provided for Linux x86_64, macOS (arm64 and x86_64), and Windows x64. The D extension is bundled in the wheel and requires no extra tooling.
+
+**Requirements:** Python ≥ 3.10, numpy, numba, scipy
+
+To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Quick start
 
