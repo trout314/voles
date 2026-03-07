@@ -173,6 +173,39 @@ def test_vie1_vec_4000(benchmark):
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
 
 
+# --- Vector VIE-1 (continuous, d=2, coll_divs=3, pts = n_intervals*9+1) ---
+
+@_requires_dlang
+def test_vie1_vec_fc_500(benchmark):
+    kernel, g, dt = _vie1_vec_inputs(55)       # 496 pts
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+              soln_init_value=0.0, force_continuous=True)
+
+@_requires_dlang
+def test_vie1_vec_fc_1000(benchmark):
+    kernel, g, dt = _vie1_vec_inputs(111)      # 1000 pts
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+              soln_init_value=0.0, force_continuous=True)
+
+@_requires_dlang
+def test_vie1_vec_fc_2000(benchmark):
+    kernel, g, dt = _vie1_vec_inputs(222)      # 1999 pts
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+              soln_init_value=0.0, force_continuous=True)
+
+@_requires_dlang
+def test_vie1_vec_fc_3000(benchmark):
+    kernel, g, dt = _vie1_vec_inputs(333)      # 2998 pts
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+              soln_init_value=0.0, force_continuous=True)
+
+@_requires_dlang
+def test_vie1_vec_fc_4000(benchmark):
+    kernel, g, dt = _vie1_vec_inputs(444)      # 3997 pts
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+              soln_init_value=0.0, force_continuous=True)
+
+
 # --- Vector VIE-2  (d=2, coll_divs=2, pts = n_intervals*4+1) ---
 # Diagonal system: K(s) = exp(-s)*I₂, y=[sin t, sin t]
 

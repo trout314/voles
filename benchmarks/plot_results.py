@@ -71,6 +71,7 @@ def generate_scalar_chart(times, output_path):
 
 
 def generate_vec_chart(times, output_path):
+    # Column-major order (matches scalar chart layout): left col top→bottom, then right col
     groups = [
         ("VIE-1 (vector, d=2)",
          [("test_vie1_vec_500",   496), ("test_vie1_vec_1000", 1000),
@@ -80,6 +81,10 @@ def generate_vec_chart(times, output_path):
          [("test_vie2_vec_500",   497), ("test_vie2_vec_1000",  997),
           ("test_vie2_vec_2000", 1997), ("test_vie2_vec_3000", 2997),
           ("test_vie2_vec_4000", 3997)]),
+        ("VIE-1 continuous (vector, d=2)",
+         [("test_vie1_vec_fc_500",   496), ("test_vie1_vec_fc_1000", 1000),
+          ("test_vie1_vec_fc_2000", 1999), ("test_vie1_vec_fc_3000", 2998),
+          ("test_vie1_vec_fc_4000", 3997)]),
         ("VIDE (vector, d=2)",
          [("test_vide_vec_500",   497), ("test_vide_vec_1000",  997),
           ("test_vide_vec_2000", 1997), ("test_vide_vec_3000", 2997),
@@ -90,8 +95,8 @@ def generate_vec_chart(times, output_path):
         print("Skipping vector chart: some benchmarks missing (D extension required)")
         return
 
-    fig, axes = plt.subplots(1, 3, figsize=(9, 3))
-    for ax, (solver_name, cases) in zip(axes, groups):
+    fig, axes = plt.subplots(2, 2, figsize=(7, 5), sharex=True)
+    for ax, (solver_name, cases) in zip(axes.T.flat, groups):
         _bar_subplot(ax, solver_name, cases, times)
     fig.supylabel("Mean time (ms)")
     fig.tight_layout()
