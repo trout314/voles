@@ -12,9 +12,7 @@ Collocation-method solvers for Volterra integral and integro-differential equati
 
 The solvers are implemented as a compiled extension written in the [D language](https://dlang.org) for maximum performance.
 
-### Solvers
-
-<hr style="border: none; border-top: 3px solid lightgray;">
+## Solvers
 
 **`solve_VIE_1`**
 
@@ -53,9 +51,7 @@ The solver handles the following cases:
 
 Lower-order trapezoidal-rule solvers for VIE-1 and VIE-2. Retained for backward compatibility; the collocation solvers above are preferred for new code.
 
-### Installation
-
-<hr style="border: none; border-top: 3px solid lightgray;">
+## Installation
 
 ```bash
 pip install volterra-equation-solvers
@@ -67,9 +63,7 @@ Pre-built wheels are provided for Linux x86_64, macOS (arm64 and x86_64), and Wi
 
 To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-### Quick start
-
-<hr style="border: none; border-top: 3px solid lightgray;">
+## Quick start
 
 ```python
 import numpy as np
@@ -91,9 +85,7 @@ print(f"Max error: {max(abs(soln - np.sin(times))):.2e}")
 
 All solvers accept `return_polys=True` to also return the piecewise polynomial solution as a list of `numpy.polynomial.Polynomial` objects.
 
-### Vector-valued systems
-
-<hr style="border: none; border-top: 3px solid lightgray;">
+## Vector-valued systems
 
 `solve_VIE_1`, `solve_VIE_2`, and `solve_VIDE` also solve for vector-valued unknowns $\mathbf{y}(t) \in \mathbb{R}^d$, where the kernel $K$ and coefficient $a$ become $d \times d$ matrix-valued functions:
 
@@ -128,9 +120,7 @@ print(f"Max error: {np.max(np.abs(soln - exact)):.2e}")
 
 > **Note:** The D extension is a required part of the package. The Numba fallback is only used for scalar solvers when a collocation setting is not supported by the D extension.
 
-### Benchmarks
-
-<hr style="border: none; border-top: 3px solid lightgray;">
+## Benchmarks
 
 Run on a **GitHub Actions `ubuntu-22.04` runner** (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost). Mean time is averaged over a variable number of calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
 
@@ -140,9 +130,7 @@ Run on a **GitHub Actions `ubuntu-22.04` runner** (2-core x86_64 VM on an Intel 
 
 ![Vector benchmarks](benchmarks/results_vec.png)
 
-### Input format
-
-<hr style="border: none; border-top: 3px solid lightgray;">
+## Input format
 
 - `kernel_values`: array of `K(s)` values from `s=0`, spaced by `time_step`
 - Length must be `(multiple of coll_divs²) + 1`; longer arrays are truncated with a warning
