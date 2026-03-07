@@ -21,9 +21,9 @@ Given functions $K$ and $g$, solves for $y(t)$ in the Type-1 Volterra integral e
 $$g(t) = \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 The solver handles the following cases:
-- $y$, $g$, and $K$ are scalar functions.
-- $y, g \in \mathbb{R}^d$ and $K \in \mathbb{R}^{d \times d}$.
-- $y, g \in \mathbb{R}^{d \times m}$ and $K \in \mathbb{R}^{d \times d}$.
+- $y(t)$, $g(t)$, and $K$ are scalar.
+- $y(t), g(t) \in \mathbb{R}^d$ and $K \in \mathbb{R}^{d \times d}$.
+- $y(t), g(t) \in \mathbb{R}^{d \times m}$ and $K \in \mathbb{R}^{d \times d}$.
 
 ### `solve_VIE_2`
 
@@ -32,9 +32,9 @@ Given functions $K$ and $g$, solves for $y(t)$ in the Type-2 Volterra integral e
 $$y(t) = g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 The solver handles the following cases:
-- $y$, $g$, and $K$ are scalar functions.
-- $y, g \in \mathbb{R}^d$ and $K \in \mathbb{R}^{d \times d}$.
-- $y, g \in \mathbb{R}^{d \times m}$ and $K \in \mathbb{R}^{d \times d}$.
+- $y(t)$, $g(t)$, and $K$ are scalar.
+- $y(t), g(t) \in \mathbb{R}^d$ and $K \in \mathbb{R}^{d \times d}$.
+- $y(t), g(t) \in \mathbb{R}^{d \times m}$ and $K \in \mathbb{R}^{d \times d}$.
 
 ### `solve_VIDE`
 
@@ -43,9 +43,9 @@ Given functions $K$, $a$, and $g$ and an initial value $y(0)$, solves for $y(t)$
 $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 The solver handles the following cases:
-- $y$, $g$, $y(0)$, $K$, and $a$ are scalar functions.
-- $y, g, y(0) \in \mathbb{R}^d$ and $K, a \in \mathbb{R}^{d \times d}$.
-- $y, g, y(0) \in \mathbb{R}^{d \times m}$ and $K, a \in \mathbb{R}^{d \times d}$.
+- $y(t)$, $g(t)$, $K$, and $a$ are scalar.
+- $y(t), g(t) \in \mathbb{R}^d$ and $K, a \in \mathbb{R}^{d \times d}$.
+- $y(t), g(t) \in \mathbb{R}^{d \times m}$ and $K, a \in \mathbb{R}^{d \times d}$.
 
 ### `solve_VIE_1_trapz`, `solve_VIE_2_trapz` *(legacy)*
 
