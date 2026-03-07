@@ -66,32 +66,33 @@ All solvers accept `return_polys=True` to also return the piecewise polynomial s
 
 `solve_VIE_1`, `solve_VIE_2`, and `solve_VIDE` also solve for vector-valued unknowns $\mathbf{y}(t) \in \mathbb{R}^d$, where the kernel $K$ and coefficient $a$ become $d \times d$ matrix-valued functions:
 
-$$\mathbf{y}(t) = \mathbf{g}(t) + \int_0^t K(t-s)\,\mathbf{y}(s)\,ds$$
+$$\mathbf{g}(t) = \int_0^t K(t-s)\,\mathbf{y}(s)\,ds$$
 
 Pass `kernel_values` as an `(N, d, d)` array and `g_values` as an `(N, d)` array:
 
 ```python
 import numpy as np
-from volterra_equation_solvers import solve_VIE_2
+from volterra_equation_solvers import solve_VIE_1
 
-# 2×2 system: y_j(t) = sin(t), j = 0, 1
-# K(s) = exp(-s) * I₂,  exact solution y = [sin t, sin t]
-d = 2
-time_step = 0.05
-times = np.arange(0, 2.05, time_step)
+# 2×2 VIE-1 with a fully coupled (all non-zero) constant kernel
+# K = [[3/2, -1/2], [-1/2, 3/2]],  exact solution y = [1+2t, 1]
+#
+# Constructed via similarity transform P=[[1,1],[1,-1]] applied to a
+# diagonal system with eigenvalues 1 and 2.
+time_step = 0.1
+times = np.arange(0, 9.1, time_step)   # 91 pts = 10×3² + 1
 N = len(times)
 
-kernel = np.zeros((N, d, d))
-kernel[:, 0, 0] = np.exp(-times)
-kernel[:, 1, 1] = np.exp(-times)
+kernel = np.full((N, 2, 2), [[1.5, -0.5], [-0.5, 1.5]])
 
-g = np.zeros((N, d))
-g[:, 0] = np.sin(times) - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
-g[:, 1] = g[:, 0]
+g = np.zeros((N, 2))
+g[:, 0] = times + 1.5 * times**2
+g[:, 1] = times - 0.5 * times**2
 
-soln = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=time_step)
-# soln shape: (N, 2);  soln[:, j] ≈ sin(times) for j = 0, 1
-print(f"Max error: {np.max(np.abs(soln - np.sin(times)[:, None])):.2e}")
+soln = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=time_step)
+# soln shape: (N, 2)
+exact = np.column_stack([1 + 2*times, np.ones(N)])
+print(f"Max error: {np.max(np.abs(soln - exact)):.2e}")
 ```
 
 > **Note:** Vector-valued solvers require the D extension and are not available through the Numba fallback.
