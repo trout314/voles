@@ -95,7 +95,7 @@ exact = np.column_stack([1 + 2*times, np.ones(N)])
 print(f"Max error: {np.max(np.abs(soln - exact)):.2e}")
 ```
 
-> **Note:** Vector-valued solvers require the D extension and are not available through the Numba fallback.
+> **Note:** The D extension is a required part of the package. The Numba fallback is only used for scalar solvers when a collocation setting is not supported by the D extension.
 
 ## Benchmarks
 

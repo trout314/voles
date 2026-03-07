@@ -1,11 +1,6 @@
 import numpy as np
 import pytest
 from volterra_equation_solvers import solve_VIE_1, solve_VIE_2, solve_VIDE
-from volterra_equation_solvers._dlang import available as _dlang_available
-
-_requires_dlang = pytest.mark.skipif(
-    not _dlang_available, reason="D extension not available"
-)
 
 # --- VIE-2 (coll_divs=2, pts = n_intervals*4+1) ---
 
@@ -147,27 +142,22 @@ def _vie1_vec_inputs(n_intervals):
     g[0] = 0.0
     return kernel, g, time_step
 
-@_requires_dlang
 def test_vie1_vec_500(benchmark):
     kernel, g, dt = _vie1_vec_inputs(55)       # 496 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
 
-@_requires_dlang
 def test_vie1_vec_1000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(111)      # 1000 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
 
-@_requires_dlang
 def test_vie1_vec_2000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(222)      # 1999 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
 
-@_requires_dlang
 def test_vie1_vec_3000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(333)      # 2998 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
 
-@_requires_dlang
 def test_vie1_vec_4000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(444)      # 3997 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
@@ -175,31 +165,26 @@ def test_vie1_vec_4000(benchmark):
 
 # --- Vector VIE-1 (continuous, d=2, coll_divs=3, pts = n_intervals*9+1) ---
 
-@_requires_dlang
 def test_vie1_vec_fc_500(benchmark):
     kernel, g, dt = _vie1_vec_inputs(55)       # 496 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
               soln_init_value=np.zeros(2), force_continuous=True)
 
-@_requires_dlang
 def test_vie1_vec_fc_1000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(111)      # 1000 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
               soln_init_value=np.zeros(2), force_continuous=True)
 
-@_requires_dlang
 def test_vie1_vec_fc_2000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(222)      # 1999 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
               soln_init_value=np.zeros(2), force_continuous=True)
 
-@_requires_dlang
 def test_vie1_vec_fc_3000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(333)      # 2998 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
               soln_init_value=np.zeros(2), force_continuous=True)
 
-@_requires_dlang
 def test_vie1_vec_fc_4000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(444)      # 3997 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
@@ -220,27 +205,22 @@ def _vie2_vec_inputs(n_intervals):
     g = np.column_stack([rhs, rhs])
     return kernel, g, time_step
 
-@_requires_dlang
 def test_vie2_vec_500(benchmark):
     kernel, g, dt = _vie2_vec_inputs(124)      # 497 pts
     benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
 
-@_requires_dlang
 def test_vie2_vec_1000(benchmark):
     kernel, g, dt = _vie2_vec_inputs(249)      # 997 pts
     benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
 
-@_requires_dlang
 def test_vie2_vec_2000(benchmark):
     kernel, g, dt = _vie2_vec_inputs(499)      # 1997 pts
     benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
 
-@_requires_dlang
 def test_vie2_vec_3000(benchmark):
     kernel, g, dt = _vie2_vec_inputs(749)      # 2997 pts
     benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
 
-@_requires_dlang
 def test_vie2_vec_4000(benchmark):
     kernel, g, dt = _vie2_vec_inputs(999)      # 3997 pts
     benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
@@ -266,31 +246,26 @@ def _vide_vec_inputs(n_intervals):
     soln_init = np.zeros(2)
     return kernel, g, a, soln_init, time_step
 
-@_requires_dlang
 def test_vide_vec_500(benchmark):
     kernel, g, a, init, dt = _vide_vec_inputs(124)   # 497 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
               soln_init_value=init, time_step=dt)
 
-@_requires_dlang
 def test_vide_vec_1000(benchmark):
     kernel, g, a, init, dt = _vide_vec_inputs(249)   # 997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
               soln_init_value=init, time_step=dt)
 
-@_requires_dlang
 def test_vide_vec_2000(benchmark):
     kernel, g, a, init, dt = _vide_vec_inputs(499)   # 1997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
               soln_init_value=init, time_step=dt)
 
-@_requires_dlang
 def test_vide_vec_3000(benchmark):
     kernel, g, a, init, dt = _vide_vec_inputs(749)   # 2997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
               soln_init_value=init, time_step=dt)
 
-@_requires_dlang
 def test_vide_vec_4000(benchmark):
     kernel, g, a, init, dt = _vide_vec_inputs(999)   # 3997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,

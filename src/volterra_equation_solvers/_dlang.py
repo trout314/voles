@@ -1,8 +1,8 @@
 """
-Optional ctypes loader for the D language extension (libvolterra_dlang.so).
+ctypes loader for the D language extension (libvolterra_dlang.so).
 
-If the shared library is not present, `available` is set to False and the
-wrapper functions raise RuntimeError.  The rest of the package is unaffected.
+The shared library is a required part of the package.  If it cannot be found
+or loaded, ImportError is raised at import time.
 """
 
 import ctypes
@@ -12,7 +12,6 @@ import sys
 import numpy as np
 
 _lib = None
-available = False
 
 # ctypes shorthand
 _dp = ctypes.POINTER(ctypes.c_double)
@@ -83,7 +82,7 @@ def _setup_argtypes() -> None:
 
 
 def _load() -> None:
-    global _lib, available
+    global _lib
     here = os.path.dirname(os.path.abspath(__file__))
 
     if sys.platform == "win32":
@@ -102,11 +101,15 @@ def _load() -> None:
             try:
                 _lib = ctypes.CDLL(path)
                 _setup_argtypes()
-                available = True
                 return
-            except OSError:
-                pass
-    available = False
+            except OSError as e:
+                raise ImportError(f"Found {lib_name} at {path} but could not load it: {e}") from e
+    raise ImportError(
+        f"volterra_equation_solvers requires the compiled D extension ({lib_name}). "
+        f"Searched: {candidates}. "
+        "Install the package from a pre-built wheel or build the extension manually "
+        "(see dlang/README or the project documentation)."
+    )
 
 
 _load()
@@ -119,8 +122,6 @@ _load()
 def solve_vie1_d(g_values, kernel_values, soln_init_value, time_step,
                  coll_divs, coll_choices, return_polys, force_continuous):
     """Call the D stub for solve_VIE_1. Returns (soln_values, poly_coefs_or_None)."""
-    if not available:
-        raise RuntimeError("D extension not available")
 
     g = np.ascontiguousarray(g_values, dtype=np.float64)
     k = np.ascontiguousarray(kernel_values, dtype=np.float64)
@@ -175,8 +176,6 @@ def solve_vie1_vec_d(g_values, kernel_values, soln_init_value, time_step,
     -------
     out_soln : ndarray, shape (N, d)
     """
-    if not available:
-        raise RuntimeError("D extension not available")
 
     g = np.ascontiguousarray(g_values, dtype=np.float64)
     k = np.ascontiguousarray(kernel_values, dtype=np.float64)
@@ -228,8 +227,6 @@ def solve_vie2_vec_d(g_values, kernel_values, time_step, coll_divs, coll_choices
     -------
     out_soln : ndarray, shape (N, d)
     """
-    if not available:
-        raise RuntimeError("D extension not available")
 
     g = np.ascontiguousarray(g_values, dtype=np.float64)
     k = np.ascontiguousarray(kernel_values, dtype=np.float64)
@@ -264,8 +261,6 @@ def solve_vie2_vec_d(g_values, kernel_values, time_step, coll_divs, coll_choices
 def solve_vie2_d(g_values, kernel_values, time_step, coll_divs,
                  coll_choices, return_polys):
     """Call the D stub for solve_VIE_2. Returns (soln_values, poly_coefs_or_None)."""
-    if not available:
-        raise RuntimeError("D extension not available")
 
     g = np.ascontiguousarray(g_values, dtype=np.float64)
     k = np.ascontiguousarray(kernel_values, dtype=np.float64)
@@ -308,8 +303,6 @@ def solve_vie2_d(g_values, kernel_values, time_step, coll_divs,
 def solve_vide_d(g_values, kernel_values, a_values, soln_init_value, time_step,
                  coll_divs, coll_choices, return_polys):
     """Call the D stub for solve_VIDE. Returns (soln_values, poly_coefs_or_None)."""
-    if not available:
-        raise RuntimeError("D extension not available")
 
     g = np.ascontiguousarray(g_values, dtype=np.float64)
     k = np.ascontiguousarray(kernel_values, dtype=np.float64)
@@ -367,8 +360,6 @@ def solve_vide_vec_d(g_values, kernel_values, a_values, soln_init_values, time_s
     -------
     out_soln : ndarray, shape (N, d)
     """
-    if not available:
-        raise RuntimeError("D extension not available")
 
     g = np.ascontiguousarray(g_values, dtype=np.float64)
     k = np.ascontiguousarray(kernel_values, dtype=np.float64)
@@ -410,8 +401,6 @@ def solve_vide_vec_d(g_values, kernel_values, a_values, soln_init_values, time_s
 
 def supported_coll_settings_d():
     """Return list of (coll_divs, coll_choices) for all settings compiled into the D library."""
-    if not available:
-        raise RuntimeError("D extension not available")
 
     num = _lib.volterra_num_supported_settings()
     ncols = _lib.volterra_max_coll_params() + 1
