@@ -14,7 +14,7 @@ The solvers are implemented as a compiled extension written in the [D language](
 
 ## Solvers
 
-**`solve_VIE_1`**
+### `solve_VIE_1`
 
 Given functions $K$ and $g$, solves for $y(t)$ in the Type-1 Volterra integral equation (VIE-1):
 
@@ -25,7 +25,7 @@ The solver handles the following cases:
 - **Vector:** $y, g \in \mathbb{R}^d$ and $K \in \mathbb{R}^{d \times d}$.
 - **Matrix:** $y, g \in \mathbb{R}^{d \times m}$ and $K \in \mathbb{R}^{d \times d}$.
 
-**`solve_VIE_2`**
+### `solve_VIE_2`
 
 Given functions $K$ and $g$, solves for $y(t)$ in the Type-2 Volterra integral equation (VIE-2):
 
@@ -36,7 +36,7 @@ The solver handles the following cases:
 - **Vector:** $y, g \in \mathbb{R}^d$ and $K \in \mathbb{R}^{d \times d}$.
 - **Matrix:** $y, g \in \mathbb{R}^{d \times m}$ and $K \in \mathbb{R}^{d \times d}$.
 
-**`solve_VIDE`**
+### `solve_VIDE`
 
 Given functions $K$, $a$, and $g$ and an initial value $y(0)$, solves for $y(t)$ in the Volterra integro-differential equation (VIDE):
 
@@ -47,7 +47,7 @@ The solver handles the following cases:
 - **Vector:** $y, g, y(0) \in \mathbb{R}^d$ and $K, a \in \mathbb{R}^{d \times d}$.
 - **Matrix:** $y, g, y(0) \in \mathbb{R}^{d \times m}$ and $K, a \in \mathbb{R}^{d \times d}$.
 
-**`solve_VIE_1_trapz`, `solve_VIE_2_trapz`** *(legacy)*
+### `solve_VIE_1_trapz`, `solve_VIE_2_trapz` *(legacy)*
 
 Lower-order trapezoidal-rule solvers for VIE-1 and VIE-2. Retained for backward compatibility; the collocation solvers above are preferred for new code.
 
