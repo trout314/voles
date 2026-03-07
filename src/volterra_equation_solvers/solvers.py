@@ -57,31 +57,6 @@ def lagrange_integ_f(x, index, nodes):
     terms = [coefs[i] * x ** (i + 1) for i in range(len(coefs))]
     return np.sum(np.array(terms))
 
-# TO DO: Decide what to do with this function. Keep?
-@ncjit
-def solve_VIE_1_trapz(*, g_values, kernel_values, dt):
-    assert np.isclose(g_values[0], 0.0), "g(0) must be zero"
-    soln_y = np.zeros_like(g_values)
-    k0 = kernel_values[0]
-    for t_indx in range(0, len(soln_y)):
-        first_term = kernel_values[t_indx]*soln_y[0]
-        middle_terms = np.sum(np.array([kernel_values[t_indx - i]*soln_y[i]
-                               for i in range(1, t_indx-1)]))
-        soln_y[t_indx] = (2.0/(k0*dt))*g_values[t_indx] - (1.0/k0)*first_term - (2.0/k0)*middle_terms
-    return soln_y        
-
-# TO DO: Decide what to do with this function. Keep?
-@ncjit
-def solve_VIE_2_trapz(*, g_values, kernel_values, omega, dt):
-    assert np.isclose(g_values[0], 0.0), "g(0) must be zero"
-    soln_y = np.zeros_like(g_values)
-    k0 = kernel_values[0]
-    for t_indx in range(0, len(soln_y)):
-        first_term = (dt/2.0)*kernel_values[t_indx]*soln_y[0]
-        middle_terms = dt*np.sum(np.array([kernel_values[t_indx - i]*soln_y[i]
-                                  for i in range(1, t_indx-1)]))
-        soln_y[t_indx] = (2.0/(k0*dt))*(g_values[t_indx] - first_term - middle_terms)
-    return soln_y   
 
 @ncjit
 def A(coll_info):

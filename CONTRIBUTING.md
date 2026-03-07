@@ -14,10 +14,9 @@ pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
-## Building the D extension (optional)
+## Building the D extension (required)
 
-The D extension provides a faster backend but is not required for development —
-the Numba fallback is used automatically if the library is absent.
+The D extension is a required part of the package. Tests will fail without it.
 
 To build it you need [ldc2](https://github.com/ldc-developers/ldc/releases) and
 [meson](https://mesonbuild.com/) + [ninja](https://ninja-build.org/):
@@ -45,8 +44,8 @@ Copy-Item dlang\build\volterra_dlang.dll src\volterra_equation_solvers\
 Verify it loaded:
 
 ```python
-from volterra_equation_solvers._dlang import available
-print(available)  # True
+import volterra_equation_solvers
+print(volterra_equation_solvers.__version__)  # should print without ImportError
 ```
 
 ## Submitting changes

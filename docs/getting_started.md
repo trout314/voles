@@ -6,7 +6,7 @@
 pip install git+https://github.com/trout314/volterra-equation-solvers
 ```
 
-**Dependencies:** numpy, numba
+**Dependencies:** numpy, numba, and the compiled D extension (included in binary distributions; see [CONTRIBUTING.md](../CONTRIBUTING.md) to build from source)
 
 ## Input format
 
