@@ -87,7 +87,7 @@ print(f"Max error: {max(abs(soln - np.sin(times))):.2e}")
 
 All solvers accept `return_polys=True` to also return the piecewise polynomial solution as a list of `numpy.polynomial.Polynomial` objects.
 
-## Vector-valued systems
+## Vector and Matrix Valued Equations
 
 `solve_VIE_1`, `solve_VIE_2`, and `solve_VIDE` also solve for vector-valued unknowns $\mathbf{y}(t) \in \mathbb{R}^d$, where the kernel $K$ and coefficient $a$ become $d \times d$ matrix-valued functions:
 
