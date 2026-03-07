@@ -18,6 +18,17 @@ Collocation-method solvers for Volterra integral and integro-differential equati
 pip install git+https://github.com/trout314/volterra-equation-solvers
 ```
 
+## Mathematical derivations
+
+The `docs/` directory contains worked derivations of the analytic solutions used in the test suite:
+
+| File | Contents |
+|------|----------|
+| [`scalar_solutions.pdf`](scalar_solutions.pdf) | Derivations for all six scalar test cases (VIE-1, VIE-2, VIDE) |
+| [`coupled_vector_solutions.pdf`](coupled_vector_solutions.pdf) | Derivations for the coupled 2×2 vector test cases, constructed via a similarity transform |
+
+LaTeX source files are provided alongside the PDFs.
+
 ## Quick example
 
 ```python

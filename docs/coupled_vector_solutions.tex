@@ -1,0 +1,338 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage[margin=1.1in]{geometry}
+\usepackage{booktabs}
+
+\newtheorem*{claim}{Claim}
+
+\title{Analytic Solutions for Coupled Vector Volterra Tests}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Setup: The Similarity Transform Method}
+
+All three examples are constructed by the same technique.  Start with a
+\emph{diagonal} system whose solution is known in closed form, then conjugate
+by an invertible matrix $P$ to obtain a \emph{fully coupled} system with a
+known solution.
+
+We use
+\[
+  P = \begin{pmatrix} 1 & 1 \\ 1 & -1 \end{pmatrix}, \qquad
+  P^{-1} = \tfrac{1}{2}\begin{pmatrix} 1 & 1 \\ 1 & -1 \end{pmatrix}.
+\]
+One can verify $PP^{-1}=I$ directly.  For any diagonal matrix
+$D = \operatorname{diag}(d_1, d_2)$,
+\[
+  \widetilde{D} \;:=\; PDP^{-1}
+  \;=\;
+  \begin{pmatrix} \tfrac{d_1+d_2}{2} & \tfrac{d_1-d_2}{2} \\[4pt]
+                  \tfrac{d_1-d_2}{2} & \tfrac{d_1+d_2}{2} \end{pmatrix}.
+\]
+In every example below we choose $d_1=1$, $d_2=2$, giving
+\[
+  \widetilde{D}
+  = \begin{pmatrix} \tfrac{3}{2} & -\tfrac{1}{2} \\[4pt]
+                    -\tfrac{1}{2} & \tfrac{3}{2} \end{pmatrix}.
+\]
+
+If $\mathbf{y}(t)$ solves the diagonal system, the transformed solution is
+$\mathbf{z}(t) = P\mathbf{y}(t)$, and all coefficient matrices/functions
+transform as $(\,\cdot\,) \mapsto P(\,\cdot\,)P^{-1}$, while forcing
+functions transform as $\mathbf{g} \mapsto P\mathbf{g}$.
+
+% ============================================================
+\section{Type-1 Volterra Integral Equation (VIE-1)}
+
+The vector VIE-1 is
+\[
+  \mathbf{g}(t) = \int_0^t \widetilde{K}(t-s)\,\mathbf{z}(s)\,ds,
+  \qquad t\ge 0.
+\]
+
+\subsection*{Diagonal system}
+
+Choose the diagonal kernel $K = \operatorname{diag}(1,2)$ (constant) and the
+exact solutions
+\[
+  y_1(t) = 1+t, \qquad y_2(t) = t.
+\]
+The corresponding forcing functions are obtained by direct integration:
+\begin{align*}
+  g_1(t) &= \int_0^t 1\cdot(1+s)\,ds = t + \tfrac{t^2}{2}, \\[4pt]
+  g_2(t) &= \int_0^t 2s\,ds = t^2.
+\end{align*}
+
+\subsection*{Transformed system}
+
+Applying $P$:
+\[
+  \mathbf{z}(t) = P\mathbf{y}(t)
+  = \begin{pmatrix}1&1\\1&-1\end{pmatrix}\begin{pmatrix}1+t\\t\end{pmatrix}
+  = \begin{pmatrix}1+2t\\1\end{pmatrix},
+\]
+\[
+  \widetilde{K} = PDP^{-1}
+  = \begin{pmatrix}\tfrac{3}{2}&-\tfrac{1}{2}\\-\tfrac{1}{2}&\tfrac{3}{2}\end{pmatrix},
+\]
+\[
+  \widetilde{\mathbf{g}}(t) = P\mathbf{g}(t)
+  = \begin{pmatrix}(t+\tfrac{t^2}{2})+t^2\\(t+\tfrac{t^2}{2})-t^2\end{pmatrix}
+  = \begin{pmatrix}t+\tfrac{3t^2}{2}\\t-\tfrac{t^2}{2}\end{pmatrix}.
+\]
+
+\subsection*{Verification}
+
+We check that $\widetilde{\mathbf{g}}(t) = \int_0^t\widetilde{K}(t-s)\,\mathbf{z}(s)\,ds$
+component by component.
+
+\paragraph{Component 0.}
+\begin{align*}
+  \int_0^t \Bigl(\tfrac{3}{2}z_0(s) - \tfrac{1}{2}z_1(s)\Bigr)\,ds
+  &= \int_0^t \Bigl(\tfrac{3}{2}(1+2s) - \tfrac{1}{2}\cdot 1\Bigr)\,ds \\
+  &= \int_0^t (1+3s)\,ds \\
+  &= t + \tfrac{3t^2}{2} \;=\; \tilde{g}_0(t). \checkmark
+\end{align*}
+
+\paragraph{Component 1.}
+\begin{align*}
+  \int_0^t \Bigl(-\tfrac{1}{2}z_0(s) + \tfrac{3}{2}z_1(s)\Bigr)\,ds
+  &= \int_0^t \Bigl(-\tfrac{1}{2}(1+2s) + \tfrac{3}{2}\cdot 1\Bigr)\,ds \\
+  &= \int_0^t (1-s)\,ds \\
+  &= t - \tfrac{t^2}{2} \;=\; \tilde{g}_1(t). \checkmark
+\end{align*}
+
+\subsection*{Summary}
+\[
+  \boxed{
+    \widetilde{K} = \begin{pmatrix}\tfrac{3}{2}&-\tfrac{1}{2}\\-\tfrac{1}{2}&\tfrac{3}{2}\end{pmatrix},
+    \quad
+    \widetilde{\mathbf{g}}(t) = \begin{pmatrix}t+\tfrac{3}{2}t^2\\t-\tfrac{1}{2}t^2\end{pmatrix},
+    \quad
+    \mathbf{z}(t) = \begin{pmatrix}1+2t\\1\end{pmatrix}.
+  }
+\]
+
+% ============================================================
+\section{Type-2 Volterra Integral Equation (VIE-2)}
+
+The vector VIE-2 is
+\[
+  \mathbf{z}(t) = \widetilde{\mathbf{g}}(t)
+                + \int_0^t \widetilde{K}(t-s)\,\mathbf{z}(s)\,ds,
+  \qquad t\ge 0.
+\]
+
+\subsection*{Diagonal system}
+
+Choose $K = \operatorname{diag}(1,2)$ and exact solutions
+\[
+  y_1(t) = t, \qquad y_2(t) = t^2.
+\]
+The forcing functions satisfy $y_r = g_r + \int_0^t k_r\,y_r(s)\,ds$:
+\begin{align*}
+  g_1(t) &= t - \int_0^t s\,ds = t - \tfrac{t^2}{2}, \\[4pt]
+  g_2(t) &= t^2 - \int_0^t 2s^2\,ds = t^2 - \tfrac{2t^3}{3}.
+\end{align*}
+
+\subsection*{Transformed system}
+
+\[
+  \mathbf{z}(t) = P\mathbf{y}(t)
+  = \begin{pmatrix}t+t^2\\t-t^2\end{pmatrix},
+  \qquad
+  \widetilde{K} = \begin{pmatrix}\tfrac{3}{2}&-\tfrac{1}{2}\\-\tfrac{1}{2}&\tfrac{3}{2}\end{pmatrix},
+\]
+\[
+  \widetilde{\mathbf{g}}(t) = P\mathbf{g}(t)
+  = \begin{pmatrix}
+      \bigl(t-\tfrac{t^2}{2}\bigr)+\bigl(t^2-\tfrac{2t^3}{3}\bigr)\\[4pt]
+      \bigl(t-\tfrac{t^2}{2}\bigr)-\bigl(t^2-\tfrac{2t^3}{3}\bigr)
+    \end{pmatrix}
+  = \begin{pmatrix}
+      t+\tfrac{t^2}{2}-\tfrac{2t^3}{3}\\[4pt]
+      t-\tfrac{3t^2}{2}+\tfrac{2t^3}{3}
+    \end{pmatrix}.
+\]
+
+\subsection*{Verification}
+
+\paragraph{Component 0.}
+\begin{align*}
+  \tilde{g}_0(t) + \int_0^t\Bigl(\tfrac{3}{2}z_0(s)-\tfrac{1}{2}z_1(s)\Bigr)\,ds
+  &= \Bigl(t+\tfrac{t^2}{2}-\tfrac{2t^3}{3}\Bigr)
+     + \int_0^t\Bigl(\tfrac{3}{2}(s+s^2)-\tfrac{1}{2}(s-s^2)\Bigr)\,ds \\
+  &= \Bigl(t+\tfrac{t^2}{2}-\tfrac{2t^3}{3}\Bigr)
+     + \int_0^t(s+2s^2)\,ds \\
+  &= \Bigl(t+\tfrac{t^2}{2}-\tfrac{2t^3}{3}\Bigr)
+     + \Bigl(\tfrac{t^2}{2}+\tfrac{2t^3}{3}\Bigr) \\
+  &= t+t^2 \;=\; z_0(t). \checkmark
+\end{align*}
+
+\paragraph{Component 1.}
+\begin{align*}
+  \tilde{g}_1(t) + \int_0^t\Bigl(-\tfrac{1}{2}z_0(s)+\tfrac{3}{2}z_1(s)\Bigr)\,ds
+  &= \Bigl(t-\tfrac{3t^2}{2}+\tfrac{2t^3}{3}\Bigr)
+     + \int_0^t\Bigl(-\tfrac{1}{2}(s+s^2)+\tfrac{3}{2}(s-s^2)\Bigr)\,ds \\
+  &= \Bigl(t-\tfrac{3t^2}{2}+\tfrac{2t^3}{3}\Bigr)
+     + \int_0^t(s-2s^2)\,ds \\
+  &= \Bigl(t-\tfrac{3t^2}{2}+\tfrac{2t^3}{3}\Bigr)
+     + \Bigl(\tfrac{t^2}{2}-\tfrac{2t^3}{3}\Bigr) \\
+  &= t-t^2 \;=\; z_1(t). \checkmark
+\end{align*}
+
+\subsection*{Summary}
+\[
+  \boxed{
+    \widetilde{K} = \begin{pmatrix}\tfrac{3}{2}&-\tfrac{1}{2}\\-\tfrac{1}{2}&\tfrac{3}{2}\end{pmatrix},
+    \quad
+    \widetilde{\mathbf{g}}(t) = \begin{pmatrix}t+\tfrac{1}{2}t^2-\tfrac{2}{3}t^3\\[4pt]t-\tfrac{3}{2}t^2+\tfrac{2}{3}t^3\end{pmatrix},
+    \quad
+    \mathbf{z}(t) = \begin{pmatrix}t+t^2\\t-t^2\end{pmatrix}.
+  }
+\]
+
+% ============================================================
+\section{Volterra Integro-Differential Equation (VIDE)}
+
+The vector VIDE is
+\[
+  \mathbf{z}'(t) = \widetilde{a}(t)\,\mathbf{z}(t)
+                 + \widetilde{\mathbf{g}}(t)
+                 + \int_0^t \widetilde{K}(t-s)\,\mathbf{z}(s)\,ds,
+  \qquad \mathbf{z}(0) = \mathbf{z}_0.
+\]
+
+\subsection*{Diagonal system}
+
+Choose $a = \operatorname{diag}(1,2)$, $K = \operatorname{diag}(1,2)$, and
+exact solutions
+\[
+  y_1(t) = t, \qquad y_2(t) = t^2, \qquad \mathbf{y}(0) = \mathbf{0}.
+\]
+Substituting into $y_r' = a_r y_r + g_r + \int_0^t k_r y_r(s)\,ds$ and
+solving for $g_r$:
+
+\paragraph{Component 1.}
+\[
+  1 = 1\cdot t + g_1(t) + \int_0^t s\,ds
+    = t + g_1(t) + \tfrac{t^2}{2}
+  \;\implies\;
+  g_1(t) = 1 - t - \tfrac{t^2}{2}.
+\]
+
+\paragraph{Component 2.}
+\[
+  2t = 2t^2 + g_2(t) + \int_0^t 2s^2\,ds
+     = 2t^2 + g_2(t) + \tfrac{2t^3}{3}
+  \;\implies\;
+  g_2(t) = 2t - 2t^2 - \tfrac{2t^3}{3}.
+\]
+
+\subsection*{Transformed system}
+
+Since $a = K = \operatorname{diag}(1,2)$, both transform to the same matrix:
+\[
+  \widetilde{a} = \widetilde{K}
+  = PDP^{-1}
+  = \begin{pmatrix}\tfrac{3}{2}&-\tfrac{1}{2}\\-\tfrac{1}{2}&\tfrac{3}{2}\end{pmatrix}.
+\]
+The transformed solution and initial condition are
+\[
+  \mathbf{z}(t) = P\mathbf{y}(t)
+  = \begin{pmatrix}t+t^2\\t-t^2\end{pmatrix},
+  \qquad
+  \mathbf{z}(0) = P\mathbf{0} = \mathbf{0}.
+\]
+The transformed forcing is
+\begin{align*}
+  \widetilde{\mathbf{g}}(t) &= P\mathbf{g}(t)
+  = \begin{pmatrix}
+      g_1(t)+g_2(t)\\g_1(t)-g_2(t)
+    \end{pmatrix} \\[6pt]
+  &= \begin{pmatrix}
+      \bigl(1-t-\tfrac{t^2}{2}\bigr)+\bigl(2t-2t^2-\tfrac{2t^3}{3}\bigr)\\[4pt]
+      \bigl(1-t-\tfrac{t^2}{2}\bigr)-\bigl(2t-2t^2-\tfrac{2t^3}{3}\bigr)
+    \end{pmatrix}
+  = \begin{pmatrix}
+      1+t-\tfrac{5t^2}{2}-\tfrac{2t^3}{3}\\[4pt]
+      1-3t+\tfrac{3t^2}{2}+\tfrac{2t^3}{3}
+    \end{pmatrix}.
+\end{align*}
+
+\subsection*{Verification}
+
+We verify $\mathbf{z}'(t) = \widetilde{a}\,\mathbf{z}(t) + \widetilde{\mathbf{g}}(t)
++ \int_0^t\widetilde{K}(t-s)\,\mathbf{z}(s)\,ds$ for each component.
+
+The integral term is the same as in the VIE-2 verification above (since
+$\widetilde{K}$ and $\mathbf{z}$ are identical):
+\[
+  \int_0^t\Bigl(\widetilde{K}\,\mathbf{z}(s)\Bigr)_0\,ds
+  = \int_0^t(s+2s^2)\,ds = \tfrac{t^2}{2}+\tfrac{2t^3}{3},
+\]
+\[
+  \int_0^t\Bigl(\widetilde{K}\,\mathbf{z}(s)\Bigr)_1\,ds
+  = \int_0^t(s-2s^2)\,ds = \tfrac{t^2}{2}-\tfrac{2t^3}{3}.
+\]
+
+\paragraph{Component 0.}
+
+Left-hand side: $z_0'(t) = 1+2t$.
+
+Right-hand side:
+\begin{align*}
+  &\bigl(\widetilde{a}\,\mathbf{z}\bigr)_0
+   + \tilde{g}_0
+   + \int_0^t\bigl(\widetilde{K}\,\mathbf{z}(s)\bigr)_0\,ds \\
+  &\quad= \Bigl(\tfrac{3}{2}(t+t^2)-\tfrac{1}{2}(t-t^2)\Bigr)
+         + \Bigl(1+t-\tfrac{5t^2}{2}-\tfrac{2t^3}{3}\Bigr)
+         + \Bigl(\tfrac{t^2}{2}+\tfrac{2t^3}{3}\Bigr) \\
+  &\quad= (t+2t^2)
+         + \Bigl(1+t-\tfrac{5t^2}{2}-\tfrac{2t^3}{3}\Bigr)
+         + \Bigl(\tfrac{t^2}{2}+\tfrac{2t^3}{3}\Bigr) \\
+  &\quad= 1 + 2t + \Bigl(2-\tfrac{5}{2}+\tfrac{1}{2}\Bigr)t^2
+              + \Bigl(-\tfrac{2}{3}+\tfrac{2}{3}\Bigr)t^3 \\
+  &\quad= 1+2t. \checkmark
+\end{align*}
+
+\paragraph{Component 1.}
+
+Left-hand side: $z_1'(t) = 1-2t$.
+
+Right-hand side:
+\begin{align*}
+  &\bigl(\widetilde{a}\,\mathbf{z}\bigr)_1
+   + \tilde{g}_1
+   + \int_0^t\bigl(\widetilde{K}\,\mathbf{z}(s)\bigr)_1\,ds \\
+  &\quad= \Bigl(-\tfrac{1}{2}(t+t^2)+\tfrac{3}{2}(t-t^2)\Bigr)
+         + \Bigl(1-3t+\tfrac{3t^2}{2}+\tfrac{2t^3}{3}\Bigr)
+         + \Bigl(\tfrac{t^2}{2}-\tfrac{2t^3}{3}\Bigr) \\
+  &\quad= (t-2t^2)
+         + \Bigl(1-3t+\tfrac{3t^2}{2}+\tfrac{2t^3}{3}\Bigr)
+         + \Bigl(\tfrac{t^2}{2}-\tfrac{2t^3}{3}\Bigr) \\
+  &\quad= 1 + (1-3)t + \Bigl(-2+\tfrac{3}{2}+\tfrac{1}{2}\Bigr)t^2
+              + \Bigl(\tfrac{2}{3}-\tfrac{2}{3}\Bigr)t^3 \\
+  &\quad= 1-2t. \checkmark
+\end{align*}
+
+\subsection*{Summary}
+\[
+  \boxed{
+    \widetilde{a} = \widetilde{K}
+    = \begin{pmatrix}\tfrac{3}{2}&-\tfrac{1}{2}\\-\tfrac{1}{2}&\tfrac{3}{2}\end{pmatrix},
+    \quad
+    \widetilde{\mathbf{g}}(t)
+    = \begin{pmatrix}1+t-\tfrac{5}{2}t^2-\tfrac{2}{3}t^3\\[4pt]
+                     1-3t+\tfrac{3}{2}t^2+\tfrac{2}{3}t^3\end{pmatrix},
+    \quad
+    \mathbf{z}(t) = \begin{pmatrix}t+t^2\\t-t^2\end{pmatrix},
+    \quad
+    \mathbf{z}(0) = \mathbf{0}.
+  }
+\]
+
+\end{document}

@@ -76,3 +76,5 @@ Run on a **12th Gen Intel(R) Core(TM) i5-12600KF**. Mean time is averaged over a
 - `coll_choices`: list of integers selecting collocation nodes within each sub-interval
 
 See the [Getting Started](docs/getting_started.md) page or the `notebooks/` directory for complete examples.
+
+Worked derivations of the analytic solutions used in the test suite are in [`docs/scalar_solutions.pdf`](docs/scalar_solutions.pdf) and [`docs/coupled_vector_solutions.pdf`](docs/coupled_vector_solutions.pdf).
