@@ -14,7 +14,7 @@ except ImportError:
     _numba_available = False
 
 def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, time_step=1.0,
-               coll_divs=2, coll_choices=[0,1,2], return_polys=False):
+               coll_divs=2, coll_choices=[0,1,2], return_polys=False, show_warnings=True):
     '''
     Solve a Volterra integro-differential equation (VIDE.)
       
@@ -105,8 +105,9 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         if (coll_divs > 1) and (N % coll_divs**2 != 1):
             ans_len = int(N / coll_divs**2 - 1) * coll_divs**2 + 1
             assert ans_len < N
-            print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
-                  f"Truncating to {ans_len}.")
+            if show_warnings:
+                print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
+                      f"Truncating to {ans_len}.")
             kernel_values_ = kernel_values_[:ans_len]
             g_values_ = g_values_[:ans_len]
             a_values_ = a_values_[:ans_len]
@@ -152,11 +153,12 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
         ans_len = int(len(kernel_values) / coll_divs**2 - 1) * coll_divs**2 + 1
         assert ans_len < len(kernel_values)
-        print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
-              f"is not of the form: (multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. " +
-              f"All input data lists will be truncated to the next smaller number " +
-              f"of this form ({ans_len}) which will also be the length of the " +
-              f"returned list of solution values.")
+        if show_warnings:
+            print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
+                  f"is not of the form: (multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. " +
+                  f"All input data lists will be truncated to the next smaller number " +
+                  f"of this form ({ans_len}) which will also be the length of the " +
+                  f"returned list of solution values.")
         kernel_values_ = kernel_values_[:ans_len]
         g_values_ = g_values_[:ans_len]
         a_values_ = a_values_[:ans_len]
@@ -174,7 +176,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             g_values_, kernel_values_, a_values_, soln_init_value,
             time_step, coll_divs, coll_choices, return_polys)
     elif _numba_available:
-        print("warning: falling back to slower python/numba code")
+        if show_warnings:
+            print("warning: falling back to slower python/numba code")
         soln_vals, poly_coefs = _numba_solvers.solve_VIDE_jit(
             g_values_, kernel_values_, a_values_, soln_init_value,
             time_step, coll_divs, coll_choices, return_polys)
@@ -356,11 +359,12 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
         ans_len = int(len(kernel_values) / coll_divs**2 - 1) * coll_divs**2 + 1
         assert ans_len < len(kernel_values)
-        print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
-              f"is not of the form: (multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. " +
-              f"All input data lists will be truncated to the next smaller number " +
-              f"of this form ({ans_len}) which will also be the length of the " +
-              f"returned list of solution values.")
+        if show_warnings:
+            print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
+                  f"is not of the form: (multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. " +
+                  f"All input data lists will be truncated to the next smaller number " +
+                  f"of this form ({ans_len}) which will also be the length of the " +
+                  f"returned list of solution values.")
         kernel_values_ = kernel_values_[:ans_len]
         g_values_ = g_values_[:ans_len]
 
@@ -392,7 +396,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             g_values_, kernel_values_, soln_init_value_, time_step,
             coll_divs, coll_choices, return_polys, force_continuous)
     elif _numba_available:
-        print("warning: falling back to slower python/numba code")
+        if show_warnings:
+            print("warning: falling back to slower python/numba code")
         soln_vals, poly_coefs = _numba_solvers.solve_VIE_1_jit(
             g_values_, kernel_values_, soln_init_value_, time_step,
             coll_divs, coll_choices, return_polys, force_continuous)
@@ -415,7 +420,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         return soln_vals
 
 def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
-                coll_choices=[0,1,2], return_polys=False):
+                coll_choices=[0,1,2], return_polys=False, show_warnings=True):
     '''
     Solve a "Type 2" Volterra integral equation.
 
@@ -487,8 +492,9 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         if (coll_divs > 1) and (N % coll_divs**2 != 1):
             ans_len = int(N / coll_divs**2 - 1) * coll_divs**2 + 1
             assert ans_len < N
-            print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
-                  f"Truncating to {ans_len}.")
+            if show_warnings:
+                print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
+                      f"Truncating to {ans_len}.")
             kernel_values_ = kernel_values_[:ans_len]
             g_values_ = g_values_[:ans_len]
 
@@ -523,11 +529,12 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
         ans_len = int(len(kernel_values) / coll_divs**2 - 1) * coll_divs**2 + 1
         assert ans_len < len(kernel_values)
-        print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
-              f"is not of the form: (multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. " +
-              f"All input data lists will be truncated to the next smaller number " +
-              f"of this form ({ans_len}) which will also be the length of the " +
-              f"returned list of solution values.")
+        if show_warnings:
+            print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
+                  f"is not of the form: (multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. " +
+                  f"All input data lists will be truncated to the next smaller number " +
+                  f"of this form ({ans_len}) which will also be the length of the " +
+                  f"returned list of solution values.")
         kernel_values_ = kernel_values_[:ans_len]
         g_values_ = g_values_[:ans_len]
 
@@ -543,7 +550,8 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         soln_vals, poly_coefs = _dlang_module.solve_vie2_d(
             g_values_, kernel_values_, time_step, coll_divs, coll_choices, return_polys)
     elif _numba_available:
-        print("warning: falling back to slower python/numba code")
+        if show_warnings:
+            print("warning: falling back to slower python/numba code")
         soln_vals, poly_coefs = _numba_solvers.solve_VIE_2_jit(
             g_values_, kernel_values_, time_step, coll_divs, coll_choices, return_polys)
     else:
