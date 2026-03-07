@@ -14,7 +14,7 @@ The solvers are implemented as a compiled extension written in the [D language](
 
 ### Solvers
 
-<hr style="border: none; border-top: 3px solid lightgray;">
+<hr style="border: none; border-top: 3px solid lightgray; margin-top: -10px;">
 
 **`solve_VIE_1`**
 
@@ -55,7 +55,7 @@ Lower-order trapezoidal-rule solvers for VIE-1 and VIE-2. Retained for backward 
 
 ### Installation
 
-<hr style="border: none; border-top: 3px solid lightgray;">
+<hr style="border: none; border-top: 3px solid lightgray; margin-top: -10px;">
 
 ```bash
 pip install volterra-equation-solvers
@@ -69,7 +69,7 @@ To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](CO
 
 ### Quick start
 
-<hr style="border: none; border-top: 3px solid lightgray;">
+<hr style="border: none; border-top: 3px solid lightgray; margin-top: -10px;">
 
 ```python
 import numpy as np
@@ -93,7 +93,7 @@ All solvers accept `return_polys=True` to also return the piecewise polynomial s
 
 ### Vector-valued systems
 
-<hr style="border: none; border-top: 3px solid lightgray;">
+<hr style="border: none; border-top: 3px solid lightgray; margin-top: -10px;">
 
 `solve_VIE_1`, `solve_VIE_2`, and `solve_VIDE` also solve for vector-valued unknowns $\mathbf{y}(t) \in \mathbb{R}^d$, where the kernel $K$ and coefficient $a$ become $d \times d$ matrix-valued functions:
 
@@ -130,7 +130,7 @@ print(f"Max error: {np.max(np.abs(soln - exact)):.2e}")
 
 ### Benchmarks
 
-<hr style="border: none; border-top: 3px solid lightgray;">
+<hr style="border: none; border-top: 3px solid lightgray; margin-top: -10px;">
 
 Run on a **GitHub Actions `ubuntu-22.04` runner** (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost). Mean time is averaged over a variable number of calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
 
@@ -142,7 +142,7 @@ Run on a **GitHub Actions `ubuntu-22.04` runner** (2-core x86_64 VM on an Intel 
 
 ### Input format
 
-<hr style="border: none; border-top: 3px solid lightgray;">
+<hr style="border: none; border-top: 3px solid lightgray; margin-top: -10px;">
 
 - `kernel_values`: array of `K(s)` values from `s=0`, spaced by `time_step`
 - Length must be `(multiple of coll_divs²) + 1`; longer arrays are truncated with a warning
