@@ -1,0 +1,239 @@
+name: Build and publish wheels
+
+# Triggered by version tags (e.g. v0.2.0) or manually for testing.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+
+  # -------------------------------------------------------------------------
+  # Pure-Python sdist (no D extension).  Works on any platform via Numba.
+  # -------------------------------------------------------------------------
+  build-sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Remove D library so it is not bundled in the sdist
+        run: rm -f src/volterra_equation_solvers/volterra_dlang.so
+
+      - name: Build sdist
+        run: |
+          pip install build
+          python -m build --sdist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  # -------------------------------------------------------------------------
+  # Linux x86_64 — built inside Ubuntu 20.04 (glibc 2.31) Docker container,
+  # guaranteeing the .so works on Ubuntu 20.04 / Debian 11 / RHEL 8 and later.
+  # Tagged manylinux_2_31_x86_64 so pip selects it on compatible systems.
+  # -------------------------------------------------------------------------
+  build-wheel-linux-x86_64:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build D extension in Ubuntu 20.04 container
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/work" ubuntu:20.04 bash -c "
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq curl xz-utils ninja-build python3-pip libxml2
+            pip3 install -q 'meson==1.5.2'
+            curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.36.0/ldc2-1.36.0-linux-x86_64.tar.xz \
+              | tar -xJ -C /tmp
+            export PATH=/tmp/ldc2-1.36.0-linux-x86_64/bin:\$PATH
+            cd /work/dlang
+            meson setup build --wipe --buildtype=release
+            ninja -C build
+            cp build/volterra_dlang.so /work/src/volterra_equation_solvers/
+          "
+
+      - name: Verify glibc requirement <= 2.31
+        run: |
+          max=$(objdump -T src/volterra_equation_solvers/volterra_dlang.so \
+            | awk '/GLIBC/{match($0,/GLIBC_([0-9.]+)/,a); print a[1]}' \
+            | sort -V | tail -1)
+          echo "Max glibc version required: $max"
+          python3 -c "
+          def ver(s): return tuple(int(x) for x in s.split('.'))
+          assert ver('$max') <= ver('2.31'), f'glibc {repr(\"$max\")} > 2.31'
+          print('glibc requirement OK')
+          "
+
+      - name: Build wheel and re-tag as manylinux_2_31_x86_64
+        run: |
+          pip install build wheel
+          python -m build --wheel
+          python -m wheel tags --platform-tag manylinux_2_31_x86_64 --remove dist/*.whl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-x86_64
+          path: dist/*.whl
+
+  # -------------------------------------------------------------------------
+  # macOS arm64 (Apple Silicon, macOS 11+)
+  # -------------------------------------------------------------------------
+  build-wheel-macos-arm64:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install meson and ninja
+        run: brew install meson ninja
+
+      - name: Download and extract ldc2
+        run: |
+          LDC_VERSION="1.42.0"
+          curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-universal.tar.xz" \
+            | tar -xJ -C "$HOME" 2>/dev/null \
+            || curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-arm64.tar.xz" \
+            | tar -xJ -C "$HOME"
+          LDC_DIR=$(ls -d "$HOME"/ldc2-*/ | head -1)
+          echo "${LDC_DIR}bin" >> $GITHUB_PATH
+
+      - name: Build D extension
+        run: |
+          cd dlang
+          meson setup build --wipe --buildtype=release
+          ninja -C build
+          cp build/volterra_dlang.dylib ../src/volterra_equation_solvers/
+
+      - name: Build wheel and re-tag as macosx_11_0_arm64
+        run: |
+          pip install build wheel
+          python -m build --wheel
+          python -m wheel tags --platform-tag macosx_11_0_arm64 --remove dist/*.whl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-macos-arm64
+          path: dist/*.whl
+
+  # -------------------------------------------------------------------------
+  # macOS x86_64 (Intel, macOS 10.9+)
+  # -------------------------------------------------------------------------
+  build-wheel-macos-x86_64:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install meson and ninja
+        run: brew install meson ninja
+
+      - name: Download and extract ldc2
+        run: |
+          LDC_VERSION="1.42.0"
+          curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-universal.tar.xz" \
+            | tar -xJ -C "$HOME" 2>/dev/null \
+            || curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-x86_64.tar.xz" \
+            | tar -xJ -C "$HOME"
+          LDC_DIR=$(ls -d "$HOME"/ldc2-*/ | head -1)
+          echo "${LDC_DIR}bin" >> $GITHUB_PATH
+
+      - name: Build D extension
+        run: |
+          cd dlang
+          meson setup build --wipe --buildtype=release
+          ninja -C build
+          cp build/volterra_dlang.dylib ../src/volterra_equation_solvers/
+
+      - name: Build wheel and re-tag as macosx_10_9_x86_64
+        run: |
+          pip install build wheel
+          python -m build --wheel
+          python -m wheel tags --platform-tag macosx_10_9_x86_64 --remove dist/*.whl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-macos-x86_64
+          path: dist/*.whl
+
+  # -------------------------------------------------------------------------
+  # Windows x64
+  # -------------------------------------------------------------------------
+  build-wheel-windows-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install meson and ninja
+        run: pip install meson ninja
+
+      - name: Download and extract ldc2
+        shell: pwsh
+        run: |
+          $LDC_VERSION = "1.41.0"
+          $archive = "ldc2-${LDC_VERSION}-windows-x64.7z"
+          Invoke-WebRequest -Uri "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/$archive" -OutFile "$env:TEMP\$archive"
+          7z x "$env:TEMP\$archive" -o"$env:USERPROFILE"
+          echo "$env:USERPROFILE\ldc2-${LDC_VERSION}-windows-x64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build D extension
+        shell: pwsh
+        run: |
+          cd dlang
+          meson setup build --wipe --buildtype=release
+          ninja -C build
+          Copy-Item build\volterra_dlang.dll ..\src\volterra_equation_solvers\
+
+      - name: Build wheel and re-tag as win_amd64
+        shell: bash
+        run: |
+          pip install build wheel
+          python -m build --wheel
+          python -m wheel tags --platform-tag win_amd64 --remove dist/*.whl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-windows-x64
+          path: dist/*.whl
+
+  # -------------------------------------------------------------------------
+  # Publish all wheels + sdist to PyPI using OIDC trusted publishing.
+  #
+  # One-time PyPI setup required (no secrets needed after this):
+  #   1. Go to pypi.org → Your projects → volterra-equation-solvers → Publishing
+  #   2. Add a Trusted Publisher:
+  #        Owner:    trout314
+  #        Repo:     volterra-equation-solvers
+  #        Workflow: build-wheels.yml
+  #        Env:      pypi
+  # -------------------------------------------------------------------------
+  publish:
+    needs:
+      - build-sdist
+      - build-wheel-linux-x86_64
+      - build-wheel-macos-arm64
+      - build-wheel-macos-x86_64
+      - build-wheel-windows-x64
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # required for OIDC trusted publishing
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          merge-multiple: true
+          path: dist
+
+      - name: List distributions to be published
+        run: ls -lh dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
