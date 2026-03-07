@@ -22,8 +22,8 @@ $$g(t) = \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 The solver handles the following cases:
 - $y(t)$, $g(t)$, and $K(t)$ are scalar.
-- $y(t), g(t) \in \mathbb{R}^d$ and $K(t) \in \mathbb{R}^{d \times d}$.
-- $y(t), g(t) \in \mathbb{R}^{d \times m}$ and $K(t) \in \mathbb{R}^{d \times d}$.
+- $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ is a $d \times d$ matrix.
+- $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ is a $d \times d$ matrix.
 
 ### `solve_VIE_2`
 
@@ -33,8 +33,8 @@ $$y(t) = g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 The solver handles the following cases:
 - $y(t)$, $g(t)$, and $K(t)$ are scalar.
-- $y(t), g(t) \in \mathbb{R}^d$ and $K(t) \in \mathbb{R}^{d \times d}$.
-- $y(t), g(t) \in \mathbb{R}^{d \times m}$ and $K(t) \in \mathbb{R}^{d \times d}$.
+- $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ is a $d \times d$ matrix.
+- $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ is a $d \times d$ matrix.
 
 ### `solve_VIDE`
 
@@ -44,8 +44,8 @@ $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 The solver handles the following cases:
 - $y(t)$, $g(t)$, $K(t)$, and $a(t)$ are scalar.
-- $y(t), g(t) \in \mathbb{R}^d$ and $K(t), a(t) \in \mathbb{R}^{d \times d}$.
-- $y(t), g(t) \in \mathbb{R}^{d \times m}$ and $K(t), a(t) \in \mathbb{R}^{d \times d}$.
+- $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ and $a(t)$ are $d \times d$ matrices.
+- $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ and $a(t)$ are $d \times d$ matrices.
 
 ### `solve_VIE_1_trapz`, `solve_VIE_2_trapz` *(legacy)*
 
