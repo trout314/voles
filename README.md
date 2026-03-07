@@ -20,7 +20,7 @@ Given functions $K$ and $g$, solves for $y(t)$ in the Type-1 Volterra integral e
 
 $$g(t) = \int_0^t K(t-s)\\, y(s)\\, ds$$
 
-$y$ and $g$ may be scalar, $\mathbb{R}^d$-vector-valued, or $\mathbb{R}^{d \times m}$-matrix-valued; $K$ is scalar or $\mathbb{R}^{d \times d}$-matrix-valued accordingly.
+$y$, $g$, and $K$ may be (i) all scalar, (ii) $y, g \in \mathbb{R}^d$ and $K \in \mathbb{R}^{d \times d}$, or (iii) $y, g \in \mathbb{R}^{d \times m}$ and $K \in \mathbb{R}^{d \times d}$.
 
 **`solve_VIE_2`**
 
@@ -28,7 +28,7 @@ Given functions $K$ and $g$, solves for $y(t)$ in the Type-2 Volterra integral e
 
 $$y(t) = g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
-$y$ and $g$ may be scalar, $\mathbb{R}^d$-vector-valued, or $\mathbb{R}^{d \times m}$-matrix-valued; $K$ is scalar or $\mathbb{R}^{d \times d}$-matrix-valued accordingly.
+$y$, $g$, and $K$ may be (i) all scalar, (ii) $y, g \in \mathbb{R}^d$ and $K \in \mathbb{R}^{d \times d}$, or (iii) $y, g \in \mathbb{R}^{d \times m}$ and $K \in \mathbb{R}^{d \times d}$.
 
 **`solve_VIDE`**
 
@@ -36,7 +36,7 @@ Given functions $K$, $a$, and $g$ and an initial value $y(0)$, solves for $y(t)$
 
 $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
-$y$, $g$, and $y(0)$ may be scalar, $\mathbb{R}^d$-vector-valued, or $\mathbb{R}^{d \times m}$-matrix-valued; $K$ and $a$ are scalar or $\mathbb{R}^{d \times d}$-matrix-valued accordingly.
+$y$, $g$, $y(0)$, $K$, and $a$ may be (i) all scalar, (ii) $y, g, y(0) \in \mathbb{R}^d$ and $K, a \in \mathbb{R}^{d \times d}$, or (iii) $y, g, y(0) \in \mathbb{R}^{d \times m}$ and $K, a \in \mathbb{R}^{d \times d}$.
 
 **`solve_VIE_1_trapz`, `solve_VIE_2_trapz`** *(legacy)*
 
