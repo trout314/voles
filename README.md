@@ -101,9 +101,6 @@ from volterra_equation_solvers import solve_VIE_1
 
 # 2×2 VIE-1 with a fully coupled (all non-zero) constant kernel
 # K = [[3/2, -1/2], [-1/2, 3/2]],  exact solution y = [1+2t, 1]
-#
-# Constructed via similarity transform P=[[1,1],[1,-1]] applied to a
-# diagonal system with eigenvalues 1 and 2.
 time_step = 0.1
 times = np.arange(0, 9.1, time_step)   # 91 pts = 10×3² + 1
 N = len(times)
