@@ -67,27 +67,27 @@ def test_vie1_4000(benchmark):
 def test_vie1_fc_500(benchmark):
     kernel, g, dt = _vie1_inputs(55)           # 496 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
-              soln_init_value=np.zeros(2), force_continuous=True)
+              soln_init_value=0.0, force_continuous=True)
 
 def test_vie1_fc_1000(benchmark):
     kernel, g, dt = _vie1_inputs(111)          # 1000 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
-              soln_init_value=np.zeros(2), force_continuous=True)
+              soln_init_value=0.0, force_continuous=True)
 
 def test_vie1_fc_2000(benchmark):
     kernel, g, dt = _vie1_inputs(222)          # 1999 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
-              soln_init_value=np.zeros(2), force_continuous=True)
+              soln_init_value=0.0, force_continuous=True)
 
 def test_vie1_fc_3000(benchmark):
     kernel, g, dt = _vie1_inputs(333)          # 2998 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
-              soln_init_value=np.zeros(2), force_continuous=True)
+              soln_init_value=0.0, force_continuous=True)
 
 def test_vie1_fc_4000(benchmark):
     kernel, g, dt = _vie1_inputs(444)          # 3997 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
-              soln_init_value=np.zeros(2), force_continuous=True)
+              soln_init_value=0.0, force_continuous=True)
 
 # --- VIDE (coll_divs=2, pts = n_intervals*4+1) ---
 
