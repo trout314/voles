@@ -1,4 +1,5 @@
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 from . import _dlang as _dlang_module
 
 _all_fast = _dlang_module.supported_coll_settings_d()
@@ -102,15 +103,17 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
                     g_cols = [g_values] * m
             else:
                 g_cols = [None] * m
-            cols = [solve_VIDE(kernel_values=kernel_values,
-                               a_values=a_values,
-                               g_values=g_cols[j],
-                               soln_init_value=soln_init_values_[:, j],
-                               time_step=time_step, coll_divs=coll_divs,
-                               coll_choices=coll_choices,
-                               return_polys=False,
-                               show_warnings=show_warnings)
-                    for j in range(m)]
+            def _col_vide(j):
+                return solve_VIDE(kernel_values=kernel_values,
+                                  a_values=a_values,
+                                  g_values=g_cols[j],
+                                  soln_init_value=soln_init_values_[:, j],
+                                  time_step=time_step, coll_divs=coll_divs,
+                                  coll_choices=coll_choices,
+                                  return_polys=False,
+                                  show_warnings=show_warnings)
+            with ThreadPoolExecutor(max_workers=m) as ex:
+                cols = list(ex.map(_col_vide, range(m)))
             return np.stack(cols, axis=2)
 
         if g_values is not None:
@@ -342,15 +345,17 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                             f"soln_init_value must have shape ({d}, {m}) for matrix-valued g_values")
                 else:
                     init_cols = np.zeros((d, m))
-                cols = [solve_VIE_1(kernel_values=kernel_values,
-                                    g_values=g_values_[:, :, j],
-                                    soln_init_value=init_cols[:, j],
-                                    time_step=time_step, coll_divs=coll_divs,
-                                    coll_choices=coll_choices,
-                                    return_polys=False,
-                                    force_continuous=force_continuous,
-                                    show_warnings=show_warnings)
-                        for j in range(m)]
+                def _col_vie1(j):
+                    return solve_VIE_1(kernel_values=kernel_values,
+                                       g_values=g_values_[:, :, j],
+                                       soln_init_value=init_cols[:, j],
+                                       time_step=time_step, coll_divs=coll_divs,
+                                       coll_choices=coll_choices,
+                                       return_polys=False,
+                                       force_continuous=force_continuous,
+                                       show_warnings=show_warnings)
+                with ThreadPoolExecutor(max_workers=m) as ex:
+                    cols = list(ex.map(_col_vie1, range(m)))
                 return np.stack(cols, axis=2)
             elif g_values_.shape != (N, d):
                 raise ValueError(
@@ -550,13 +555,15 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                 if g_values_.shape[:2] != (N, d):
                     raise ValueError(
                         f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
-                cols = [solve_VIE_2(kernel_values=kernel_values,
-                                    g_values=g_values_[:, :, j],
-                                    time_step=time_step, coll_divs=coll_divs,
-                                    coll_choices=coll_choices,
-                                    return_polys=False,
-                                    show_warnings=show_warnings)
-                        for j in range(m)]
+                def _col_vie2(j):
+                    return solve_VIE_2(kernel_values=kernel_values,
+                                       g_values=g_values_[:, :, j],
+                                       time_step=time_step, coll_divs=coll_divs,
+                                       coll_choices=coll_choices,
+                                       return_polys=False,
+                                       show_warnings=show_warnings)
+                with ThreadPoolExecutor(max_workers=m) as ex:
+                    cols = list(ex.map(_col_vie2, range(m)))
                 return np.stack(cols, axis=2)
             elif g_values_.shape != (N, d):
                 raise ValueError(
