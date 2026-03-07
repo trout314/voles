@@ -676,14 +676,17 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             kernel_values_ = kernel_values_[:ans_len]
             g_values_ = g_values_[:ans_len]
 
-        soln_init_value_ = 0.0
         if soln_init_value is not None:
             if (not force_continuous) and show_warnings:
                 print("warning: setting soln_init_value has no effect when force_continuous=False.")
-            else:
-                soln_init_value_ = float(soln_init_value)
+            soln_init_value_ = np.asarray(soln_init_value, dtype=float).ravel()
+            if soln_init_value_.shape not in ((), (1,), (d,)):
+                raise ValueError(
+                    f"soln_init_value must be a scalar or length-{d} array for d={d}")
+            soln_init_value_ = np.broadcast_to(soln_init_value_, (d,))
         else:
             assert not force_continuous, "must specify soln_init_value for continuous solutions"
+            soln_init_value_ = np.zeros(d)
 
         assert 0 not in coll_choices, "zero cannot be a collocation parameter"
         assert coll_divs > 0, "coll_divs must be a positive integer"

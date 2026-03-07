@@ -32,7 +32,7 @@ def _setup_argtypes() -> None:
     _lib.volterra_solve_vie1_vec.restype = ctypes.c_int
     _lib.volterra_solve_vie1_vec.argtypes = [
         _dp, _dp, ctypes.c_int, ctypes.c_int,  # g_values, kernel_values, n, d
-        ctypes.c_double, ctypes.c_double,        # soln_init_value, time_step
+        _dp, ctypes.c_double,                    # soln_init_values (d,), time_step
         ctypes.c_int, _ip, ctypes.c_int,         # coll_divs, coll_choices, num_choices
         ctypes.c_int, ctypes.c_int,              # return_polys, force_continuous
         _dp, _dp, _ip,                           # out_soln, out_poly_coefs, out_mesh_divs
@@ -188,6 +188,10 @@ def solve_vie1_vec_d(g_values, kernel_values, soln_init_value, time_step,
     choices = np.ascontiguousarray(coll_choices, dtype=np.int32)
     num_choices = len(choices)
 
+    init = np.ascontiguousarray(
+        np.broadcast_to(np.asarray(soln_init_value, dtype=np.float64), (d,)),
+        dtype=np.float64)
+
     out_soln = np.zeros((n, d), dtype=np.float64)
     out_mesh_divs = ctypes.c_int(0)
 
@@ -196,7 +200,7 @@ def solve_vie1_vec_d(g_values, kernel_values, soln_init_value, time_step,
         k.ctypes.data_as(_dp),
         ctypes.c_int(n),
         ctypes.c_int(d),
-        ctypes.c_double(soln_init_value),
+        init.ctypes.data_as(_dp),
         ctypes.c_double(time_step),
         ctypes.c_int(coll_divs),
         choices.ctypes.data_as(_ip),

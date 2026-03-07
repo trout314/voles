@@ -1322,7 +1322,7 @@ void G_VIDE_vec_rt(int coll_divs, int[] coll_choices)(
 
 void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
     double[] g_values, double[] kernel_values,
-    double soln_init_value, double time_step,
+    double[] soln_init_values, double time_step,
     bool return_polys, bool force_continuous,
     double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
 {
@@ -1368,7 +1368,7 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
         double[d] zeros_d = 0.0;
         boundary_vals[] = zeros_d;
         foreach (r; 0 .. d)
-            boundary_vals[0][r] = soln_init_value;  // scalar broadcast (TBD: d-vector API)
+            boundary_vals[0][r] = soln_init_values[r];
 
         // Precompute scalars for boundary propagation: p(1) = bv*L0ext(1) + sum_j U_j*(1/c_j)*L_j(1)
         double L0ext_at_1 = lagrange_f!(coll_divs, czero)(1.0, 0);
@@ -1464,7 +1464,7 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
 
 void solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     double[] g_values, double[] kernel_values,
-    int d, double soln_init_value, double time_step,
+    int d, double[] soln_init_values, double time_step,
     bool return_polys, bool force_continuous,
     double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
 {
@@ -1511,8 +1511,7 @@ void solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     {
         double[] boundary_flat = new double[(mesh_divs + 1) * d];
         boundary_flat[] = 0;
-        foreach (r; 0 .. d)
-            boundary_flat[r] = soln_init_value;
+        boundary_flat[0 .. d] = soln_init_values[0 .. d];
 
         double[] rho_buf = new double[dm * d];
         rho_mat_rt!coll_info(kernel_values, d, rho_buf);
@@ -1590,7 +1589,7 @@ void solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
 
 void dispatch_VIE_1_vec(int coll_divs, int[] coll_choices)(
     double[] gv, double[] kv, int d,
-    double soln_init_value, double time_step,
+    double[] soln_init_values, double time_step,
     bool rp, bool fc,
     double[] out_soln_slice, double[] poly_slice, ref int md)
 {
@@ -1600,13 +1599,13 @@ void dispatch_VIE_1_vec(int coll_divs, int[] coll_choices)(
         {
             case di:
                 solve_VIE_1_vec_impl!(coll_divs, coll_choices, di)(
-                    gv, kv, soln_init_value, time_step, rp, fc,
+                    gv, kv, soln_init_values, time_step, rp, fc,
                     out_soln_slice, poly_slice, md);
                 return;
         }
         default:
             solve_VIE_1_vec_runtime_impl!(coll_divs, coll_choices)(
-                gv, kv, d, soln_init_value, time_step, rp, fc,
+                gv, kv, d, soln_init_values, time_step, rp, fc,
                 out_soln_slice, poly_slice, md);
     }
 }
@@ -2160,13 +2159,14 @@ export extern(C):
 // out_soln:      (n, d)   caller-allocated flat array of length n*d
 int volterra_solve_vie1_vec(
     double* g_values, double* kernel_values, int n, int d,
-    double soln_init_value, double time_step,
+    double* soln_init_values, double time_step,
     int coll_divs, int* coll_choices, int num_choices,
     int return_polys, int force_continuous,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
     double[] gv      = g_values[0 .. n * d];
     double[] kv      = kernel_values[0 .. n * d * d];
+    double[] init    = soln_init_values[0 .. d];
     int[]    choices = coll_choices[0 .. num_choices];
 
     auto id = find_coll_info_id!(max_coll_divs, max_coll_params)(coll_divs, choices);
@@ -2194,7 +2194,7 @@ int volterra_solve_vie1_vec(
             mixin(format(
                 "case %s:
                     dispatch_VIE_1_vec!(settings[0], settings[1..$])(
-                        gv, kv, d, soln_init_value, time_step, rp, fc,
+                        gv, kv, d, init, time_step, rp, fc,
                         out_soln_slice, poly_slice, md);
                     break outer;", idx));
         }
@@ -2217,7 +2217,7 @@ int volterra_solve_vie1(
 {
     return volterra_solve_vie1_vec(
         g_values, kernel_values, n, 1,
-        soln_init_value, time_step,
+        &soln_init_value, time_step,
         coll_divs, coll_choices, num_choices,
         return_polys, force_continuous,
         out_soln, out_poly_coefs, out_mesh_divs);
