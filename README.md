@@ -105,7 +105,7 @@ print(f"Max error: {np.max(np.abs(soln - exact)):.2e}")
 
 ## Benchmarks
 
-Run on a **GitHub Actions `ubuntu-22.04` runner** (2-core x86_64 VM). Mean time is averaged over a variable number of automatically-calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
+Run on a **GitHub Actions `ubuntu-22.04` runner** (2-core x86_64 VM on an Intel Xeon Platinum 8370C, 2.8 GHz base / 3.5 GHz boost). Mean time is averaged over a variable number of automatically-calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
 
 ![Scalar benchmarks](benchmarks/results.png)
 
