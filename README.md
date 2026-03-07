@@ -18,7 +18,7 @@ The solvers are implemented as a compiled extension written in the [D language](
 
 Given functions $K$ and $g$, solves for $y(t)$ in the Type-1 Volterra integral equation (VIE-1):
 
-$$g(t) = \int_0^t K(t-s)\, y(s)\, ds$$
+$$g(t) = \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 $y$ and $g$ may be scalar, $\mathbb{R}^d$-vector-valued, or $\mathbb{R}^{d \times m}$-matrix-valued; $K$ is scalar or $\mathbb{R}^{d \times d}$-matrix-valued accordingly.
 
@@ -26,7 +26,7 @@ $y$ and $g$ may be scalar, $\mathbb{R}^d$-vector-valued, or $\mathbb{R}^{d \time
 
 Given functions $K$ and $g$, solves for $y(t)$ in the Type-2 Volterra integral equation (VIE-2):
 
-$$y(t) = g(t) + \int_0^t K(t-s)\, y(s)\, ds$$
+$$y(t) = g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 $y$ and $g$ may be scalar, $\mathbb{R}^d$-vector-valued, or $\mathbb{R}^{d \times m}$-matrix-valued; $K$ is scalar or $\mathbb{R}^{d \times d}$-matrix-valued accordingly.
 
@@ -34,7 +34,7 @@ $y$ and $g$ may be scalar, $\mathbb{R}^d$-vector-valued, or $\mathbb{R}^{d \time
 
 Given functions $K$, $a$, and $g$ and an initial value $y(0)$, solves for $y(t)$ in the Volterra integro-differential equation (VIDE):
 
-$$y'(t) = a(t)\, y(t) + g(t) + \int_0^t K(t-s)\, y(s)\, ds$$
+$$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 $y$, $g$, and $y(0)$ may be scalar, $\mathbb{R}^d$-vector-valued, or $\mathbb{R}^{d \times m}$-matrix-valued; $K$ and $a$ are scalar or $\mathbb{R}^{d \times d}$-matrix-valued accordingly.
 
@@ -80,7 +80,7 @@ All solvers accept `return_polys=True` to also return the piecewise polynomial s
 
 `solve_VIE_1`, `solve_VIE_2`, and `solve_VIDE` also solve for vector-valued unknowns $\mathbf{y}(t) \in \mathbb{R}^d$, where the kernel $K$ and coefficient $a$ become $d \times d$ matrix-valued functions:
 
-$$\mathbf{g}(t) = \int_0^t K(t-s)\,\mathbf{y}(s)\,ds$$
+$$\mathbf{g}(t) = \int_0^t K(t-s)\\,\mathbf{y}(s)\\,ds$$
 
 Pass `kernel_values` as an `(N, d, d)` array and `g_values` as an `(N, d)` array:
 
