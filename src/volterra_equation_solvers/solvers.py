@@ -250,7 +250,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         a_values_ = np.zeros_like(kernel_values_)
 
     if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
-        ans_len = int(len(kernel_values) / coll_divs**2 - 1) * coll_divs**2 + 1
+        ans_len = (len(kernel_values) - 1) // coll_divs**2 * coll_divs**2 + 1
         assert ans_len < len(kernel_values)
         if show_warnings:
             print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
@@ -510,7 +510,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     assert time_step > 0.0, "time_step must be positive"
 
     if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
-        ans_len = int(len(kernel_values) / coll_divs**2 - 1) * coll_divs**2 + 1
+        ans_len = (len(kernel_values) - 1) // coll_divs**2 * coll_divs**2 + 1
         assert ans_len < len(kernel_values)
         if show_warnings:
             print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
@@ -740,7 +740,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         g_values_ = np.zeros_like(kernel_values_)
 
     if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
-        ans_len = int(len(kernel_values) / coll_divs**2 - 1) * coll_divs**2 + 1
+        ans_len = (len(kernel_values) - 1) // coll_divs**2 * coll_divs**2 + 1
         assert ans_len < len(kernel_values)
         if show_warnings:
             print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
