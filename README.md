@@ -155,11 +155,20 @@ print(f"y'(0.2) ≈ {p.deriv()(0.2):.6f},  exact = {np.cos(0.2):.6f}")
 
 ## Benchmarks
 
-Run on a **GitHub Actions `ubuntu-22.04` runner** (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost). Mean time is averaged over a variable number of calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
+All three solvers have the same asymptotic complexity, where N is the number of input points and d is the vector/matrix dimension:
+
+| | Scalar | Vector / matrix |
+|---|---|---|
+| Time | O(N²) | O(N²d²) |
+| Memory | O(N) | O(Nd²) |
+
+The quadratic time scaling arises because each new mesh step requires a history sum over all previous steps. The `coll_divs` parameter affects the constant factor but not the asymptotic scaling.
+
+Run on a GitHub Actions `ubuntu-22.04` runner (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost). Mean time is averaged over a variable number of calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
 
 ![Scalar benchmarks](benchmarks/results.png)
 
-**Vector solvers** (D extension, d=2):
+Vector solvers (D extension, d=2):
 
 ![Vector benchmarks](benchmarks/results_vec.png)
 
