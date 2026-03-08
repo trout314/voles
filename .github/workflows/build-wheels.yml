@@ -50,7 +50,7 @@ jobs:
 
       - name: Build wheel and re-tag as manylinux_2_31_x86_64
         run: |
-          pip install build wheel
+          pip install build "wheel>=0.40.0"
           python -m build --wheel
           python -m wheel tags --platform-tag manylinux_2_31_x86_64 --remove dist/*.whl
 
@@ -89,7 +89,7 @@ jobs:
 
       - name: Build wheel and re-tag as macosx_11_0_arm64
         run: |
-          pip install build wheel
+          pip install build "wheel>=0.40.0"
           python -m build --wheel
           python -m wheel tags --platform-tag macosx_11_0_arm64 --remove dist/*.whl
 
@@ -128,7 +128,7 @@ jobs:
 
       - name: Build wheel and re-tag as macosx_10_9_x86_64
         run: |
-          pip install build wheel
+          pip install build "wheel>=0.40.0"
           python -m build --wheel
           python -m wheel tags --platform-tag macosx_10_9_x86_64 --remove dist/*.whl
 
@@ -171,7 +171,7 @@ jobs:
       - name: Build wheel and re-tag as win_amd64
         shell: bash
         run: |
-          pip install build wheel
+          pip install build "wheel>=0.40.0"
           python -m build --wheel
           python -m wheel tags --platform-tag win_amd64 --remove dist/*.whl
 
