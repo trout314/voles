@@ -143,18 +143,16 @@ soln_vals, polys = solve_VIDE(
     g_values=g,
     soln_init_value=0.0,
     time_step=time_step,
-    coll_divs=3,
-    coll_choices=[1, 2, 3],
     return_polys=True,
 )
 
 # polys[i] is a numpy.polynomial.Polynomial covering mesh interval i.
 # Evaluate at a point not on the time grid:
-p = polys[0]                            # covers t ∈ [0, 0.9]
-print(f"y(0.4)  ≈ {p(0.4):.6f},  exact = {np.sin(0.4):.6f}")
+p = polys[0]                            # covers t ∈ [0, 0.4]
+print(f"y(0.2)  ≈ {p(0.2):.6f},  exact = {np.sin(0.2):.6f}")
 
 # Differentiate to recover y'(t):
-print(f"y'(0.4) ≈ {p.deriv()(0.4):.6f},  exact = {np.cos(0.4):.6f}")
+print(f"y'(0.2) ≈ {p.deriv()(0.2):.6f},  exact = {np.cos(0.2):.6f}")
 ```
 
 ## Benchmarks
