@@ -166,11 +166,7 @@ The quadratic time scaling arises because each new mesh step requires a history 
 
 Run on a GitHub Actions `ubuntu-22.04` runner (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost). Mean time is averaged over a variable number of calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
 
-![Scalar benchmarks](benchmarks/results.png)
-
-Vector solvers (D extension, d=2):
-
-![Vector benchmarks](benchmarks/results_vec.png)
+![Benchmarks](benchmarks/results.png)
 
 See the [Getting Started](https://trout314.github.io/volterra-equation-solvers/getting_started/) page or the `notebooks/` directory for complete examples.
 
