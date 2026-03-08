@@ -1,0 +1,280 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage[margin=1.1in]{geometry}
+
+\newtheorem{lemma}{Lemma}
+
+\title{Analytic Solutions for Scalar Volterra Test Cases}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+The three scalar equation types under consideration are:
+\begin{align}
+  \text{VIE-1:} \quad & g(t) = \int_0^t K(t-s)\,y(s)\,ds,
+    \label{eq:vie1} \\[4pt]
+  \text{VIE-2:} \quad & y(t) = g(t) + \int_0^t K(t-s)\,y(s)\,ds,
+    \label{eq:vie2} \\[4pt]
+  \text{VIDE:}  \quad & y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds,
+    \quad y(0)=y_0.
+    \label{eq:vide}
+\end{align}
+In each case the kernel $K$ is specified as a function of the lag $\tau = t-s \ge 0$,
+and the array \texttt{kernel\_values} stores $K(0), K(\Delta t), K(2\Delta t),\ldots$.
+
+The following lemma is used in two of the six examples.
+
+\begin{lemma}
+\label{lem:expsin}
+\[
+  \int_0^t e^{s}\sin s\,ds = \tfrac{1}{2}\bigl[e^{s}(\sin s - \cos s)\bigr]_0^t
+  = \tfrac{1}{2}\bigl(e^t(\sin t-\cos t)+1\bigr).
+\]
+Consequently,
+\[
+  \int_0^t e^{-(t-s)}\sin s\,ds
+  \;=\; e^{-t}\int_0^t e^{s}\sin s\,ds
+  \;=\; \frac{\sin t - \cos t + e^{-t}}{2}.
+\]
+\end{lemma}
+\begin{proof}
+Differentiate the anti-derivative directly:
+$\tfrac{d}{ds}\bigl[e^s(\sin s-\cos s)\bigr] = e^s(\sin s-\cos s)+e^s(\cos s+\sin s) = 2e^s\sin s$.
+Dividing by 2 gives the first identity.  The second follows by writing
+$e^{-(t-s)} = e^{-t}\cdot e^s$ and pulling $e^{-t}$ outside the integral.
+\end{proof}
+
+% ==============================================================
+\section{Type-1 Volterra Integral Equation (VIE-1)}
+
+\subsection{Polynomial kernel: $K(\tau)=2+\tau$, $\;y(t)=t$}
+
+The convolution kernel is $K(t-s)=2+(t-s)$.
+We claim $y(t)=t$ and derive $g$ by direct computation:
+\begin{align*}
+  g(t) &= \int_0^t \bigl(2+(t-s)\bigr)\cdot s\,ds
+         = \int_0^t \bigl(2s + ts - s^2\bigr)\,ds \\
+       &= \Bigl[s^2 + \tfrac{t}{2}s^2 - \tfrac{s^3}{3}\Bigr]_0^t
+         = t^2 + \tfrac{t^3}{2} - \tfrac{t^3}{3}
+         = t^2 + \tfrac{t^3}{6}.
+\end{align*}
+
+\medskip\noindent\textbf{Summary.}
+\[
+  \boxed{K(\tau)=2+\tau,\quad g(t)=t^2+\tfrac{t^3}{6},\quad y(t)=t.}
+\]
+
+\subsection{Exponential kernel: $K(\tau)=e^{\tau}$, $\;y(t)=\cos t - \sin t$}
+
+The convolution kernel is $K(t-s)=e^{t-s}$.  Differentiating the
+VIE-1 equation with respect to $t$ gives a direct formula for $y$:
+\[
+  g'(t)
+  = K(0)\,y(t) + \int_0^t \frac{\partial}{\partial t}e^{t-s}\,y(s)\,ds
+  = y(t) + \int_0^t e^{t-s}\,y(s)\,ds
+  = y(t) + g(t),
+\]
+hence
+\[
+  y(t) = g'(t) - g(t).
+\]
+With $g(t)=\sin t$ this yields $y(t) = \cos t - \sin t$.
+
+\medskip\noindent\textbf{Verification.}
+Using the standard integrals
+$\int e^{-s}\cos s\,ds = \tfrac{1}{2}e^{-s}(\sin s-\cos s)$ and
+$\int e^{-s}\sin s\,ds = -\tfrac{1}{2}e^{-s}(\sin s+\cos s)$,
+\begin{align*}
+  \int_0^t e^{t-s}(\cos s-\sin s)\,ds
+  &= e^t\int_0^t e^{-s}(\cos s-\sin s)\,ds \\
+  &= e^t\Bigl[\tfrac{1}{2}e^{-s}(\sin s-\cos s)
+              +\tfrac{1}{2}e^{-s}(\sin s+\cos s)\Bigr]_0^t \\
+  &= e^t\bigl[e^{-s}\sin s\bigr]_0^t
+   = e^t\bigl(e^{-t}\sin t - 0\bigr) = \sin t \;=\; g(t). \checkmark
+\end{align*}
+
+\medskip\noindent\textbf{Summary.}
+\[
+  \boxed{K(\tau)=e^{\tau},\quad g(t)=\sin t,\quad y(t)=\cos t-\sin t.}
+\]
+
+% ==============================================================
+\section{Type-2 Volterra Integral Equation (VIE-2)}
+
+\subsection{Decaying exponential kernel: $K(\tau)=e^{-\tau}$, $\;y(t)=\sin t$}
+
+The convolution kernel is $K(t-s)=e^{-(t-s)}$.  We claim $y(t)=\sin t$
+and derive $g$ from the VIE-2 equation:
+\[
+  g(t) = y(t) - \int_0^t e^{-(t-s)}\sin s\,ds.
+\]
+By Lemma~\ref{lem:expsin},
+\[
+  \int_0^t e^{-(t-s)}\sin s\,ds = \frac{\sin t - \cos t + e^{-t}}{2},
+\]
+so
+\[
+  g(t) = \sin t - \frac{\sin t - \cos t + e^{-t}}{2}
+       = \frac{\sin t + \cos t - e^{-t}}{2}.
+\]
+
+\medskip\noindent\textbf{Verification.}
+\[
+  g(t) + \int_0^t e^{-(t-s)}\sin s\,ds
+  = \frac{\sin t+\cos t-e^{-t}}{2} + \frac{\sin t-\cos t+e^{-t}}{2}
+  = \sin t \;=\; y(t). \checkmark
+\]
+
+\medskip\noindent\textbf{Summary.}
+\[
+  \boxed{K(\tau)=e^{-\tau},\quad
+         g(t)=\tfrac{1}{2}(\sin t+\cos t-e^{-t}),\quad y(t)=\sin t.}
+\]
+
+\subsection{Cosine kernel: $K(\tau)=2\cos\tau$, $\;y(t)=e^{t}$}
+
+The convolution kernel is $K(t-s)=2\cos(t-s)$.  We claim $y(t)=e^t$
+and compute the integral using the angle-sum formula
+$\cos(t-s)=\cos t\cos s+\sin t\sin s$:
+\begin{align*}
+  \int_0^t 2\cos(t-s)\,e^s\,ds
+  &= 2\cos t\int_0^t e^s\cos s\,ds
+   + 2\sin t\int_0^t e^s\sin s\,ds.
+\end{align*}
+
+The two standard anti-derivatives are
+\begin{align*}
+  \int e^s\cos s\,ds &= \tfrac{1}{2}e^s(\cos s+\sin s), \\
+  \int e^s\sin s\,ds &= \tfrac{1}{2}e^s(\sin s-\cos s),
+\end{align*}
+which follow from the same integration-by-parts argument used in
+Lemma~\ref{lem:expsin}.  Evaluating from $0$ to $t$:
+\begin{align*}
+  \int_0^t e^s\cos s\,ds &= \tfrac{1}{2}\bigl(e^t(\cos t+\sin t)-1\bigr), \\
+  \int_0^t e^s\sin s\,ds &= \tfrac{1}{2}\bigl(e^t(\sin t-\cos t)+1\bigr).
+\end{align*}
+
+Therefore,
+\begin{align*}
+  \int_0^t 2\cos(t-s)\,e^s\,ds
+  &= \cos t\bigl(e^t(\cos t+\sin t)-1\bigr)
+   + \sin t\bigl(e^t(\sin t-\cos t)+1\bigr) \\
+  &= e^t\cos^2 t + e^t\sin t\cos t - \cos t
+   + e^t\sin^2 t - e^t\sin t\cos t + \sin t \\
+  &= e^t(\cos^2 t+\sin^2 t) + \sin t - \cos t \\
+  &= e^t + \sin t - \cos t.
+\end{align*}
+
+Hence $g(t) = e^t - (e^t+\sin t-\cos t) = \cos t - \sin t$.
+
+\medskip\noindent\textbf{Verification.}
+\[
+  g(t) + \int_0^t 2\cos(t-s)\,e^s\,ds
+  = (\cos t-\sin t) + (e^t+\sin t-\cos t)
+  = e^t \;=\; y(t). \checkmark
+\]
+
+\medskip\noindent\textbf{Summary.}
+\[
+  \boxed{K(\tau)=2\cos\tau,\quad g(t)=\cos t-\sin t,\quad y(t)=e^t.}
+\]
+
+% ==============================================================
+\section{Volterra Integro-Differential Equation (VIDE)}
+
+\subsection{Pure ODE: $K=0$, $a(t)=-1$, $\;y(0)=2$}
+
+With $K=0$ the equation reduces to the first-order linear ODE
+\[
+  y'(t) = -y(t) + g(t), \qquad y(0) = 2.
+\]
+\noindent\textbf{Finding $y$.}
+We take $g(t)=t$ and solve by the integrating factor $\mu(t)=e^t$:
+\[
+  \frac{d}{dt}\bigl(e^t y\bigr) = e^t(y'+y) = te^t.
+\]
+Integrating by parts,
+\[
+  e^t y = \int te^t\,dt = (t-1)e^t + C.
+\]
+Applying $y(0)=2$:
+\[
+  e^0\cdot 2 = (0-1)e^0 + C \implies C = 3,
+\]
+giving
+\[
+  y(t) = 3e^{-t} + t - 1.
+\]
+
+\medskip\noindent\textbf{Verification.}
+\[
+  y'(t) = -3e^{-t}+1, \qquad
+  -y(t)+t = -(3e^{-t}+t-1)+t = -3e^{-t}+1.
+\]
+So $y'=-y+t=g(t)$. \checkmark
+
+\medskip\noindent\textbf{Summary.}
+\[
+  \boxed{K=0,\quad a(t)=-1,\quad g(t)=t,\quad y(0)=2,\quad
+         y(t)=3e^{-t}+t-1.}
+\]
+
+\subsection{Full VIDE: $K(\tau)=e^{-\tau}$, $\;a(t)=\dfrac{1}{1+t^2}$, $\;y(0)=0$}
+
+We claim $y(t)=\sin t$ and derive $g$ from the VIDE equation:
+\[
+  g(t) = y'(t) - a(t)\,y(t) - \int_0^t K(t-s)\,y(s)\,ds.
+\]
+
+\medskip\noindent\textbf{Step 1: differentiate $y$.}
+$y'(t) = \cos t$.
+
+\medskip\noindent\textbf{Step 2: $a(t)y(t)$.}
+\[
+  a(t)\,y(t) = \frac{\sin t}{1+t^2}.
+\]
+
+\medskip\noindent\textbf{Step 3: the convolution integral.}
+By Lemma~\ref{lem:expsin} with $y(s)=\sin s$,
+\[
+  \int_0^t e^{-(t-s)}\sin s\,ds = \frac{\sin t-\cos t+e^{-t}}{2}.
+\]
+
+\medskip\noindent\textbf{Step 4: assemble $g$.}
+\begin{align*}
+  g(t) &= \cos t - \frac{\sin t}{1+t^2}
+         - \frac{\sin t-\cos t+e^{-t}}{2} \\[4pt]
+       &= \cos t - \frac{\sin t}{1+t^2}
+         - \frac{\sin t}{2} + \frac{\cos t}{2} - \frac{e^{-t}}{2} \\[4pt]
+       &= \frac{3\cos t}{2} - \frac{\sin t}{2}
+         - \frac{e^{-t}}{2} - \frac{\sin t}{1+t^2}.
+\end{align*}
+
+\medskip\noindent\textbf{Verification.}
+\begin{align*}
+  a(t)\,y(t) + g(t) + \int_0^t e^{-(t-s)}\sin s\,ds
+  &= \frac{\sin t}{1+t^2}
+   + \left(\frac{3\cos t}{2} - \frac{\sin t}{2}
+           - \frac{e^{-t}}{2} - \frac{\sin t}{1+t^2}\right)
+   + \frac{\sin t-\cos t+e^{-t}}{2} \\[4pt]
+  &= \frac{3\cos t}{2} - \frac{\sin t}{2} - \frac{e^{-t}}{2}
+   + \frac{\sin t - \cos t + e^{-t}}{2} \\[4pt]
+  &= \frac{3\cos t}{2} - \frac{\cos t}{2}
+   + \frac{-\sin t+\sin t}{2}
+   + \frac{-e^{-t}+e^{-t}}{2} \\[4pt]
+  &= \cos t \;=\; y'(t). \checkmark
+\end{align*}
+
+\medskip\noindent\textbf{Summary.}
+\[
+  \boxed{
+    K(\tau)=e^{-\tau},\quad
+    a(t)=\frac{1}{1+t^2},\quad
+    g(t)=\frac{3\cos t}{2}-\frac{\sin t}{2}-\frac{e^{-t}}{2}-\frac{\sin t}{1+t^2},
+    \quad y(0)=0,\quad y(t)=\sin t.
+  }
+\]
+
+\end{document}
