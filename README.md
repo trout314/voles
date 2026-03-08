@@ -96,7 +96,7 @@ The solvers require input arrays to satisfy an internal size constraint. Any len
 
 ## Vector and Matrix Valued Equations
 
-All three solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ and $g(t)$ are $d$-dimensional vectors, the kernel $K(t)$ and coefficient $a(t)$ are $d \times d$ matrices. When $y(t)$ and $g(t)$ are $d \times m$ matrices, the kernel $K(t)$ and coefficient $a(t)$ are again $d \times d$ matrices. If `kernel_values` is an `(N, d, d)` array and `g_values` is an `(N, d)` array, the returned solution has shape `(N, d)`:
+All three solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ and $g(t)$ are $d$-dimensional vectors, the kernel $K(t)$ and coefficient $a(t)$ are $d \times d$ matrices. When $y(t)$ and $g(t)$ are $d \times m$ matrices, the kernel $K(t)$ and coefficient $a(t)$ are again $d \times d$ matrices.
 
 ```python
 import numpy as np
