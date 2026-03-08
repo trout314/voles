@@ -155,7 +155,7 @@ print(f"y'(0.2) ≈ {p.deriv()(0.2):.6f},  exact = {np.cos(0.2):.6f}")
 
 ## Benchmarks
 
-All three solvers have the same asymptotic complexity in N and d, where N is the number of input points and d is the vector/matrix dimension:
+All three solvers have the same expected asymptotic complexity in N and d, where N is the number of input points and d is the vector/matrix dimension:
 
 | | Scalar | Vector / matrix |
 |---|---|---|
