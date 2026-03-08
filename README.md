@@ -90,7 +90,7 @@ print(f"Max error: {max(abs(soln - np.sin(times))):.2e}")
 
 All solvers accept `return_polys=True` to also return the piecewise polynomial solution as a list of `numpy.polynomial.Polynomial` objects.
 
-The input arrays must have length $N = k \cdot \text{coll\_divs}^2 + 1$ for some positive integer $k$. For example, with the default `coll_divs=2`, valid lengths are 5, 9, 13, 17, … (i.e. multiples of 4, plus 1). The comment `# 41 pts = 10×2² + 1` in the example above shows this for `coll_divs=2`. If a longer array is passed, it is automatically truncated to the nearest valid length and a warning is printed.
+The input arrays must have length `k * coll_divs**2 + 1` for some positive integer `k`. For example, with the default `coll_divs=2`, valid lengths are 5, 9, 13, 17, … (multiples of 4, plus 1) — hence `# 41 pts = 10×2² + 1` in the example above. If a longer array is passed, it is automatically truncated to the nearest valid length and a warning is printed.
 
 ## Vector and Matrix Valued Equations
 
