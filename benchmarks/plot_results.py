@@ -24,8 +24,8 @@ def _panel_chart(times, groups, output_path, title):
         print(f"Skipping {title} chart: some benchmarks missing")
         return
 
-    fig, axes = plt.subplots(2, 2, figsize=(6, 5.5))
-    for i, (ax, (label, cases)) in enumerate(zip(axes.flat, groups)):
+    fig, axes = plt.subplots(1, 3, figsize=(9, 3.5))
+    for ax, (label, cases) in zip(axes, groups):
         ns = [n for _, n in cases]
         ms = [times[name] * 1e3 for name, _ in cases]
         ax.plot(ns, ms, color=COLOR, marker=MARKER, linewidth=1.5, markersize=5)
@@ -36,13 +36,11 @@ def _panel_chart(times, groups, output_path, title):
         ax.set_xticks([1000, 2000, 3000, 4000])
         ax.yaxis.set_minor_locator(plt.matplotlib.ticker.AutoMinorLocator())
         ax.tick_params(labelsize=8)
-        if i < 2:
-            ax.tick_params(labelbottom=False)
 
     fig.supxlabel("Input length", fontsize=12, y=0.03)
     fig.supylabel("Mean execution time (ms)", fontsize=12, x=0.03)
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0.07, wspace=0.1)
+    fig.subplots_adjust(wspace=0.3)
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
     print(f"Saved {title} chart to {output_path}")
@@ -54,10 +52,6 @@ def generate_scalar_chart(times, output_path):
          [("test_vie1_500",   496), ("test_vie1_1000", 1000),
           ("test_vie1_2000", 1999), ("test_vie1_3000", 2998),
           ("test_vie1_4000", 3997)]),
-        ("VIE-1 (continuous)",
-         [("test_vie1_fc_500",   496), ("test_vie1_fc_1000", 1000),
-          ("test_vie1_fc_2000", 1999), ("test_vie1_fc_3000", 2998),
-          ("test_vie1_fc_4000", 3997)]),
         ("VIE-2",
          [("test_vie2_500",   497), ("test_vie2_1000",  997),
           ("test_vie2_2000", 1997), ("test_vie2_3000", 2997),
@@ -76,10 +70,6 @@ def generate_vec_chart(times, output_path):
          [("test_vie1_vec_500",   496), ("test_vie1_vec_1000", 1000),
           ("test_vie1_vec_2000", 1999), ("test_vie1_vec_3000", 2998),
           ("test_vie1_vec_4000", 3997)]),
-        ("VIE-1 continuous (d=2)",
-         [("test_vie1_vec_fc_500",   496), ("test_vie1_vec_fc_1000", 1000),
-          ("test_vie1_vec_fc_2000", 1999), ("test_vie1_vec_fc_3000", 2998),
-          ("test_vie1_vec_fc_4000", 3997)]),
         ("VIE-2 (d=2)",
          [("test_vie2_vec_500",   497), ("test_vie2_vec_1000",  997),
           ("test_vie2_vec_2000", 1997), ("test_vie2_vec_3000", 2997),
