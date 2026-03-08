@@ -124,6 +124,39 @@ exact = np.column_stack([1 + 2*times, np.ones(N)])
 print(f"Max error: {np.max(np.abs(soln - exact)):.2e}")
 ```
 
+## Polynomial Solutions
+
+Passing `return_polys=True` to any solver returns a `(soln_values, polys)` tuple, where `polys` is a list of `numpy.polynomial.Polynomial` objects covering successive mesh intervals. These can be evaluated at any point, differentiated, integrated, and so on. The following example uses `solve_VIDE` to solve for $y(t) = \sin(t)$, then evaluates the solution and its derivative at a point not on the time grid:
+
+```python
+import numpy as np
+from volterra_equation_solvers import solve_VIDE
+
+# y(t) = sin(t) satisfies this VIDE with K(s) = exp(-s), a(t) = 0
+time_step = 0.1
+times = np.arange(0, 9.1, time_step)   # 91 points
+kernel = np.exp(-times)
+g = 1.5*np.cos(times) - 0.5*np.sin(times) - 0.5*np.exp(-times)
+
+soln_vals, polys = solve_VIDE(
+    kernel_values=kernel,
+    g_values=g,
+    soln_init_value=0.0,
+    time_step=time_step,
+    coll_divs=3,
+    coll_choices=[1, 2, 3],
+    return_polys=True,
+)
+
+# polys[i] is a numpy.polynomial.Polynomial covering mesh interval i.
+# Evaluate at a point not on the time grid:
+p = polys[0]                            # covers t ∈ [0, 0.9]
+print(f"y(0.4)  ≈ {p(0.4):.6f},  exact = {np.sin(0.4):.6f}")
+
+# Differentiate to recover y'(t):
+print(f"y'(0.4) ≈ {p.deriv()(0.4):.6f},  exact = {np.cos(0.4):.6f}")
+```
+
 ## Benchmarks
 
 Run on a **GitHub Actions `ubuntu-22.04` runner** (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost). Mean time is averaged over a variable number of calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
