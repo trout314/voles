@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "Collocation-method solvers for Volterra integral and integro-differential equations"
 readme = "README.md"
 license = { file = "LICENSE" }
+authors = [
+    { name = "Aaron D. Trout", email = "atrout@chatham.edu" },
+]
 requires-python = ">=3.10"
 keywords = ["volterra", "integral equations", "collocation", "numerical methods", "scientific computing"]
 classifiers = [
