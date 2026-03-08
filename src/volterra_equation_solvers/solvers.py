@@ -42,6 +42,28 @@ try:
 except ImportError:
     _numba_available = False
 
+
+def _truncate_N(kernel_values_, coll_divs, show_warnings):
+    """Truncate kernel_values_ to the largest valid length; return (N, kernel_values_).
+
+    Valid lengths satisfy N ≡ 1 (mod coll_divs²).  Prints a warning when
+    truncation is needed and show_warnings is True.
+    """
+    N = len(kernel_values_)
+    if coll_divs > 1 and N % coll_divs**2 != 1:
+        N_used = (N - 1) // coll_divs**2 * coll_divs**2 + 1
+        if show_warnings:
+            print(
+                f"warning: the length of kernel_values ({N}) is not of the form: "
+                f"(multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. "
+                f"All input data lists will be truncated to the next smaller number "
+                f"of this form ({N_used}) which will also be the length of the "
+                f"returned list of solution values."
+            )
+        return N_used, kernel_values_[:N_used]
+    return N, kernel_values_
+
+
 def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, time_step=1.0,
                coll_divs=2, coll_choices=[0,1,2], return_polys=False, show_warnings=True):
     r'''
@@ -125,9 +147,12 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         raise ValueError(
             f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
 
+    N_orig = len(kernel_values_)
+    N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
+
     # ------------------------------------------------------------------ vector path
     if ndim == 3:
-        N, d1, d2 = kernel_values_.shape
+        _, d1, d2 = kernel_values_.shape
         if d1 != d2:
             raise ValueError(f"kernel_values must have shape (N, d, d), got {kernel_values_.shape}")
         d = d1
@@ -142,17 +167,18 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             if g_values is not None:
                 g_mat = np.asarray(g_values, dtype=float)
                 if g_mat.ndim == 3:
-                    if g_mat.shape != (N, d, m_cols):
+                    if g_mat.shape[1:] != (d, m_cols):
                         raise ValueError(
                             f"g_values shape {g_mat.shape} incompatible with kernel/soln_init shapes")
-                    g_cols = [g_mat[:, :, j] for j in range(m_cols)]
+                    g_cols = [g_mat[:N, :, j] for j in range(m_cols)]
                 else:
                     g_cols = [g_values] * m_cols
             else:
                 g_cols = [None] * m_cols
+            a_trunc = np.asarray(a_values, dtype=float)[:N] if a_values is not None else None
             def _col_vide(j):
-                return solve_VIDE(kernel_values=kernel_values,
-                                  a_values=a_values,
+                return solve_VIDE(kernel_values=kernel_values_,
+                                  a_values=a_trunc,
                                   g_values=g_cols[j],
                                   soln_init_value=soln_init_values_[:, j],
                                   time_step=time_step, coll_divs=coll_divs,
@@ -177,17 +203,19 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
 
         if g_values is not None:
             g_values_ = np.asarray(g_values, dtype=float)
-            if g_values_.shape != (N, d):
+            if g_values_.shape != (N_orig, d):
                 raise ValueError(
                     f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+            g_values_ = g_values_[:N]
         else:
             g_values_ = np.zeros((N, d), dtype=float)
 
         if a_values is not None:
             a_values_ = np.asarray(a_values, dtype=float)
-            if a_values_.shape != (N, d, d):
+            if a_values_.shape != (N_orig, d, d):
                 raise ValueError(
                     f"a_values shape {a_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+            a_values_ = a_values_[:N]
         else:
             a_values_ = np.zeros((N, d, d), dtype=float)
 
@@ -195,16 +223,6 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         if soln_init_values_.shape != (d,):
             raise ValueError(
                 f"soln_init_value must be a scalar or length-{d} array for d={d}")
-
-        if (coll_divs > 1) and (N % coll_divs**2 != 1):
-            ans_len = (N - 1) // coll_divs**2 * coll_divs**2 + 1
-            assert ans_len < N
-            if show_warnings:
-                print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
-                      f"Truncating to {ans_len}.")
-            kernel_values_ = kernel_values_[:ans_len]
-            g_values_ = g_values_[:ans_len]
-            a_values_ = a_values_[:ans_len]
 
         assert coll_divs > 0, "coll_divs must be a positive integer"
         assert all(isinstance(c, int) for c in coll_choices), "coll_choices must be a list of integers"
@@ -234,33 +252,20 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
 
     if g_values is not None:
-        g_values_ = np.array(g_values)
+        g_values_ = np.asarray(g_values, dtype=float)
         assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"
-        assert len(g_values_) == len(kernel_values_), \
-            "kernel_values and g_values must have the same length"
+        assert len(g_values_) == N_orig, "kernel_values and g_values must have the same length"
+        g_values_ = g_values_[:N]
     else:
-        g_values_ = np.zeros_like(kernel_values_)
+        g_values_ = np.zeros(N)
 
     if a_values is not None:
-        a_values_ = np.array(a_values)
+        a_values_ = np.asarray(a_values, dtype=float)
         assert len(a_values_.shape) == 1, "a_values must be a 1-dim array"
-        assert len(a_values_) == len(kernel_values_), \
-            "kernel_values and a_values must have the same length"
+        assert len(a_values_) == N_orig, "kernel_values and a_values must have the same length"
+        a_values_ = a_values_[:N]
     else:
-        a_values_ = np.zeros_like(kernel_values_)
-
-    if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
-        ans_len = (len(kernel_values) - 1) // coll_divs**2 * coll_divs**2 + 1
-        assert ans_len < len(kernel_values)
-        if show_warnings:
-            print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
-                  f"is not of the form: (multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. " +
-                  f"All input data lists will be truncated to the next smaller number " +
-                  f"of this form ({ans_len}) which will also be the length of the " +
-                  f"returned list of solution values.")
-        kernel_values_ = kernel_values_[:ans_len]
-        g_values_ = g_values_[:ans_len]
-        a_values_ = a_values_[:ans_len]
+        a_values_ = np.zeros(N)
 
     assert coll_divs > 0, "coll_divs must be a positive integer"
     assert all([isinstance(choice, int) for choice in coll_choices]), \
@@ -393,9 +398,12 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         raise ValueError(
             f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
 
+    N_orig = len(kernel_values_)
+    N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
+
     # ------------------------------------------------------------------ vector path
     if ndim == 3:
-        N, d1, d2 = kernel_values_.shape
+        _, d1, d2 = kernel_values_.shape
         if d1 != d2:
             raise ValueError(f"kernel_values must have shape (N, d, d), got {kernel_values_.shape}")
         d = d1
@@ -404,7 +412,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             g_values_ = np.asarray(g_values, dtype=float)
             if g_values_.ndim == 3:  # matrix case: shape (N, d, m_cols)
                 m_cols = g_values_.shape[2]
-                if g_values_.shape[:2] != (N, d):
+                if g_values_.shape[1] != d:
                     raise ValueError(
                         f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
                 if soln_init_value is not None:
@@ -414,9 +422,10 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                             f"soln_init_value must have shape ({d}, {m_cols}) for matrix-valued g_values")
                 else:
                     init_cols = np.zeros((d, m_cols))
+                g_cols = g_values_[:N]
                 def _col_vie1(j):
-                    return solve_VIE_1(kernel_values=kernel_values,
-                                       g_values=g_values_[:, :, j],
+                    return solve_VIE_1(kernel_values=kernel_values_,
+                                       g_values=g_cols[:, :, j],
                                        soln_init_value=init_cols[:, j],
                                        time_step=time_step, coll_divs=coll_divs,
                                        coll_choices=coll_choices,
@@ -438,22 +447,15 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                         mat_polys.append(arr)
                     return (soln, mat_polys)
                 return np.stack(results, axis=2)
-            elif g_values_.shape != (N, d):
-                raise ValueError(
-                    f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+            else:
+                if g_values_.shape != (N_orig, d):
+                    raise ValueError(
+                        f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+                g_values_ = g_values_[:N]
         else:
             g_values_ = np.zeros((N, d), dtype=float)
 
         assert time_step > 0.0, "time_step must be positive"
-
-        if (coll_divs > 1) and (N % coll_divs**2 != 1):
-            ans_len = (N - 1) // coll_divs**2 * coll_divs**2 + 1
-            assert ans_len < N
-            if show_warnings:
-                print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
-                      f"Truncating to {ans_len}.")
-            kernel_values_ = kernel_values_[:ans_len]
-            g_values_ = g_values_[:ans_len]
 
         if soln_init_value is not None:
             if (not force_continuous) and show_warnings:
@@ -500,26 +502,14 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
 
     if g_values is not None:
-        g_values_ = np.array(g_values)
+        g_values_ = np.asarray(g_values, dtype=float)
         assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"
-        assert len(g_values_) == len(kernel_values_), \
-            "kernel_values and g_values must have the same length"
+        assert len(g_values_) == N_orig, "kernel_values and g_values must have the same length"
+        g_values_ = g_values_[:N]
     else:
-        g_values_ = np.zeros_like(kernel_values_)
+        g_values_ = np.zeros(N)
 
     assert time_step > 0.0, "time_step must be positive"
-
-    if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
-        ans_len = (len(kernel_values) - 1) // coll_divs**2 * coll_divs**2 + 1
-        assert ans_len < len(kernel_values)
-        if show_warnings:
-            print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
-                  f"is not of the form: (multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. " +
-                  f"All input data lists will be truncated to the next smaller number " +
-                  f"of this form ({ans_len}) which will also be the length of the " +
-                  f"returned list of solution values.")
-        kernel_values_ = kernel_values_[:ans_len]
-        g_values_ = g_values_[:ans_len]
 
     if soln_init_value is None:
         assert not force_continuous, \
@@ -654,9 +644,12 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         raise ValueError(
             f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
 
+    N_orig = len(kernel_values_)
+    N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
+
     # ------------------------------------------------------------------ vector path
     if ndim == 3:
-        N, d1, d2 = kernel_values_.shape
+        _, d1, d2 = kernel_values_.shape
         if d1 != d2:
             raise ValueError(f"kernel_values must have shape (N, d, d), got {kernel_values_.shape}")
         d = d1
@@ -665,12 +658,13 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
             g_values_ = np.asarray(g_values, dtype=float)
             if g_values_.ndim == 3:  # matrix case: shape (N, d, m_cols)
                 m_cols = g_values_.shape[2]
-                if g_values_.shape[:2] != (N, d):
+                if g_values_.shape[1] != d:
                     raise ValueError(
                         f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+                g_cols = g_values_[:N]
                 def _col_vie2(j):
-                    return solve_VIE_2(kernel_values=kernel_values,
-                                       g_values=g_values_[:, :, j],
+                    return solve_VIE_2(kernel_values=kernel_values_,
+                                       g_values=g_cols[:, :, j],
                                        time_step=time_step, coll_divs=coll_divs,
                                        coll_choices=coll_choices,
                                        return_polys=return_polys,
@@ -690,20 +684,13 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                         mat_polys.append(arr)
                     return (soln, mat_polys)
                 return np.stack(results, axis=2)
-            elif g_values_.shape != (N, d):
-                raise ValueError(
-                    f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+            else:
+                if g_values_.shape != (N_orig, d):
+                    raise ValueError(
+                        f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+                g_values_ = g_values_[:N]
         else:
             g_values_ = np.zeros((N, d), dtype=float)
-
-        if (coll_divs > 1) and (N % coll_divs**2 != 1):
-            ans_len = (N - 1) // coll_divs**2 * coll_divs**2 + 1
-            assert ans_len < N
-            if show_warnings:
-                print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
-                      f"Truncating to {ans_len}.")
-            kernel_values_ = kernel_values_[:ans_len]
-            g_values_ = g_values_[:ans_len]
 
         assert coll_divs > 0, "coll_divs must be a positive integer"
         assert all(isinstance(c, int) for c in coll_choices), "coll_choices must be a list of integers"
@@ -732,24 +719,12 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
 
     if g_values is not None:
-        g_values_ = np.array(g_values)
+        g_values_ = np.asarray(g_values, dtype=float)
         assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"
-        assert len(g_values_) == len(kernel_values_), \
-            "kernel_values and g_values must have the same length"
+        assert len(g_values_) == N_orig, "kernel_values and g_values must have the same length"
+        g_values_ = g_values_[:N]
     else:
-        g_values_ = np.zeros_like(kernel_values_)
-
-    if (coll_divs > 1) and (len(kernel_values) % (coll_divs**2) != 1):
-        ans_len = (len(kernel_values) - 1) // coll_divs**2 * coll_divs**2 + 1
-        assert ans_len < len(kernel_values)
-        if show_warnings:
-            print(f"warning: the length of kernel_values ({len(kernel_values)}) " +
-                  f"is not of the form: (multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. " +
-                  f"All input data lists will be truncated to the next smaller number " +
-                  f"of this form ({ans_len}) which will also be the length of the " +
-                  f"returned list of solution values.")
-        kernel_values_ = kernel_values_[:ans_len]
-        g_values_ = g_values_[:ans_len]
+        g_values_ = np.zeros(N)
 
     assert coll_divs > 0, "coll_divs must be a positive integer"
     assert all([isinstance(choice, int) for choice in coll_choices]), \
