@@ -76,7 +76,7 @@ from volterra_equation_solvers import solve_VIE_2
 
 # y(t) = sin(t) satisfies this VIE-2 with K(s) = exp(-s)
 time_step = 0.05
-times = np.arange(0, 2.05, time_step)          # 41 pts = 10×2² + 1
+times = np.arange(0, 2.1, time_step)   # 42 pts; solver truncates to 41
 kernel = np.exp(-times)
 g = np.sin(times) - 0.5*(np.exp(-times) + np.sin(times) - np.cos(times))
 
@@ -85,12 +85,12 @@ soln = solve_VIE_2(
     g_values=g,
     time_step=time_step,
 )
-print(f"Max error: {max(abs(soln - np.sin(times))):.2e}")
+print(f"Max error: {max(abs(soln - np.sin(times[:len(soln)]))):.2e}")
 ```
 
 All solvers accept `return_polys=True` to also return the piecewise polynomial solution as a list of `numpy.polynomial.Polynomial` objects.
 
-The input arrays must have length `k * coll_divs**2 + 1` for some positive integer `k`. For example, with the default `coll_divs=2`, valid lengths are 5, 9, 13, 17, … (multiples of 4, plus 1) — hence `# 41 pts = 10×2² + 1` in the example above. If a longer array is passed, it is automatically truncated to the nearest valid length and a warning is printed.
+The solvers require input arrays to satisfy an internal size constraint. Any length can be passed; if the length doesn't meet the constraint, the arrays are automatically truncated to the nearest valid length and a warning is printed. See the API reference for each solver for details.
 
 ## Vector and Matrix Valued Equations
 
