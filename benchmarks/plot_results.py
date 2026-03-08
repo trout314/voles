@@ -68,6 +68,8 @@ def generate_combined_chart(times, output_path):
                     bbox=dict(facecolor="white", alpha=0.7, edgecolor="none", pad=2))
             ax.set_box_aspect(1)
             ax.set_xticks([1000, 2000, 3000, 4000])
+            ax.yaxis.set_major_locator(plt.matplotlib.ticker.MaxNLocator(nbins=4))
+            ax.yaxis.set_major_formatter(plt.matplotlib.ticker.FormatStrFormatter('%.1f'))
             ax.yaxis.set_minor_locator(plt.matplotlib.ticker.AutoMinorLocator())
             ax.tick_params(labelsize=8)
             if row == 0:
@@ -76,7 +78,7 @@ def generate_combined_chart(times, output_path):
     fig.supxlabel("Input length", fontsize=12, y=0.03)
     fig.supylabel("Mean execution time (ms)", fontsize=12, x=0.02)
     fig.tight_layout()
-    fig.subplots_adjust(hspace=0.07, wspace=0.15)
+    fig.subplots_adjust(hspace=0.07, wspace=0.2)
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
     print(f"Saved combined chart to {output_path}")
