@@ -197,7 +197,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
                 f"soln_init_value must be a scalar or length-{d} array for d={d}")
 
         if (coll_divs > 1) and (N % coll_divs**2 != 1):
-            ans_len = int(N / coll_divs**2 - 1) * coll_divs**2 + 1
+            ans_len = (N - 1) // coll_divs**2 * coll_divs**2 + 1
             assert ans_len < N
             if show_warnings:
                 print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
@@ -447,7 +447,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         assert time_step > 0.0, "time_step must be positive"
 
         if (coll_divs > 1) and (N % coll_divs**2 != 1):
-            ans_len = int(N / coll_divs**2 - 1) * coll_divs**2 + 1
+            ans_len = (N - 1) // coll_divs**2 * coll_divs**2 + 1
             assert ans_len < N
             if show_warnings:
                 print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
@@ -697,7 +697,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
             g_values_ = np.zeros((N, d), dtype=float)
 
         if (coll_divs > 1) and (N % coll_divs**2 != 1):
-            ans_len = int(N / coll_divs**2 - 1) * coll_divs**2 + 1
+            ans_len = (N - 1) // coll_divs**2 * coll_divs**2 + 1
             assert ans_len < N
             if show_warnings:
                 print(f"warning: N={N} is not of the form (multiple of coll_divs**2)+1. "
