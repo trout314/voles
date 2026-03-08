@@ -132,14 +132,16 @@ Passing `return_polys=True` to any solver returns a `(soln_values, polys)` tuple
 import numpy as np
 from volterra_equation_solvers import solve_VIDE
 
-# y(t) = sin(t) satisfies this VIDE with K(s) = exp(-s), a(t) = 0
+# y(t) = sin(t) satisfies this VIDE with K(s) = exp(-s), a(t) = -1
 time_step = 0.1
 times = np.arange(0, 9.1, time_step)   # 91 points
 kernel = np.exp(-times)
-g = 1.5*np.cos(times) - 0.5*np.sin(times) - 0.5*np.exp(-times)
+a = np.full(len(times), -1.0)
+g = 1.5*np.cos(times) + 0.5*np.sin(times) - 0.5*np.exp(-times)
 
 soln_vals, polys = solve_VIDE(
     kernel_values=kernel,
+    a_values=a,
     g_values=g,
     soln_init_value=0.0,
     time_step=time_step,
