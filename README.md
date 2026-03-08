@@ -76,10 +76,12 @@ from volterra_equation_solvers import solve_VIE_2
 
 # y(t) = sin(t) satisfies this VIE-2 with K(s) = exp(-s)
 time_step = 0.05
-times = np.arange(0, 2.1, time_step)   # 42 pts; length must be of form 4k+1, solver truncates to 41
+times = np.arange(0, 2.1, time_step)   # 42 pts
 kernel = np.exp(-times)
 g = np.sin(times) - 0.5*(np.exp(-times) + np.sin(times) - np.cos(times))
 
+# Default solver settings require length of form 4k+1; input will be
+# truncated from 42 to 41, so soln has 41 elements, not 42.
 soln = solve_VIE_2(
     kernel_values=kernel,
     g_values=g,
