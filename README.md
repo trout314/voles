@@ -26,7 +26,7 @@ The solver handles the following cases:
 - $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ is a $d \times d$ matrix.
 - $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ is a $d \times d$ matrix.
 
-[API reference](https://trout314.github.io/volterra-equation-solvers/api/vie1/)
+For a full description of the solver inputs/outputs and available settings, see: [API reference](https://trout314.github.io/volterra-equation-solvers/api/vie1/)
 
 ### `solve_VIE_2`
 
@@ -39,7 +39,7 @@ The solver handles the following cases:
 - $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ is a $d \times d$ matrix.
 - $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ is a $d \times d$ matrix.
 
-[API reference](https://trout314.github.io/volterra-equation-solvers/api/vie2/)
+For a full description of the solver inputs/outputs and available settings, see: [API reference](https://trout314.github.io/volterra-equation-solvers/api/vie2/)
 
 ### `solve_VIDE`
 
@@ -52,7 +52,7 @@ The solver handles the following cases:
 - $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ and $a(t)$ are $d \times d$ matrices.
 - $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ and $a(t)$ are $d \times d$ matrices.
 
-[API reference](https://trout314.github.io/volterra-equation-solvers/api/vide/)
+For a full description of the solver inputs/outputs and available settings, see: [API reference](https://trout314.github.io/volterra-equation-solvers/api/vide/)
 
 ### `solve_VIE_1_trapz`, `solve_VIE_2_trapz` *(legacy)*
 
