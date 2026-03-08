@@ -170,6 +170,6 @@ Run on a GitHub Actions `ubuntu-22.04` runner (2-core x86_64 VM on an Intel Xeon
 
 ![Benchmarks](benchmarks/results.png)
 
-See the [Getting Started](https://trout314.github.io/volterra-equation-solvers/getting_started/) page or the `notebooks/` directory for complete examples.
+See the [Getting Started](https://trout314.github.io/volterra-equation-solvers/getting_started/) page for complete examples.
 
 Worked derivations of the analytic solutions used in the test suite are in [`docs/scalar_solutions.pdf`](docs/scalar_solutions.pdf) and [`docs/coupled_vector_solutions.pdf`](docs/coupled_vector_solutions.pdf).
