@@ -68,7 +68,7 @@ def generate_combined_chart(times, output_path):
                     bbox=dict(facecolor="white", alpha=0.7, edgecolor="none", pad=2))
             ax.set_box_aspect(1)
             ax.set_xticks([1000, 2000, 3000, 4000])
-            ax.yaxis.set_major_locator(plt.matplotlib.ticker.MaxNLocator(nbins=4))
+            ax.yaxis.set_major_locator(plt.matplotlib.ticker.MaxNLocator(nbins=8))
             ax.yaxis.set_major_formatter(plt.matplotlib.ticker.FormatStrFormatter('%.1f'))
             ax.yaxis.set_minor_locator(plt.matplotlib.ticker.AutoMinorLocator())
             ax.tick_params(labelsize=8)
