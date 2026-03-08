@@ -11,7 +11,7 @@ Collocation-method solvers for Volterra integral and integro-differential equati
 
 > Brunner H. *Collocation Methods for Volterra Integral and Related Functional Differential Equations.* Cambridge University Press; 2004.
 
-The solvers are implemented as a compiled extension written in the [D language](https://dlang.org) for maximum performance.
+The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code.
 
 ## Solvers
 
