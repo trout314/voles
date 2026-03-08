@@ -90,6 +90,8 @@ print(f"Max error: {max(abs(soln - np.sin(times))):.2e}")
 
 All solvers accept `return_polys=True` to also return the piecewise polynomial solution as a list of `numpy.polynomial.Polynomial` objects.
 
+The input arrays must have length $N = k \cdot \text{coll\_divs}^2 + 1$ for some positive integer $k$. For example, with the default `coll_divs=2`, valid lengths are 5, 9, 13, 17, … (i.e. multiples of 4, plus 1). The comment `# 41 pts = 10×2² + 1` in the example above shows this for `coll_divs=2`. If a longer array is passed, it is automatically truncated to the nearest valid length and a warning is printed.
+
 ## Vector and Matrix Valued Equations
 
 `solve_VIE_1`, `solve_VIE_2`, and `solve_VIDE` also solve for vector-valued unknowns $\mathbf{y}(t) \in \mathbb{R}^d$, where the kernel $K$ and coefficient $a$ become $d \times d$ matrix-valued functions:
@@ -129,13 +131,6 @@ Run on a **GitHub Actions `ubuntu-22.04` runner** (2-core x86_64 VM on an Intel 
 **Vector solvers** (D extension, d=2):
 
 ![Vector benchmarks](benchmarks/results_vec.png)
-
-## Input format
-
-- `kernel_values`: array of `K(s)` values from `s=0`, spaced by `time_step`
-- Length must be `(multiple of coll_divs²) + 1`; longer arrays are truncated with a warning
-- `coll_divs`: number of collocation sub-intervals (default varies by solver)
-- `coll_choices`: list of integers selecting collocation nodes within each sub-interval
 
 See the [Getting Started](https://trout314.github.io/volterra-equation-solvers/getting_started/) page or the `notebooks/` directory for complete examples.
 
