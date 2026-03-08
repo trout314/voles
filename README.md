@@ -96,11 +96,7 @@ The solvers require input arrays to satisfy an internal size constraint. Any len
 
 ## Vector and Matrix Valued Equations
 
-`solve_VIE_1`, `solve_VIE_2`, and `solve_VIDE` also solve for vector-valued unknowns $\mathbf{y}(t) \in \mathbb{R}^d$, where the kernel $K$ and coefficient $a$ become $d \times d$ matrix-valued functions:
-
-$$\mathbf{g}(t) = \int_0^t K(t-s)\\,\mathbf{y}(s)\\,ds$$
-
-Pass `kernel_values` as an `(N, d, d)` array and `g_values` as an `(N, d)` array:
+All three solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ and $g(t)$ are vectors of length $d$, the kernel $K(t)$ and coefficient $a(t)$ become $d \times d$ matrices, and the equations generalise in the natural way. Pass `kernel_values` as an `(N, d, d)` array and `g_values` as an `(N, d)` array; the returned solution has shape `(N, d)`:
 
 ```python
 import numpy as np
