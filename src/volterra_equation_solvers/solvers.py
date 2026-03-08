@@ -39,57 +39,79 @@ except ImportError:
 
 def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, time_step=1.0,
                coll_divs=2, coll_choices=[0,1,2], return_polys=False, show_warnings=True):
-    '''
-    Solve a Volterra integro-differential equation (VIDE.)
-      
-    Solve the following Volterra integro-differential equation for the unknown
-    function y(t).
+    r'''
+    Solve a Volterra integro-differential equation.
 
-        y'(t) = a(t)y(t) + g(t) + integral[K(t-s)y(s)ds from s=0 to s=t]
+    Finds $y(t)$ satisfying
 
-    By default, this function returns a numpy array of solution values y(t). If
-    return_polys is set to true, then it returns a two-element tuple containing
-    these y(t) values, followed by the list of numpy polynomial functions that define
-    the piecewise solution.
+    $$y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds, \quad y(0) = y_0$$
 
-    Keyword Arguments:
-        kernel_values (iterable): Kernel values K(s) at times s starting from
-            zero and increasing in increments of time_step.
-        a_values (iterable): Values for the function a(t) given at a set of times t
-            starting from zero and increasing in increments of time_step. a_values
-            must have the same length as kernel_values. The default is all zeros.
-        g_values (iterable): Values for the function g(t) given at a set of times t
-            starting from zero and increasing in increments of time_step. g_values
-            must have the same length as kernel_values. The default is all zeros.
-        time_step (number): The separation between the times t where the functions
-            K(t) and g(t) are defined. The value of time_step must be positive. The 
-            default is 1.0.
-        soln_init_value (number): The desired initial value of the soltion y(t).
-        coll_divs (number): The number of collocation divisions used when specifying
-            the collocation parameters. The value of coll_divs must be a positive 
-            integer. The default is 2.
-        coll_choices (iterable): List of positive integers that define the
-            collocation parameters. Each such integer k corresponds to the
-            collocation parameter k/coll_divs. The default is [0,1,2].
-        return_polys (boolean): Specify if the solver should also return the list of
-            polynomials defining the solution. By default, return_poly is false and
-            only the numpy array of solution values is returned. See the "Returns"
-            section of this docstring for details.
-    
-    The solver uses the collocation method described in the book:
-        Brunner H. "Collocation Methods for Volterra Integral and Related
-        Functional Differential Equations." Cambridge University Press; 2004.
-    See Chapter 3 pages 160-167 for details.
+    Parameters
+    ----------
+    kernel_values : array_like of shape (N,) or (N, d, d)
+        Values of $K(s)$ at times $s = 0, h, 2h, \ldots, (N-1)h$, where $h$
+        is ``time_step``. Pass a 1-D array for scalar equations or a 3-D array
+        of shape ``(N, d, d)`` for $d$-dimensional vector equations.
+    a_values : array_like of shape (N,) or (N, d, d), optional
+        Values of the coefficient $a(t)$ at the same times as
+        ``kernel_values``. For vector equations $a(t)$ is a $d \times d$
+        matrix. Defaults to zero.
+    g_values : array_like of shape (N,) or (N, d) or (N, d, m), optional
+        Forcing term $g(t)$ sampled at the same times as ``kernel_values``.
+        For matrix-valued equations pass shape ``(N, d, m)`` to solve $m$
+        right-hand sides simultaneously. Defaults to zero.
+    soln_init_value : float or array_like of shape (d,) or (d, m)
+        Initial value $y(0) = y_0$. Required.
+    time_step : float, optional
+        Spacing $h$ between consecutive sample times. Must be positive.
+        Default is 1.0.
+    coll_divs : int, optional
+        Number of collocation sub-intervals per mesh interval. Must be a
+        positive integer. Default is 2.
+    coll_choices : list of int, optional
+        Indices selecting the collocation nodes within each sub-interval.
+        Each entry $k$ corresponds to the node $k / c$ where $c$ =
+        ``coll_divs``, placed in $[0, 1]$. Entries must be distinct integers
+        in $\{0, 1, \ldots, \text{coll\_divs}\}$. Default is ``[0, 1, 2]``.
+    return_polys : bool, optional
+        If ``True``, also return the piecewise polynomial solution.
+        Default is ``False``.
+    show_warnings : bool, optional
+        If ``True`` (default), print a warning when ``kernel_values`` is
+        truncated or when the Numba fallback is used.
 
-    Returns:
-        If return_polys is set to false, this function returns a numpy array of
-        solution values y(t) for the same times t used in the input parameters
-        kernel_values, a_values, and g_values.
-        
-        If return_polys is set to true then this function returns a two element tuple
-        (soln_values, polys) where soln_values contains the solution values y(t) as
-        described above, and polys is a list of numpy polynomial objects defining the
-        piecewise polynomial solution.
+    Returns
+    -------
+    soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)
+        Solution values $y(t)$ at the same times as the input arrays.
+        Returned when ``return_polys=False`` (default).
+    (soln_values, polys) : tuple
+        Returned when ``return_polys=True``. ``soln_values`` is as above.
+        For scalar equations, ``polys`` is a list of
+        `numpy.polynomial.Polynomial` objects, one per mesh interval, each
+        mapping $t$ to the polynomial approximation of $y(t)$ on that
+        interval. For vector equations, each element of ``polys`` is an object
+        array of shape ``(d,)`` (or ``(d, m)`` for matrix equations) containing
+        one polynomial per component.
+
+    Notes
+    -----
+    The length $N$ of the input arrays must satisfy
+    $N \equiv 1 \pmod{\text{coll\_divs}^2}$. If a longer array is supplied it
+    is truncated to the largest conforming length and a warning is printed
+    (unless ``show_warnings=False``).
+
+    The solver dispatches at runtime to a D-extension routine specialised for
+    the given collocation setting. For scalar equations, settings not compiled
+    into the extension fall back to a Numba-JIT implementation (requires the
+    ``numba`` optional dependency); a warning is printed when the fallback is
+    used. For vector equations only the compiled settings are supported.
+
+    References
+    ----------
+    .. [1] Brunner, H. *Collocation Methods for Volterra Integral and Related
+       Functional Differential Equations.* Cambridge University Press, 2004.
+       Chapter 3, pp. 160–167.
     '''
     kernel_values_ = np.asarray(kernel_values, dtype=float)
     ndim = kernel_values_.ndim
@@ -297,59 +319,90 @@ def solve_VIE_2_trapz(*, g_values, kernel_values, omega, dt):
 
 def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step=1.0, coll_divs=3,
                 coll_choices=[1,2,3], return_polys=False, force_continuous=False, show_warnings=True):
-    '''
-    Solve a "Type 1" Volterra integral equation.
-      
-    Solve the following Volterra integral equation (of Type 1) for the unknown
-    function y(t).
-    
-        g(t) = integral[K(t-s)y(s)ds from s=0 to s=t]
+    r'''
+    Solve a Volterra integral equation of the first kind.
 
-    By default, this function returns a numpy array of solution values y(t). If
-    return_polys is set to true, then it returns a two-element tuple containing
-    these y(t) values, followed by the list of numpy polynomial functions that define
-    the piecewise solution.
+    Finds $y(t)$ satisfying
 
-    Keyword Arguments:
-        kernel_values (iterable): Kernel values K(s) at times s starting from
-            zero and increasing in increments of time_step.
-        g_values (iterable): Values for the function g(t) given at a set of times t
-            starting from zero and increasing in increments of time_step. g_values
-            must have the same length as kernel_values. The default is all zeros.
-        time_step (number): The separation between the times t where the functions
-            K(t) and g(t) are defined. The value of time_step must be positive. The 
-            default is 1.0
-        force_continuous (boolean): Specify if the piecewise polynomial solution
-            used to compute the returned values y(t) must be continuous. The default
-            is false.
-        soln_init_value (number): The desired initial value of the soltion y(t) when
-            a continuous solution is desired. May only be set if force_continuous is
-            true. See the force_continuous parameter.
-        coll_divs (number): The number of collocation divisions used when specifying
-            the collocation parameters. The value of coll_divs must be a positive 
-            integer. The default is 3.
-        coll_choices (iterable): List of positive integers that define the
-            collocation parameters. Each such integer k corresponds to the
-            collocation parameter k/coll_divs. The default is [1,2,3].
-        return_polys (boolean): Specify if the solver should also return the list of
-            polynomials defining the solution. By default, return_poly is false and
-            only the numpy array of solution values is returned. See the "Returns"
-            section of this docstring for details.
-    
-    The solver uses the methods described in Sections 2.4.1, 2.4.3, and 2.4.5 of the
-    book:
-        Brunner H. "Collocation Methods for Volterra Integral and Related
-        Functional Differential Equations." Cambridge University Press; 2004.
+    $$g(t) = \int_0^t K(t-s)\,y(s)\,ds$$
 
-    Returns:
-        If return_polys is set to false, this function returns a numpy array of
-        solution values y(t) for the same times t used in the input parameters
-        kernel_values and g_values.
-        
-        If return_polys is set to true then this function returns a two element tuple
-        (soln_values, polys) where soln_values contains the solution values y(t) as
-        described above, and polys is a list of numpy polynomial objects defining the
-        piecewise polynomial solution.
+    Parameters
+    ----------
+    kernel_values : array_like of shape (N,) or (N, d, d)
+        Values of $K(s)$ at times $s = 0, h, 2h, \ldots, (N-1)h$, where $h$
+        is ``time_step``. Pass a 1-D array for scalar equations or a 3-D array
+        of shape ``(N, d, d)`` for $d$-dimensional vector equations.
+    g_values : array_like of shape (N,) or (N, d) or (N, d, m), optional
+        Right-hand side $g(t)$ sampled at the same times as ``kernel_values``.
+        For matrix-valued equations pass shape ``(N, d, m)`` to solve $m$
+        right-hand sides simultaneously. Defaults to zero.
+    soln_init_value : float or array_like of shape (d,) or (d, m), optional
+        Initial value $y(0)$ imposed when ``force_continuous=True``. Has no
+        effect when ``force_continuous=False`` (default). Required when
+        ``force_continuous=True``.
+    time_step : float, optional
+        Spacing $h$ between consecutive sample times. Must be positive.
+        Default is 1.0.
+    coll_divs : int, optional
+        Number of collocation sub-intervals per mesh interval. Must be a
+        positive integer. Default is 3.
+    coll_choices : list of int, optional
+        Indices selecting the collocation nodes within each sub-interval.
+        Each entry $k$ corresponds to the node $k / c$ where $c$ =
+        ``coll_divs``, placed in $(0, 1]$; zero is excluded. Entries must be
+        distinct integers in $\{1, \ldots, \text{coll\_divs}\}$.
+        Default is ``[1, 2, 3]``.
+    return_polys : bool, optional
+        If ``True``, also return the piecewise polynomial solution.
+        Default is ``False``.
+    force_continuous : bool, optional
+        If ``True``, enforce continuity of the piecewise polynomial solution
+        across mesh-interval boundaries, using ``soln_init_value`` as the
+        starting condition. The default discontinuous method is generally more
+        accurate for the same number of collocation nodes. Default is
+        ``False``.
+    show_warnings : bool, optional
+        If ``True`` (default), print a warning when ``kernel_values`` is
+        truncated, when ``soln_init_value`` has no effect, or when the Numba
+        fallback is used.
+
+    Returns
+    -------
+    soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)
+        Solution values $y(t)$ at the same times as the input arrays.
+        Returned when ``return_polys=False`` (default).
+    (soln_values, polys) : tuple
+        Returned when ``return_polys=True``. ``soln_values`` is as above.
+        For scalar equations, ``polys`` is a list of
+        `numpy.polynomial.Polynomial` objects, one per mesh interval, each
+        mapping $t$ to the polynomial approximation of $y(t)$ on that
+        interval. For vector equations, each element of ``polys`` is an object
+        array of shape ``(d,)`` (or ``(d, m)`` for matrix equations) containing
+        one polynomial per component.
+
+    Notes
+    -----
+    The length $N$ of the input arrays must satisfy
+    $N \equiv 1 \pmod{\text{coll\_divs}^2}$. If a longer array is supplied it
+    is truncated to the largest conforming length and a warning is printed
+    (unless ``show_warnings=False``).
+
+    Zero is excluded from ``coll_choices`` because the VIE-1 collocation
+    scheme does not place nodes at $t = 0$; doing so would require evaluating
+    the equation at $t = 0$ where both sides are zero by definition, giving no
+    information about $y(0)$.
+
+    The solver dispatches at runtime to a D-extension routine specialised for
+    the given collocation setting. For scalar equations, settings not compiled
+    into the extension fall back to a Numba-JIT implementation (requires the
+    ``numba`` optional dependency); a warning is printed when the fallback is
+    used. For vector equations only the compiled settings are supported.
+
+    References
+    ----------
+    .. [1] Brunner, H. *Collocation Methods for Volterra Integral and Related
+       Functional Differential Equations.* Cambridge University Press, 2004.
+       Sections 2.4.1, 2.4.3, and 2.4.5.
     '''
     kernel_values_ = np.asarray(kernel_values, dtype=float)
     ndim = kernel_values_.ndim
@@ -534,52 +587,73 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
 
 def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                 coll_choices=[0,1,2], return_polys=False, show_warnings=True):
-    '''
-    Solve a "Type 2" Volterra integral equation.
+    r'''
+    Solve a Volterra integral equation of the second kind.
 
-    Solve the following Volterra integral equation (of Type 2) for the unknown
-    function y(t).
+    Finds $y(t)$ satisfying
 
-        y(t) = g(t) + integral[K(t-s)y(s)ds from s=0 to s=t]
+    $$y(t) = g(t) + \int_0^t K(t-s)\,y(s)\,ds$$
 
-    By default, this function returns a numpy array of solution values y(t). If
-    return_polys is set to true, then it returns a two-element tuple containing
-    these y(t) values, followed by the list of numpy polynomial functions that define
-    the piecewise solution.
+    Parameters
+    ----------
+    kernel_values : array_like of shape (N,) or (N, d, d)
+        Values of $K(s)$ at times $s = 0, h, 2h, \ldots, (N-1)h$, where $h$
+        is ``time_step``. Pass a 1-D array for scalar equations or a 3-D array
+        of shape ``(N, d, d)`` for $d$-dimensional vector equations.
+    g_values : array_like of shape (N,) or (N, d) or (N, d, m), optional
+        Right-hand side $g(t)$ sampled at the same times as ``kernel_values``.
+        For matrix-valued equations pass shape ``(N, d, m)`` to solve $m$
+        right-hand sides simultaneously. Defaults to zero.
+    time_step : float, optional
+        Spacing $h$ between consecutive sample times. Must be positive.
+        Default is 1.0.
+    coll_divs : int, optional
+        Number of collocation sub-intervals per mesh interval. Must be a
+        positive integer. Default is 2.
+    coll_choices : list of int, optional
+        Indices selecting the collocation nodes within each sub-interval.
+        Each entry $k$ corresponds to the node $k / c$ where $c$ =
+        ``coll_divs``, placed in $[0, 1]$. Entries must be distinct integers
+        in $\{0, 1, \ldots, \text{coll\_divs}\}$. Default is ``[0, 1, 2]``.
+    return_polys : bool, optional
+        If ``True``, also return the piecewise polynomial solution.
+        Default is ``False``.
+    show_warnings : bool, optional
+        If ``True`` (default), print a warning when ``kernel_values`` is
+        truncated or when the Numba fallback is used.
 
-    Keyword Arguments:
-        kernel_values (iterable): Kernel values K(s) at times s starting from
-            zero and increasing in increments of time_step.
-        g_values (iterable): Values for the function g(t) given at a set of times t
-            starting from zero and increasing in increments of time_step. g_values
-            must have the same length as kernel_values. The default is all zeros.
-        time_step (number): The separation between the times t where the functions
-            K(t) and g(t) are defined. The value of time_step must be positive. The
-            default is 1.0.
-        coll_divs (number): The number of collocation divisions used when specifying
-            the collocation parameters. The value of coll_divs must be a positive
-            integer. The default is 2.
-        coll_choices (iterable): List of positive integers that define the
-            collocation parameters. Each such integer k corresponds to the
-            collocation parameter k/coll_divs. The default is [0,1,2].
-        return_polys (boolean): Specify if the solver should also return the list of
-            polynomials defining the solution. By default, return_poly is false and
-            only the numpy array of solution values is returned. See the "Returns"
-            section of this docstring for details.
+    Returns
+    -------
+    soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)
+        Solution values $y(t)$ at the same times as the input arrays.
+        Returned when ``return_polys=False`` (default).
+    (soln_values, polys) : tuple
+        Returned when ``return_polys=True``. ``soln_values`` is as above.
+        For scalar equations, ``polys`` is a list of
+        `numpy.polynomial.Polynomial` objects, one per mesh interval, each
+        mapping $t$ to the polynomial approximation of $y(t)$ on that
+        interval. For vector equations, each element of ``polys`` is an object
+        array of shape ``(d,)`` (or ``(d, m)`` for matrix equations) containing
+        one polynomial per component.
 
-    The solver uses the collocation method described in Section 2.2 of the book:
-        Brunner H. "Collocation Methods for Volterra Integral and Related
-        Functional Differential Equations." Cambridge University Press; 2004.
+    Notes
+    -----
+    The length $N$ of the input arrays must satisfy
+    $N \equiv 1 \pmod{\text{coll\_divs}^2}$. If a longer array is supplied it
+    is truncated to the largest conforming length and a warning is printed
+    (unless ``show_warnings=False``).
 
-    Returns:
-        If return_polys is set to false, this function returns a numpy array of
-        solution values y(t) for the same times t used in the input parameters
-        kernel_values and g_values.
+    The solver dispatches at runtime to a D-extension routine specialised for
+    the given collocation setting. For scalar equations, settings not compiled
+    into the extension fall back to a Numba-JIT implementation (requires the
+    ``numba`` optional dependency); a warning is printed when the fallback is
+    used. For vector equations only the compiled settings are supported.
 
-        If return_polys is set to true then this function returns a two element tuple
-        (soln_values, polys) where soln_values contains the solution values y(t) as
-        described above, and polys is a list of numpy polynomial objects defining the
-        piecewise polynomial solution.
+    References
+    ----------
+    .. [1] Brunner, H. *Collocation Methods for Volterra Integral and Related
+       Functional Differential Equations.* Cambridge University Press, 2004.
+       Section 2.2.
     '''
     kernel_values_ = np.asarray(kernel_values, dtype=float)
     ndim = kernel_values_.ndim

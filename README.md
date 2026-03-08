@@ -5,6 +5,7 @@
 [![Tests (Windows)](https://github.com/trout314/volterra-equation-solvers/actions/workflows/tests-windows.yml/badge.svg)](https://github.com/trout314/volterra-equation-solvers/actions/workflows/tests-windows.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://trout314.github.io/volterra-equation-solvers/)
 
 Collocation-method solvers for Volterra integral and integro-differential equations, based on:
 
@@ -134,6 +135,6 @@ Run on a **GitHub Actions `ubuntu-22.04` runner** (2-core x86_64 VM on an Intel 
 - `coll_divs`: number of collocation sub-intervals (default varies by solver)
 - `coll_choices`: list of integers selecting collocation nodes within each sub-interval
 
-See the [Getting Started](docs/getting_started.md) page or the `notebooks/` directory for complete examples.
+See the [Getting Started](https://trout314.github.io/volterra-equation-solvers/getting_started/) page or the `notebooks/` directory for complete examples.
 
 Worked derivations of the analytic solutions used in the test suite are in [`docs/scalar_solutions.pdf`](docs/scalar_solutions.pdf) and [`docs/coupled_vector_solutions.pdf`](docs/coupled_vector_solutions.pdf).
