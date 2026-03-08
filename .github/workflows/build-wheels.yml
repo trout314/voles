@@ -100,31 +100,38 @@ jobs:
 
   # -------------------------------------------------------------------------
   # macOS x86_64 (Intel, macOS 10.9+)
+  # Cross-compiled from the macos-latest (arm64) runner using ldc2's
+  # -mtriple flag — avoids the deprecated macos-13 runner.
   # -------------------------------------------------------------------------
   build-wheel-macos-x86_64:
-    runs-on: macos-13
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install meson and ninja
-        run: brew install meson ninja
 
       - name: Download and extract ldc2
         run: |
           LDC_VERSION="1.42.0"
           curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-universal.tar.xz" \
             | tar -xJ -C "$HOME" 2>/dev/null \
-            || curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-x86_64.tar.xz" \
+            || curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-arm64.tar.xz" \
             | tar -xJ -C "$HOME"
           LDC_DIR=$(ls -d "$HOME"/ldc2-*/ | head -1)
           echo "${LDC_DIR}bin" >> $GITHUB_PATH
 
-      - name: Build D extension
+      - name: Cross-compile D extension for x86_64
         run: |
           cd dlang
-          meson setup build --wipe --buildtype=release
-          ninja -C build
-          cp build/volterra_dlang.dylib ../src/volterra_equation_solvers/
+          ldc2 \
+            -mtriple=x86_64-apple-macosx10.9 \
+            -shared \
+            -boundscheck=on \
+            -link-defaultlib-shared=false \
+            -O2 \
+            -I=source \
+            -of=volterra_dlang.dylib \
+            source/volterra_solvers.d \
+            source/utility.d
+          cp volterra_dlang.dylib ../src/volterra_equation_solvers/
 
       - name: Build wheel and re-tag as macosx_10_9_x86_64
         run: |
