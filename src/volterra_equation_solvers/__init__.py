@@ -1,4 +1,4 @@
-from .solvers import solve_VIE_1, solve_VIE_2, solve_VIDE, solve_VIE_1_trapz, solve_VIE_2_trapz
+from .solvers import solve_VIE_1, solve_VIE_2, solve_VIDE
 from ._dlang import supported_coll_settings_d as _supported_coll_settings_d
 
 _all = _supported_coll_settings_d()
@@ -9,7 +9,7 @@ del _all
 
 __all__ = [
     "solve_VIE_1", "solve_VIE_2", "solve_VIDE",
-    "solve_VIE_1_trapz", "solve_VIE_2_trapz",
+
     "fast_coll_settings_VIE_1", "fast_coll_settings_VIE_2", "fast_coll_settings_VIDE",
 ]
 from importlib.metadata import version

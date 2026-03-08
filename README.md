@@ -54,10 +54,6 @@ The solver handles the following cases:
 
 For a full description of the solver inputs/outputs and available settings, see: [API reference](https://trout314.github.io/volterra-equation-solvers/api/vide/)
 
-### `solve_VIE_1_trapz`, `solve_VIE_2_trapz` *(legacy)*
-
-Lower-order trapezoidal-rule solvers for VIE-1 and VIE-2. Retained for backward compatibility; the collocation solvers above are preferred for new code.
-
 ## Installation
 
 ```bash
