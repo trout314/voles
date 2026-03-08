@@ -15,7 +15,7 @@ The solvers are implemented as a compiled extension written in the [D language](
 
 ## Solvers
 
-### `solve_VIE_1`
+### `solve_VIE_1` — [API reference](https://trout314.github.io/volterra-equation-solvers/api/vie1/)
 
 Given functions $K$ and $g$, solves for $y(t)$ in the Type-1 Volterra integral equation (VIE-1):
 
@@ -26,7 +26,7 @@ The solver handles the following cases:
 - $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ is a $d \times d$ matrix.
 - $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ is a $d \times d$ matrix.
 
-### `solve_VIE_2`
+### `solve_VIE_2` — [API reference](https://trout314.github.io/volterra-equation-solvers/api/vie2/)
 
 Given functions $K$ and $g$, solves for $y(t)$ in the Type-2 Volterra integral equation (VIE-2):
 
@@ -37,7 +37,7 @@ The solver handles the following cases:
 - $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ is a $d \times d$ matrix.
 - $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ is a $d \times d$ matrix.
 
-### `solve_VIDE`
+### `solve_VIDE` — [API reference](https://trout314.github.io/volterra-equation-solvers/api/vide/)
 
 Given functions $K$, $a$, and $g$ and an initial value $y(0)$, solves for $y(t)$ in the Volterra integro-differential equation (VIDE):
 
