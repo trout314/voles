@@ -2191,6 +2191,16 @@ int find_coll_info_id(int max_cd, int max_cp)(int coll_divs, int[] coll_choices)
     return -1;
 }
 
+// Returns true for VIE-1 collocation settings that are known to be
+// non-convergent (empirically verified via grid-refinement studies).
+bool is_nonconvergent_vie1_setting(int coll_divs, int[] choices)
+{
+    if (coll_divs == 3 && choices == [1])       return true;
+    if (coll_divs == 4 && choices == [1])       return true;
+    if (coll_divs == 4 && choices == [1, 2])    return true;
+    return false;
+}
+
 // ---------------------------------------------------------------------------
 // extern(C) entry points
 // ---------------------------------------------------------------------------
@@ -2212,6 +2222,9 @@ int volterra_solve_vie1_vec(
     double[] kv      = kernel_values[0 .. n * d * d];
     double[] init    = soln_init_values[0 .. d];
     int[]    choices = coll_choices[0 .. num_choices];
+
+    if (is_nonconvergent_vie1_setting(coll_divs, choices))
+        return 1;
 
     auto id = find_coll_info_id!(max_coll_divs, max_coll_params)(coll_divs, choices);
     if (id < 0)

@@ -26,7 +26,12 @@ def _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step):
     return polys
 
 _all_fast = _dlang_module.supported_coll_settings_d()
-_fast_settings_VIE_1 = [(d, c) for d, c in _all_fast if 0 not in c]
+# Non-convergent VIE-1 settings excluded (verified by grid-refinement study).
+_VIE1_NONCONVERGENT = {(3, (1,)), (4, (1,)), (4, (1, 2))}
+_fast_settings_VIE_1 = [
+    (d, c) for d, c in _all_fast
+    if 0 not in c and (d, tuple(c)) not in _VIE1_NONCONVERGENT
+]
 _fast_settings_VIE_2 = _all_fast
 _fast_settings_VIDE  = _all_fast
 del _all_fast
@@ -469,6 +474,11 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             assert 1 <= choice <= coll_divs, "coll_choices must contain only integers from 1 to coll_divs"
         coll_choices = sorted(coll_choices)
 
+        if (coll_divs, tuple(coll_choices)) in _VIE1_NONCONVERGENT:
+            raise ValueError(
+                f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
+                f"does not produce a convergent VIE-1 solver and is not supported. "
+                f"Use a setting from fast_coll_settings_VIE_1.")
         if (coll_divs, coll_choices) not in _fast_settings_VIE_1:
             raise RuntimeError(
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
@@ -534,6 +544,11 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         assert 1 <= choice <= coll_divs, \
             "coll_choices must contain only integers from 1 to coll_divs"
     coll_choices = sorted(coll_choices)
+    if (coll_divs, tuple(coll_choices)) in _VIE1_NONCONVERGENT:
+        raise ValueError(
+            f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
+            f"does not produce a convergent VIE-1 solver and is not supported. "
+            f"Use a setting from fast_coll_settings_VIE_1.")
     if (coll_divs, coll_choices) in _fast_settings_VIE_1:
         soln_vals, poly_coefs = _dlang_module.solve_vie1_d(
             g_values_, kernel_values_, soln_init_value_, time_step,
