@@ -157,10 +157,12 @@ print(f"y'(0.2) ≈ {p.deriv()(0.2):.6f},  exact = {np.cos(0.2):.6f}")
 
 All three solvers have the same expected asymptotic complexity in N, d, and m, where N is the number of input points, d is the number of rows in the solution, and m is the number of columns:
 
-| | Scalar | Vector (d×1) | Matrix (d×m) |
+| | Scalar | Vector (d×1) | Matrix (d×m)* |
 |---|---|---|---|
 | Time | O(N²) | O(N²d²) | O(N²d²m) |
 | Memory | O(N) | O(Nd²) | O(Nd²m) |
+
+\* The m columns of the solution are independent and the code runs them in parallel.
 
 The quadratic time scaling arises because each new mesh step requires a history sum over all previous steps. The `coll_divs` and `coll_choices` parameters affect the constant factor but not the asymptotic scaling in N, d, and m.
 
