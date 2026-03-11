@@ -122,9 +122,9 @@ print(f"Max error: {np.max(np.abs(soln - exact)):.2e}")
 
 ## How the Collocation Method Works
 
-The solvers approximate $y(t)$ as a **piecewise polynomial**. The time axis is divided into mesh intervals, and on each interval the solution is represented by a polynomial whose coefficients are determined by requiring the Volterra equation to hold exactly at a set of **collocation points** within that interval.
+The solvers approximate $y(t)$ as a piecewise polynomial. The time axis is divided into mesh intervals, and on each interval the solution is represented by a polynomial whose coefficients are determined by requiring the Volterra equation to hold exactly at a set of collocation points within that interval.
 
-Because the solution on each mesh interval is an explicit polynomial, the solver can optionally return it (see **Polynomial Solutions** below). This is useful for evaluating the solution at arbitrary times, differentiating, integrating, and so on.
+Because the solution on each mesh interval is an explicit polynomial, the solver can optionally return it (see Polynomial Solutions below). This is useful for evaluating the solution at arbitrary times, differentiating, integrating, and so on.
 
 ## Polynomial Solutions
 
