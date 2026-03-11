@@ -1,6 +1,7 @@
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from . import _dlang as _dlang_module
+from . import _complex as _cplx
 
 
 def _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step):
@@ -140,6 +141,26 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
        Functional Differential Equations.* Cambridge University Press, 2004.
        Chapter 3, pp. 160–167.
     '''
+    # ------------------------------------------------------------------ complex dispatch
+    if _cplx.is_complex(kernel_values, a_values, g_values, soln_init_value):
+        K_arr = np.asarray(kernel_values)
+        is_scalar = (K_arr.ndim == 1)
+        d_orig = 0 if is_scalar else K_arr.shape[1]
+        K_real = _cplx._block_kernel(K_arr)
+        a_real = _cplx._block_a(np.asarray(a_values)) if a_values is not None else None
+        g_real = _cplx._expand_g(np.asarray(g_values)) if g_values is not None else None
+        init_real = _cplx._expand_init(soln_init_value)
+        result = solve_VIDE(
+            kernel_values=K_real, a_values=a_real, g_values=g_real,
+            soln_init_value=init_real, time_step=time_step, coll_divs=coll_divs,
+            coll_choices=coll_choices, return_polys=return_polys,
+            show_warnings=show_warnings)
+        if return_polys:
+            soln_real, polys_real = result
+            return (_cplx._recombine(soln_real, d_orig),
+                    _cplx._recombine_polys(polys_real, d_orig))
+        return _cplx._recombine(result, d_orig)
+
     kernel_values_ = np.asarray(kernel_values, dtype=float)
     ndim = kernel_values_.ndim
 
@@ -391,6 +412,25 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
        Functional Differential Equations.* Cambridge University Press, 2004.
        Sections 2.4.1, 2.4.3, and 2.4.5.
     '''
+    # ------------------------------------------------------------------ complex dispatch
+    if _cplx.is_complex(kernel_values, g_values, soln_init_value):
+        K_arr = np.asarray(kernel_values)
+        is_scalar = (K_arr.ndim == 1)
+        d_orig = 0 if is_scalar else K_arr.shape[1]
+        K_real = _cplx._block_kernel(K_arr)
+        g_real = _cplx._expand_g(np.asarray(g_values)) if g_values is not None else None
+        init_real = _cplx._expand_init(soln_init_value) if soln_init_value is not None else None
+        result = solve_VIE_1(
+            kernel_values=K_real, g_values=g_real, soln_init_value=init_real,
+            time_step=time_step, coll_divs=coll_divs, coll_choices=coll_choices,
+            return_polys=return_polys, force_continuous=force_continuous,
+            show_warnings=show_warnings)
+        if return_polys:
+            soln_real, polys_real = result
+            return (_cplx._recombine(soln_real, d_orig),
+                    _cplx._recombine_polys(polys_real, d_orig))
+        return _cplx._recombine(result, d_orig)
+
     kernel_values_ = np.asarray(kernel_values, dtype=float)
     ndim = kernel_values_.ndim
 
@@ -637,6 +677,23 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
        Functional Differential Equations.* Cambridge University Press, 2004.
        Section 2.2.
     '''
+    # ------------------------------------------------------------------ complex dispatch
+    if _cplx.is_complex(kernel_values, g_values):
+        K_arr = np.asarray(kernel_values)
+        is_scalar = (K_arr.ndim == 1)
+        d_orig = 0 if is_scalar else K_arr.shape[1]
+        K_real = _cplx._block_kernel(K_arr)
+        g_real = _cplx._expand_g(np.asarray(g_values)) if g_values is not None else None
+        result = solve_VIE_2(
+            kernel_values=K_real, g_values=g_real,
+            time_step=time_step, coll_divs=coll_divs, coll_choices=coll_choices,
+            return_polys=return_polys, show_warnings=show_warnings)
+        if return_polys:
+            soln_real, polys_real = result
+            return (_cplx._recombine(soln_real, d_orig),
+                    _cplx._recombine_polys(polys_real, d_orig))
+        return _cplx._recombine(result, d_orig)
+
     kernel_values_ = np.asarray(kernel_values, dtype=float)
     ndim = kernel_values_.ndim
 
