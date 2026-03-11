@@ -120,6 +120,12 @@ exact = np.column_stack([1 + 2*times, np.ones(N)])
 print(f"Max error: {np.max(np.abs(soln - exact)):.2e}")
 ```
 
+## How the Collocation Method Works
+
+The solvers approximate $y(t)$ as a **piecewise polynomial**. The time axis is divided into mesh intervals, and on each interval the solution is represented by a polynomial whose coefficients are determined by requiring the Volterra equation to hold exactly at a set of **collocation points** within that interval.
+
+Because the solution on each mesh interval is an explicit polynomial, the solver can optionally return it (see **Polynomial Solutions** below). This is useful for evaluating the solution at arbitrary times, differentiating, integrating, and so on.
+
 ## Polynomial Solutions
 
 Passing `return_polys=True` to any solver returns a `(soln_values, polys)` tuple, where `polys` is a list of `numpy.polynomial.Polynomial` objects covering successive mesh intervals. These can be evaluated at any point, differentiated, integrated, and so on. The following example uses `solve_VIDE` to solve for $y(t) = \sin(t)$, then evaluates the solution and its derivative at a point not on the time grid:
