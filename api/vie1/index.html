@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
     
     
       
@@ -1025,28 +1025,7 @@ used. For vector equations only the compiled settings are supported.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/volterra_equation_solvers/solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">307</span>
-<span class="normal">308</span>
-<span class="normal">309</span>
-<span class="normal">310</span>
-<span class="normal">311</span>
-<span class="normal">312</span>
-<span class="normal">313</span>
-<span class="normal">314</span>
-<span class="normal">315</span>
-<span class="normal">316</span>
-<span class="normal">317</span>
-<span class="normal">318</span>
-<span class="normal">319</span>
-<span class="normal">320</span>
-<span class="normal">321</span>
-<span class="normal">322</span>
-<span class="normal">323</span>
-<span class="normal">324</span>
-<span class="normal">325</span>
-<span class="normal">326</span>
-<span class="normal">327</span>
-<span class="normal">328</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">328</span>
 <span class="normal">329</span>
 <span class="normal">330</span>
 <span class="normal">331</span>
@@ -1286,7 +1265,47 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="normal">565</span>
 <span class="normal">566</span>
 <span class="normal">567</span>
-<span class="normal">568</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="normal">568</span>
+<span class="normal">569</span>
+<span class="normal">570</span>
+<span class="normal">571</span>
+<span class="normal">572</span>
+<span class="normal">573</span>
+<span class="normal">574</span>
+<span class="normal">575</span>
+<span class="normal">576</span>
+<span class="normal">577</span>
+<span class="normal">578</span>
+<span class="normal">579</span>
+<span class="normal">580</span>
+<span class="normal">581</span>
+<span class="normal">582</span>
+<span class="normal">583</span>
+<span class="normal">584</span>
+<span class="normal">585</span>
+<span class="normal">586</span>
+<span class="normal">587</span>
+<span class="normal">588</span>
+<span class="normal">589</span>
+<span class="normal">590</span>
+<span class="normal">591</span>
+<span class="normal">592</span>
+<span class="normal">593</span>
+<span class="normal">594</span>
+<span class="normal">595</span>
+<span class="normal">596</span>
+<span class="normal">597</span>
+<span class="normal">598</span>
+<span class="normal">599</span>
+<span class="normal">600</span>
+<span class="normal">601</span>
+<span class="normal">602</span>
+<span class="normal">603</span>
+<span class="normal">604</span>
+<span class="normal">605</span>
+<span class="normal">606</span>
+<span class="normal">607</span>
+<span class="normal">608</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
                 <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">force_continuous</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Solve a Volterra integral equation of the first kind.</span>
@@ -1373,6 +1392,25 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="sd">       Functional Differential Equations.* Cambridge University Press, 2004.</span>
 <span class="sd">       Sections 2.4.1, 2.4.3, and 2.4.5.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
+    <span class="c1"># ------------------------------------------------------------------ complex dispatch</span>
+    <span class="k">if</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">is_complex</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">):</span>
+        <span class="n">K_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">)</span>
+        <span class="n">is_scalar</span> <span class="o">=</span> <span class="p">(</span><span class="n">K_arr</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">d_orig</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">is_scalar</span> <span class="k">else</span> <span class="n">K_arr</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">K_real</span> <span class="o">=</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">_block_kernel</span><span class="p">(</span><span class="n">K_arr</span><span class="p">)</span>
+        <span class="n">g_real</span> <span class="o">=</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">_expand_g</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">g_values</span><span class="p">))</span> <span class="k">if</span> <span class="n">g_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">init_real</span> <span class="o">=</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">_expand_init</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">)</span> <span class="k">if</span> <span class="n">soln_init_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">solve_VIE_1</span><span class="p">(</span>
+            <span class="n">kernel_values</span><span class="o">=</span><span class="n">K_real</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="n">g_real</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="n">init_real</span><span class="p">,</span>
+            <span class="n">time_step</span><span class="o">=</span><span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="n">coll_choices</span><span class="p">,</span>
+            <span class="n">return_polys</span><span class="o">=</span><span class="n">return_polys</span><span class="p">,</span> <span class="n">force_continuous</span><span class="o">=</span><span class="n">force_continuous</span><span class="p">,</span>
+            <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">return_polys</span><span class="p">:</span>
+            <span class="n">soln_real</span><span class="p">,</span> <span class="n">polys_real</span> <span class="o">=</span> <span class="n">result</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">_cplx</span><span class="o">.</span><span class="n">_recombine</span><span class="p">(</span><span class="n">soln_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">),</span>
+                    <span class="n">_cplx</span><span class="o">.</span><span class="n">_recombine_polys</span><span class="p">(</span><span class="n">polys_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">_recombine</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">)</span>
+
     <span class="n">kernel_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
     <span class="n">ndim</span> <span class="o">=</span> <span class="n">kernel_values_</span><span class="o">.</span><span class="n">ndim</span>
 
