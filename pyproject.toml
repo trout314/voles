@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "volterra-equation-solvers"
-version = "0.3.0"
+version = "0.3.1"
 description = "Collocation-method solvers for Volterra integral and integro-differential equations"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -52,6 +52,7 @@ Changelog = "https://github.com/trout314/volterra-equation-solvers/blob/main/CHA
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/volterra_equation_solvers"]
+artifacts = ["*.so", "*.dylib", "*.dll"]
 
 # ---------------------------------------------------------------------------
 # Building the D extension (volterra_dlang.so / .dylib / .dll)

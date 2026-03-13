@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-03-13
+
+### Fixed
+- Wheels now include the compiled D extension (`.so`/`.dylib`/`.dll`); previous wheels contained only Python files, causing `ImportError` on import
+
+## [0.3.0] - 2026-03-08
+
+_Yanked: wheels missing compiled D extension (see 0.3.1)._
+
 ## [0.2.0] - 2026-03-08
 
 ### Added
