@@ -11,7 +11,7 @@ Collocation-method solvers for Volterra integral and integro-differential equati
 
 > Brunner H. *Collocation Methods for Volterra Integral and Related Functional Differential Equations.* Cambridge University Press; 2004.
 
-The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code.
+The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code. All solvers support real-valued and complex-valued data.
 
 ## Solvers
 
@@ -118,6 +118,23 @@ soln = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=time_step)
 # soln shape: (N, 2)
 exact = np.column_stack([1 + 2*times, np.ones(N)])
 print(f"Max error: {np.max(np.abs(soln - exact)):.2e}")
+```
+
+## Complex-Valued Equations
+
+All three solvers accept complex-valued inputs. Pass complex NumPy arrays for the kernel, forcing function, and (for VIDE) initial value, and the solver returns a complex-valued solution. This works for scalar, vector, and matrix cases alike.
+
+```python
+import numpy as np
+from volterra_equation_solvers import solve_VIE_2
+
+time_step = 0.05
+times = np.arange(0, 2.1, time_step)
+kernel = np.exp(-1j * times)               # complex kernel
+g = np.ones_like(times, dtype=complex)
+
+soln = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=time_step)
+# soln is a complex-valued array
 ```
 
 ## How the Collocation Method Works
