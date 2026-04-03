@@ -3,7 +3,10 @@ import pytest
 
 TOLERANCE = 1e-3
 
-
+# Solution checked using Mathematica commands:
+#    g[t_] := Sin[t];
+#    K[s_] := Exp[s];
+#    DSolveValue[g[t] == Integrate[K[t - s] y[s], {s, 0, t}], y[t], t]
 @pytest.fixture
 def vie1_data():
     """VIE-1 test data: g(t)=sin(t), K(x)=exp(x), exact=cos(t)-sin(t)."""

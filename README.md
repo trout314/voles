@@ -143,6 +143,12 @@ The solvers approximate each component of $y(t)$ as a piecewise polynomial. The 
 
 Because the solution on each mesh interval is an explicit polynomial, the solver can optionally return it (see Polynomial Solutions below). This is useful for evaluating the solution at arbitrary times, differentiating, integrating, and so on.
 
+## Piecewise Polynomial Illustration
+
+The figure below illustrates the idea. The time axis is split into mesh intervals (dashed vertical lines), and on each interval the solver finds a polynomial $p_i(t)$ that satisfies the equation at a set of collocation points (dots). Stitching the pieces together produces a piecewise polynomial that closely tracks the exact solution.
+
+![Piecewise polynomial illustration](docs/piecewise_polynomial.png)
+
 ## Polynomial Solutions
 
 Passing `return_polys=True` to any solver returns a `(soln_values, polys)` tuple, where `polys` is a list of `numpy.polynomial.Polynomial` objects covering successive mesh intervals. These can be evaluated at any point, differentiated, integrated, and so on. The following example uses `solve_VIDE` to solve for $y(t) = \sin(t)$, then evaluates the solution and its derivative at a point not on the time grid:
