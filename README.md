@@ -7,6 +7,10 @@
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://trout314.github.io/volterra-equation-solvers/)
 
+<p align="center">
+  <img src="docs/vole_chalkboard.png" alt="Volterra equation solvers mascot" width="400">
+</p>
+
 Collocation-method solvers for Volterra integral and integro-differential equations, based on:
 
 > Brunner H. *Collocation Methods for Volterra Integral and Related Functional Differential Equations.* Cambridge University Press; 2004.
