@@ -23,9 +23,14 @@ from volterra_equation_solvers import (
 )
 
 # ---------------------------------------------------------------------------
-# Test problems (all have exact solution y(t) = sin(t))
+# Test problems
 # ---------------------------------------------------------------------------
 
+# Checked using Mathematica commands:
+# g[t_] := Sin[t] - (1/2) (Exp[-t] + Sin[t] - Cos[t]);
+# K[s_] := Exp[-s];
+# eqn := y[t] == g[t] + Integrate[K[t - s] y[s], {s, 0, t}]
+# ans = DSolveValue[eqn, y[t], t]
 def _vie2_error(n_intervals, coll_divs, coll_choices, T):
     """VIE-2: K(s) = exp(-s), exact y(t) = sin(t)."""
     h = T / (n_intervals * coll_divs**2)
@@ -38,7 +43,13 @@ def _vie2_error(n_intervals, coll_divs, coll_choices, T):
                        show_warnings=False)
     return np.max(np.abs(soln - np.sin(t)))
 
-
+# Checked using Mathematica commands:
+# a[t_] := 1/(1 + t^2);
+# g[t_] := Cos[t] - (1/2) (Exp[-t] + Sin[t] - Cos[t]) - Sin[t]/(1 + t^2);
+# K[x_] := Exp[-x];
+# expected[t_] := Sin[t]
+# rhs = a[t] y[t] + g[t] + Integrate[K[t - s] y[s], {s, 0, t}];
+# Simplify[rhs] == expected'[t]
 def _vide_error(n_intervals, coll_divs, coll_choices, T):
     """VIDE: K(s) = exp(-s), a(t) = 1/(1+t²), exact y(t) = sin(t)."""
     h = T / (n_intervals * coll_divs**2)
@@ -55,7 +66,11 @@ def _vide_error(n_intervals, coll_divs, coll_choices, T):
                       show_warnings=False)
     return np.max(np.abs(soln - np.sin(t)))
 
-
+# Checked using Mathematica commands:
+# g[t_] := Sin[t];
+# K[s_] := Exp[s];
+# eqn := g[t] == Integrate[K[t - s] y[s], {s, 0, t}]
+# DSolveValue[eqn, y[t], t]
 def _vie1_error(n_intervals, coll_divs, coll_choices, T):
     """VIE-1: K(s) = exp(s), exact y(t) = cos(t) - sin(t).
 
@@ -102,7 +117,7 @@ def check_convergence(error_fn, coll_divs, coll_choices,
             orders.append(np.log2(e1 / e2))
 
     # Allow a stagnation at machine precision (errors below ~1e-13).
-    converges = all(e2 < e1 or e1 < 1e-13
+    converges = all(e2 < e1 or (e1 < 1e-13 and e2 < 1e-13)
                     for e1, e2 in zip(errors, errors[1:]))
     mean_order = float(np.mean(orders)) if orders else None
     return converges, mean_order, errors, None
