@@ -28,7 +28,11 @@ def vie1_data():
         coll_choices=[1, 2, 3],
     )
 
-
+# Solution checked using Mathematica commands:
+# g[t_] := Sin[t] - (1/2) (Exp[-t] + Sin[t] - Cos[t]);
+# K[s_] := Exp[-s];
+# eqn := y[t] == g[t] + Integrate[K[t - s] y[s], {s, 0, t}]
+# ans = DSolveValue[eqn, y[t], t]
 @pytest.fixture
 def vie2_data():
     """VIE-2 test data: K(x)=exp(-x), exact=sin(t)."""
@@ -49,7 +53,13 @@ def vie2_data():
         coll_choices=[0, 1, 2, 3],
     )
 
-
+# Solution checked using Mathematica commands:\
+# a[t_] := 1/(1 + t^2);
+# g[t_] := Cos[t] - (1/2) (Exp[-t] + Sin[t] - Cos[t]) - Sin[t]/(1 + t^2);
+# K[x_] := Exp[-x];
+# y[t_] := Sin[t]
+# rhs = a[t] y[t] + g[t] + Integrate[K[t - s] y[s], {s, 0, t}];
+# Simplify[rhs] == y'[t]
 @pytest.fixture
 def vide_data():
     """VIDE test data: a(t)=1/(1+t²), K(x)=exp(-x), exact=sin(t)."""
