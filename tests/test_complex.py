@@ -27,6 +27,12 @@ def _times(time_step, coll_divs, n_mesh=10):
 class TestVIE2Complex:
     """Scalar complex VIE-2: K(s) = exp(-s), exact y(t) = exp(it)."""
 
+# Checked using Mathematica commands:
+# g[t_] := Exp[I t] - (1 - I)/2 (Exp[I t] - Exp[-t]);
+# K[s_] := Exp[-s];
+# expected[t_] := Exp[I t];
+# rhs = g[t] + Integrate[K[t - s] expected[s], {s, 0, t}];
+# Simplify[rhs] == expected[t]
     def setup_method(self):
         self.time_step = 0.05
         self.coll_divs = 3
