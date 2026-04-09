@@ -76,7 +76,7 @@ class TestNumbaFallbackWarning:
                          show_warnings=True)
         except NotImplementedError:
             pytest.skip("numba not available")
-        assert "fallback" in capsys.readouterr().out.lower()
+        assert "falling back" in capsys.readouterr().out.lower()
 
     def test_vie2_fallback_silent(self, capsys):
         kernel, g, h = self._unsupported_data()
@@ -96,7 +96,7 @@ class TestNumbaFallbackWarning:
                         show_warnings=True)
         except NotImplementedError:
             pytest.skip("numba not available")
-        assert "fallback" in capsys.readouterr().out.lower()
+        assert "falling back" in capsys.readouterr().out.lower()
 
     def test_vide_fallback_silent(self, capsys):
         kernel, g, h = self._unsupported_data()
@@ -117,7 +117,7 @@ class TestNumbaFallbackWarning:
                          show_warnings=True)
         except (NotImplementedError, ValueError):
             pytest.skip("numba not available or setting rejected")
-        assert "fallback" in capsys.readouterr().out.lower()
+        assert "falling back" in capsys.readouterr().out.lower()
 
     def test_vie1_fallback_silent(self, capsys):
         kernel, g, h = self._unsupported_data()
