@@ -1,4 +1,4 @@
-project('volterra-dlang', 'd', version: '0.1.0')
+project('volterra-dlang', 'd', version: '0.1.0', meson_version: '>=1.1')
 
 # Keep array bounds checking on even in release builds.
 # Without this, a future --d-release flag or -boundscheck=off could silently
@@ -8,7 +8,9 @@ add_project_arguments('-boundscheck=on', language: 'd')
 
 # LAPACK is optional — used for vector VIE-1 with d > max_d_compile.
 # When found, the Have_lapack version flag enables the dgesv_ call path.
-lapack_dep = dependency('lapack', required: false)
+# Set -Dwith-lapack=disabled to force the pure-D lin_solve_rt fallback even
+# when LAPACK is installed (used by CI to ensure the fallback stays tested).
+lapack_dep = dependency('lapack', required: get_option('with-lapack'))
 d_version_flags = []
 lapack_link_args = []
 if lapack_dep.found()

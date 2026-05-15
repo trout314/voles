@@ -79,6 +79,31 @@ def test_vie1_vec_analytic_2d():
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
+def test_vie1_vec_analytic_d9_runtime_path():
+    """d=9 forces the runtime LU path (max_d_compile=8). Exercises lin_solve_rt
+    (or LAPACK dgesv_) on a well-conditioned matrix, verifying not just the
+    singularity branch but the actual factor-and-solve correctness."""
+    time_step = 0.1
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1
+    times = np.arange(num_pts) * time_step
+    d = 9
+    K0 = 2 + times
+    kernel = np.zeros((num_pts, d, d))
+    for r in range(d):
+        kernel[:, r, r] = K0
+    g = np.zeros((num_pts, d))
+    g[:] = (times**2 + times**3 / 6)[:, None]
+    exact = np.zeros((num_pts, d))
+    exact[:] = times[:, None]
+
+    soln = solve_VIE_1(
+        kernel_values=kernel, g_values=g,
+        time_step=time_step, coll_divs=coll_divs,
+        coll_choices=[1, 2, 3])
+    assert np.max(np.abs(soln - exact)) < TOLERANCE
+
+
 def test_vie1_vec_force_continuous():
     """Vector force_continuous=True: result should still match analytic solution.
 

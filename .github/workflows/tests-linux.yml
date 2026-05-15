@@ -84,3 +84,44 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v
+
+  # Build with -Dwith-lapack=disabled even though liblapack-dev is installed,
+  # so the pure-D lin_solve_rt fallback is exercised. Without this job, the
+  # main test matrix would silently switch to dgesv_ if a future runner image
+  # started including LAPACK.
+  test-no-lapack:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling (incl. liblapack-dev to prove we still opt out)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build liblapack-dev curl xz-utils
+          pip install -q 'meson==1.5.2'
+          curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.36.0/ldc2-1.36.0-linux-x86_64.tar.xz \
+            | tar -xJ -C /tmp
+          echo "/tmp/ldc2-1.36.0-linux-x86_64/bin" >> $GITHUB_PATH
+
+      - name: Build D extension with -Dwith-lapack=disabled
+        run: |
+          cd dlang
+          meson setup build -Dwith-lapack=disabled --buildtype=release
+          ninja -C build
+          cp build/volterra_dlang.so ../src/volterra_equation_solvers/
+
+      - name: Install package and dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Verify the no-LAPACK path is active
+        run: |
+          python -c "from volterra_equation_solvers._dlang import have_lapack_d; assert have_lapack_d() == False, 'Expected no-LAPACK build'"
+
+      - name: Run tests
+        run: pytest tests/ -v

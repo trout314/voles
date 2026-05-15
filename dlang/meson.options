@@ -1,0 +1,4 @@
+option('with-lapack', type: 'feature', value: 'auto',
+       description: 'Use LAPACK (dgesv_) for the runtime-d linear solver. ' +
+                    'When disabled, the pure-D lin_solve_rt fallback is used unconditionally. ' +
+                    'Default "auto": link LAPACK if available, otherwise fall back.')

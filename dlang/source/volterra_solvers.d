@@ -2587,6 +2587,16 @@ int volterra_solve_vide_vec(
     catch (SingularMatrixException) { return 2; }
 }
 
+// Returns 1 if the extension was built with LAPACK (Have_lapack version flag),
+// in which case lin_solve_lapack dispatches to dgesv_. Returns 0 if built
+// without LAPACK, in which case lin_solve_lapack dispatches to the pure-D
+// lin_solve_rt fallback. Used by tests to assert which LU path is active.
+int volterra_have_lapack()
+{
+    version (Have_lapack) return 1;
+    else                  return 0;
+}
+
 int volterra_max_coll_params()
 {
     return max_coll_params;

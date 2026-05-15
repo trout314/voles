@@ -19,6 +19,9 @@ _ip = ctypes.POINTER(ctypes.c_int)
 
 
 def _setup_argtypes() -> None:
+    _lib.volterra_have_lapack.restype = ctypes.c_int
+    _lib.volterra_have_lapack.argtypes = []
+
     _lib.volterra_max_coll_params.restype = ctypes.c_int
     _lib.volterra_max_coll_params.argtypes = []
 
@@ -442,6 +445,11 @@ def solve_vide_vec_d(g_values, kernel_values, a_values, soln_init_values, time_s
     if return_polys:
         return (out_soln, out_poly_coefs.reshape(mesh_divs, num_choices + 1, d))
     return (out_soln, None)
+
+
+def have_lapack_d() -> bool:
+    """True if the D extension was built with LAPACK; False if it falls back to the pure-D LU."""
+    return bool(_lib.volterra_have_lapack())
 
 
 def supported_coll_settings_d():
