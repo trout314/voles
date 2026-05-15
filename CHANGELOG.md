@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-05-15
+
+### Fixed
+- Vector VIE-1/VIE-2/VIDE with `d > 8` (the compile-time threshold) no longer aborts the process when LAPACK is not linked into the D extension; a pure-D Gaussian-elimination fallback (`lin_solve_rt`) is used instead
+- Singular or nearly singular coefficient matrices in the runtime-`d` LU path now raise `numpy.linalg.LinAlgError` instead of aborting the process via `assert`
+
+### Added
+- `dlang/meson.options`: new `with-lapack` feature option (`auto`/`enabled`/`disabled`) to force the build to skip LAPACK even when it is installed
+- CI: new Linux job that builds with `-Dwith-lapack=disabled` to keep the LAPACK-less code path covered
+
 ## [0.3.1] - 2026-03-13
 
 ### Fixed

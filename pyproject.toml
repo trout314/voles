@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "volterra-equation-solvers"
-version = "0.3.1"
+version = "0.3.2"
 description = "Collocation-method solvers for Volterra integral and integro-differential equations"
 readme = "README.md"
 license = { file = "LICENSE" }
