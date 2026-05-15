@@ -142,38 +142,36 @@ jobs:
 
   # -------------------------------------------------------------------------
   # macOS x86_64 (Intel, macOS 10.9+)
-  # Cross-compiled from the macos-latest (arm64) runner using ldc2's
-  # -mtriple flag — avoids the deprecated macos-13 runner.
+  # Built natively on the deprecated-but-still-available macos-13 runner so we
+  # can actually load-test the wheel against a real Intel interpreter. When
+  # GitHub retires macos-13 we'll drop this job and the x86_64 wheel — see
+  # CHANGELOG. Cross-compile on the arm64 runner is also possible but doesn't
+  # let us run the smoke test.
   # -------------------------------------------------------------------------
   build-wheel-macos-x86_64:
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download and extract ldc2
+      - name: Install meson and ninja
+        run: brew install meson ninja
+
+      - name: Download and extract ldc2 (x86_64)
         run: |
           LDC_VERSION="1.42.0"
           curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-universal.tar.xz" \
             | tar -xJ -C "$HOME" 2>/dev/null \
-            || curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-arm64.tar.xz" \
+            || curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-x86_64.tar.xz" \
             | tar -xJ -C "$HOME"
           LDC_DIR=$(ls -d "$HOME"/ldc2-*/ | head -1)
           echo "${LDC_DIR}bin" >> $GITHUB_PATH
 
-      - name: Cross-compile D extension for x86_64
+      - name: Build D extension
         run: |
           cd dlang
-          ldc2 \
-            -mtriple=x86_64-apple-macosx10.9 \
-            -shared \
-            -boundscheck=on \
-            -link-defaultlib-shared=false \
-            -O2 \
-            -I=source \
-            -of=volterra_dlang.dylib \
-            source/volterra_solvers.d \
-            source/utility.d
-          cp volterra_dlang.dylib ../src/volterra_equation_solvers/
+          meson setup build --wipe --buildtype=release
+          ninja -C build
+          cp build/volterra_dlang.dylib ../src/volterra_equation_solvers/
 
       - name: Build wheel and re-tag as macosx_10_9_x86_64
         run: |
@@ -195,13 +193,7 @@ jobs:
           print(f'OK: {exts[0]}')
           "
 
-      - name: Set up x86_64 Python for smoke test
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          architecture: x64
-
-      - name: Smoke-test wheel import (x86_64 via Rosetta)
+      - name: Smoke-test wheel import
         run: |
           python3 -m venv /tmp/test-venv
           /tmp/test-venv/bin/pip install numpy
