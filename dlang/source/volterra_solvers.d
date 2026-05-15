@@ -12,25 +12,17 @@ import utility : subsetsOfSize;
 // Linear solver — runtime dim (used for d > max_d_compile)
 // ---------------------------------------------------------------------------
 
-// Thrown by lin_solve / lin_solve_rt when a pivot is below the relative
-// threshold dim * eps * max_pivot_seen, indicating a singular or
-// near-singular coefficient matrix. Caught at the extern(C) boundary and
-// surfaced as an error code (translated to LinAlgError on the Python side).
-class SingularMatrixException : Exception
-{
-    int row;
-    double pivot;
-    double threshold;
-    this(int row, double pivot, double threshold)
-    {
-        import std.format : format;
-        super(format("singular or nearly singular coefficient matrix at row %d: "
-                   ~ "|pivot|=%g <= threshold=%g", row, pivot, threshold));
-        this.row = row;
-        this.pivot = pivot;
-        this.threshold = threshold;
-    }
-}
+// Singular-matrix signaling.
+//
+// lin_solve_lapack / lin_solve_rt return false when a pivot is below the
+// relative threshold dim * eps * max_pivot_seen (i.e. the coefficient matrix
+// is singular or nearly singular). Callers must propagate this bool up to the
+// extern(C) boundary, where it becomes return code 2 (translated to
+// numpy.linalg.LinAlgError on the Python side).
+//
+// We deliberately do NOT throw a D exception across the extern(C) boundary:
+// on Windows DLLs LDC's SEH unwinding through a C ABI is unreliable and
+// causes access violations. Bool returns are portable.
 
 version (Have_lapack)
 {
@@ -42,36 +34,31 @@ version (Have_lapack)
 // a_colmaj: dm*dm flat column-major buffer (overwritten with LU).
 // b:        dm vector (overwritten with solution).
 // ipiv:     scratch int[dm] buffer.
+// Returns:  true on success, false on singular / nearly singular matrix.
 //
-// Dispatches to LAPACK dgesv_ when the extension was built with -d-version=Have_lapack,
+// Dispatches to LAPACK dgesv_ when built with -d-version=Have_lapack,
 // otherwise to the pure-D lin_solve_rt (Gaussian elimination with partial pivoting).
-// Both paths throw SingularMatrixException on a singular / nearly singular matrix.
-void lin_solve_lapack(double[] a_colmaj, double[] b, int dm, int[] ipiv)
+bool lin_solve_lapack(double[] a_colmaj, double[] b, int dm, int[] ipiv)
 {
     version (Have_lapack)
     {
         int nrhs = 1;
         int info;
         dgesv_(&dm, &nrhs, a_colmaj.ptr, &dm, ipiv.ptr, b.ptr, &dm, &info);
-        if (info != 0)
-        {
-            // dgesv_ returns info > 0 = the (1-indexed) row whose pivot was exactly zero,
-            // info < 0 = bad argument (should never happen here since we control the call).
-            int row = info > 0 ? info - 1 : 0;
-            throw new SingularMatrixException(row, 0.0, 0.0);
-        }
+        // info > 0 → (1-indexed) row of an exactly-zero pivot;
+        // info < 0 → bad argument (should never happen here since we control the call).
+        return info == 0;
     }
     else
     {
-        lin_solve_rt(a_colmaj, b, dm, ipiv);
+        return lin_solve_rt(a_colmaj, b, dm, ipiv);
     }
 }
 
 // Pure-D fallback: in-place LU with partial pivoting on a column-major buffer.
 // Same signature/semantics as the LAPACK path so callers can be agnostic.
-// Throws SingularMatrixException if any pivot magnitude falls below
-// dm * eps * max_pivot_seen.
-void lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv)
+// Returns false if any pivot magnitude falls below dm * eps * max_pivot_seen.
+bool lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv)
 {
     enum double eps = double.epsilon;
     double max_pivot_seen = 0.0;
@@ -107,7 +94,7 @@ void lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv)
         if (max_val > max_pivot_seen) max_pivot_seen = max_val;
         double threshold = dm * eps * max_pivot_seen;
         if (max_val <= threshold)
-            throw new SingularMatrixException(k, max_val, threshold);
+            return false;
 
         // Eliminate column k below the diagonal; store multipliers in L.
         double pivot_val = a_colmaj[k + k * dm];
@@ -132,6 +119,8 @@ void lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv)
             b[i] -= a_colmaj[i + kk * dm] * b[kk];
         b[i] /= a_colmaj[i + i * dm];
     }
+
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1566,7 +1555,8 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
 // VIE-1 solver implementation — runtime d (LAPACK path)
 // ---------------------------------------------------------------------------
 
-void solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
+// Returns false if any lin_solve_lapack call detected a singular matrix.
+bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     double[] g_values, double[] kernel_values,
     int d, double[] soln_init_values, double time_step,
     bool return_polys, bool force_continuous,
@@ -1607,7 +1597,8 @@ void solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
             foreach (i; 0 .. dm)
                 rhs[i] -= G_buf[i];
             coef_work[] = coef_orig[];
-            lin_solve_lapack(coef_work, rhs, dm, ipiv);
+            if (!lin_solve_lapack(coef_work, rhs, dm, ipiv))
+                return false;
             solution_U_flat[n*dm .. (n+1)*dm] = rhs[];
         }
     }
@@ -1636,7 +1627,8 @@ void solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
                     rhs[ri] += dt * rho_buf[ri * d + s] * boundary_flat[n*d + s];
             }
             coef_work[] = coef_orig[];
-            lin_solve_lapack(coef_work, rhs, dm, ipiv);
+            if (!lin_solve_lapack(coef_work, rhs, dm, ipiv))
+                return false;
             solution_U_flat[n*dm .. (n+1)*dm] = rhs[];
 
             foreach (r; 0 .. d)
@@ -1665,7 +1657,7 @@ void solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
         foreach (p; 1 .. mesh_divs)
         foreach (r; 0 .. d)
             out_soln[p * coll_divs^^2 * d + r] *= 0.5;
-        return;
+        return true;
     }
 
     // Evaluate (force_continuous=false)
@@ -1685,13 +1677,14 @@ void solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     foreach (p; 1 .. mesh_divs)
     foreach (r; 0 .. d)
         out_soln[p * coll_divs^^2 * d + r] *= 0.5;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
 // VIE-1 dispatch helper: selects compile-time or runtime impl based on d
 // ---------------------------------------------------------------------------
 
-void dispatch_VIE_1_vec(int coll_divs, int[] coll_choices)(
+bool dispatch_VIE_1_vec(int coll_divs, int[] coll_choices)(
     double[] gv, double[] kv, int d,
     double[] soln_init_values, double time_step,
     bool rp, bool fc,
@@ -1705,10 +1698,10 @@ void dispatch_VIE_1_vec(int coll_divs, int[] coll_choices)(
                 solve_VIE_1_vec_impl!(coll_divs, coll_choices, di)(
                     gv, kv, soln_init_values, time_step, rp, fc,
                     out_soln_slice, poly_slice, md);
-                return;
+                return true;
         }
         default:
-            solve_VIE_1_vec_runtime_impl!(coll_divs, coll_choices)(
+            return solve_VIE_1_vec_runtime_impl!(coll_divs, coll_choices)(
                 gv, kv, d, soln_init_values, time_step, rp, fc,
                 out_soln_slice, poly_slice, md);
     }
@@ -1796,7 +1789,8 @@ void solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
 // VIE-2 vector solver — runtime d (LAPACK path)
 // ---------------------------------------------------------------------------
 
-void solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
+// Returns false if any lin_solve_lapack call detected a singular matrix.
+bool solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     double[] g_values, double[] kernel_values,
     int d, double time_step,
     double[] out_soln, ref int out_mesh_divs)
@@ -1835,7 +1829,8 @@ void solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
         foreach (i; 0 .. dm)
             rhs[i] += G_buf[i];
         coef_work[] = coef_orig[];
-        lin_solve_lapack(coef_work, rhs, dm, ipiv);
+        if (!lin_solve_lapack(coef_work, rhs, dm, ipiv))
+            return false;
         solution_U_flat[n*dm .. (n+1)*dm] = rhs[];
     }
 
@@ -1855,13 +1850,14 @@ void solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     foreach (p; 1 .. mesh_divs)
     foreach (r; 0 .. d)
         out_soln[p * coll_divs^^2 * d + r] *= 0.5;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
 // VIE-2 dispatch helper
 // ---------------------------------------------------------------------------
 
-void dispatch_VIE_2_vec(int coll_divs, int[] coll_choices)(
+bool dispatch_VIE_2_vec(int coll_divs, int[] coll_choices)(
     double[] gv, double[] kv, int d, double time_step, bool rp,
     double[] out_soln_slice, double[] poly_slice, ref int md)
 {
@@ -1872,10 +1868,10 @@ void dispatch_VIE_2_vec(int coll_divs, int[] coll_choices)(
             case di:
                 solve_VIE_2_vec_impl!(coll_divs, coll_choices, di)(
                     gv, kv, time_step, rp, out_soln_slice, poly_slice, md);
-                return;
+                return true;
         }
         default:
-            solve_VIE_2_vec_runtime_impl!(coll_divs, coll_choices)(
+            return solve_VIE_2_vec_runtime_impl!(coll_divs, coll_choices)(
                 gv, kv, d, time_step, out_soln_slice, md);
     }
 }
@@ -1996,7 +1992,8 @@ void solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
 // VIDE vector solver — runtime d (LAPACK path)
 // ---------------------------------------------------------------------------
 
-void solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
+// Returns false if any lin_solve_lapack call detected a singular matrix.
+bool solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     double[] g_values, double[] kernel_values, double[] a_values,
     int d, double[] soln_init_values,
     double time_step,
@@ -2053,7 +2050,8 @@ void solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
                 rhs[ri] += boundary_flat[n*d + s] * kappa_n_buf[ri * d + s];
         }
 
-        lin_solve_lapack(coef_buf, rhs, dm, ipiv);
+        if (!lin_solve_lapack(coef_buf, rhs, dm, ipiv))
+            return false;
         solution_Y_flat[n*dm .. (n+1)*dm] = rhs[];
 
         foreach (r; 0 .. d)
@@ -2082,13 +2080,14 @@ void solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     foreach (p; 1 .. mesh_divs)
     foreach (r; 0 .. d)
         out_soln[p * coll_divs^^2 * d + r] *= 0.5;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
 // VIDE dispatch helper
 // ---------------------------------------------------------------------------
 
-void dispatch_VIDE_vec(int coll_divs, int[] coll_choices)(
+bool dispatch_VIDE_vec(int coll_divs, int[] coll_choices)(
     double[] gv, double[] kv, double[] av, int d,
     double[] soln_init_values, double time_step, bool rp,
     double[] out_soln_slice, double[] poly_slice, ref int md)
@@ -2100,10 +2099,10 @@ void dispatch_VIDE_vec(int coll_divs, int[] coll_choices)(
             case di:
                 solve_VIDE_vec_impl!(coll_divs, coll_choices, di)(
                     gv, kv, av, soln_init_values, time_step, rp, out_soln_slice, poly_slice, md);
-                return;
+                return true;
         }
         default:
-            solve_VIDE_vec_runtime_impl!(coll_divs, coll_choices)(
+            return solve_VIDE_vec_runtime_impl!(coll_divs, coll_choices)(
                 gv, kv, av, d, soln_init_values, time_step, out_soln_slice, md);
     }
 }
@@ -2320,7 +2319,6 @@ int volterra_solve_vie1_vec(
     int return_polys, int force_continuous,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    try {
     double[] gv      = g_values[0 .. n * d];
     double[] kv      = kernel_values[0 .. n * d * d];
     double[] init    = soln_init_values[0 .. d];
@@ -2343,6 +2341,7 @@ int volterra_solve_vie1_vec(
     bool rp = return_polys != 0;
     bool fc = force_continuous != 0;
     int  md = 0;
+    bool ok = false;
 
     static immutable all_settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
 
@@ -2352,7 +2351,7 @@ int volterra_solve_vie1_vec(
         {
             mixin(format(
                 "case %s:
-                    dispatch_VIE_1_vec!(settings[0], settings[1..$])(
+                    ok = dispatch_VIE_1_vec!(settings[0], settings[1..$])(
                         gv, kv, d, init, time_step, rp, fc,
                         out_soln_slice, poly_slice, md);
                     break outer;", idx));
@@ -2361,10 +2360,9 @@ int volterra_solve_vie1_vec(
             return 1;
     }
 
+    if (!ok) return 2;
     *out_mesh_divs = md;
     return 0;
-    }
-    catch (SingularMatrixException) { return 2; }
 }
 
 // volterra_solve_vie1: scalar wrapper — delegates to volterra_solve_vie1_vec with d=1.
@@ -2390,7 +2388,6 @@ int volterra_solve_vie2(
     int* coll_choices, int num_choices, int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    try {
     double[] gv = g_values[0..n];
     double[] kv = kernel_values[0..n];
     int[] choices = coll_choices[0..num_choices];
@@ -2427,8 +2424,6 @@ int volterra_solve_vie2(
 
     *out_mesh_divs = md;
     return 0;
-    }
-    catch (SingularMatrixException) { return 2; }
 }
 
 int volterra_solve_vide(
@@ -2437,7 +2432,6 @@ int volterra_solve_vide(
     int coll_divs, int* coll_choices, int num_choices, int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    try {
     double[] gv = g_values[0..n];
     double[] kv = kernel_values[0..n];
     double[] av = a_values[0..n];
@@ -2475,8 +2469,6 @@ int volterra_solve_vide(
 
     *out_mesh_divs = md;
     return 0;
-    }
-    catch (SingularMatrixException) { return 2; }
 }
 
 // volterra_solve_vie2_vec: primary VIE-2 entry point, handles all d.
@@ -2491,7 +2483,6 @@ int volterra_solve_vie2_vec(
     int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    try {
     double[] gv      = g_values[0 .. n * d];
     double[] kv      = kernel_values[0 .. n * d * d];
     int[]    choices = coll_choices[0 .. num_choices];
@@ -2507,6 +2498,7 @@ int volterra_solve_vie2_vec(
         poly_slice = out_poly_coefs[0 .. mesh_divs * (num_choices + 1) * d];
     bool rp = return_polys != 0;
     int md = 0;
+    bool ok = false;
 
     static immutable all_settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
 
@@ -2516,7 +2508,7 @@ int volterra_solve_vie2_vec(
         {
             mixin(format(
                 "case %s:
-                    dispatch_VIE_2_vec!(settings[0], settings[1..$])(
+                    ok = dispatch_VIE_2_vec!(settings[0], settings[1..$])(
                         gv, kv, d, time_step, rp, out_soln_slice, poly_slice, md);
                     break outer;", idx));
         }
@@ -2524,10 +2516,9 @@ int volterra_solve_vie2_vec(
             return 1;
     }
 
+    if (!ok) return 2;
     *out_mesh_divs = md;
     return 0;
-    }
-    catch (SingularMatrixException) { return 2; }
 }
 
 // volterra_solve_vide_vec: primary VIDE entry point, handles all d.
@@ -2546,7 +2537,6 @@ int volterra_solve_vide_vec(
     int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    try {
     double[] gv   = g_values[0 .. n * d];
     double[] kv   = kernel_values[0 .. n * d * d];
     double[] av   = a_values[0 .. n * d * d];
@@ -2564,6 +2554,7 @@ int volterra_solve_vide_vec(
         poly_slice = out_poly_coefs[0 .. mesh_divs * (num_choices + 1) * d];
     bool rp = return_polys != 0;
     int md = 0;
+    bool ok = false;
 
     static immutable all_settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
 
@@ -2573,7 +2564,7 @@ int volterra_solve_vide_vec(
         {
             mixin(format(
                 "case %s:
-                    dispatch_VIDE_vec!(settings[0], settings[1..$])(
+                    ok = dispatch_VIDE_vec!(settings[0], settings[1..$])(
                         gv, kv, av, d, init, time_step, rp, out_soln_slice, poly_slice, md);
                     break outer;", idx));
         }
@@ -2581,10 +2572,9 @@ int volterra_solve_vide_vec(
             return 1;
     }
 
+    if (!ok) return 2;
     *out_mesh_divs = md;
     return 0;
-    }
-    catch (SingularMatrixException) { return 2; }
 }
 
 // Returns 1 if the extension was built with LAPACK (Have_lapack version flag),
