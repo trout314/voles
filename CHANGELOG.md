@@ -4,9 +4,13 @@
 
 ## [0.3.2] - 2026-05-15
 
+### Removed
+- **macOS x86_64 (Intel) wheel.** The GitHub-hosted `macos-13` runner is deprecated and currently capacity-starved; the cross-compile-plus-Rosetta-smoke-test alternative on `macos-latest` (arm64) does not produce a load-testable wheel in CI. Rather than ship an under-tested artifact, the platform is dropped. Intel Mac users can pin to `volterra-equation-solvers==0.3.1` (last tested x86_64 release) or build from source per CONTRIBUTING.md.
+
 ### Fixed
 - Vector VIE-1/VIE-2/VIDE with `d > 8` (the compile-time threshold) no longer aborts the process when LAPACK is not linked into the D extension; a pure-D Gaussian-elimination fallback (`lin_solve_rt`) is used instead
 - Singular or nearly singular coefficient matrices in the runtime-`d` LU path now raise `numpy.linalg.LinAlgError` instead of aborting the process via `assert`
+- Singular-matrix signaling in the runtime-`d` LU path uses bool returns instead of D exceptions, avoiding access-violation crashes when LDC-emitted exception unwinding crosses the `extern(C)` boundary in Windows DLLs
 
 ### Added
 - `dlang/meson.options`: new `with-lapack` feature option (`auto`/`enabled`/`disabled`) to force the build to skip LAPACK even when it is installed

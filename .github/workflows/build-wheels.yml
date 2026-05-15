@@ -141,71 +141,6 @@ jobs:
           path: dist/*.whl
 
   # -------------------------------------------------------------------------
-  # macOS x86_64 (Intel, macOS 10.9+)
-  # Built natively on the deprecated-but-still-available macos-13 runner so we
-  # can actually load-test the wheel against a real Intel interpreter. When
-  # GitHub retires macos-13 we'll drop this job and the x86_64 wheel — see
-  # CHANGELOG. Cross-compile on the arm64 runner is also possible but doesn't
-  # let us run the smoke test.
-  # -------------------------------------------------------------------------
-  build-wheel-macos-x86_64:
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install meson and ninja
-        run: brew install meson ninja
-
-      - name: Download and extract ldc2 (x86_64)
-        run: |
-          LDC_VERSION="1.42.0"
-          curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-universal.tar.xz" \
-            | tar -xJ -C "$HOME" 2>/dev/null \
-            || curl -fL "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/ldc2-${LDC_VERSION}-osx-x86_64.tar.xz" \
-            | tar -xJ -C "$HOME"
-          LDC_DIR=$(ls -d "$HOME"/ldc2-*/ | head -1)
-          echo "${LDC_DIR}bin" >> $GITHUB_PATH
-
-      - name: Build D extension
-        run: |
-          cd dlang
-          meson setup build --wipe --buildtype=release
-          ninja -C build
-          cp build/volterra_dlang.dylib ../src/volterra_equation_solvers/
-
-      - name: Build wheel and re-tag as macosx_10_9_x86_64
-        run: |
-          pip install build "wheel>=0.40.0"
-          python -m build --wheel
-          python -m wheel tags --platform-tag macosx_10_9_x86_64 --remove dist/*.whl
-
-      - name: Verify wheel contains D extension
-        run: |
-          python3 -c "
-          import zipfile, glob, sys
-          whl = glob.glob('dist/*.whl')[0]
-          names = zipfile.ZipFile(whl).namelist()
-          exts = [n for n in names if n.endswith(('.so', '.dylib', '.dll'))]
-          if not exts:
-              print(f'ERROR: No compiled extension found in {whl}')
-              print('Contents:', names)
-              sys.exit(1)
-          print(f'OK: {exts[0]}')
-          "
-
-      - name: Smoke-test wheel import
-        run: |
-          python3 -m venv /tmp/test-venv
-          /tmp/test-venv/bin/pip install numpy
-          /tmp/test-venv/bin/pip install dist/*.whl
-          /tmp/test-venv/bin/python -c "from volterra_equation_solvers import solve_VIE_1, solve_VIE_2, solve_VIDE; print('Import OK')"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheel-macos-x86_64
-          path: dist/*.whl
-
-  # -------------------------------------------------------------------------
   # Windows x64
   # -------------------------------------------------------------------------
   build-wheel-windows-x64:
@@ -291,7 +226,6 @@ jobs:
     needs:
       - build-wheel-linux-x86_64
       - build-wheel-macos-arm64
-      - build-wheel-macos-x86_64
       - build-wheel-windows-x64
     runs-on: ubuntu-latest
     environment: pypi
