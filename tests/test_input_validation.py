@@ -246,6 +246,25 @@ def test_nan_a_at_coll_point_vide():
 
 
 # ---------------------------------------------------------------------------
+# Singular coefficient matrix raises numpy.linalg.LinAlgError.
+#
+# VIE-1's coefficient matrix is dt * BN_vec(kernel); a zero kernel makes it
+# the zero matrix, which is singular. d=9 forces the runtime LU path (compile-
+# time path is d <= max_d_compile = 8 and uses a non-recoverable assert).
+# ---------------------------------------------------------------------------
+
+def test_vie1_singular_matrix_raises_linalgerror():
+    d = 9
+    coll_divs = 3
+    N = coll_divs**2 + 1  # one mesh interval
+    kernel = np.zeros((N, d, d))
+    g = np.ones((N, d))
+    with pytest.raises(np.linalg.LinAlgError):
+        solve_VIE_1(kernel_values=kernel, g_values=g,
+                    coll_divs=coll_divs, coll_choices=[1, 2, 3])
+
+
+# ---------------------------------------------------------------------------
 # Plain Python lists accepted for array inputs
 # ---------------------------------------------------------------------------
 

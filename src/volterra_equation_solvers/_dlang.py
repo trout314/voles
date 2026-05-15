@@ -121,6 +121,15 @@ _load()
 # Wrapper functions
 # ---------------------------------------------------------------------------
 
+def _check_return(ret: int, func_name: str) -> None:
+    if ret == 0:
+        return
+    if ret == 2:
+        raise np.linalg.LinAlgError(
+            f"{func_name}: singular or nearly singular coefficient matrix"
+        )
+    raise RuntimeError(f"{func_name} returned error code {ret}")
+
 def solve_vie1_d(g_values, kernel_values, soln_init_value, time_step,
                  coll_divs, coll_choices, return_polys, force_continuous):
     """Call the D stub for solve_VIE_1. Returns (soln_values, poly_coefs_or_None)."""
@@ -157,8 +166,7 @@ def solve_vie1_d(g_values, kernel_values, soln_init_value, time_step,
         poly_ptr,
         ctypes.byref(out_mesh_divs),
     )
-    if ret != 0:
-        raise RuntimeError(f"volterra_solve_vie1 returned error code {ret}")
+    _check_return(ret, "volterra_solve_vie1")
 
     if return_polys:
         return (out_soln, out_poly_coefs.reshape(mesh_divs, num_choices + 1))
@@ -221,8 +229,7 @@ def solve_vie1_vec_d(g_values, kernel_values, soln_init_value, time_step,
         poly_ptr,
         ctypes.byref(out_mesh_divs),
     )
-    if ret != 0:
-        raise RuntimeError(f"volterra_solve_vie1_vec returned error code {ret}")
+    _check_return(ret, "volterra_solve_vie1_vec")
 
     if return_polys:
         return (out_soln, out_poly_coefs.reshape(mesh_divs, num_choices + 1, d))
@@ -278,8 +285,7 @@ def solve_vie2_vec_d(g_values, kernel_values, time_step, coll_divs, coll_choices
         poly_ptr,
         ctypes.byref(out_mesh_divs),
     )
-    if ret != 0:
-        raise RuntimeError(f"volterra_solve_vie2_vec returned error code {ret}")
+    _check_return(ret, "volterra_solve_vie2_vec")
 
     if return_polys:
         return (out_soln, out_poly_coefs.reshape(mesh_divs, num_choices + 1, d))
@@ -320,8 +326,7 @@ def solve_vie2_d(g_values, kernel_values, time_step, coll_divs,
         poly_ptr,
         ctypes.byref(out_mesh_divs),
     )
-    if ret != 0:
-        raise RuntimeError(f"volterra_solve_vie2 returned error code {ret}")
+    _check_return(ret, "volterra_solve_vie2")
 
     if return_polys:
         return (out_soln, out_poly_coefs.reshape(mesh_divs, num_choices + 1))
@@ -365,8 +370,7 @@ def solve_vide_d(g_values, kernel_values, a_values, soln_init_value, time_step,
         poly_ptr,
         ctypes.byref(out_mesh_divs),
     )
-    if ret != 0:
-        raise RuntimeError(f"volterra_solve_vide returned error code {ret}")
+    _check_return(ret, "volterra_solve_vide")
 
     if return_polys:
         return (out_soln, out_poly_coefs.reshape(mesh_divs, num_choices + 1))
@@ -433,8 +437,7 @@ def solve_vide_vec_d(g_values, kernel_values, a_values, soln_init_values, time_s
         poly_ptr,
         ctypes.byref(out_mesh_divs),
     )
-    if ret != 0:
-        raise RuntimeError(f"volterra_solve_vide_vec returned error code {ret}")
+    _check_return(ret, "volterra_solve_vide_vec")
 
     if return_polys:
         return (out_soln, out_poly_coefs.reshape(mesh_divs, num_choices + 1, d))

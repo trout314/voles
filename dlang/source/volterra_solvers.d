@@ -9,8 +9,28 @@ import std.format : format;
 import utility : subsetsOfSize;
 
 // ---------------------------------------------------------------------------
-// LAPACK (optional — used for d > max_d_compile)
+// Linear solver — runtime dim (used for d > max_d_compile)
 // ---------------------------------------------------------------------------
+
+// Thrown by lin_solve / lin_solve_rt when a pivot is below the relative
+// threshold dim * eps * max_pivot_seen, indicating a singular or
+// near-singular coefficient matrix. Caught at the extern(C) boundary and
+// surfaced as an error code (translated to LinAlgError on the Python side).
+class SingularMatrixException : Exception
+{
+    int row;
+    double pivot;
+    double threshold;
+    this(int row, double pivot, double threshold)
+    {
+        import std.format : format;
+        super(format("singular or nearly singular coefficient matrix at row %d: "
+                   ~ "|pivot|=%g <= threshold=%g", row, pivot, threshold));
+        this.row = row;
+        this.pivot = pivot;
+        this.threshold = threshold;
+    }
+}
 
 version (Have_lapack)
 {
@@ -22,6 +42,10 @@ version (Have_lapack)
 // a_colmaj: dm*dm flat column-major buffer (overwritten with LU).
 // b:        dm vector (overwritten with solution).
 // ipiv:     scratch int[dm] buffer.
+//
+// Dispatches to LAPACK dgesv_ when the extension was built with -d-version=Have_lapack,
+// otherwise to the pure-D lin_solve_rt (Gaussian elimination with partial pivoting).
+// Both paths throw SingularMatrixException on a singular / nearly singular matrix.
 void lin_solve_lapack(double[] a_colmaj, double[] b, int dm, int[] ipiv)
 {
     version (Have_lapack)
@@ -29,12 +53,84 @@ void lin_solve_lapack(double[] a_colmaj, double[] b, int dm, int[] ipiv)
         int nrhs = 1;
         int info;
         dgesv_(&dm, &nrhs, a_colmaj.ptr, &dm, ipiv.ptr, b.ptr, &dm, &info);
-        assert(info == 0, "dgesv_ failed: matrix is singular or near-singular");
+        if (info != 0)
+        {
+            // dgesv_ returns info > 0 = the (1-indexed) row whose pivot was exactly zero,
+            // info < 0 = bad argument (should never happen here since we control the call).
+            int row = info > 0 ? info - 1 : 0;
+            throw new SingularMatrixException(row, 0.0, 0.0);
+        }
     }
     else
     {
-        assert(false, "LAPACK not available: d exceeds the compile-time threshold. "
-                    ~ "Rebuild the D extension with LAPACK to support large d.");
+        lin_solve_rt(a_colmaj, b, dm, ipiv);
+    }
+}
+
+// Pure-D fallback: in-place LU with partial pivoting on a column-major buffer.
+// Same signature/semantics as the LAPACK path so callers can be agnostic.
+// Throws SingularMatrixException if any pivot magnitude falls below
+// dm * eps * max_pivot_seen.
+void lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv)
+{
+    enum double eps = double.epsilon;
+    double max_pivot_seen = 0.0;
+
+    foreach (k; 0 .. dm)
+    {
+        // Find pivot row: max |a[i, k]| for i in [k, dm).
+        int pivot = k;
+        double max_val = a_colmaj[k + k * dm];
+        if (max_val < 0) max_val = -max_val;
+        foreach (i; k + 1 .. dm)
+        {
+            double v = a_colmaj[i + k * dm];
+            if (v < 0) v = -v;
+            if (v > max_val) { max_val = v; pivot = i; }
+        }
+        ipiv[k] = pivot;
+
+        // Swap rows k and `pivot` in both A (all dm columns) and b.
+        if (pivot != k)
+        {
+            foreach (j; 0 .. dm)
+            {
+                double tmp = a_colmaj[k + j * dm];
+                a_colmaj[k + j * dm] = a_colmaj[pivot + j * dm];
+                a_colmaj[pivot + j * dm] = tmp;
+            }
+            double tmp_b = b[k]; b[k] = b[pivot]; b[pivot] = tmp_b;
+        }
+
+        // Singular / nearly singular check: pivot must dominate the
+        // largest |pivot| seen so far by at least dm * eps.
+        if (max_val > max_pivot_seen) max_pivot_seen = max_val;
+        double threshold = dm * eps * max_pivot_seen;
+        if (max_val <= threshold)
+            throw new SingularMatrixException(k, max_val, threshold);
+
+        // Eliminate column k below the diagonal; store multipliers in L.
+        double pivot_val = a_colmaj[k + k * dm];
+        foreach (i; k + 1 .. dm)
+        {
+            double m = a_colmaj[i + k * dm] / pivot_val;
+            a_colmaj[i + k * dm] = m;
+            foreach (j; k + 1 .. dm)
+                a_colmaj[i + j * dm] -= m * a_colmaj[k + j * dm];
+        }
+    }
+
+    // Forward substitution: L has unit diagonal.
+    foreach (i; 1 .. dm)
+        foreach (kk; 0 .. i)
+            b[i] -= a_colmaj[i + kk * dm] * b[kk];
+
+    // Back substitution.
+    foreach_reverse (i; 0 .. dm)
+    {
+        foreach (kk; i + 1 .. dm)
+            b[i] -= a_colmaj[i + kk * dm] * b[kk];
+        b[i] /= a_colmaj[i + i * dm];
     }
 }
 
@@ -2203,6 +2299,12 @@ bool is_nonconvergent_vie1_setting(int coll_divs, int[] choices)
 
 // ---------------------------------------------------------------------------
 // extern(C) entry points
+//
+// Return codes:
+//   0 = success
+//   1 = invalid / unsupported collocation setting
+//   2 = singular or nearly singular coefficient matrix (from lin_solve_lapack /
+//       lin_solve_rt); translated to numpy.linalg.LinAlgError on the Python side
 // ---------------------------------------------------------------------------
 
 export extern(C):
@@ -2218,6 +2320,7 @@ int volterra_solve_vie1_vec(
     int return_polys, int force_continuous,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
+    try {
     double[] gv      = g_values[0 .. n * d];
     double[] kv      = kernel_values[0 .. n * d * d];
     double[] init    = soln_init_values[0 .. d];
@@ -2260,6 +2363,8 @@ int volterra_solve_vie1_vec(
 
     *out_mesh_divs = md;
     return 0;
+    }
+    catch (SingularMatrixException) { return 2; }
 }
 
 // volterra_solve_vie1: scalar wrapper — delegates to volterra_solve_vie1_vec with d=1.
@@ -2285,6 +2390,7 @@ int volterra_solve_vie2(
     int* coll_choices, int num_choices, int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
+    try {
     double[] gv = g_values[0..n];
     double[] kv = kernel_values[0..n];
     int[] choices = coll_choices[0..num_choices];
@@ -2321,6 +2427,8 @@ int volterra_solve_vie2(
 
     *out_mesh_divs = md;
     return 0;
+    }
+    catch (SingularMatrixException) { return 2; }
 }
 
 int volterra_solve_vide(
@@ -2329,6 +2437,7 @@ int volterra_solve_vide(
     int coll_divs, int* coll_choices, int num_choices, int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
+    try {
     double[] gv = g_values[0..n];
     double[] kv = kernel_values[0..n];
     double[] av = a_values[0..n];
@@ -2366,6 +2475,8 @@ int volterra_solve_vide(
 
     *out_mesh_divs = md;
     return 0;
+    }
+    catch (SingularMatrixException) { return 2; }
 }
 
 // volterra_solve_vie2_vec: primary VIE-2 entry point, handles all d.
@@ -2380,6 +2491,7 @@ int volterra_solve_vie2_vec(
     int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
+    try {
     double[] gv      = g_values[0 .. n * d];
     double[] kv      = kernel_values[0 .. n * d * d];
     int[]    choices = coll_choices[0 .. num_choices];
@@ -2414,6 +2526,8 @@ int volterra_solve_vie2_vec(
 
     *out_mesh_divs = md;
     return 0;
+    }
+    catch (SingularMatrixException) { return 2; }
 }
 
 // volterra_solve_vide_vec: primary VIDE entry point, handles all d.
@@ -2432,6 +2546,7 @@ int volterra_solve_vide_vec(
     int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
+    try {
     double[] gv   = g_values[0 .. n * d];
     double[] kv   = kernel_values[0 .. n * d * d];
     double[] av   = a_values[0 .. n * d * d];
@@ -2468,6 +2583,8 @@ int volterra_solve_vide_vec(
 
     *out_mesh_divs = md;
     return 0;
+    }
+    catch (SingularMatrixException) { return 2; }
 }
 
 int volterra_max_coll_params()
