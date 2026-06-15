@@ -342,9 +342,14 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     if mesh_breakpoints[0] != 0.0:
         raise ValueError("mesh_breakpoints[0] must be 0")
 
-    coll_choices = sorted(int(c) for c in coll_choices)
     if coll_divs < 1:
         raise ValueError("coll_divs must be a positive integer")
+    for c in coll_choices:
+        # bool is a subclass of int in Python; reject anyway since it's never intended
+        if isinstance(c, bool) or not isinstance(c, (int, np.integer)):
+            raise ValueError(
+                f"coll_choices must be a list of integers, got {type(c).__name__}")
+    coll_choices = sorted(int(c) for c in coll_choices)
     if len(set(coll_choices)) != len(coll_choices):
         raise ValueError("coll_choices entries must be distinct")
     for c in coll_choices:

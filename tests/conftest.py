@@ -209,3 +209,17 @@ def vie2_callable_abel():
         coll_choices=[0, 1, 2],
         kernel_singularity=0.0,
     )
+
+
+# K(u) = 2 cos(u), exact y(t) = exp(t). Callable analogue of vie2_exp_data.
+# Derivation: integral_0^t 2 cos(t-s) e^s ds = e^t - cos t + sin t,
+# so g(t) = exp(t) - (e^t - cos t + sin t) = cos t - sin t.
+@pytest.fixture
+def vie2_callable_exp():
+    return dict(
+        kernel=lambda u: 2.0 * np.cos(u),
+        g=lambda t: np.cos(t) - np.sin(t),
+        y_exact=np.exp,
+        coll_divs=2,
+        coll_choices=[0, 1, 2],
+    )
