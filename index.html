@@ -226,6 +226,13 @@
   
     
     
+      
+  
+  
+  
+  
+    
+    
       <li class="md-tabs__item">
         <a href="api/vie1/" class="md-tabs__link">
           
@@ -235,6 +242,9 @@
 
         </a>
       </li>
+    
+  
+
     
   
 
@@ -507,6 +517,58 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Array-based solvers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Array-based solvers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="api/vie1/" class="md-nav__link">
         
@@ -580,6 +642,186 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Callable-input solvers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Callable-input solvers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/function_vie1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    function_solve_VIE_1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/function_vie2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    function_solve_VIE_2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/function_vide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    function_solve_VIDE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/optimal_graded_mesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    optimal_graded_mesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -728,6 +970,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="examples/function_solvers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Callable inputs and arbitrary mesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -831,30 +1101,45 @@
 <p>Brunner H. <em>Collocation Methods for Volterra Integral and Related Functional Differential Equations.</em> Cambridge University Press; 2004.</p>
 </blockquote>
 <h2 id="solvers">Solvers</h2>
+<p>Two families of solvers are provided. The <strong>array-based</strong> family is the
+fastest path when the kernel and forcing are already sampled on a uniform
+grid; the <strong>callable-input</strong> family accepts callables, supports arbitrary
+meshes, and handles weakly singular kernels.</p>
 <table>
 <thead>
 <tr>
-<th>Function</th>
 <th>Equation</th>
+<th>Array-based</th>
+<th>Callable-input</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>solve_VIE_1</code></td>
 <td><span class="arithmatex">\(g(t) = \int_0^t K(t-s)y(s)ds\)</span></td>
+<td><code>solve_VIE_1</code></td>
+<td><code>function_solve_VIE_1</code></td>
 </tr>
 <tr>
-<td><code>solve_VIE_2</code></td>
 <td><span class="arithmatex">\(y(t) = g(t) + \int_0^t K(t-s)y(s)ds\)</span></td>
+<td><code>solve_VIE_2</code></td>
+<td><code>function_solve_VIE_2</code></td>
 </tr>
 <tr>
-<td><code>solve_VIDE</code></td>
 <td><span class="arithmatex">\(y'(t) = a(t)y(t) + g(t) + \int_0^t K(t-s)y(s)ds\)</span></td>
+<td><code>solve_VIDE</code></td>
+<td><code>function_solve_VIDE</code></td>
 </tr>
 </tbody>
 </table>
+<p>The callable-input solvers also expose <code>optimal_graded_mesh(alpha, T, M,
+coll_choices)</code> for building a Brunner-graded mesh suitable for kernels
+with a <span class="arithmatex">\(u^{-\alpha}\)</span> singularity.</p>
 <h2 id="quick-install">Quick install</h2>
 <pre><code class="language-bash">pip install git+https://github.com/trout314/volterra-equation-solvers
+</code></pre>
+<p>The callable-input solvers (<code>function_solve_*</code>, <code>optimal_graded_mesh</code>)
+additionally require <code>scipy</code>:</p>
+<pre><code class="language-bash">pip install &quot;volterra-equation-solvers[callable] @ git+https://github.com/trout314/volterra-equation-solvers&quot;
 </code></pre>
 <h2 id="mathematical-derivations">Mathematical derivations</h2>
 <p>The <code>docs/</code> directory contains worked derivations of the analytic solutions used in the test suite:</p>
