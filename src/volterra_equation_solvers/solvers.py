@@ -460,18 +460,20 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                     if init_cols.shape != (d, m_cols):
                         raise ValueError(
                             f"soln_init_value must have shape ({d}, {m_cols}) for matrix-valued g_values")
+                    if (not force_continuous) and show_warnings:
+                        print("warning: setting soln_init_value has no effect when force_continuous=False.")
                 else:
-                    init_cols = np.zeros((d, m_cols))
+                    init_cols = None
                 g_cols = g_values_[:N]
                 def _col_vie1(j):
                     return solve_VIE_1(kernel_values=kernel_values_,
                                        g_values=g_cols[:, :, j],
-                                       soln_init_value=init_cols[:, j],
+                                       soln_init_value=init_cols[:, j] if init_cols is not None else None,
                                        time_step=time_step, coll_divs=coll_divs,
                                        coll_choices=coll_choices,
                                        return_polys=return_polys,
                                        force_continuous=force_continuous,
-                                       show_warnings=show_warnings)
+                                       show_warnings=False)
                 with ThreadPoolExecutor(max_workers=m_cols) as ex:
                     results = list(ex.map(_col_vie1, range(m_cols)))
                 if return_polys:

@@ -183,3 +183,42 @@ class TestVIE1SolnInitValueWarning:
                      soln_init_value=np.ones(d), force_continuous=False,
                      show_warnings=False)
         assert capsys.readouterr().out == ""
+
+    @staticmethod
+    def _matrix_inputs(n=10, d=2, m=3):
+        h = 0.01
+        times = np.arange(n) * h
+        kernel = np.zeros((n, d, d))
+        for i in range(n):
+            kernel[i] = np.eye(d) * np.exp(-times[i])
+        g = np.zeros((n, d, m))
+        for j in range(m):
+            g[:, :, j] = np.column_stack([np.sin(times * (j + 1))] * d)
+        g[0] = 0.0
+        return kernel, g, h, d, m
+
+    def test_matrix_no_init_silent(self, capsys):
+        """When no soln_init_value is passed, no spurious 'no effect' warning fires."""
+        kernel, g, h, d, m = self._matrix_inputs()
+        solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
+                     coll_divs=1, coll_choices=[1],
+                     force_continuous=False, show_warnings=True)
+        assert "no effect" not in capsys.readouterr().out.lower()
+
+    def test_matrix_warns_once(self, capsys):
+        """When init is passed with force_continuous=False, warn exactly once (not per-column)."""
+        kernel, g, h, d, m = self._matrix_inputs()
+        solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
+                     coll_divs=1, coll_choices=[1],
+                     soln_init_value=np.ones((d, m)), force_continuous=False,
+                     show_warnings=True)
+        out = capsys.readouterr().out.lower()
+        assert out.count("no effect") == 1
+
+    def test_matrix_silent(self, capsys):
+        kernel, g, h, d, m = self._matrix_inputs()
+        solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
+                     coll_divs=1, coll_choices=[1],
+                     soln_init_value=np.ones((d, m)), force_continuous=False,
+                     show_warnings=False)
+        assert capsys.readouterr().out == ""
