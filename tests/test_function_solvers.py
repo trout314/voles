@@ -9,7 +9,9 @@ continue to pass after the D port.
 import numpy as np
 import pytest
 
-from volterra_equation_solvers._callable_solvers import function_solve_VIE_2
+from volterra_equation_solvers._callable_solvers import (
+    function_solve_VIE_2, function_solve_VIDE,
+)
 
 
 def _collect_node_values(y, mesh_bps, coll_divs, coll_choices, ref):
@@ -572,3 +574,176 @@ def test_vec_validation_kernel_not_square():
     with pytest.raises(ValueError, match="scalar or square"):
         function_solve_VIE_2(kernel=bad_K, mesh_breakpoints=np.linspace(0, 1, 5),
                              coll_divs=2, coll_choices=[0, 1, 2])
+
+
+# ---------------------------------------------------------------------------
+# VIDE (Volterra integro-differential equation)
+# ---------------------------------------------------------------------------
+
+def test_vide_pure_ode_matches_exact(vide_callable_ode):
+    """K=0 reduces VIDE to an ODE; compare to the closed-form solution."""
+    p = vide_callable_ode
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"],
+        mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-6
+
+
+def test_vide_smooth_matches_exact(vide_callable_smooth):
+    p = vide_callable_smooth
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"],
+        mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-6
+
+
+@pytest.mark.parametrize("M_target", [10, 20, 40])
+def test_vide_convergence_rate(vide_callable_smooth, M_target):
+    """Halving h reduces error by >= 8 (order-4 method, generous lower bound)."""
+    p = vide_callable_smooth
+
+    def err_at(M):
+        mesh = np.linspace(0, 1, M + 1)
+        y = function_solve_VIDE(
+            kernel=p["kernel"], a=p["a"], g=p["g"],
+            soln_init_value=p["soln_init_value"],
+            mesh_breakpoints=mesh,
+            coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+        return _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+
+    assert err_at(M_target) / err_at(M_target * 2) > 8.0
+
+
+def test_vide_a_none_treated_as_zero(vide_callable_smooth):
+    """a=None: with K=exp(-u), g chosen, exact y=sin(t) -- but a contribution removed.
+
+    Constructing from scratch is fiddly; just verify that a=None gives a
+    different (still finite) result than a=callable.
+    """
+    p = vide_callable_smooth
+    mesh = np.linspace(0, 1, 11)
+    y_with_a = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"],
+        mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    y_without_a = function_solve_VIDE(
+        kernel=p["kernel"], g=p["g"],
+        soln_init_value=p["soln_init_value"],
+        mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    assert np.all(np.isfinite(y_without_a))
+    # Results should differ (a contributes a non-zero term)
+    assert np.max(np.abs(y_with_a - y_without_a)) > 1e-4
+
+
+def test_vide_g_none_treated_as_zero():
+    """g=None with K=0, a=0: y'(t) = 0, so y(t) = y_0 constant."""
+    mesh = np.linspace(0, 1, 11)
+    y = function_solve_VIDE(
+        kernel=lambda u: 0.0, soln_init_value=3.0,
+        mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2])
+    assert np.allclose(y, 3.0, atol=1e-12)
+
+
+def test_vide_non_uniform_mesh(vide_callable_smooth):
+    p = vide_callable_smooth
+    mesh = np.linspace(0, 1, 21) ** 1.5
+    y = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"],
+        mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-5
+
+
+def test_vide_callable_solution_wrapper(vide_callable_smooth):
+    p = vide_callable_smooth
+    mesh = np.linspace(0, 1, 21)
+    y_arr, y_func = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"],
+        mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        return_function=True)
+    assert isinstance(y_func(0.37), float)
+    assert abs(y_func(0.37) - p["y_exact"](0.37)) < 1e-5
+    ts = np.array([0.1, 0.5, 0.9])
+    vals = y_func(ts)
+    assert vals.shape == ts.shape
+    assert np.max(np.abs(vals - p["y_exact"](ts))) < 1e-5
+    # Initial condition should be honored exactly via y_boundary[0].
+    assert abs(y_func(0.0) - p["soln_init_value"]) < 1e-12
+
+
+def test_vide_vec_diagonal_matches_scalar(vide_callable_smooth, vide_callable_vec_diagonal):
+    """Diagonal d=2 vector VIDE matches two independent scalar solves."""
+    sp = vide_callable_smooth
+    vp = vide_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 21)
+    y_scalar = function_solve_VIDE(
+        kernel=sp["kernel"], a=sp["a"], g=sp["g"],
+        soln_init_value=sp["soln_init_value"],
+        mesh_breakpoints=mesh,
+        coll_divs=sp["coll_divs"], coll_choices=sp["coll_choices"])
+    y_vec = function_solve_VIDE(
+        kernel=vp["kernel"], a=vp["a"], g=vp["g"],
+        soln_init_value=vp["soln_init_value"],
+        mesh_breakpoints=mesh,
+        coll_divs=vp["coll_divs"], coll_choices=vp["coll_choices"])
+    assert y_vec.shape == (len(mesh) - 1, len(sp["coll_choices"]), vp["d"])
+    assert np.allclose(y_vec[..., 0], y_scalar, atol=1e-12)
+    assert np.allclose(y_vec[..., 1], y_scalar, atol=1e-12)
+
+
+def test_vide_vec_matches_exact(vide_callable_vec_diagonal):
+    p = vide_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"],
+        mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-6
+
+
+def test_vide_vec_callable_wrapper(vide_callable_vec_diagonal):
+    p = vide_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 21)
+    _, y_func = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"],
+        mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        return_function=True)
+    val = y_func(0.37)
+    assert val.shape == (p["d"],)
+    assert np.max(np.abs(val - p["y_exact"](0.37))) < 1e-5
+
+
+def test_vide_validation_soln_init_required():
+    """soln_init_value is required (no default)."""
+    with pytest.raises(TypeError):
+        function_solve_VIDE(kernel=lambda u: 0.0,
+                            mesh_breakpoints=np.linspace(0, 1, 5),
+                            coll_divs=2, coll_choices=[0, 1, 2])
+
+
+def test_vide_vec_validation_init_wrong_shape(vide_callable_vec_diagonal):
+    p = vide_callable_vec_diagonal
+    with pytest.raises(ValueError, match=r"shape \(2,\)"):
+        function_solve_VIDE(
+            kernel=p["kernel"], a=p["a"], g=p["g"],
+            soln_init_value=np.zeros(3),  # wrong size: d=2 but pass length-3
+            mesh_breakpoints=np.linspace(0, 1, 11),
+            coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])

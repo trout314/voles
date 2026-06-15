@@ -40,6 +40,22 @@ def _setup_argtypes() -> None:
         _dp,                                                   # out_y
     ]
 
+    _lib.function_solve_vide.restype = ctypes.c_int
+    _lib.function_solve_vide.argtypes = [
+        _dp, _dp, _dp,                                # W, g, a_arr
+        _dp, _dp, _dp,                                # alpha, w_vec, h_widths
+        ctypes.c_double, ctypes.c_int, ctypes.c_int,  # soln_init, M, p
+        _dp, _dp,                                     # out_y_prime, out_y_boundary
+    ]
+
+    _lib.function_solve_vide_vec.restype = ctypes.c_int
+    _lib.function_solve_vide_vec.argtypes = [
+        _dp, _dp, _dp,                                                  # W, g, a_arr
+        _dp, _dp, _dp,                                                  # alpha, w_vec, h_widths
+        _dp, ctypes.c_int, ctypes.c_int, ctypes.c_int,                  # soln_init, M, p, d
+        _dp, _dp,                                                       # out_y_prime, out_y_boundary
+    ]
+
     _lib.volterra_max_coll_params.restype = ctypes.c_int
     _lib.volterra_max_coll_params.argtypes = []
 
@@ -506,6 +522,104 @@ def function_solve_max_p_d() -> int:
 def function_solve_max_d_d() -> int:
     """Max d (vector kernel dimension) compiled into the D extension."""
     return int(_lib.function_solve_max_d())
+
+
+def function_solve_vide_d(W, g_arr, a_arr, alpha, w_vec, h_widths, soln_init):
+    """Call the D solver for the scalar callable-input VIDE.
+
+    Parameters
+    ----------
+    W : ndarray, shape (M, p, M, p+1), float64, C-contiguous
+        Extended weight tensor (antideriv basis + constant).
+    g_arr, a_arr : ndarray, shape (M, p), float64
+        g and a sampled at collocation points.
+    alpha : ndarray, shape (p, p), float64
+        alpha[i, k] = I_k(c_i).
+    w_vec : ndarray, shape (p,), float64
+        w_vec[k] = I_k(1); used to advance the y boundary value.
+    h_widths : ndarray, shape (M,), float64
+        Mesh-interval widths.
+    soln_init : float
+        y(0).
+
+    Returns
+    -------
+    y_prime : ndarray, shape (M, p), float64
+        y' at collocation nodes.
+    y_boundary : ndarray, shape (M+1,), float64
+        y at mesh breakpoints, y_boundary[0] = soln_init.
+    """
+    W_c = np.ascontiguousarray(W, dtype=np.float64)
+    g_c = np.ascontiguousarray(g_arr, dtype=np.float64)
+    a_c = np.ascontiguousarray(a_arr, dtype=np.float64)
+    alpha_c = np.ascontiguousarray(alpha, dtype=np.float64)
+    w_c = np.ascontiguousarray(w_vec, dtype=np.float64)
+    h_c = np.ascontiguousarray(h_widths, dtype=np.float64)
+    M, p = g_c.shape
+    if W_c.shape != (M, p, M, p + 1):
+        raise ValueError(
+            f"W shape {W_c.shape} incompatible with (M, p, M, p+1) = "
+            f"({M}, {p}, {M}, {p + 1})")
+    out_y_prime = np.zeros((M, p), dtype=np.float64)
+    out_y_boundary = np.zeros(M + 1, dtype=np.float64)
+    ret = _lib.function_solve_vide(
+        W_c.ctypes.data_as(_dp),
+        g_c.ctypes.data_as(_dp),
+        a_c.ctypes.data_as(_dp),
+        alpha_c.ctypes.data_as(_dp),
+        w_c.ctypes.data_as(_dp),
+        h_c.ctypes.data_as(_dp),
+        ctypes.c_double(float(soln_init)),
+        ctypes.c_int(M), ctypes.c_int(p),
+        out_y_prime.ctypes.data_as(_dp),
+        out_y_boundary.ctypes.data_as(_dp),
+    )
+    _check_return(ret, "function_solve_vide")
+    return out_y_prime, out_y_boundary
+
+
+def function_solve_vide_vec_d(W, g_arr, a_arr, alpha, w_vec, h_widths, soln_init):
+    """Vector VIDE solver. See `function_solve_vide_d` for the scalar version.
+
+    Shapes:
+        W: (M, p, M, p+1, d, d)
+        g_arr: (M, p, d)
+        a_arr: (M, p, d, d)
+        alpha: (p, p)
+        w_vec: (p,)
+        h_widths: (M,)
+        soln_init: (d,)
+
+    Returns: (y_prime, y_boundary) of shapes (M, p, d) and (M+1, d).
+    """
+    W_c = np.ascontiguousarray(W, dtype=np.float64)
+    g_c = np.ascontiguousarray(g_arr, dtype=np.float64)
+    a_c = np.ascontiguousarray(a_arr, dtype=np.float64)
+    alpha_c = np.ascontiguousarray(alpha, dtype=np.float64)
+    w_c = np.ascontiguousarray(w_vec, dtype=np.float64)
+    h_c = np.ascontiguousarray(h_widths, dtype=np.float64)
+    init_c = np.ascontiguousarray(soln_init, dtype=np.float64)
+    M, p, d = g_c.shape
+    if W_c.shape != (M, p, M, p + 1, d, d):
+        raise ValueError(
+            f"W shape {W_c.shape} incompatible with expected "
+            f"(M, p, M, p+1, d, d) = ({M}, {p}, {M}, {p+1}, {d}, {d})")
+    out_y_prime = np.zeros((M, p, d), dtype=np.float64)
+    out_y_boundary = np.zeros((M + 1, d), dtype=np.float64)
+    ret = _lib.function_solve_vide_vec(
+        W_c.ctypes.data_as(_dp),
+        g_c.ctypes.data_as(_dp),
+        a_c.ctypes.data_as(_dp),
+        alpha_c.ctypes.data_as(_dp),
+        w_c.ctypes.data_as(_dp),
+        h_c.ctypes.data_as(_dp),
+        init_c.ctypes.data_as(_dp),
+        ctypes.c_int(M), ctypes.c_int(p), ctypes.c_int(d),
+        out_y_prime.ctypes.data_as(_dp),
+        out_y_boundary.ctypes.data_as(_dp),
+    )
+    _check_return(ret, "function_solve_vide_vec")
+    return out_y_prime, out_y_boundary
 
 
 def function_solve_vie2_vec_d(W, g_arr):

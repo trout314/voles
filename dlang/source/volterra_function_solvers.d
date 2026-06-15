@@ -168,6 +168,99 @@ int function_solve_vie2(
     }
 }
 
+// ---------------------------------------------------------------------------
+// VIDE: y'(t) = a(t) y(t) + g(t) + integral_0^t K(t-s) y(s) ds, y(0) = y_0
+//
+// Unknown on interval n: Y'_{n,k}, the values of y' at the p collocation nodes.
+// Boundary state: y_n, the value of y at the left mesh-breakpoint of interval n.
+//   y(s) on interval n equals  y_n + h_n * sum_k Y'_{n,k} * I_k((s - t_n) / h_n)
+//   where I_k is the antiderivative-of-Lagrange basis (precomputed in Python).
+//
+// Python passes the extended weight tensor W[n, i, l, k_ext] for k_ext in 0..p:
+//   - k_ext < p:  W = integral of K(tau_{n,i} - s) * I_k((s - t_l) / h_l) ds
+//   - k_ext = p:  W = integral of K(tau_{n,i} - s) ds        (constant 1)
+// (Integration is over [t_l, t_{l+1}] for l < n, over [t_n, tau_{n,i}] for l = n.)
+//
+// Per step n, the collocation equations become a p x p linear system in Y'_n:
+//   A[i, k] = delta[i,k] - a(tau_{n,i}) * h_n * alpha[i, k] - h_n * W[n, i, n, k]
+//   b[i]    = a(tau_{n,i}) * y_n + g(tau_{n,i}) + y_n * W[n, i, n, p]
+//           + sum_{l<n} ( y_l * W[n, i, l, p] + h_l * sum_k Y'_{l,k} * W[n, i, l, k] )
+// alpha[i, k] = I_k(c_i) (precomputed in Python), c_i = coll_choices[i] / coll_divs.
+//
+// After the solve, advance: y_{n+1} = y_n + h_n * sum_k Y'_{n,k} * w_vec[k],
+// where w_vec[k] = I_k(1).
+// ---------------------------------------------------------------------------
+
+void function_solve_vide_impl(int p)(
+    const double[] W,        // (M, p, M, p+1)
+    const double[] g,        // (M, p)
+    const double[] a_arr,    // (M, p)
+    const double[] alpha,    // (p, p) — row i column k holds I_k(c_i)
+    const double[] w_vec,    // (p,)   — w_vec[k] = I_k(1)
+    const double[] h_widths, // (M,)
+    double soln_init, int M,
+    double[] out_y_prime,    // (M, p)
+    double[] out_y_boundary) // (M+1,)
+{
+    enum int kext_basis = p + 1;
+    out_y_boundary[0] = soln_init;
+
+    foreach (n; 0 .. M)
+    {
+        double y_n = out_y_boundary[n];
+        double h_n = h_widths[n];
+
+        double[p] rhs = 0.0;
+        double[p][p] A;
+
+        // Diagonal block: A[i][k] = delta(i,k) - a_i * h_n * alpha[i,k]
+        //                                       - h_n * W[n, i, n, k]
+        // RHS partial from current interval n: a_i * y_n + g_i + y_n * W[n, i, n, p]
+        foreach (i; 0 .. p)
+        {
+            double a_i = a_arr[n * p + i];
+            double g_i = g[n * p + i];
+            rhs[i] = a_i * y_n + g_i;
+
+            size_t W_diag_base = ((cast(size_t)(n * p + i) * M + n) * kext_basis);
+            rhs[i] += y_n * W[W_diag_base + p];
+
+            foreach (k; 0 .. p)
+            {
+                double identity = (i == k) ? 1.0 : 0.0;
+                A[i][k] = identity
+                        - a_i * h_n * alpha[i * p + k]
+                        - h_n * W[W_diag_base + k];
+            }
+        }
+
+        // History from l < n
+        foreach (l; 0 .. n)
+        {
+            double y_l = out_y_boundary[l];
+            double h_l = h_widths[l];
+            foreach (i; 0 .. p)
+            {
+                size_t W_row_base = (cast(size_t)(n * p + i) * M + l) * kext_basis;
+                rhs[i] += y_l * W[W_row_base + p];
+                foreach (k; 0 .. p)
+                    rhs[i] += h_l * out_y_prime[l * p + k] * W[W_row_base + k];
+            }
+        }
+
+        auto Y_n = lin_solve!p(A, rhs);
+        foreach (i; 0 .. p)
+            out_y_prime[n * p + i] = Y_n[i];
+
+        // Advance y boundary: y_{n+1} = y_n + h_n * sum_k Y'_{n,k} * w_vec[k]
+        double dy = 0.0;
+        foreach (k; 0 .. p)
+            dy += Y_n[k] * w_vec[k];
+        out_y_boundary[n + 1] = y_n + h_n * dy;
+    }
+}
+
+
 int function_solve_max_p()
 {
     return MAX_FUNCTION_P;
@@ -176,6 +269,199 @@ int function_solve_max_p()
 int function_solve_max_d()
 {
     return MAX_FUNCTION_D;
+}
+
+// VIDE vector path: same equations as the scalar impl but each Y'_{n,k}
+// and y_n is a (d,)-vector and a(tau), W[n,i,l,k] are (d, d) matrices.
+// Per-step block system has dimension (p*d) x (p*d).
+void function_solve_vide_vec_impl(int p, int d)(
+    const double[] W,          // (M, p, M, p+1, d, d)
+    const double[] g,          // (M, p, d)
+    const double[] a_arr,      // (M, p, d, d)
+    const double[] alpha,      // (p, p)
+    const double[] w_vec,      // (p,)
+    const double[] h_widths,   // (M,)
+    const double[] soln_init,  // (d,)
+    int M,
+    double[] out_y_prime,      // (M, p, d)
+    double[] out_y_boundary)   // (M+1, d)
+{
+    enum int pd = p * d;
+    enum int kext_basis = p + 1;
+
+    foreach (b; 0 .. d) out_y_boundary[b] = soln_init[b];
+
+    foreach (n; 0 .. M)
+    {
+        double h_n = h_widths[n];
+        size_t y_n_base = cast(size_t)(n) * d;
+
+        double[pd] rhs = 0.0;
+        double[pd][pd] A;
+
+        foreach (i; 0 .. p)
+        {
+            size_t W_diag_base = (cast(size_t)(n * p + i) * M + n) * kext_basis;
+            size_t a_block_base = cast(size_t)(n * p + i) * d * d;
+
+            // RHS pieces from current interval: a_i * y_n + g_n_i + y_n * W[n,i,n,p]
+            // (note W[..., p] is the constant-basis (d,d) block: I_const)
+            foreach (aa; 0 .. d)
+            {
+                double acc = g[(n * p + i) * d + aa];
+                foreach (bb; 0 .. d)
+                {
+                    double y_n_b = out_y_boundary[y_n_base + bb];
+                    acc += a_arr[a_block_base + aa * d + bb] * y_n_b;
+                    acc += W[(W_diag_base + p) * d * d + aa * d + bb] * y_n_b;
+                }
+                rhs[i * d + aa] = acc;
+            }
+
+            // A[i,k] block: delta(i,k)*I_d - a_i*h_n*alpha[i,k] - h_n*W[n,i,n,k]
+            foreach (k; 0 .. p)
+            {
+                double a_h_alpha = h_n * alpha[i * p + k];
+                size_t Wnk_base = (W_diag_base + k) * d * d;
+                foreach (aa; 0 .. d)
+                {
+                    foreach (bb; 0 .. d)
+                    {
+                        double identity = (i == k && aa == bb) ? 1.0 : 0.0;
+                        A[i * d + aa][k * d + bb]
+                            = identity
+                            - a_h_alpha * a_arr[a_block_base + aa * d + bb]
+                            - h_n * W[Wnk_base + aa * d + bb];
+                    }
+                }
+            }
+        }
+
+        // History from l < n
+        foreach (l; 0 .. n)
+        {
+            double h_l = h_widths[l];
+            size_t y_l_base = cast(size_t)(l) * d;
+            foreach (i; 0 .. p)
+            {
+                size_t W_row_base = (cast(size_t)(n * p + i) * M + l) * kext_basis;
+                // y_l * W[n,i,l,p]
+                foreach (aa; 0 .. d)
+                {
+                    double acc = 0.0;
+                    foreach (bb; 0 .. d)
+                        acc += W[(W_row_base + p) * d * d + aa * d + bb] * out_y_boundary[y_l_base + bb];
+                    rhs[i * d + aa] += acc;
+                }
+                // h_l * sum_k Y'_{l,k} . W[n,i,l,k]
+                foreach (k; 0 .. p)
+                {
+                    size_t Wlk_base = (W_row_base + k) * d * d;
+                    size_t Yp_base = cast(size_t)(l * p + k) * d;
+                    foreach (aa; 0 .. d)
+                    {
+                        double acc = 0.0;
+                        foreach (bb; 0 .. d)
+                            acc += W[Wlk_base + aa * d + bb] * out_y_prime[Yp_base + bb];
+                        rhs[i * d + aa] += h_l * acc;
+                    }
+                }
+            }
+        }
+
+        auto Yn = lin_solve!pd(A, rhs);
+        foreach (i; 0 .. p)
+            foreach (aa; 0 .. d)
+                out_y_prime[(n * p + i) * d + aa] = Yn[i * d + aa];
+
+        // y_{n+1} = y_n + h_n * sum_k Y'_{n,k} * w_vec[k]
+        foreach (aa; 0 .. d)
+        {
+            double dy = 0.0;
+            foreach (k; 0 .. p)
+                dy += Yn[k * d + aa] * w_vec[k];
+            out_y_boundary[(n + 1) * d + aa] = out_y_boundary[y_n_base + aa] + h_n * dy;
+        }
+    }
+}
+
+int function_solve_vide(
+    double* W, double* g, double* a_arr,
+    double* alpha, double* w_vec, double* h_widths,
+    double soln_init, int M, int p,
+    double* out_y_prime, double* out_y_boundary)
+{
+    if (M < 1) return 1;
+    if (p < 1 || p > MAX_FUNCTION_P) return 1;
+
+    size_t M_sz = cast(size_t) M;
+    size_t p_sz = cast(size_t) p;
+    size_t kext = p_sz + 1;
+    double[] W_slice = W[0 .. M_sz * p_sz * M_sz * kext];
+    double[] g_slice = g[0 .. M_sz * p_sz];
+    double[] a_slice = a_arr[0 .. M_sz * p_sz];
+    double[] alpha_slice = alpha[0 .. p_sz * p_sz];
+    double[] w_slice = w_vec[0 .. p_sz];
+    double[] h_slice = h_widths[0 .. M_sz];
+    double[] y_prime_slice = out_y_prime[0 .. M_sz * p_sz];
+    double[] y_boundary_slice = out_y_boundary[0 .. M_sz + 1];
+
+    switch (p)
+    {
+        static foreach (pi; 1 .. MAX_FUNCTION_P + 1)
+        {
+            case pi:
+                function_solve_vide_impl!pi(
+                    W_slice, g_slice, a_slice, alpha_slice, w_slice, h_slice,
+                    soln_init, M, y_prime_slice, y_boundary_slice);
+                return 0;
+        }
+        default:
+            return 1;
+    }
+}
+
+int function_solve_vide_vec(
+    double* W, double* g, double* a_arr,
+    double* alpha, double* w_vec, double* h_widths,
+    double* soln_init, int M, int p, int d,
+    double* out_y_prime, double* out_y_boundary)
+{
+    if (M < 1) return 1;
+    if (p < 1 || p > MAX_FUNCTION_P) return 1;
+    if (d < 1 || d > MAX_FUNCTION_D) return 1;
+
+    size_t M_sz = cast(size_t) M;
+    size_t p_sz = cast(size_t) p;
+    size_t d_sz = cast(size_t) d;
+    size_t kext = p_sz + 1;
+    double[] W_slice = W[0 .. M_sz * p_sz * M_sz * kext * d_sz * d_sz];
+    double[] g_slice = g[0 .. M_sz * p_sz * d_sz];
+    double[] a_slice = a_arr[0 .. M_sz * p_sz * d_sz * d_sz];
+    double[] alpha_slice = alpha[0 .. p_sz * p_sz];
+    double[] w_slice = w_vec[0 .. p_sz];
+    double[] h_slice = h_widths[0 .. M_sz];
+    double[] init_slice = soln_init[0 .. d_sz];
+    double[] y_prime_slice = out_y_prime[0 .. M_sz * p_sz * d_sz];
+    double[] y_boundary_slice = out_y_boundary[0 .. (M_sz + 1) * d_sz];
+
+    int key = p * 100 + d;
+    switch (key)
+    {
+        static foreach (pi; 1 .. MAX_FUNCTION_P + 1)
+        {
+            static foreach (di; 1 .. MAX_FUNCTION_D + 1)
+            {
+                case pi * 100 + di:
+                    function_solve_vide_vec_impl!(pi, di)(
+                        W_slice, g_slice, a_slice, alpha_slice, w_slice, h_slice,
+                        init_slice, M, y_prime_slice, y_boundary_slice);
+                    return 0;
+            }
+        }
+        default:
+            return 1;
+    }
 }
 
 int function_solve_vie2_vec(

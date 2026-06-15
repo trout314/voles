@@ -242,6 +242,53 @@ def vie2_callable_vec_diagonal():
     )
 
 
+# VIDE callable fixture: a(t)=1/(1+t^2), K(u)=exp(-u), exact y=sin(t).
+# Same Mathematica derivation as vide_data above. y(0) = 0.
+@pytest.fixture
+def vide_callable_smooth():
+    return dict(
+        kernel=lambda u: np.exp(-u),
+        a=lambda t: 1.0 / (1.0 + t**2),
+        g=lambda t: (np.cos(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
+                     - np.sin(t) / (1.0 + t**2)),
+        y_exact=np.sin,
+        soln_init_value=0.0,
+        coll_divs=2,
+        coll_choices=[0, 1, 2],
+    )
+
+
+# Pure-ODE VIDE: K=0, a=-1, g=t, y(0)=2 -> exact y = 3 exp(-t) + t - 1.
+@pytest.fixture
+def vide_callable_ode():
+    return dict(
+        kernel=lambda u: 0.0,
+        a=lambda t: -1.0,
+        g=lambda t: t,
+        y_exact=lambda t: 3 * np.exp(-t) + t - 1,
+        soln_init_value=2.0,
+        coll_divs=2,
+        coll_choices=[0, 1, 2],
+    )
+
+
+# Diagonal 2x2 VIDE: same scalar problem on each component.
+@pytest.fixture
+def vide_callable_vec_diagonal(vide_callable_smooth):
+    p = vide_callable_smooth
+    eye = np.eye(2)
+    return dict(
+        d=2,
+        kernel=lambda u: p["kernel"](u) * eye,
+        a=lambda t: p["a"](t) * eye,
+        g=lambda t: np.array([p["g"](t), p["g"](t)]),
+        y_exact=lambda t: np.array([p["y_exact"](t), p["y_exact"](t)]),
+        soln_init_value=np.zeros(2),
+        coll_divs=2,
+        coll_choices=[0, 1, 2],
+    )
+
+
 # 2x2 coupled, non-constant kernel. Constructed via similarity transform
 # P=[[1,1],[1,-1]] on a diagonal system with K_diag=diag(exp(-s), 1) and
 # y_diag=[sin(t), t]:
