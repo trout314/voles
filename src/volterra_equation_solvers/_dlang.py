@@ -22,6 +22,15 @@ def _setup_argtypes() -> None:
     _lib.volterra_have_lapack.restype = ctypes.c_int
     _lib.volterra_have_lapack.argtypes = []
 
+    _lib.function_solve_vie2.restype = ctypes.c_int
+    _lib.function_solve_vie2.argtypes = [
+        _dp, _dp, ctypes.c_int, ctypes.c_int,  # W, g, M, p
+        _dp,                                    # out_y
+    ]
+
+    _lib.function_solve_max_p.restype = ctypes.c_int
+    _lib.function_solve_max_p.argtypes = []
+
     _lib.volterra_max_coll_params.restype = ctypes.c_int
     _lib.volterra_max_coll_params.argtypes = []
 
@@ -445,6 +454,44 @@ def solve_vide_vec_d(g_values, kernel_values, a_values, soln_init_values, time_s
     if return_polys:
         return (out_soln, out_poly_coefs.reshape(mesh_divs, num_choices + 1, d))
     return (out_soln, None)
+
+
+def function_solve_vie2_d(W, g_arr):
+    """Call the D solver for the callable-input scalar VIE-2.
+
+    Parameters
+    ----------
+    W : ndarray, shape (M, p, M, p), float64, C-contiguous
+        Precomputed weight tensor.
+    g_arr : ndarray, shape (M, p), float64, C-contiguous
+        g sampled at collocation points.
+
+    Returns
+    -------
+    out_y : ndarray, shape (M, p), float64
+        Solution values at collocation nodes.
+    """
+    W_c = np.ascontiguousarray(W, dtype=np.float64)
+    g_c = np.ascontiguousarray(g_arr, dtype=np.float64)
+    M, p = g_c.shape
+    if W_c.shape != (M, p, M, p):
+        raise ValueError(
+            f"W shape {W_c.shape} incompatible with g shape {g_c.shape}")
+    out_y = np.zeros((M, p), dtype=np.float64)
+    ret = _lib.function_solve_vie2(
+        W_c.ctypes.data_as(_dp),
+        g_c.ctypes.data_as(_dp),
+        ctypes.c_int(M),
+        ctypes.c_int(p),
+        out_y.ctypes.data_as(_dp),
+    )
+    _check_return(ret, "function_solve_vie2")
+    return out_y
+
+
+def function_solve_max_p_d() -> int:
+    """Max p (number of collocation nodes per interval) compiled into the D extension."""
+    return int(_lib.function_solve_max_p())
 
 
 def have_lapack_d() -> bool:

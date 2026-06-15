@@ -13,8 +13,8 @@ node positions; users wanting finer resolution pass more breakpoints.
 Architecture: Python precomputes a weight tensor `W[n,i,l,k]` such that
 `integral over interval l of K(tau_{n,i} - s) y(s) ds = sum_k W[n,i,l,k] y_{l,k}`,
 where `y` on interval `l` is expanded in the Lagrange basis on the collocation
-nodes. The D extension (or a slow Python solver in development) then runs the
-per-step linear-algebra hot loop on `W` with zero kernel callbacks.
+nodes. The D extension then runs the per-step linear-algebra hot loop on `W`
+with zero kernel callbacks.
 
 scipy is required (optional extra `[callable]`); imported lazily.
 """
@@ -206,27 +206,6 @@ def _build_W_scalar(kernel, mesh_breakpoints: np.ndarray,
 
 
 # ---------------------------------------------------------------------------
-# Slow Python solver (development scaffolding; to be replaced by D entry)
-# ---------------------------------------------------------------------------
-
-def _solve_VIE_2_slow(W: np.ndarray, g_arr: np.ndarray) -> np.ndarray:
-    """Solve VIE-2 collocation system step-by-step using precomputed W.
-
-    Returns y[n, k] -- the collocation-node values, shape (M, p).
-    """
-    M, p, _, _ = W.shape
-    y = np.zeros((M, p), dtype=np.float64)
-    eye_p = np.eye(p)
-    for n in range(M):
-        rhs = g_arr[n].copy()
-        for l in range(n):
-            rhs += W[n, :, l, :] @ y[l]
-        A = eye_p - W[n, :, n, :]
-        y[n] = np.linalg.solve(A, rhs)
-    return y
-
-
-# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -379,8 +358,14 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
             for i in range(p):
                 g_arr[n, i] = float(g(t_n + node_pos[i] * h_n))
 
-    # Solve (slow Python for now -- D replacement coming)
-    y = _solve_VIE_2_slow(W, g_arr)
+    # Solve via the D extension (per-step LU on a templated stack-allocated block).
+    from . import _dlang as _dlang_module
+    if p > _dlang_module.function_solve_max_p_d():
+        raise ValueError(
+            f"len(coll_choices) = {p} exceeds the maximum compiled into the "
+            f"D extension ({_dlang_module.function_solve_max_p_d()}). "
+            f"Use a smaller coll_choices.")
+    y = _dlang_module.function_solve_vie2_d(W, g_arr)
 
     if return_function:
         polys = _build_polynomials(y, mesh_breakpoints, coll_divs, coll_choices)
