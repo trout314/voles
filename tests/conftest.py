@@ -223,3 +223,47 @@ def vie2_callable_exp():
         coll_divs=2,
         coll_choices=[0, 1, 2],
     )
+
+
+# 2x2 diagonal vector kernel: same exp(-u)/sin(t) problem on each component.
+# Lets us check that the vector solver matches two independent scalar solves.
+@pytest.fixture
+def vie2_callable_vec_diagonal():
+    d = 2
+    eye = np.eye(d)
+    g_s = lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t))
+    return dict(
+        d=d,
+        kernel=lambda u: np.exp(-u) * eye,
+        g=lambda t: np.array([g_s(t), g_s(t)]),
+        y_exact=lambda t: np.array([np.sin(t), np.sin(t)]),
+        coll_divs=2,
+        coll_choices=[0, 1, 2],
+    )
+
+
+# 2x2 coupled, non-constant kernel. Constructed via similarity transform
+# P=[[1,1],[1,-1]] on a diagonal system with K_diag=diag(exp(-s), 1) and
+# y_diag=[sin(t), t]:
+#
+#   K(s)    = 0.5 * [[exp(-s)+1, exp(-s)-1], [exp(-s)-1, exp(-s)+1]]
+#   y_exact = [sin t + t, sin t - t]
+#   g       = P * [g_smooth, g_poly]^T
+#             where g_smooth = (sin + cos - exp(-t))/2 and g_poly = t - t^2/2
+@pytest.fixture
+def vie2_callable_vec_coupled():
+    g_s = lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t))
+    g_p = lambda t: t - 0.5 * t**2
+    def K(u):
+        k1 = np.exp(-u); k2 = 1.0
+        return 0.5 * np.array([[k1 + k2, k1 - k2], [k1 - k2, k1 + k2]])
+    def g(t):
+        return np.array([g_s(t) + g_p(t), g_s(t) - g_p(t)])
+    def y_exact(t):
+        return np.array([np.sin(t) + t, np.sin(t) - t])
+    return dict(
+        d=2,
+        kernel=K, g=g, y_exact=y_exact,
+        coll_divs=3,
+        coll_choices=[0, 1, 2, 3],
+    )

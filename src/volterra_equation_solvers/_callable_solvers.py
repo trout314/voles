@@ -39,6 +39,14 @@ def _import_scipy_quad():
     return quad
 
 
+def _import_scipy_quad_vec():
+    try:
+        from scipy.integrate import quad_vec
+    except ImportError as e:
+        raise ImportError(_SCIPY_IMPORT_ERR) from e
+    return quad_vec
+
+
 # ---------------------------------------------------------------------------
 # Lagrange basis construction (normalized [0, 1] coordinates)
 # ---------------------------------------------------------------------------
@@ -107,6 +115,20 @@ def _fixed_order_quad(integrand, a: float, b: float, order: int) -> float:
     s_points = mid + half * nodes
     vals = np.array([integrand(s) for s in s_points])
     return float(half * np.dot(weights, vals))
+
+
+def _fixed_order_quad_matrix(integrand, a: float, b: float, order: int,
+                              d: int) -> np.ndarray:
+    """Gauss-Legendre on a (d, d)-valued integrand on [a, b]."""
+    if b <= a:
+        return np.zeros((d, d), dtype=np.float64)
+    nodes, weights = _gauss_legendre_nodes_weights(order)
+    half = 0.5 * (b - a)
+    mid = 0.5 * (a + b)
+    result = np.zeros((d, d), dtype=np.float64)
+    for x, w in zip(nodes, weights):
+        result += w * np.asarray(integrand(mid + half * x), dtype=np.float64)
+    return half * result
 
 
 def _build_W_scalar(kernel, mesh_breakpoints: np.ndarray,
@@ -205,6 +227,94 @@ def _build_W_scalar(kernel, mesh_breakpoints: np.ndarray,
     return W
 
 
+def _build_W_vector(kernel, mesh_breakpoints: np.ndarray,
+                    coll_divs: int, coll_choices: list[int],
+                    kernel_singularity, smooth_gl_order: int, d: int,
+                    smooth_check_tol: float = 1e-9) -> np.ndarray:
+    """Vector analogue of _build_W_scalar for matrix-valued kernels.
+
+    Shape: (M, p, M, p, d, d). For each (n, i, l, k), the (d, d) block holds
+    integral over interval l (or partial for l == n) of K(tau_{n,i} - s)
+    multiplied by L_{l,k}(s).
+    """
+    M = len(mesh_breakpoints) - 1
+    p = len(coll_choices)
+    basis = _lagrange_basis_coefs(coll_divs, coll_choices)
+    node_pos = np.asarray(coll_choices, dtype=float) / coll_divs
+    widths = np.diff(mesh_breakpoints)
+    singular_locs = _normalize_kernel_singularity(kernel_singularity)
+
+    quad_vec = None
+    W = np.zeros((M, p, M, p, d, d), dtype=np.float64)
+
+    for n in range(M):
+        h_n = widths[n]
+        t_n = mesh_breakpoints[n]
+        tau_n = t_n + node_pos * h_n
+
+        for i in range(p):
+            tau = tau_n[i]
+            sing_for_tau = singular_locs(tau)
+
+            for l in range(n + 1):
+                t_l = mesh_breakpoints[l]
+                t_lp1 = mesh_breakpoints[l + 1]
+                h_l = widths[l]
+                a_int = t_l
+                b_int = t_lp1 if l < n else tau
+
+                if b_int <= a_int:
+                    continue
+
+                tol = 1e-12 * max(1.0, abs(b_int - a_int))
+                interior_sing = [sp for sp in sing_for_tau
+                                 if a_int + tol < sp < b_int - tol]
+                endpoint_sing = any(abs(sp - a_int) < tol or abs(sp - b_int) < tol
+                                    for sp in sing_for_tau)
+                use_adaptive = bool(interior_sing) or endpoint_sing
+
+                for k in range(p):
+                    L_k_coefs = basis[k]
+
+                    def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs):
+                        x_norm = (s - _t_l) / _h_l
+                        K = np.asarray(kernel(_tau - s), dtype=np.float64)
+                        return K * _eval_poly_at(_L_k, x_norm)
+
+                    if use_adaptive:
+                        if quad_vec is None:
+                            quad_vec = _import_scipy_quad_vec()
+                        kwargs = {'limit': 100}
+                        if interior_sing:
+                            kwargs['points'] = interior_sing
+                        val, _err = quad_vec(integrand, a_int, b_int, **kwargs)
+                    else:
+                        v1 = _fixed_order_quad_matrix(integrand, a_int, b_int,
+                                                     smooth_gl_order, d)
+                        v2 = _fixed_order_quad_matrix(integrand, a_int, b_int,
+                                                     smooth_gl_order + 2, d)
+                        err = float(np.max(np.abs(v1 - v2)))
+                        ref = max(1.0, float(np.max(np.abs(v2))))
+                        if err <= smooth_check_tol * ref:
+                            val = v2
+                        else:
+                            if quad_vec is None:
+                                quad_vec = _import_scipy_quad_vec()
+                            val, _err = quad_vec(integrand, a_int, b_int,
+                                                 limit=100)
+
+                    W[n, i, l, k, :, :] = val
+
+    if not np.isfinite(W).all():
+        raise ValueError(
+            "Kernel weight tensor contains non-finite entries -- your kernel "
+            "appears to be singular. Pass `kernel_singularity=<location(s)>` "
+            "to declare the singular point(s)."
+        )
+
+    return W
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -212,27 +322,40 @@ def _build_W_scalar(kernel, mesh_breakpoints: np.ndarray,
 class _SolutionFunction:
     """Callable wrapping the per-interval Lagrange polynomials.
 
-    `y(t)` evaluates the piecewise polynomial at scalar or array `t`. Exposes
-    `.polynomials` (list of `numpy.polynomial.Polynomial`) and
-    `.mesh_breakpoints` (the mesh used) as attributes.
+    `y(t)` evaluates the piecewise polynomial at scalar or array `t`.
+
+    For scalar problems, `polynomials` is a list of `numpy.polynomial.Polynomial`
+    objects, one per mesh interval. For vector problems with d components,
+    `polynomials` is a list of object arrays of shape `(d,)`, each entry a
+    Polynomial for that component on that interval.
     """
 
-    def __init__(self, polynomials, mesh_breakpoints):
+    def __init__(self, polynomials, mesh_breakpoints, d: int = 0):
         self.polynomials = polynomials
         self.mesh_breakpoints = np.asarray(mesh_breakpoints)
+        # d == 0 marks a scalar problem; d >= 1 marks a vector problem
+        self._d = d
 
     def __call__(self, t):
+        scalar_input = (np.isscalar(t) or np.ndim(t) == 0)
         t_arr = np.atleast_1d(np.asarray(t, dtype=float))
-        out = np.empty(t_arr.shape, dtype=float)
         bps = self.mesh_breakpoints
-        # bisect: each t lands in interval [bps[idx-1], bps[idx]] for idx in [1, M]
         idx = np.searchsorted(bps, t_arr, side='right') - 1
         idx = np.clip(idx, 0, len(self.polynomials) - 1)
+
+        if self._d == 0:
+            out = np.empty(t_arr.shape, dtype=float)
+            for j, (ti, ii) in enumerate(zip(t_arr, idx)):
+                out[j] = self.polynomials[int(ii)](ti)
+            return float(out[0]) if scalar_input else out
+
+        # Vector case: each interval has d component polynomials
+        out = np.empty((len(t_arr), self._d), dtype=float)
         for j, (ti, ii) in enumerate(zip(t_arr, idx)):
-            out[j] = self.polynomials[int(ii)](ti)
-        if np.isscalar(t) or np.ndim(t) == 0:
-            return float(out[0])
-        return out
+            polys_n = self.polynomials[int(ii)]
+            for r in range(self._d):
+                out[j, r] = polys_n[r](ti)
+        return out[0] if scalar_input else out
 
 
 def _build_polynomials(y: np.ndarray, mesh_breakpoints: np.ndarray,
@@ -243,21 +366,53 @@ def _build_polynomials(y: np.ndarray, mesh_breakpoints: np.ndarray,
     """
     p = len(coll_choices)
     M = len(mesh_breakpoints) - 1
-    basis = _lagrange_basis_coefs(coll_divs, coll_choices)  # in normalized coords
+    basis = _lagrange_basis_coefs(coll_divs, coll_choices)
     polys = []
     for n in range(M):
         t_l = mesh_breakpoints[n]
         t_r = mesh_breakpoints[n + 1]
-        h = t_r - t_l
-        # Build poly in normalized coords (sum over k of y[n,k] * basis[k])
         norm_coef = np.zeros(p)
         for k in range(p):
             norm_coef += y[n, k] * basis[k]
-        # Convert: Polynomial in actual time, with domain [t_l, t_r] and window [0, 1]
         poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
                                         window=(0.0, 1.0), symbol='t')
         polys.append(poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim())
     return polys
+
+
+def _build_polynomials_vector(y: np.ndarray, mesh_breakpoints: np.ndarray,
+                               coll_divs: int, coll_choices: list[int],
+                               d: int) -> list:
+    """Vector analogue: y has shape (M, p, d); return list of (d,) Polynomial arrays."""
+    p = len(coll_choices)
+    M = len(mesh_breakpoints) - 1
+    basis = _lagrange_basis_coefs(coll_divs, coll_choices)
+    polys = []
+    for n in range(M):
+        t_l = mesh_breakpoints[n]
+        t_r = mesh_breakpoints[n + 1]
+        comps = np.empty(d, dtype=object)
+        for r in range(d):
+            norm_coef = np.zeros(p)
+            for k in range(p):
+                norm_coef += y[n, k, r] * basis[k]
+            poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
+                                            window=(0.0, 1.0), symbol='t')
+            comps[r] = poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim()
+        polys.append(comps)
+    return polys
+
+
+def _detect_kernel_shape(kernel, sample_u: float):
+    """Sample kernel(u) at a non-singular point and return (is_vector, d)."""
+    sample = np.asarray(kernel(sample_u))
+    if sample.ndim == 0:
+        return False, 1
+    if sample.ndim == 2 and sample.shape[0] == sample.shape[1] and sample.shape[0] >= 1:
+        return True, int(sample.shape[0])
+    raise ValueError(
+        f"kernel(u) must return a scalar or square (d, d) matrix; got shape "
+        f"{tuple(sample.shape)} at u={sample_u}.")
 
 
 def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
@@ -345,30 +500,61 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     widths = np.diff(mesh_breakpoints)
     node_pos = np.asarray(coll_choices, dtype=float) / coll_divs
 
-    # Build W (the precomputed weight tensor)
-    W = _build_W_scalar(kernel, mesh_breakpoints, coll_divs, coll_choices,
-                        kernel_singularity, _smooth_gl_order)
+    # Detect scalar vs vector kernel by sampling at a non-singular point.
+    sample_u = float(widths[0]) * 0.5
+    is_vector, d = _detect_kernel_shape(kernel, sample_u)
 
-    # Evaluate g at all collocation points
-    g_arr = np.zeros((M, p), dtype=np.float64)
+    from . import _dlang as _dlang_module
+    max_p = _dlang_module.function_solve_max_p_d()
+    if p > max_p:
+        raise ValueError(
+            f"len(coll_choices) = {p} exceeds the maximum compiled into the "
+            f"D extension ({max_p}). Use a smaller coll_choices.")
+
+    if not is_vector:
+        W = _build_W_scalar(kernel, mesh_breakpoints, coll_divs, coll_choices,
+                            kernel_singularity, _smooth_gl_order)
+        g_arr = np.zeros((M, p), dtype=np.float64)
+        if g is not None:
+            for n in range(M):
+                t_n = mesh_breakpoints[n]
+                h_n = widths[n]
+                for i in range(p):
+                    g_arr[n, i] = float(g(t_n + node_pos[i] * h_n))
+        y = _dlang_module.function_solve_vie2_d(W, g_arr)
+
+        if return_function:
+            polys = _build_polynomials(y, mesh_breakpoints, coll_divs, coll_choices)
+            y_func = _SolutionFunction(polys, mesh_breakpoints, d=0)
+            return y, y_func
+        return y
+
+    # ----- Vector path -----
+    max_d = _dlang_module.function_solve_max_d_d()
+    if d > max_d:
+        raise ValueError(
+            f"kernel dimension d = {d} exceeds the maximum compiled into the "
+            f"D extension ({max_d}).")
+
+    W = _build_W_vector(kernel, mesh_breakpoints, coll_divs, coll_choices,
+                        kernel_singularity, _smooth_gl_order, d)
+    g_arr = np.zeros((M, p, d), dtype=np.float64)
     if g is not None:
         for n in range(M):
             t_n = mesh_breakpoints[n]
             h_n = widths[n]
             for i in range(p):
-                g_arr[n, i] = float(g(t_n + node_pos[i] * h_n))
-
-    # Solve via the D extension (per-step LU on a templated stack-allocated block).
-    from . import _dlang as _dlang_module
-    if p > _dlang_module.function_solve_max_p_d():
-        raise ValueError(
-            f"len(coll_choices) = {p} exceeds the maximum compiled into the "
-            f"D extension ({_dlang_module.function_solve_max_p_d()}). "
-            f"Use a smaller coll_choices.")
-    y = _dlang_module.function_solve_vie2_d(W, g_arr)
+                g_val = np.asarray(g(t_n + node_pos[i] * h_n), dtype=np.float64)
+                if g_val.shape != (d,):
+                    raise ValueError(
+                        f"g(t) must return a shape ({d},) array for vector kernel; "
+                        f"got shape {tuple(g_val.shape)}")
+                g_arr[n, i, :] = g_val
+    y = _dlang_module.function_solve_vie2_vec_d(W, g_arr)
 
     if return_function:
-        polys = _build_polynomials(y, mesh_breakpoints, coll_divs, coll_choices)
-        y_func = _SolutionFunction(polys, mesh_breakpoints)
+        polys = _build_polynomials_vector(y, mesh_breakpoints, coll_divs,
+                                          coll_choices, d)
+        y_func = _SolutionFunction(polys, mesh_breakpoints, d=d)
         return y, y_func
     return y

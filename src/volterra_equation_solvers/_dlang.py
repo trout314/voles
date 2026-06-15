@@ -31,6 +31,15 @@ def _setup_argtypes() -> None:
     _lib.function_solve_max_p.restype = ctypes.c_int
     _lib.function_solve_max_p.argtypes = []
 
+    _lib.function_solve_max_d.restype = ctypes.c_int
+    _lib.function_solve_max_d.argtypes = []
+
+    _lib.function_solve_vie2_vec.restype = ctypes.c_int
+    _lib.function_solve_vie2_vec.argtypes = [
+        _dp, _dp, ctypes.c_int, ctypes.c_int, ctypes.c_int,  # W, g, M, p, d
+        _dp,                                                   # out_y
+    ]
+
     _lib.volterra_max_coll_params.restype = ctypes.c_int
     _lib.volterra_max_coll_params.argtypes = []
 
@@ -492,6 +501,45 @@ def function_solve_vie2_d(W, g_arr):
 def function_solve_max_p_d() -> int:
     """Max p (number of collocation nodes per interval) compiled into the D extension."""
     return int(_lib.function_solve_max_p())
+
+
+def function_solve_max_d_d() -> int:
+    """Max d (vector kernel dimension) compiled into the D extension."""
+    return int(_lib.function_solve_max_d())
+
+
+def function_solve_vie2_vec_d(W, g_arr):
+    """Call the D vector solver for callable-input VIE-2.
+
+    Parameters
+    ----------
+    W : ndarray, shape (M, p, M, p, d, d), float64, C-contiguous
+        Precomputed weight tensor.
+    g_arr : ndarray, shape (M, p, d), float64, C-contiguous
+        g sampled at collocation points.
+
+    Returns
+    -------
+    out_y : ndarray, shape (M, p, d), float64
+        Solution values at collocation nodes.
+    """
+    W_c = np.ascontiguousarray(W, dtype=np.float64)
+    g_c = np.ascontiguousarray(g_arr, dtype=np.float64)
+    M, p, d = g_c.shape
+    if W_c.shape != (M, p, M, p, d, d):
+        raise ValueError(
+            f"W shape {W_c.shape} incompatible with g shape {g_c.shape}")
+    out_y = np.zeros((M, p, d), dtype=np.float64)
+    ret = _lib.function_solve_vie2_vec(
+        W_c.ctypes.data_as(_dp),
+        g_c.ctypes.data_as(_dp),
+        ctypes.c_int(M),
+        ctypes.c_int(p),
+        ctypes.c_int(d),
+        out_y.ctypes.data_as(_dp),
+    )
+    _check_return(ret, "function_solve_vie2_vec")
+    return out_y
 
 
 def have_lapack_d() -> bool:

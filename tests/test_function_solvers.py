@@ -13,7 +13,11 @@ from volterra_equation_solvers._callable_solvers import function_solve_VIE_2
 
 
 def _collect_node_values(y, mesh_bps, coll_divs, coll_choices, ref):
-    """Max |y_node - ref(t_node)| across all collocation nodes."""
+    """Max ||y_node - ref(t_node)||_inf across all collocation nodes.
+
+    Works for both scalar (y[n,i] is float) and vector (y[n,i] is (d,) array)
+    solutions; np.max(np.abs(...)) collapses to abs() in the scalar case.
+    """
     node_pos = np.asarray(coll_choices, dtype=float) / coll_divs
     err = 0.0
     M = len(mesh_bps) - 1
@@ -22,7 +26,7 @@ def _collect_node_values(y, mesh_bps, coll_divs, coll_choices, ref):
         h_n = mesh_bps[n + 1] - t_n
         for i, pos in enumerate(node_pos):
             t = t_n + pos * h_n
-            err = max(err, abs(y[n, i] - ref(t)))
+            err = max(err, float(np.max(np.abs(y[n, i] - ref(t)))))
     return err
 
 
@@ -446,3 +450,125 @@ def test_scipy_missing_friendly_import_error(monkeypatch, vie2_callable_abel):
             mesh_breakpoints=np.linspace(0, 1, 11) ** 3,
             coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
             kernel_singularity=p["kernel_singularity"])
+
+
+# ---------------------------------------------------------------------------
+# Vector-valued VIE-2 (matrix kernel K, vector g and y)
+# ---------------------------------------------------------------------------
+
+def test_vec_diagonal_matches_scalar(vie2_callable_smooth, vie2_callable_vec_diagonal):
+    """Diagonal K: vector result must equal two independent scalar solves."""
+    sp = vie2_callable_smooth
+    vp = vie2_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 21)
+
+    y_scalar = function_solve_VIE_2(
+        kernel=sp["kernel"], g=sp["g"], mesh_breakpoints=mesh,
+        coll_divs=sp["coll_divs"], coll_choices=sp["coll_choices"])
+    y_vec = function_solve_VIE_2(
+        kernel=vp["kernel"], g=vp["g"], mesh_breakpoints=mesh,
+        coll_divs=vp["coll_divs"], coll_choices=vp["coll_choices"])
+
+    assert y_vec.shape == (len(mesh) - 1, len(sp["coll_choices"]), vp["d"])
+    assert np.allclose(y_vec[..., 0], y_scalar, atol=1e-12)
+    assert np.allclose(y_vec[..., 1], y_scalar, atol=1e-12)
+
+
+def test_vec_diagonal_matches_exact(vie2_callable_vec_diagonal):
+    p = vie2_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-6
+
+
+def test_vec_coupled_kernel_matches_exact(vie2_callable_vec_coupled):
+    """Non-constant 2x2 coupled kernel with known analytic solution."""
+    p = vie2_callable_vec_coupled
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-6
+
+
+def test_vec_constant_coupled_kernel_polynomial_exact():
+    """Constant 2x2 K with polynomial exact y; Lagrange-3 basis captures it exactly."""
+    K_mat = np.array([[1.5, -0.5], [-0.5, 1.5]])
+    K = lambda u: K_mat
+    g = lambda t: np.array([t + 0.5*t**2 - (2/3)*t**3,
+                            t - 1.5*t**2 + (2/3)*t**3])
+    y_exact = lambda t: np.array([t + t**2, t - t**2])
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
+                             coll_divs=3, coll_choices=[0, 1, 2, 3])
+    err = _collect_node_values(y, mesh, 3, [0, 1, 2, 3], y_exact)
+    assert err < 1e-12  # exact within machine precision
+
+
+def test_vec_non_uniform_mesh(vie2_callable_vec_coupled):
+    p = vie2_callable_vec_coupled
+    mesh = np.linspace(0, 1, 21) ** 1.5
+    y = function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-5
+
+
+def test_vec_g_none_treated_as_zero(vie2_callable_vec_diagonal):
+    """g=None on a vector kernel: trivial solution is y=0 of shape (M, p, d)."""
+    p = vie2_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 11)
+    y = function_solve_VIE_2(
+        kernel=p["kernel"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    assert y.shape == (10, 3, p["d"])
+    assert np.allclose(y, 0.0, atol=1e-12)
+
+
+def test_vec_callable_solution_wrapper(vie2_callable_vec_diagonal):
+    p = vie2_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 21)
+    y_arr, y_func = function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        return_function=True)
+
+    # Scalar t -> (d,) array
+    val = y_func(0.37)
+    assert val.shape == (p["d"],)
+    assert np.allclose(val, p["y_exact"](0.37), atol=1e-5)
+
+    # Array t -> (len(t), d) array
+    ts = np.array([0.1, 0.37, 0.5, 0.9])
+    vals = y_func(ts)
+    assert vals.shape == (len(ts), p["d"])
+    expected = np.stack([p["y_exact"](t) for t in ts])
+    assert np.max(np.abs(vals - expected)) < 1e-5
+
+    # Polynomials list has M entries, each a (d,) object array of Polynomials
+    assert len(y_func.polynomials) == len(mesh) - 1
+    assert y_func.polynomials[0].shape == (p["d"],)
+
+
+def test_vec_validation_g_returns_wrong_shape(vie2_callable_vec_diagonal):
+    """g(t) returning wrong-sized array must raise."""
+    p = vie2_callable_vec_diagonal
+    bad_g = lambda t: np.array([t])  # shape (1,) but d=2
+    with pytest.raises(ValueError, match=r"shape \(2,\)"):
+        function_solve_VIE_2(kernel=p["kernel"], g=bad_g,
+                             mesh_breakpoints=np.linspace(0, 1, 11),
+                             coll_divs=p["coll_divs"],
+                             coll_choices=p["coll_choices"])
+
+
+def test_vec_validation_kernel_not_square():
+    """kernel(u) returning a non-square matrix must raise."""
+    bad_K = lambda u: np.array([[1.0, 2.0, 3.0]])  # shape (1, 3)
+    with pytest.raises(ValueError, match="scalar or square"):
+        function_solve_VIE_2(kernel=bad_K, mesh_breakpoints=np.linspace(0, 1, 5),
+                             coll_divs=2, coll_choices=[0, 1, 2])
