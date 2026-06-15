@@ -33,6 +33,9 @@ numba = [
     "numba",
     "scipy",
 ]
+callable = [
+    "scipy",
+]
 dev = [
     "pytest",
     "pytest-cov",
