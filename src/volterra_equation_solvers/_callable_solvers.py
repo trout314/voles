@@ -542,6 +542,9 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     sample_u = float(widths[0]) * 0.5
     is_vector, d = _detect_kernel_shape(kernel, sample_u)
 
+    _maybe_warn_mesh_uniform_with_singularity(
+        mesh_breakpoints, kernel_singularity, show_warnings)
+
     from . import _dlang as _dlang_module
     max_p = _dlang_module.function_solve_max_p_d()
     if p > max_p:
@@ -847,6 +850,71 @@ def _build_vide_polynomials_vector(y_prime: np.ndarray, y_boundary: np.ndarray,
             comps[r] = poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim()
         polys.append(comps)
     return polys
+
+
+# ---------------------------------------------------------------------------
+# Mesh helpers
+# ---------------------------------------------------------------------------
+
+def optimal_graded_mesh(*, alpha: float, T: float, M: int,
+                        coll_choices: list[int]) -> np.ndarray:
+    r"""Return a graded mesh of M+1 breakpoints suitable for a weakly
+    singular convolution kernel $K(u) \sim u^{-\alpha}$, $\alpha \in [0, 1)$.
+
+    Grading: $t_n = T \cdot (n/M)^r$ with $r = p / (1 - \alpha)$, where
+    $p = $ ``len(coll_choices)`` is the order of the collocation method
+    (number of collocation nodes per interval). This recovers the optimal
+    convergence order for Abel-type kernels (per Brunner ch. 6).
+
+    Parameters
+    ----------
+    alpha : float
+        Singularity exponent, in $[0, 1)$.
+    T : float
+        Right endpoint of the mesh (positive).
+    M : int
+        Number of intervals (positive). The returned array has length M+1.
+    coll_choices : list of int
+        Collocation choice list that will be passed to the solver. Only the
+        length is used (determines the method order).
+
+    Returns
+    -------
+    mesh_breakpoints : ndarray of shape (M+1,)
+        Strictly-increasing breakpoints with ``[0] == 0`` and ``[-1] == T``.
+    """
+    if not 0.0 <= alpha < 1.0:
+        raise ValueError(f"alpha must satisfy 0 <= alpha < 1, got {alpha}")
+    if T <= 0:
+        raise ValueError(f"T must be positive, got {T}")
+    if M < 1:
+        raise ValueError(f"M must be a positive integer, got {M}")
+    if not coll_choices:
+        raise ValueError("coll_choices must be non-empty")
+    p = len(coll_choices)
+    r = p / (1.0 - alpha)
+    n = np.arange(M + 1, dtype=np.float64)
+    return T * (n / M) ** r
+
+
+def _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints: np.ndarray,
+                                              kernel_singularity,
+                                              show_warnings: bool) -> None:
+    """If a singularity is declared but the mesh appears uniform (max/min
+    interval ratio < 1.5), suggest `optimal_graded_mesh`.
+    """
+    if not show_warnings or kernel_singularity is None:
+        return
+    widths = np.diff(mesh_breakpoints)
+    ratio = float(widths.max() / widths.min())
+    if ratio < 1.5:
+        print(
+            "warning: kernel_singularity is declared but the mesh appears "
+            "uniform (max/min interval ratio = {:.2f}). For optimal "
+            "convergence on weakly singular problems, consider "
+            "`optimal_graded_mesh(alpha=..., T=..., M=..., "
+            "coll_choices=...)`.".format(ratio)
+        )
 
 
 # ---------------------------------------------------------------------------

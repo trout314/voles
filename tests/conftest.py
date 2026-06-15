@@ -208,6 +208,7 @@ def vie2_callable_abel():
         coll_divs=2,
         coll_choices=[0, 1, 2],
         kernel_singularity=0.0,
+        alpha=0.5,
     )
 
 
@@ -252,6 +253,41 @@ def vie1_callable_smooth():
         y_exact=lambda t: np.cos(t) - np.sin(t),
         coll_divs=3,
         coll_choices=[1, 2, 3],
+    )
+
+
+# Abel-type VIE-1: K(u) = u^{-1/2}, exact y(t)=sqrt(t).
+# Derivation: integral_0^t (t-s)^{-1/2} sqrt(s) ds = pi*t/2, so g(t) = pi*t/2.
+@pytest.fixture
+def vie1_callable_abel():
+    return dict(
+        kernel=lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0,
+        g=lambda t: 0.5 * np.pi * t,
+        y_exact=np.sqrt,
+        coll_divs=3,
+        coll_choices=[1, 2, 3],
+        kernel_singularity=0.0,
+        alpha=0.5,
+    )
+
+
+# Abel-type VIDE: K(u) = u^{-1/2}, a(t)=0, exact y(t)=t^{3/2}, y(0)=0.
+# Derivation: y'(t) = (3/2)*sqrt(t).
+#   integral_0^t (t-s)^{-1/2} s^{3/2} ds = t^2 * B(5/2, 1/2) = (3*pi/8) * t^2
+#   (Beta-function exponent is a+b+1 = -1/2 + 3/2 + 1 = 2.)
+# So g(t) = (3/2)*sqrt(t) - (3*pi/8)*t^2.
+@pytest.fixture
+def vide_callable_abel():
+    return dict(
+        kernel=lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0,
+        a=None,
+        g=lambda t: 1.5 * np.sqrt(t) - (3 * np.pi / 8.0) * t**2,
+        y_exact=lambda t: t**1.5,
+        soln_init_value=0.0,
+        coll_divs=2,
+        coll_choices=[0, 1, 2],
+        kernel_singularity=0.0,
+        alpha=0.5,
     )
 
 

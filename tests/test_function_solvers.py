@@ -11,6 +11,7 @@ import pytest
 
 from volterra_equation_solvers._callable_solvers import (
     function_solve_VIE_2, function_solve_VIDE, function_solve_VIE_1,
+    optimal_graded_mesh,
 )
 
 
@@ -921,3 +922,207 @@ def test_vie1_silent_when_show_warnings_false(capsys):
                          soln_init_value=1.0, force_continuous=False,
                          show_warnings=False)
     assert capsys.readouterr().out == ""
+
+
+# ---------------------------------------------------------------------------
+# optimal_graded_mesh helper
+# ---------------------------------------------------------------------------
+
+def test_graded_mesh_basic_properties():
+    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=20, coll_choices=[0, 1, 2])
+    assert mesh.shape == (21,)
+    assert mesh[0] == 0.0
+    assert mesh[-1] == pytest.approx(1.0)
+    assert np.all(np.diff(mesh) > 0)  # strictly increasing
+
+
+def test_graded_mesh_grading_increases_with_alpha():
+    """Higher alpha -> stronger grading (larger ratio of last/first interval)."""
+    M = 20
+    cc = [0, 1, 2]
+    def ratio(alpha):
+        mesh = optimal_graded_mesh(alpha=alpha, T=1.0, M=M, coll_choices=cc)
+        widths = np.diff(mesh)
+        return widths[-1] / widths[0]
+    assert ratio(0.0) < ratio(0.3) < ratio(0.5) < ratio(0.7)
+
+
+def test_graded_mesh_alpha_zero_is_uniform():
+    """alpha=0 -> r=p, but the asymptotic uniformity holds only when p=1.
+    Still, increasing M makes the result approach a smooth power-law mesh."""
+    mesh = optimal_graded_mesh(alpha=0.0, T=1.0, M=10, coll_choices=[1])
+    # r = 1 means t_n = T*(n/M), i.e. uniform.
+    expected = np.linspace(0.0, 1.0, 11)
+    assert np.allclose(mesh, expected)
+
+
+def test_graded_mesh_validation():
+    with pytest.raises(ValueError, match="alpha"):
+        optimal_graded_mesh(alpha=1.0, T=1.0, M=10, coll_choices=[1, 2])
+    with pytest.raises(ValueError, match="alpha"):
+        optimal_graded_mesh(alpha=-0.1, T=1.0, M=10, coll_choices=[1, 2])
+    with pytest.raises(ValueError, match="T"):
+        optimal_graded_mesh(alpha=0.5, T=-1.0, M=10, coll_choices=[1, 2])
+    with pytest.raises(ValueError, match="M"):
+        optimal_graded_mesh(alpha=0.5, T=1.0, M=0, coll_choices=[1, 2])
+    with pytest.raises(ValueError, match="coll_choices"):
+        optimal_graded_mesh(alpha=0.5, T=1.0, M=10, coll_choices=[])
+
+
+def test_graded_mesh_recovers_high_order_on_abel(vie2_callable_abel):
+    """optimal_graded_mesh should beat a uniform mesh by orders of magnitude."""
+    p = vie2_callable_abel
+    M = 30
+    common = dict(kernel=p["kernel"], g=p["g"],
+                  coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+                  kernel_singularity=p["kernel_singularity"],
+                  show_warnings=False)
+    uniform = np.linspace(0, 1, M + 1)
+    graded = optimal_graded_mesh(alpha=0.5, T=1.0, M=M, coll_choices=p["coll_choices"])
+    y_uniform = function_solve_VIE_2(mesh_breakpoints=uniform, **common)
+    y_graded = function_solve_VIE_2(mesh_breakpoints=graded, **common)
+    err_u = _collect_node_values(y_uniform, uniform, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    err_g = _collect_node_values(y_graded, graded, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err_g < err_u / 100
+
+
+# ---------------------------------------------------------------------------
+# Foot-gun warning: kernel_singularity declared but mesh appears uniform.
+# ---------------------------------------------------------------------------
+
+def test_uniform_mesh_with_singularity_warns(capsys, vie2_callable_abel):
+    p = vie2_callable_abel
+    function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"],
+        mesh_breakpoints=np.linspace(0, 1, 21),
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        kernel_singularity=p["kernel_singularity"], show_warnings=True)
+    assert "optimal_graded_mesh" in capsys.readouterr().out
+
+
+def test_graded_mesh_with_singularity_silent(capsys, vie2_callable_abel):
+    p = vie2_callable_abel
+    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=20, coll_choices=p["coll_choices"])
+    function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        kernel_singularity=p["kernel_singularity"], show_warnings=True)
+    out = capsys.readouterr().out
+    assert "optimal_graded_mesh" not in out
+
+
+def test_smooth_kernel_uniform_mesh_does_not_warn(capsys, vie2_callable_smooth):
+    """The warning should fire ONLY when a singularity is declared."""
+    p = vie2_callable_smooth
+    function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"],
+        mesh_breakpoints=np.linspace(0, 1, 21),
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        show_warnings=True)
+    assert capsys.readouterr().out == ""
+
+
+def test_singularity_warning_silenced_by_show_warnings_false(capsys, vie2_callable_abel):
+    p = vie2_callable_abel
+    function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"],
+        mesh_breakpoints=np.linspace(0, 1, 21),
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        kernel_singularity=p["kernel_singularity"], show_warnings=False)
+    assert capsys.readouterr().out == ""
+
+
+# ---------------------------------------------------------------------------
+# Singular-kernel path for VIE-1 and VIDE (we only had VIE-2 coverage before).
+# ---------------------------------------------------------------------------
+
+def test_vie1_singular_kernel_graded_mesh(vie1_callable_abel):
+    """Abel VIE-1 with graded mesh should recover much better than uniform."""
+    p = vie1_callable_abel
+    M = 30
+    common = dict(kernel=p["kernel"], g=p["g"],
+                  coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+                  kernel_singularity=p["kernel_singularity"],
+                  show_warnings=False)
+    uniform = np.linspace(0, 1, M + 1)
+    graded = optimal_graded_mesh(alpha=p["alpha"], T=1.0, M=M,
+                                 coll_choices=p["coll_choices"])
+    y_uniform = function_solve_VIE_1(mesh_breakpoints=uniform, **common)
+    y_graded = function_solve_VIE_1(mesh_breakpoints=graded, **common)
+    err_u = _collect_node_values(y_uniform, uniform, p["coll_divs"],
+                                 p["coll_choices"], p["y_exact"])
+    err_g = _collect_node_values(y_graded, graded, p["coll_divs"],
+                                 p["coll_choices"], p["y_exact"])
+    assert err_g < err_u / 10  # at least 10x better
+
+
+def test_vide_singular_kernel_graded_mesh(vide_callable_abel):
+    """Abel VIDE with graded mesh should match exact solution well."""
+    p = vide_callable_abel
+    M = 40
+    graded = optimal_graded_mesh(alpha=p["alpha"], T=1.0, M=M,
+                                 coll_choices=p["coll_choices"])
+    y = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"],
+        mesh_breakpoints=graded,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        kernel_singularity=p["kernel_singularity"], show_warnings=False)
+    err = _collect_node_values(y, graded, p["coll_divs"],
+                               p["coll_choices"], p["y_exact"])
+    assert err < 1e-3
+
+
+def test_vie1_singular_undeclared_raises():
+    """VIE-1 with K=1/u (non-integrable) and no singularity declared -> error."""
+    K_bad = lambda u: 1.0 / u if u > 0 else float("inf")
+    with pytest.warns(), pytest.raises(ValueError, match="non-finite"):
+        function_solve_VIE_1(kernel=K_bad, g=lambda t: t,
+                             mesh_breakpoints=np.linspace(0, 1, 11),
+                             coll_divs=3, coll_choices=[1, 2, 3])
+
+
+def test_vide_singular_undeclared_raises():
+    """VIDE with K=1/u and no singularity declared -> error."""
+    K_bad = lambda u: 1.0 / u if u > 0 else float("inf")
+    with pytest.warns(), pytest.raises(ValueError, match="non-finite"):
+        function_solve_VIDE(kernel=K_bad, g=lambda t: t, soln_init_value=0.0,
+                            mesh_breakpoints=np.linspace(0, 1, 11),
+                            coll_divs=2, coll_choices=[0, 1, 2])
+
+
+# ---------------------------------------------------------------------------
+# Formal Abel convergence test: with the optimal graded mesh, the error
+# should decrease by at least 4x when M is doubled (giving roughly the
+# polynomial-order rate recovered by the grading).
+# ---------------------------------------------------------------------------
+
+def test_abel_convergence_with_graded_mesh(vie2_callable_abel):
+    p = vie2_callable_abel
+    def err_at(M):
+        mesh = optimal_graded_mesh(alpha=p["alpha"], T=1.0, M=M,
+                                   coll_choices=p["coll_choices"])
+        y = function_solve_VIE_2(
+            kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+            coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+            kernel_singularity=p["kernel_singularity"], show_warnings=False)
+        return _collect_node_values(y, mesh, p["coll_divs"],
+                                    p["coll_choices"], p["y_exact"])
+
+    e_coarse = err_at(20)
+    e_fine = err_at(40)
+    # With optimal grading the recovered rate is the method order p=3
+    # (~ factor 8 per halving), but real-world performance varies; require >=4.
+    assert e_coarse / e_fine > 4.0
+
+
+# ---------------------------------------------------------------------------
+# Package-level exports (smoke test that import-path works for users).
+# ---------------------------------------------------------------------------
+
+def test_package_level_exports():
+    import volterra_equation_solvers as ves
+    assert ves.function_solve_VIE_1 is function_solve_VIE_1
+    assert ves.function_solve_VIE_2 is function_solve_VIE_2
+    assert ves.function_solve_VIDE is function_solve_VIDE
+    assert ves.optimal_graded_mesh is optimal_graded_mesh
