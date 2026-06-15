@@ -6,16 +6,32 @@ Collocation-method solvers for Volterra integral and integro-differential equati
 
 ## Solvers
 
-| Function | Equation |
-|----------|----------|
-| `solve_VIE_1` | $g(t) = \int_0^t K(t-s)y(s)ds$ |
-| `solve_VIE_2` | $y(t) = g(t) + \int_0^t K(t-s)y(s)ds$ |
-| `solve_VIDE`  | $y'(t) = a(t)y(t) + g(t) + \int_0^t K(t-s)y(s)ds$ |
+Two families of solvers are provided. The **array-based** family is the
+fastest path when the kernel and forcing are already sampled on a uniform
+grid; the **callable-input** family accepts callables, supports arbitrary
+meshes, and handles weakly singular kernels.
+
+| Equation | Array-based | Callable-input |
+|----------|-------------|----------------|
+| $g(t) = \int_0^t K(t-s)y(s)ds$ | `solve_VIE_1` | `function_solve_VIE_1` |
+| $y(t) = g(t) + \int_0^t K(t-s)y(s)ds$ | `solve_VIE_2` | `function_solve_VIE_2` |
+| $y'(t) = a(t)y(t) + g(t) + \int_0^t K(t-s)y(s)ds$ | `solve_VIDE` | `function_solve_VIDE` |
+
+The callable-input solvers also expose `optimal_graded_mesh(alpha, T, M,
+coll_choices)` for building a Brunner-graded mesh suitable for kernels
+with a $u^{-\alpha}$ singularity.
 
 ## Quick install
 
 ```bash
 pip install git+https://github.com/trout314/volterra-equation-solvers
+```
+
+The callable-input solvers (`function_solve_*`, `optimal_graded_mesh`)
+additionally require `scipy`:
+
+```bash
+pip install "volterra-equation-solvers[callable] @ git+https://github.com/trout314/volterra-equation-solvers"
 ```
 
 ## Mathematical derivations

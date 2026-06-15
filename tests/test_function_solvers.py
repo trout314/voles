@@ -1126,3 +1126,110 @@ def test_package_level_exports():
     assert ves.function_solve_VIE_2 is function_solve_VIE_2
     assert ves.function_solve_VIDE is function_solve_VIDE
     assert ves.optimal_graded_mesh is optimal_graded_mesh
+
+
+# ---------------------------------------------------------------------------
+# Non-uniform mesh stress tests
+#
+# Push the solvers on meshes with extreme width ratios, very many intervals,
+# and worst-case configurations to make sure nothing blows up numerically.
+# ---------------------------------------------------------------------------
+
+def test_stress_extreme_width_ratio_vie2(vie2_callable_smooth):
+    """Mesh where the largest interval is roughly 1000x the smallest."""
+    p = vie2_callable_smooth
+    # 10 tiny intervals at the start, then 10 large ones.
+    tiny = np.linspace(0.0, 0.001, 11)
+    large = np.linspace(0.001, 1.0, 11)[1:]
+    mesh = np.concatenate([tiny, large])
+    assert (np.diff(mesh).max() / np.diff(mesh).min()) > 500
+    y = function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    assert np.all(np.isfinite(y))
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-2  # loose -- large intervals limit overall accuracy
+
+
+def test_stress_many_intervals_vie2(vie2_callable_smooth):
+    """500-interval mesh: setup cost is the main risk, not correctness."""
+    p = vie2_callable_smooth
+    mesh = np.linspace(0, 1, 501)
+    y = function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-10
+
+
+def test_stress_strong_grading_vie2(vie2_callable_abel):
+    """r=10 grading -- extreme clustering near 0 for the Abel kernel."""
+    p = vie2_callable_abel
+    M = 40
+    mesh = np.linspace(0.0, 1.0, M + 1) ** 10
+    y = function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        kernel_singularity=p["kernel_singularity"], show_warnings=False)
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-3 and np.all(np.isfinite(y))
+
+
+def test_stress_vide_extreme_width_ratio(vide_callable_smooth):
+    p = vide_callable_smooth
+    tiny = np.linspace(0.0, 0.001, 6)
+    large = np.linspace(0.001, 1.0, 11)[1:]
+    mesh = np.concatenate([tiny, large])
+    y = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"],
+        mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    assert np.all(np.isfinite(y))
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-2
+
+
+def test_stress_vie1_extreme_width_ratio(vie1_callable_smooth):
+    p = vie1_callable_smooth
+    tiny = np.linspace(0.0, 0.001, 6)
+    large = np.linspace(0.001, 1.0, 11)[1:]
+    mesh = np.concatenate([tiny, large])
+    y = function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    assert np.all(np.isfinite(y))
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-2
+
+
+def test_stress_single_long_interval(vie2_callable_smooth):
+    """One huge interval forces all collocation nodes into the same Lagrange
+    polynomial of degree p-1; useful to verify the M=1 corner is exercised."""
+    p = vie2_callable_smooth
+    mesh = np.array([0.0, 5.0])
+    y = function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    assert y.shape == (1, len(p["coll_choices"]))
+    assert np.all(np.isfinite(y))
+
+
+def test_stress_t_large_via_mesh():
+    """Solve out to t = 50 (50x the typical domain) on a smooth problem."""
+    K = lambda u: np.exp(-u)
+    # y(t) = sin(t) still satisfies the equation; g is shifted accordingly.
+    g = lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t))
+    mesh = np.linspace(0, 50, 501)
+    y = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
+                              coll_divs=2, coll_choices=[0, 1, 2])
+    assert np.all(np.isfinite(y))
+    # Check accuracy at a few representative points: K decays so error grows slowly.
+    node_pos = np.array([0, 1, 2]) / 2.0
+    err = 0.0
+    for n in range(len(mesh) - 1):
+        t_n = mesh[n]; h_n = mesh[n + 1] - t_n
+        for i, pos in enumerate(node_pos):
+            t = t_n + pos * h_n
+            err = max(err, abs(y[n, i] - np.sin(t)))
+    assert err < 1e-3

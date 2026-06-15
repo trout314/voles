@@ -131,36 +131,74 @@ def _normalize_kernel_singularity(kernel_singularity):
     return lambda t, _us=tuple(declared): [t - u for u in _us]
 
 
+import functools as _functools
+
+
+@_functools.lru_cache(maxsize=16)
 def _gauss_legendre_nodes_weights(order: int) -> tuple[np.ndarray, np.ndarray]:
-    """Standard Gauss-Legendre nodes and weights on [-1, 1]."""
+    """Standard Gauss-Legendre nodes and weights on [-1, 1] (cached per order)."""
     nodes, weights = np.polynomial.legendre.leggauss(order)
+    nodes.setflags(write=False)
+    weights.setflags(write=False)
     return nodes, weights
 
 
-def _fixed_order_quad(integrand, a: float, b: float, order: int) -> float:
-    """Apply Gauss-Legendre of given order on [a, b]."""
+def _fixed_order_quad(integrand, a: float, b: float, order: int,
+                      vectorized: bool = False) -> float:
+    """Apply Gauss-Legendre of given order on [a, b].
+
+    When ``vectorized`` is True, the integrand is called once with the full
+    array of GL nodes; otherwise it is called once per node (compatible with
+    integrands that only accept scalar input).
+    """
     if b <= a:
         return 0.0
     nodes, weights = _gauss_legendre_nodes_weights(order)
     half = 0.5 * (b - a)
     mid = 0.5 * (a + b)
     s_points = mid + half * nodes
-    vals = np.array([integrand(s) for s in s_points])
+    if vectorized:
+        vals = np.asarray(integrand(s_points), dtype=np.float64)
+    else:
+        vals = np.array([integrand(s) for s in s_points])
     return float(half * np.dot(weights, vals))
 
 
 def _fixed_order_quad_matrix(integrand, a: float, b: float, order: int,
-                              d: int) -> np.ndarray:
-    """Gauss-Legendre on a (d, d)-valued integrand on [a, b]."""
+                              d: int, vectorized: bool = False) -> np.ndarray:
+    """Gauss-Legendre on a (d, d)-valued integrand on [a, b].
+
+    Vectorized path expects the integrand to return shape ``(order, d, d)``
+    when called with the (order,) array of GL nodes.
+    """
     if b <= a:
         return np.zeros((d, d), dtype=np.float64)
     nodes, weights = _gauss_legendre_nodes_weights(order)
     half = 0.5 * (b - a)
     mid = 0.5 * (a + b)
+    if vectorized:
+        s_points = mid + half * nodes
+        vals = np.asarray(integrand(s_points), dtype=np.float64)
+        return half * np.einsum('i,ijk->jk', weights, vals)
     result = np.zeros((d, d), dtype=np.float64)
     for x, w in zip(nodes, weights):
         result += w * np.asarray(integrand(mid + half * x), dtype=np.float64)
     return half * result
+
+
+def _detect_kernel_vectorized(kernel, sample_u: float, is_vector: bool, d: int) -> bool:
+    """Return True if ``kernel`` returns the expected shape when called with
+    a small array of u values. Detected once at the top of a W build to pick
+    the vectorized GL path uniformly.
+    """
+    test_arr = np.array([sample_u, sample_u * 1.1, sample_u * 1.2])
+    try:
+        result = kernel(test_arr)
+    except Exception:
+        return False
+    arr = np.asarray(result)
+    expected = (3, d, d) if is_vector else (3,)
+    return arr.shape == expected
 
 
 def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
@@ -181,6 +219,11 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
     node_pos = np.asarray(coll_choices, dtype=float) / coll_divs
     widths = np.diff(mesh_breakpoints)
     singular_locs = _normalize_kernel_singularity(kernel_singularity)
+
+    # Detect once whether the kernel broadcasts over a numpy array of u values;
+    # if so, the smooth-path GL quadrature can be done in a single numpy call.
+    sample_u = float(widths[0]) * 0.5
+    kernel_vec = _detect_kernel_vectorized(kernel, sample_u, is_vector=False, d=0)
 
     quad = None
     W = np.zeros((M, p, M, n_basis), dtype=np.float64)
@@ -216,7 +259,7 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
 
                     def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs):
                         x_norm = (s - _t_l) / _h_l
-                        return kernel(_tau - s) * _eval_poly_at(_L_k, x_norm)
+                        return kernel(_tau - s) * npp.polyval(x_norm, _L_k)
 
                     if use_adaptive:
                         if quad is None:
@@ -227,9 +270,9 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                         val, _err = quad(integrand, a_int, b_int, **kwargs)
                     else:
                         v1 = _fixed_order_quad(integrand, a_int, b_int,
-                                               smooth_gl_order)
+                                               smooth_gl_order, vectorized=kernel_vec)
                         v2 = _fixed_order_quad(integrand, a_int, b_int,
-                                               smooth_gl_order + 2)
+                                               smooth_gl_order + 2, vectorized=kernel_vec)
                         if abs(v1 - v2) <= smooth_check_tol * max(1.0, abs(v2)):
                             val = v2
                         else:
@@ -272,6 +315,9 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
     widths = np.diff(mesh_breakpoints)
     singular_locs = _normalize_kernel_singularity(kernel_singularity)
 
+    sample_u = float(widths[0]) * 0.5
+    kernel_vec = _detect_kernel_vectorized(kernel, sample_u, is_vector=True, d=d)
+
     quad_vec = None
     W = np.zeros((M, p, M, n_basis, d, d), dtype=np.float64)
 
@@ -304,10 +350,18 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 for k in range(n_basis):
                     L_k_coefs = basis[k]
 
-                    def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs):
-                        x_norm = (s - _t_l) / _h_l
-                        K = np.asarray(kernel(_tau - s), dtype=np.float64)
-                        return K * _eval_poly_at(_L_k, x_norm)
+                    if kernel_vec:
+                        def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs):
+                            x_norm = (s - _t_l) / _h_l
+                            K = np.asarray(kernel(_tau - s), dtype=np.float64)
+                            # poly is scalar/(n,); K is (d,d)/(n,d,d). Broadcast.
+                            return K * npp.polyval(x_norm, _L_k)[..., None, None] \
+                                if K.ndim == 3 else K * float(npp.polyval(x_norm, _L_k))
+                    else:
+                        def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs):
+                            x_norm = (s - _t_l) / _h_l
+                            K = np.asarray(kernel(_tau - s), dtype=np.float64)
+                            return K * _eval_poly_at(_L_k, x_norm)
 
                     if use_adaptive:
                         if quad_vec is None:
@@ -318,9 +372,9 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                         val, _err = quad_vec(integrand, a_int, b_int, **kwargs)
                     else:
                         v1 = _fixed_order_quad_matrix(integrand, a_int, b_int,
-                                                     smooth_gl_order, d)
+                                                     smooth_gl_order, d, vectorized=kernel_vec)
                         v2 = _fixed_order_quad_matrix(integrand, a_int, b_int,
-                                                     smooth_gl_order + 2, d)
+                                                     smooth_gl_order + 2, d, vectorized=kernel_vec)
                         err = float(np.max(np.abs(v1 - v2)))
                         ref = max(1.0, float(np.max(np.abs(v2))))
                         if err <= smooth_check_tol * ref:

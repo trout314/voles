@@ -30,10 +30,17 @@ nav:
   - Home: index.md
   - Getting Started: getting_started.md
   - API Reference:
-      - solve_VIE_1: api/vie1.md
-      - solve_VIE_2: api/vie2.md
-      - solve_VIDE: api/vide.md
+      - Array-based solvers:
+          - solve_VIE_1: api/vie1.md
+          - solve_VIE_2: api/vie2.md
+          - solve_VIDE: api/vide.md
+      - Callable-input solvers:
+          - function_solve_VIE_1: api/function_vie1.md
+          - function_solve_VIE_2: api/function_vie2.md
+          - function_solve_VIDE: api/function_vide.md
+          - optimal_graded_mesh: api/optimal_graded_mesh.md
   - Examples:
       - VIE Type 1: examples/vie1.md
       - VIE Type 2: examples/vie2.md
       - VIDE: examples/vide.md
+      - Callable inputs and arbitrary mesh: examples/function_solvers.md
