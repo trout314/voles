@@ -847,3 +847,174 @@ def _build_vide_polynomials_vector(y_prime: np.ndarray, y_boundary: np.ndarray,
             comps[r] = poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim()
         polys.append(comps)
     return polys
+
+
+# ---------------------------------------------------------------------------
+# VIE-1: g(t) = integral_0^t K(t-s) y(s) ds
+# ---------------------------------------------------------------------------
+
+# Same non-convergent settings as the array-based solver (empirical, grid-refinement).
+_VIE1_NONCONVERGENT = {(3, (1,)), (4, (1,)), (4, (1, 2))}
+
+
+def _lagrange_at(coll_divs, coll_choices, x):
+    """Return the row vector [L_0(x), L_1(x), ..., L_{p-1}(x)] in normalized coords."""
+    basis = _lagrange_basis_coefs(coll_divs, coll_choices)
+    p = basis.shape[0]
+    return np.array([_eval_poly_at(basis[k], x) for k in range(p)], dtype=np.float64)
+
+
+def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
+                          mesh_breakpoints,
+                          coll_divs: int = 3, coll_choices: list[int] = [1, 2, 3],
+                          kernel_singularity=None,
+                          return_function: bool = False,
+                          force_continuous: bool = False,
+                          show_warnings: bool = True,
+                          _smooth_gl_order: int = 6):
+    r"""Solve the Volterra integral equation of the first kind
+
+    $$g(t) = \int_0^t K(t-s)\,y(s)\,ds$$
+
+    with callable kernel and right-hand side on an arbitrary mesh. Zero is not
+    a permitted collocation node (both sides of the equation vanish at t=0).
+
+    Parameters
+    ----------
+    kernel : callable
+        ``kernel(u)`` returns $K(u)$.
+    g : callable, optional
+        ``g(t)`` returns the right-hand side. Defaults to zero (trivial y=0).
+    soln_init_value : float or array_like, optional
+        $y(0)$. Required only when ``force_continuous=True``; ignored
+        otherwise. A warning is emitted if a value is passed when it has no
+        effect.
+    mesh_breakpoints : array_like
+        Strictly-increasing 1-D array starting at 0.
+    coll_divs, coll_choices : int, list of int
+        Collocation nodes lie at ``coll_choices[k] / coll_divs`` in (0, 1].
+        Zero is excluded from ``coll_choices``.
+    force_continuous : bool, optional
+        If ``True``, replace one collocation equation per interval with a
+        continuity constraint on the piecewise polynomial solution. The first
+        interval uses ``soln_init_value`` as the starting condition; later
+        intervals match the previous interval's right endpoint. The default
+        discontinuous method is generally more accurate.
+    kernel_singularity, return_function, show_warnings :
+        See ``function_solve_VIE_2``.
+    """
+    mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
+    if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
+        raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
+    if not np.all(np.diff(mesh_breakpoints) > 0):
+        raise ValueError("mesh_breakpoints must be strictly increasing")
+    if mesh_breakpoints[0] != 0.0:
+        raise ValueError("mesh_breakpoints[0] must be 0")
+
+    if coll_divs < 1:
+        raise ValueError("coll_divs must be a positive integer")
+    for c in coll_choices:
+        if isinstance(c, bool) or not isinstance(c, (int, np.integer)):
+            raise ValueError(
+                f"coll_choices must be a list of integers, got {type(c).__name__}")
+    coll_choices = sorted(int(c) for c in coll_choices)
+    if 0 in coll_choices:
+        raise ValueError(
+            "zero is not a valid VIE-1 collocation choice (both sides of the "
+            "equation vanish at t=0)")
+    if len(set(coll_choices)) != len(coll_choices):
+        raise ValueError("coll_choices entries must be distinct")
+    for c in coll_choices:
+        if not 1 <= c <= coll_divs:
+            raise ValueError(f"coll_choices must lie in [1, {coll_divs}]")
+
+    if (coll_divs, tuple(coll_choices)) in _VIE1_NONCONVERGENT:
+        raise ValueError(
+            f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
+            f"does not produce a convergent VIE-1 solver and is not supported.")
+
+    if not callable(kernel):
+        raise TypeError("kernel must be callable")
+    if g is not None and not callable(g):
+        raise TypeError("g must be callable or None")
+
+    if force_continuous and soln_init_value is None:
+        raise ValueError("must specify soln_init_value when force_continuous=True")
+    if not force_continuous and soln_init_value is not None and show_warnings:
+        print("warning: setting soln_init_value has no effect when force_continuous=False.")
+
+    M = len(mesh_breakpoints) - 1
+    p = len(coll_choices)
+    widths = np.diff(mesh_breakpoints)
+    node_pos = np.asarray(coll_choices, dtype=float) / coll_divs
+
+    from . import _dlang as _dlang_module
+    max_p = _dlang_module.function_solve_max_p_d()
+    if p > max_p:
+        raise ValueError(
+            f"len(coll_choices) = {p} exceeds the maximum compiled into the "
+            f"D extension ({max_p}).")
+
+    sample_u = float(widths[0]) * 0.5
+    is_vector, d = _detect_kernel_shape(kernel, sample_u)
+
+    # Continuity-constraint vectors (only used when force_continuous=True).
+    L_at_0 = _lagrange_at(coll_divs, coll_choices, 0.0)
+    L_at_1 = _lagrange_at(coll_divs, coll_choices, 1.0)
+
+    if not is_vector:
+        W = _build_W_scalar(kernel, mesh_breakpoints, coll_divs, coll_choices,
+                            kernel_singularity, _smooth_gl_order)
+        g_arr = np.zeros((M, p), dtype=np.float64)
+        if g is not None:
+            for n in range(M):
+                t_n = mesh_breakpoints[n]
+                h_n = widths[n]
+                for i in range(p):
+                    g_arr[n, i] = float(g(t_n + node_pos[i] * h_n))
+        init_scalar = float(soln_init_value) if force_continuous else 0.0
+        y = _dlang_module.function_solve_vie1_d(
+            W, g_arr, force_continuous, L_at_0, L_at_1, init_scalar)
+        if return_function:
+            polys = _build_polynomials(y, mesh_breakpoints, coll_divs, coll_choices)
+            y_func = _SolutionFunction(polys, mesh_breakpoints, d=0)
+            return y, y_func
+        return y
+
+    # ----- Vector path -----
+    max_d = _dlang_module.function_solve_max_d_d()
+    if d > max_d:
+        raise ValueError(
+            f"kernel dimension d = {d} exceeds the maximum compiled into the "
+            f"D extension ({max_d}).")
+    if force_continuous:
+        init_vec = np.asarray(soln_init_value, dtype=np.float64)
+        if init_vec.shape != (d,):
+            raise ValueError(
+                f"soln_init_value must have shape ({d},) for vector kernel; "
+                f"got shape {tuple(init_vec.shape)}")
+    else:
+        init_vec = np.zeros(d, dtype=np.float64)
+
+    W = _build_W_vector(kernel, mesh_breakpoints, coll_divs, coll_choices,
+                        kernel_singularity, _smooth_gl_order, d)
+    g_arr = np.zeros((M, p, d), dtype=np.float64)
+    if g is not None:
+        for n in range(M):
+            t_n = mesh_breakpoints[n]
+            h_n = widths[n]
+            for i in range(p):
+                g_val = np.asarray(g(t_n + node_pos[i] * h_n), dtype=np.float64)
+                if g_val.shape != (d,):
+                    raise ValueError(
+                        f"g(t) must return a shape ({d},) array for vector kernel; "
+                        f"got shape {tuple(g_val.shape)}")
+                g_arr[n, i, :] = g_val
+    y = _dlang_module.function_solve_vie1_vec_d(
+        W, g_arr, force_continuous, L_at_0, L_at_1, init_vec)
+
+    if return_function:
+        polys = _build_polynomials_vector(y, mesh_breakpoints, coll_divs, coll_choices, d)
+        y_func = _SolutionFunction(polys, mesh_breakpoints, d=d)
+        return y, y_func
+    return y

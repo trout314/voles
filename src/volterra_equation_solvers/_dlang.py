@@ -56,6 +56,20 @@ def _setup_argtypes() -> None:
         _dp, _dp,                                                       # out_y_prime, out_y_boundary
     ]
 
+    _lib.function_solve_vie1.restype = ctypes.c_int
+    _lib.function_solve_vie1.argtypes = [
+        _dp, _dp, ctypes.c_int, ctypes.c_int, ctypes.c_int,  # W, g, M, p, force_continuous
+        _dp, _dp, ctypes.c_double,                            # L_at_0, L_at_1, soln_init
+        _dp,                                                   # out_y
+    ]
+
+    _lib.function_solve_vie1_vec.restype = ctypes.c_int
+    _lib.function_solve_vie1_vec.argtypes = [
+        _dp, _dp, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,  # W, g, M, p, d, fc
+        _dp, _dp, _dp,                                                       # L_at_0, L_at_1, soln_init
+        _dp,                                                                  # out_y
+    ]
+
     _lib.volterra_max_coll_params.restype = ctypes.c_int
     _lib.volterra_max_coll_params.argtypes = []
 
@@ -620,6 +634,65 @@ def function_solve_vide_vec_d(W, g_arr, a_arr, alpha, w_vec, h_widths, soln_init
     )
     _check_return(ret, "function_solve_vide_vec")
     return out_y_prime, out_y_boundary
+
+
+def function_solve_vie1_d(W, g_arr, force_continuous, L_at_0, L_at_1, soln_init):
+    """Call the D scalar VIE-1 solver.
+
+    Shapes: W (M, p, M, p), g_arr (M, p); L_at_0/L_at_1 (p,) (ignored when
+    force_continuous=False); soln_init is a float (ignored when fc=False).
+    """
+    W_c = np.ascontiguousarray(W, dtype=np.float64)
+    g_c = np.ascontiguousarray(g_arr, dtype=np.float64)
+    M, p = g_c.shape
+    if W_c.shape != (M, p, M, p):
+        raise ValueError(
+            f"W shape {W_c.shape} incompatible with g shape {g_c.shape}")
+    L0_c = np.ascontiguousarray(L_at_0, dtype=np.float64)
+    L1_c = np.ascontiguousarray(L_at_1, dtype=np.float64)
+    out_y = np.zeros((M, p), dtype=np.float64)
+    ret = _lib.function_solve_vie1(
+        W_c.ctypes.data_as(_dp),
+        g_c.ctypes.data_as(_dp),
+        ctypes.c_int(M), ctypes.c_int(p),
+        ctypes.c_int(1 if force_continuous else 0),
+        L0_c.ctypes.data_as(_dp),
+        L1_c.ctypes.data_as(_dp),
+        ctypes.c_double(float(soln_init)),
+        out_y.ctypes.data_as(_dp),
+    )
+    _check_return(ret, "function_solve_vie1")
+    return out_y
+
+
+def function_solve_vie1_vec_d(W, g_arr, force_continuous, L_at_0, L_at_1, soln_init):
+    """Vector VIE-1.
+
+    Shapes: W (M, p, M, p, d, d), g_arr (M, p, d); L_at_0/L_at_1 (p,);
+    soln_init (d,) (the latter three ignored when force_continuous=False).
+    """
+    W_c = np.ascontiguousarray(W, dtype=np.float64)
+    g_c = np.ascontiguousarray(g_arr, dtype=np.float64)
+    M, p, d = g_c.shape
+    if W_c.shape != (M, p, M, p, d, d):
+        raise ValueError(
+            f"W shape {W_c.shape} incompatible with g shape {g_c.shape}")
+    L0_c = np.ascontiguousarray(L_at_0, dtype=np.float64)
+    L1_c = np.ascontiguousarray(L_at_1, dtype=np.float64)
+    init_c = np.ascontiguousarray(soln_init, dtype=np.float64)
+    out_y = np.zeros((M, p, d), dtype=np.float64)
+    ret = _lib.function_solve_vie1_vec(
+        W_c.ctypes.data_as(_dp),
+        g_c.ctypes.data_as(_dp),
+        ctypes.c_int(M), ctypes.c_int(p), ctypes.c_int(d),
+        ctypes.c_int(1 if force_continuous else 0),
+        L0_c.ctypes.data_as(_dp),
+        L1_c.ctypes.data_as(_dp),
+        init_c.ctypes.data_as(_dp),
+        out_y.ctypes.data_as(_dp),
+    )
+    _check_return(ret, "function_solve_vie1_vec")
+    return out_y
 
 
 def function_solve_vie2_vec_d(W, g_arr):

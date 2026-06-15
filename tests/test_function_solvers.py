@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from volterra_equation_solvers._callable_solvers import (
-    function_solve_VIE_2, function_solve_VIDE,
+    function_solve_VIE_2, function_solve_VIDE, function_solve_VIE_1,
 )
 
 
@@ -747,3 +747,177 @@ def test_vide_vec_validation_init_wrong_shape(vide_callable_vec_diagonal):
             soln_init_value=np.zeros(3),  # wrong size: d=2 but pass length-3
             mesh_breakpoints=np.linspace(0, 1, 11),
             coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+
+
+# ---------------------------------------------------------------------------
+# VIE-1 (Volterra integral equation of the first kind)
+# ---------------------------------------------------------------------------
+
+def test_vie1_smooth_matches_exact(vie1_callable_smooth):
+    p = vie1_callable_smooth
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-5
+
+
+def test_vie1_polynomial_exact(vie1_callable_poly):
+    """K(s)=2+s, exact y=t (degree-1 polynomial). Collocation captures it exactly."""
+    p = vie1_callable_poly
+    mesh = np.linspace(0, 1, 11)
+    y = function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-10
+
+
+@pytest.mark.parametrize("M_target", [10, 20, 40])
+def test_vie1_convergence_rate(vie1_callable_smooth, M_target):
+    """Halving h reduces error by >= 4 for coll_choices=[1,2,3] (order 3+)."""
+    p = vie1_callable_smooth
+
+    def err_at(M):
+        mesh = np.linspace(0, 1, M + 1)
+        y = function_solve_VIE_1(
+            kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+            coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+        return _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+
+    assert err_at(M_target) / err_at(M_target * 2) > 4.0
+
+
+def test_vie1_g_none_treated_as_zero():
+    """g=None: trivial solution y=0."""
+    mesh = np.linspace(0, 1, 11)
+    y = function_solve_VIE_1(kernel=lambda u: np.exp(u), mesh_breakpoints=mesh,
+                             coll_divs=3, coll_choices=[1, 2, 3])
+    assert np.allclose(y, 0.0, atol=1e-12)
+
+
+def test_vie1_non_uniform_mesh(vie1_callable_smooth):
+    p = vie1_callable_smooth
+    mesh = np.linspace(0, 1, 21) ** 1.5
+    y = function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-4
+
+
+def test_vie1_callable_solution_wrapper(vie1_callable_smooth):
+    p = vie1_callable_smooth
+    mesh = np.linspace(0, 1, 21)
+    _, y_func = function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        return_function=True)
+    assert isinstance(y_func(0.37), float)
+    assert abs(y_func(0.37) - p["y_exact"](0.37)) < 1e-4
+
+
+def test_vie1_force_continuous_matches_exact(vie1_callable_smooth):
+    """force_continuous=True still converges; slightly less accurate than default."""
+    p = vie1_callable_smooth
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        soln_init_value=p["y_exact"](0.0), force_continuous=True,
+        show_warnings=False)
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-4
+
+
+def test_vie1_force_continuous_callable(vie1_callable_smooth):
+    """With force_continuous=True the polynomial y(t=0+) should equal soln_init."""
+    p = vie1_callable_smooth
+    mesh = np.linspace(0, 1, 21)
+    _, y_func = function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        soln_init_value=p["y_exact"](0.0), force_continuous=True,
+        return_function=True, show_warnings=False)
+    assert abs(y_func(0.0) - p["y_exact"](0.0)) < 1e-12
+
+
+def test_vie1_vec_diagonal_matches_scalar(vie1_callable_smooth, vie1_callable_vec_diagonal):
+    sp = vie1_callable_smooth
+    vp = vie1_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 21)
+    y_scalar = function_solve_VIE_1(
+        kernel=sp["kernel"], g=sp["g"], mesh_breakpoints=mesh,
+        coll_divs=sp["coll_divs"], coll_choices=sp["coll_choices"])
+    y_vec = function_solve_VIE_1(
+        kernel=vp["kernel"], g=vp["g"], mesh_breakpoints=mesh,
+        coll_divs=vp["coll_divs"], coll_choices=vp["coll_choices"])
+    assert y_vec.shape == (len(mesh) - 1, len(sp["coll_choices"]), vp["d"])
+    assert np.allclose(y_vec[..., 0], y_scalar, atol=1e-12)
+    assert np.allclose(y_vec[..., 1], y_scalar, atol=1e-12)
+
+
+def test_vie1_vec_matches_exact(vie1_callable_vec_diagonal):
+    p = vie1_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-5
+
+
+def test_vie1_vec_force_continuous(vie1_callable_vec_diagonal):
+    p = vie1_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        soln_init_value=p["y_exact"](0.0), force_continuous=True,
+        show_warnings=False)
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-4
+
+
+def test_vie1_validation_zero_in_coll_choices():
+    """Zero is invalid for VIE-1 (both sides of equation vanish at t=0)."""
+    with pytest.raises(ValueError, match="zero"):
+        function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
+                             mesh_breakpoints=np.linspace(0, 1, 5),
+                             coll_divs=2, coll_choices=[0, 1])
+
+
+def test_vie1_validation_nonconvergent_setting():
+    """Empirically-known non-convergent settings are rejected."""
+    with pytest.raises(ValueError, match="convergent"):
+        function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
+                             mesh_breakpoints=np.linspace(0, 1, 10),
+                             coll_divs=3, coll_choices=[1])
+
+
+def test_vie1_validation_force_continuous_no_init():
+    with pytest.raises(ValueError, match="soln_init_value"):
+        function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
+                             mesh_breakpoints=np.linspace(0, 1, 5),
+                             coll_divs=3, coll_choices=[1, 2, 3],
+                             force_continuous=True)
+
+
+def test_vie1_warns_on_unused_soln_init(capsys):
+    """soln_init_value passed with force_continuous=False -> warning."""
+    function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
+                         mesh_breakpoints=np.linspace(0, 1, 5),
+                         coll_divs=3, coll_choices=[1, 2, 3],
+                         soln_init_value=1.0, force_continuous=False,
+                         show_warnings=True)
+    assert "no effect" in capsys.readouterr().out.lower()
+
+
+def test_vie1_silent_when_show_warnings_false(capsys):
+    function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
+                         mesh_breakpoints=np.linspace(0, 1, 5),
+                         coll_divs=3, coll_choices=[1, 2, 3],
+                         soln_init_value=1.0, force_continuous=False,
+                         show_warnings=False)
+    assert capsys.readouterr().out == ""

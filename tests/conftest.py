@@ -242,6 +242,46 @@ def vie2_callable_vec_diagonal():
     )
 
 
+# VIE-1 callable fixture: g(t)=sin(t), K(x)=exp(x), exact y=cos(t)-sin(t).
+# Same derivation as vie1_data.
+@pytest.fixture
+def vie1_callable_smooth():
+    return dict(
+        kernel=lambda u: np.exp(u),
+        g=np.sin,
+        y_exact=lambda t: np.cos(t) - np.sin(t),
+        coll_divs=3,
+        coll_choices=[1, 2, 3],
+    )
+
+
+# Polynomial VIE-1 fixture: K(s)=2+s, g(t)=t^2 + t^3/6, exact y=t.
+@pytest.fixture
+def vie1_callable_poly():
+    return dict(
+        kernel=lambda u: 2.0 + u,
+        g=lambda t: t**2 + t**3 / 6.0,
+        y_exact=lambda t: t,
+        coll_divs=3,
+        coll_choices=[1, 2, 3],
+    )
+
+
+# Diagonal 2x2 VIE-1, same scalar problem on each component.
+@pytest.fixture
+def vie1_callable_vec_diagonal(vie1_callable_smooth):
+    p = vie1_callable_smooth
+    eye = np.eye(2)
+    return dict(
+        d=2,
+        kernel=lambda u: p["kernel"](u) * eye,
+        g=lambda t: np.array([p["g"](t), p["g"](t)]),
+        y_exact=lambda t: np.array([p["y_exact"](t), p["y_exact"](t)]),
+        coll_divs=3,
+        coll_choices=[1, 2, 3],
+    )
+
+
 # VIDE callable fixture: a(t)=1/(1+t^2), K(u)=exp(-u), exact y=sin(t).
 # Same Mathematica derivation as vide_data above. y(0) = 0.
 @pytest.fixture

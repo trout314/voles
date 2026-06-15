@@ -169,6 +169,158 @@ int function_solve_vie2(
 }
 
 // ---------------------------------------------------------------------------
+// VIE-1: g(t) = integral_0^t K(t-s) y(s) ds
+//
+// Per mesh step n, the collocation equations form a p x p linear system:
+//   sum_k W[n, i, n, k] y_{n, k} = g(tau_{n,i}) - sum_{l<n} sum_k W[n, i, l, k] y_{l, k}
+// Note: no identity-minus on the LHS (unlike VIE-2). The diagonal block W[n,:,n,:]
+// is what must be invertible; non-convergent collocation settings rejected upstream.
+//
+// force_continuous mode (when fc != 0):
+//   The first collocation equation (i = 0) is replaced by a continuity constraint:
+//   - n == 0:  sum_k L_at_0[k] * y_{0,k} = soln_init   (y(0+) = soln_init)
+//   - n  > 0:  sum_k L_at_0[k] * y_{n,k} = sum_k L_at_1[k] * y_{n-1,k}
+//              (y(t_n+) from interval n equals y(t_n-) from interval n-1)
+// ---------------------------------------------------------------------------
+
+void function_solve_vie1_impl(int p)(
+    const double[] W,        // (M, p, M, p)
+    const double[] g,        // (M, p)
+    int M, bool fc,
+    const double[] L_at_0,   // (p,) -- only read when fc
+    const double[] L_at_1,   // (p,) -- only read when fc
+    double soln_init,
+    double[] out_y)          // (M, p)
+{
+    foreach (n; 0 .. M)
+    {
+        double[p] rhs;
+        foreach (i; 0 .. p)
+            rhs[i] = g[n * p + i];
+
+        foreach (l; 0 .. n)
+        {
+            foreach (i; 0 .. p)
+            {
+                size_t row_base = (cast(size_t)(n * p + i) * M + l) * p;
+                foreach (k; 0 .. p)
+                    rhs[i] -= W[row_base + k] * out_y[l * p + k];
+            }
+        }
+
+        double[p][p] A;
+        foreach (i; 0 .. p)
+        {
+            size_t row_base = (cast(size_t)(n * p + i) * M + n) * p;
+            foreach (k; 0 .. p)
+                A[i][k] = W[row_base + k];
+        }
+
+        if (fc)
+        {
+            // Replace row 0 with the continuity constraint.
+            foreach (k; 0 .. p)
+                A[0][k] = L_at_0[k];
+            if (n == 0)
+            {
+                rhs[0] = soln_init;
+            }
+            else
+            {
+                double cont = 0.0;
+                foreach (k; 0 .. p)
+                    cont += L_at_1[k] * out_y[(n - 1) * p + k];
+                rhs[0] = cont;
+            }
+        }
+
+        auto y_n = lin_solve!p(A, rhs);
+        foreach (i; 0 .. p)
+            out_y[n * p + i] = y_n[i];
+    }
+}
+
+void function_solve_vie1_vec_impl(int p, int d)(
+    const double[] W,         // (M, p, M, p, d, d)
+    const double[] g,         // (M, p, d)
+    int M, bool fc,
+    const double[] L_at_0,    // (p,)
+    const double[] L_at_1,    // (p,)
+    const double[] soln_init, // (d,)
+    double[] out_y)           // (M, p, d)
+{
+    enum int pd = p * d;
+
+    foreach (n; 0 .. M)
+    {
+        double[pd] rhs;
+        foreach (i; 0 .. p)
+            foreach (aa; 0 .. d)
+                rhs[i * d + aa] = g[(n * p + i) * d + aa];
+
+        foreach (l; 0 .. n)
+        {
+            foreach (i; 0 .. p)
+            {
+                foreach (k; 0 .. p)
+                {
+                    size_t W_block = (((cast(size_t)(n * p + i) * M + l) * p + k) * d) * d;
+                    size_t y_base = cast(size_t)(l * p + k) * d;
+                    foreach (aa; 0 .. d)
+                    {
+                        double acc = 0.0;
+                        foreach (bb; 0 .. d)
+                            acc += W[W_block + aa * d + bb] * out_y[y_base + bb];
+                        rhs[i * d + aa] -= acc;
+                    }
+                }
+            }
+        }
+
+        double[pd][pd] A;
+        foreach (i; 0 .. p)
+        {
+            foreach (j; 0 .. p)
+            {
+                size_t W_block = (((cast(size_t)(n * p + i) * M + n) * p + j) * d) * d;
+                foreach (aa; 0 .. d)
+                    foreach (bb; 0 .. d)
+                        A[i * d + aa][j * d + bb] = W[W_block + aa * d + bb];
+            }
+        }
+
+        if (fc)
+        {
+            // Replace the first d rows of the block matrix with the continuity
+            // constraint applied component-wise: sum_k L_at_0[k] * y_{n, k, aa} = ...
+            foreach (aa; 0 .. d)
+            {
+                foreach (k; 0 .. p)
+                    foreach (bb; 0 .. d)
+                        A[aa][k * d + bb] = (aa == bb) ? L_at_0[k] : 0.0;
+                if (n == 0)
+                {
+                    rhs[aa] = soln_init[aa];
+                }
+                else
+                {
+                    double cont = 0.0;
+                    foreach (k; 0 .. p)
+                        cont += L_at_1[k] * out_y[((n - 1) * p + k) * d + aa];
+                    rhs[aa] = cont;
+                }
+            }
+        }
+
+        auto Y_n = lin_solve!pd(A, rhs);
+        foreach (i; 0 .. p)
+            foreach (aa; 0 .. d)
+                out_y[(n * p + i) * d + aa] = Y_n[i * d + aa];
+    }
+}
+
+
+// ---------------------------------------------------------------------------
 // VIDE: y'(t) = a(t) y(t) + g(t) + integral_0^t K(t-s) y(s) ds, y(0) = y_0
 //
 // Unknown on interval n: Y'_{n,k}, the values of y' at the p collocation nodes.
@@ -382,6 +534,77 @@ void function_solve_vide_vec_impl(int p, int d)(
                 dy += Yn[k * d + aa] * w_vec[k];
             out_y_boundary[(n + 1) * d + aa] = out_y_boundary[y_n_base + aa] + h_n * dy;
         }
+    }
+}
+
+int function_solve_vie1(
+    double* W, double* g, int M, int p, int force_continuous,
+    double* L_at_0, double* L_at_1, double soln_init,
+    double* out_y)
+{
+    if (M < 1) return 1;
+    if (p < 1 || p > MAX_FUNCTION_P) return 1;
+
+    size_t M_sz = cast(size_t) M;
+    size_t p_sz = cast(size_t) p;
+    double[] W_slice = W[0 .. M_sz * p_sz * M_sz * p_sz];
+    double[] g_slice = g[0 .. M_sz * p_sz];
+    double[] y_slice = out_y[0 .. M_sz * p_sz];
+
+    bool fc = force_continuous != 0;
+    double[] L0_slice = (fc ? L_at_0[0 .. p_sz] : null);
+    double[] L1_slice = (fc ? L_at_1[0 .. p_sz] : null);
+
+    switch (p)
+    {
+        static foreach (pi; 1 .. MAX_FUNCTION_P + 1)
+        {
+            case pi:
+                function_solve_vie1_impl!pi(
+                    W_slice, g_slice, M, fc, L0_slice, L1_slice, soln_init, y_slice);
+                return 0;
+        }
+        default:
+            return 1;
+    }
+}
+
+int function_solve_vie1_vec(
+    double* W, double* g, int M, int p, int d, int force_continuous,
+    double* L_at_0, double* L_at_1, double* soln_init,
+    double* out_y)
+{
+    if (M < 1) return 1;
+    if (p < 1 || p > MAX_FUNCTION_P) return 1;
+    if (d < 1 || d > MAX_FUNCTION_D) return 1;
+
+    size_t M_sz = cast(size_t) M;
+    size_t p_sz = cast(size_t) p;
+    size_t d_sz = cast(size_t) d;
+    double[] W_slice = W[0 .. M_sz * p_sz * M_sz * p_sz * d_sz * d_sz];
+    double[] g_slice = g[0 .. M_sz * p_sz * d_sz];
+    double[] y_slice = out_y[0 .. M_sz * p_sz * d_sz];
+
+    bool fc = force_continuous != 0;
+    double[] L0_slice = (fc ? L_at_0[0 .. p_sz] : null);
+    double[] L1_slice = (fc ? L_at_1[0 .. p_sz] : null);
+    double[] init_slice = (fc ? soln_init[0 .. d_sz] : null);
+
+    int key = p * 100 + d;
+    switch (key)
+    {
+        static foreach (pi; 1 .. MAX_FUNCTION_P + 1)
+        {
+            static foreach (di; 1 .. MAX_FUNCTION_D + 1)
+            {
+                case pi * 100 + di:
+                    function_solve_vie1_vec_impl!(pi, di)(
+                        W_slice, g_slice, M, fc, L0_slice, L1_slice, init_slice, y_slice);
+                    return 0;
+            }
+        }
+        default:
+            return 1;
     }
 }
 
