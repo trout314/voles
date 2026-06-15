@@ -176,3 +176,36 @@ def vide_ode_data():
         coll_choices=[1, 2, 3],
         soln_init_value=float(exact[0]),  # = 2.0
     )
+
+
+# Callable-input solver fixtures.
+# These return the kernel, g, and exact solution as callables (rather than
+# pre-sampled arrays), for use with function_solve_VIE_2 etc.
+
+# K(u) = exp(-u), exact y(t) = sin(t).
+# Same Mathematica derivation as `vie2_data` above, but in callable form.
+@pytest.fixture
+def vie2_callable_smooth():
+    return dict(
+        kernel=lambda u: np.exp(-u),
+        g=lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t)),
+        y_exact=np.sin,
+        coll_divs=2,
+        coll_choices=[0, 1, 2],
+    )
+
+
+# Abel-type kernel K(u) = 1/sqrt(u), exact y(t) = sqrt(t).
+# Derived from:
+#   integral_0^t (t-s)^{-1/2} sqrt(s) ds = pi*t/2
+#   => g(t) = sqrt(t) - pi*t/2
+@pytest.fixture
+def vie2_callable_abel():
+    return dict(
+        kernel=lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0,
+        g=lambda t: np.sqrt(t) - 0.5 * np.pi * t,
+        y_exact=np.sqrt,
+        coll_divs=2,
+        coll_choices=[0, 1, 2],
+        kernel_singularity=0.0,
+    )
