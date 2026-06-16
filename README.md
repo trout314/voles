@@ -19,44 +19,50 @@ The solvers are implemented as a compiled extension written in the [D language](
 
 ## Solvers
 
-### `solve_VIE_1`
+Two solver families are provided.
 
-Given functions $K$ and $g$, solves for $y(t)$ in the Type-1 Volterra integral equation (VIE-1):
+- The **array-based** family (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`) is the fastest path when the kernel and forcing are already sampled on a uniform time grid. Supports scalar, vector, and matrix-valued solutions, and complex-valued data.
+
+- The **callable-input** family (`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`) accepts the kernel, forcing term, and (for VIDE) coefficient $a$ as Python callables, runs on an arbitrary mesh via `mesh_breakpoints`, and handles weakly singular convolution kernels — useful for Abel-type problems where a graded mesh recovers the optimal convergence order. Supports scalar and vector cases, and complex-valued data. Requires `scipy` (install via the `[callable]` extra). The helper `optimal_graded_mesh` builds a Brunner-graded mesh for an $\alpha$-singular kernel.
+
+### Type-1 Volterra integral equation (VIE-1)
+
+Given $K$ and $g$, solve for $y(t)$ in:
 
 $$g(t) = \int_0^t K(t-s)\\, y(s)\\, ds$$
 
-The solver handles the following cases:
-- All functions are scalar-valued.
-- $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ is a $d \times d$ matrix.
-- $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ is a $d \times d$ matrix.
+| API | Inputs | Solution shape | Reference |
+|---|---|---|---|
+| `solve_VIE_1` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vie1/](https://trout314.github.io/volterra-equation-solvers/api/vie1/) |
+| `function_solve_VIE_1` | callables, arbitrary mesh | scalar / vector | [api/function_vie1/](https://trout314.github.io/volterra-equation-solvers/api/function_vie1/) |
 
-For a full description of the solver inputs/outputs and available settings, see: [API reference](https://trout314.github.io/volterra-equation-solvers/api/vie1/)
+### Type-2 Volterra integral equation (VIE-2)
 
-### `solve_VIE_2`
-
-Given functions $K$ and $g$, solves for $y(t)$ in the Type-2 Volterra integral equation (VIE-2):
+Given $K$ and $g$, solve for $y(t)$ in:
 
 $$y(t) = g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
-The solver handles the following cases:
-- All functions are scalar-valued.
-- $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ is a $d \times d$ matrix.
-- $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ is a $d \times d$ matrix.
+| API | Inputs | Solution shape | Reference |
+|---|---|---|---|
+| `solve_VIE_2` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vie2/](https://trout314.github.io/volterra-equation-solvers/api/vie2/) |
+| `function_solve_VIE_2` | callables, arbitrary mesh | scalar / vector | [api/function_vie2/](https://trout314.github.io/volterra-equation-solvers/api/function_vie2/) |
 
-For a full description of the solver inputs/outputs and available settings, see: [API reference](https://trout314.github.io/volterra-equation-solvers/api/vie2/)
+### Volterra integro-differential equation (VIDE)
 
-### `solve_VIDE`
-
-Given functions $K$, $a$, and $g$ and an initial value $y(0)$, solves for $y(t)$ in the Volterra integro-differential equation (VIDE):
+Given $K$, $a$, $g$, and initial value $y(0)$, solve for $y(t)$ in:
 
 $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
-The solver handles the following cases:
-- All functions are scalar-valued.
-- $y(t)$ and $g(t)$ are $d$-dimensional vectors and $K(t)$ and $a(t)$ are $d \times d$ matrices.
-- $y(t)$ and $g(t)$ are $d \times m$ matrices and $K(t)$ and $a(t)$ are $d \times d$ matrices.
+| API | Inputs | Solution shape | Reference |
+|---|---|---|---|
+| `solve_VIDE` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vide/](https://trout314.github.io/volterra-equation-solvers/api/vide/) |
+| `function_solve_VIDE` | callables, arbitrary mesh | scalar / vector | [api/function_vide/](https://trout314.github.io/volterra-equation-solvers/api/function_vide/) |
 
-For a full description of the solver inputs/outputs and available settings, see: [API reference](https://trout314.github.io/volterra-equation-solvers/api/vide/)
+### Mesh helper: `optimal_graded_mesh`
+
+Returns a Brunner-graded mesh $t_n = T (n/M)^r$ with grading exponent $r = p / (1 - \alpha)$, where $p$ is the number of collocation nodes per interval. Designed for weakly singular convolution kernels $K(u) \sim u^{-\alpha}$ with $\alpha \in [0, 1)$. Feed the result to a callable-input solver via `mesh_breakpoints` to recover the optimal convergence order on Abel-type problems.
+
+API reference: [api/optimal_graded_mesh/](https://trout314.github.io/volterra-equation-solvers/api/optimal_graded_mesh/)
 
 ## Installation
 
@@ -67,8 +73,9 @@ pip install volterra-equation-solvers
 Pre-built wheels are provided for Linux x86_64, macOS arm64 (Apple Silicon), and Windows x64. The D extension is bundled in the wheel and requires no extra tooling. Intel Macs are no longer supported as of 0.3.2; users can pin to `volterra-equation-solvers==0.3.1` or build from source (see CONTRIBUTING.md).
 
 **Requirements:** Python ≥ 3.10, numpy
-**Optional:** numba, scipy
-(only needed for non-standard collocation settings not supported by the D extension)
+**Optional extras:**
+- `[callable]` (scipy) — required for the `function_solve_*` family.
+- `[numba]` (numba, scipy) — only needed for the array-based solvers when using non-standard collocation settings not compiled into the D extension.
 
 To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
