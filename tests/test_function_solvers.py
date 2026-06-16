@@ -779,6 +779,71 @@ def test_complex_late_detection_raises_for_vide(monkeypatch):
                             coll_divs=2, coll_choices=[0, 1, 2])
 
 
+@pytest.mark.parametrize("M_target", [10, 20])
+def test_complex_convergence_rate(M_target):
+    """Complex path inherits the convergence order of the underlying real path
+    (factor-of-8+ error reduction per halving of h for coll_choices=[0,1,2])."""
+    K = lambda u: 1j
+    g = lambda t: 1.0
+    y_exact = lambda t: np.exp(1j * t)
+
+    def err_at(M):
+        mesh = np.linspace(0, 2.0, M + 1)
+        y = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
+                                 coll_divs=2, coll_choices=[0, 1, 2])
+        return _collect_node_values(y, mesh, 2, [0, 1, 2], y_exact)
+
+    assert err_at(M_target) / err_at(M_target * 2) > 8.0
+
+
+def test_complex_vector_coupled_non_diagonal():
+    """2x2 non-diagonal complex K constructed by similarity transform.
+
+    P = [[1, 1], [1, -1]] sends a diagonal system with K_diag = diag(i, 2i),
+    g_diag = [1, 1], y_diag = [exp(it), exp(2it)] to a coupled system with
+        K_tilde = P K_diag P^{-1} = [[3i/2, -i/2], [-i/2, 3i/2]]
+        g_tilde = P g_diag         = [2, 0]
+        y_tilde = P y_diag         = [exp(it)+exp(2it), exp(it)-exp(2it)]
+    Each y_diag component satisfies y_diag(t) = 1 + integral_0^t i (or 2i) y(s) ds,
+    so the coupled system off-diagonal coupling exercises the block code path.
+    """
+    K_mat = np.array([[1.5j, -0.5j], [-0.5j, 1.5j]])
+    K = lambda u: K_mat
+    g = lambda t: np.array([2.0, 0.0])
+
+    def y_exact(t):
+        return np.array([np.exp(1j * t) + np.exp(2j * t),
+                         np.exp(1j * t) - np.exp(2j * t)])
+
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
+                             coll_divs=2, coll_choices=[0, 1, 2])
+    assert y.dtype == np.complex128
+    assert y.shape == (20, 3, 2)
+    err = _collect_node_values(y, mesh, 2, [0, 1, 2], y_exact)
+    assert err < 1e-6
+
+
+def test_vie1_complex_force_continuous():
+    """VIE-1 with complex inputs + force_continuous=True pins y(0+) to the
+    complex soln_init_value via the continuity constraint."""
+    K = lambda u: 1.0 + 0j
+    g = lambda t: -1j * (np.exp(1j * t) - 1.0)  # gives exact y(t) = exp(it)
+    mesh = np.linspace(0, 2.0, 41)
+    y_arr, y_func = function_solve_VIE_1(
+        kernel=K, g=g, mesh_breakpoints=mesh,
+        coll_divs=3, coll_choices=[1, 2, 3],
+        soln_init_value=1.0 + 0j,  # y(0) = exp(0) = 1
+        force_continuous=True, show_warnings=False,
+        return_function=True)
+    assert y_arr.dtype == np.complex128
+    # Continuity constraint pins y(0+) to soln_init_value
+    assert abs(y_func(0.0) - (1.0 + 0j)) < 1e-12
+    # And the full solution matches the closed form
+    err = _collect_node_values(y_arr, mesh, 3, [1, 2, 3], lambda t: np.exp(1j * t))
+    assert err < 1e-4
+
+
 def test_complex_real_matches_real_path(vie2_callable_smooth):
     """A complex kernel with zero imaginary part should give the same result
     as the corresponding real kernel (up to the small numerical noise of going
