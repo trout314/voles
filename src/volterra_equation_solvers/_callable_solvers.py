@@ -21,8 +21,51 @@ scipy is required (optional extra `[callable]`); imported lazily.
 
 from __future__ import annotations
 
+import functools
+import warnings
+
 import numpy as np
 from numpy.polynomial import polynomial as npp
+
+
+try:
+    _ComplexWarning = np.exceptions.ComplexWarning
+except AttributeError:  # numpy < 1.25
+    _ComplexWarning = np.ComplexWarning
+
+
+def _escalate_complex_warning(fn):
+    """Decorator: while ``fn`` runs, escalate numpy ComplexWarning to an
+    exception, then catch it and re-raise as a clear ValueError.
+
+    Multi-point sampling can miss kernels whose complex range falls outside the
+    sample u-values (a real false negative of any finite sampling scheme). When
+    the real-path build then encounters a complex value, numpy's default behavior
+    is to lossy-cast it to float64 with a ``ComplexWarning`` -- which most users
+    won't see. This wrapper turns that silent data loss into a loud, actionable
+    error: detection guarantees become "either fast path via sampling, or clean
+    error" with no third path of silently wrong answers.
+
+    Note: the complex dispatch happens *inside* fn (before the real-path build),
+    so the wrapped function still routes complex inputs through block
+    decomposition normally. This wrapper only fires when sampling missed and the
+    real-path build hits a complex value.
+    """
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with warnings.catch_warnings():
+            warnings.filterwarnings('error', category=_ComplexWarning)
+            try:
+                return fn(*args, **kwargs)
+            except _ComplexWarning as e:
+                raise ValueError(
+                    "Complex values were encountered during the real-path "
+                    "solver build, but multi-point sampling of kernel/g/a "
+                    "did not detect them. Make your callables return a "
+                    "consistent dtype (either always complex or always real) "
+                    "across the integration domain and re-run."
+                ) from e
+    return wrapper
 
 
 _SCIPY_IMPORT_ERR = (
@@ -131,10 +174,7 @@ def _normalize_kernel_singularity(kernel_singularity):
     return lambda t, _us=tuple(declared): [t - u for u in _us]
 
 
-import functools as _functools
-
-
-@_functools.lru_cache(maxsize=16)
+@functools.lru_cache(maxsize=16)
 def _gauss_legendre_nodes_weights(order: int) -> tuple[np.ndarray, np.ndarray]:
     """Standard Gauss-Legendre nodes and weights on [-1, 1] (cached per order)."""
     nodes, weights = np.polynomial.legendre.leggauss(order)
@@ -660,6 +700,7 @@ class _ComplexSolutionFunction:
         return val[..., :d] + 1j * val[..., d:]
 
 
+@_escalate_complex_warning
 def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
                           coll_divs: int = 2, coll_choices: list[int] = [0, 1, 2],
                           kernel_singularity=None,
@@ -856,6 +897,7 @@ def _build_vide_polynomials_scalar(y_prime: np.ndarray, y_boundary: np.ndarray,
     return polys
 
 
+@_escalate_complex_warning
 def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
                          mesh_breakpoints,
                          coll_divs: int = 2, coll_choices: list[int] = [0, 1, 2],
@@ -1180,6 +1222,7 @@ def _lagrange_at(coll_divs, coll_choices, x):
     return np.array([_eval_poly_at(basis[k], x) for k in range(p)], dtype=np.float64)
 
 
+@_escalate_complex_warning
 def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                           mesh_breakpoints,
                           coll_divs: int = 3, coll_choices: list[int] = [1, 2, 3],

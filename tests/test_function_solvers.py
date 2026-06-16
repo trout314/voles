@@ -736,6 +736,49 @@ def test_complex_detection_via_init_only(vie2_callable_smooth):
     assert np.allclose(y, 1.0 + 1j, atol=1e-12)
 
 
+def test_complex_late_detection_raises_clear_error(monkeypatch):
+    """Sampling-based complex detection can miss kernels whose complex range
+    sits between the 5 sample points. When that happens, the ComplexWarning
+    escalation should catch the lossy cast and raise a clean ValueError --
+    not silently produce a real-valued wrong answer.
+    """
+    import volterra_equation_solvers._callable_solvers as cs
+    # Force sampling to say "no complex detected" -- simulates a kernel whose
+    # complex range escaped the 5 sample points.
+    monkeypatch.setattr(cs, "_samples_indicate_complex",
+                        lambda *args, **kwargs: False)
+
+    K = lambda u: 1.0 + 0.001j  # complex but small imag; sampler claims it isn't
+    g = lambda t: 1.0
+    mesh = np.linspace(0, 2.0, 41)
+    with pytest.raises(ValueError, match="multi-point sampling"):
+        function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
+                             coll_divs=2, coll_choices=[0, 1, 2])
+
+
+def test_complex_late_detection_raises_for_vie1(monkeypatch):
+    import volterra_equation_solvers._callable_solvers as cs
+    monkeypatch.setattr(cs, "_samples_indicate_complex",
+                        lambda *args, **kwargs: False)
+    K = lambda u: 1.0 + 0.001j
+    g = lambda t: 1.0
+    with pytest.raises(ValueError, match="multi-point sampling"):
+        function_solve_VIE_1(kernel=K, g=g, mesh_breakpoints=np.linspace(0, 2, 21),
+                             coll_divs=3, coll_choices=[1, 2, 3])
+
+
+def test_complex_late_detection_raises_for_vide(monkeypatch):
+    import volterra_equation_solvers._callable_solvers as cs
+    monkeypatch.setattr(cs, "_samples_indicate_complex",
+                        lambda *args, **kwargs: False)
+    K = lambda u: 1.0 + 0.001j
+    g = lambda t: 1.0
+    with pytest.raises(ValueError, match="multi-point sampling"):
+        function_solve_VIDE(kernel=K, g=g, soln_init_value=0.0,
+                            mesh_breakpoints=np.linspace(0, 2, 21),
+                            coll_divs=2, coll_choices=[0, 1, 2])
+
+
 def test_complex_real_matches_real_path(vie2_callable_smooth):
     """A complex kernel with zero imaginary part should give the same result
     as the corresponding real kernel (up to the small numerical noise of going
