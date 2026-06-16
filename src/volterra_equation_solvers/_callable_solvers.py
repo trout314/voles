@@ -775,6 +775,9 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     sample_u = float(widths[0]) * 0.5
     is_vector, d = _detect_kernel_shape(kernel, sample_u)
 
+    _maybe_warn_mesh_uniform_with_singularity(
+        mesh_breakpoints, kernel_singularity, show_warnings)
+
     # Precomputed scalar tables: alpha[i,k] = I_k(c_i); w[k] = I_k(1)
     anti = _lagrange_antideriv_coefs(coll_divs, coll_choices)  # (p, p+1)
     alpha = np.zeros((p, p), dtype=np.float64)
@@ -1079,6 +1082,9 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
 
     sample_u = float(widths[0]) * 0.5
     is_vector, d = _detect_kernel_shape(kernel, sample_u)
+
+    _maybe_warn_mesh_uniform_with_singularity(
+        mesh_breakpoints, kernel_singularity, show_warnings)
 
     # Continuity-constraint vectors (only used when force_continuous=True).
     L_at_0 = _lagrange_at(coll_divs, coll_choices, 0.0)

@@ -374,6 +374,28 @@ def test_validation_coll_choices_duplicates():
                              coll_divs=2, coll_choices=[1, 1, 2])
 
 
+@pytest.mark.parametrize("solver_kwargs_fn", [
+    lambda mesh: dict(solver=function_solve_VIE_2, kw=dict(
+        kernel=lambda u: np.exp(-u),
+        g=lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t)),
+        mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2])),
+    lambda mesh: dict(solver=function_solve_VIE_1, kw=dict(
+        kernel=lambda u: np.exp(u), g=np.sin,
+        mesh_breakpoints=mesh, coll_divs=3, coll_choices=[1, 2, 3])),
+    lambda mesh: dict(solver=function_solve_VIDE, kw=dict(
+        kernel=lambda u: np.exp(-u), g=lambda t: t, soln_init_value=0.0,
+        mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2])),
+])
+def test_mesh_breakpoints_accepts_plain_list(solver_kwargs_fn):
+    """Solvers accept mesh_breakpoints as a Python list (np.asarray promotion)."""
+    mesh_list = [0.0, 0.25, 0.5, 0.75, 1.0]
+    bundle = solver_kwargs_fn(mesh_list)
+    y_list = bundle["solver"](**bundle["kw"])
+    bundle_arr = solver_kwargs_fn(np.asarray(mesh_list))
+    y_arr = bundle_arr["solver"](**bundle_arr["kw"])
+    assert np.allclose(y_list, y_arr, atol=1e-14)
+
+
 # ---------------------------------------------------------------------------
 # NaN handling: NaN from kernel propagates into the W tensor and the
 # post-build isfinite check raises; NaN from g propagates into the solution.
@@ -750,6 +772,18 @@ def test_vide_vec_validation_init_wrong_shape(vide_callable_vec_diagonal):
             coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
 
 
+def test_vide_vec_validation_a_wrong_shape(vide_callable_vec_diagonal):
+    """a(t) must return a (d, d) matrix for vector VIDE."""
+    p = vide_callable_vec_diagonal
+    bad_a = lambda t: np.array([1.0, 2.0])  # shape (2,) but should be (2, 2)
+    with pytest.raises(ValueError, match=r"shape \(2, 2\)"):
+        function_solve_VIDE(
+            kernel=p["kernel"], a=bad_a, g=p["g"],
+            soln_init_value=p["soln_init_value"],
+            mesh_breakpoints=np.linspace(0, 1, 11),
+            coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+
+
 # ---------------------------------------------------------------------------
 # VIE-1 (Volterra integral equation of the first kind)
 # ---------------------------------------------------------------------------
@@ -1030,6 +1064,29 @@ def test_singularity_warning_silenced_by_show_warnings_false(capsys, vie2_callab
         coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
         kernel_singularity=p["kernel_singularity"], show_warnings=False)
     assert capsys.readouterr().out == ""
+
+
+def test_uniform_mesh_with_singularity_warns_vie1(capsys, vie1_callable_abel):
+    """VIE-1 fires the same foot-gun warning as VIE-2."""
+    p = vie1_callable_abel
+    function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"],
+        mesh_breakpoints=np.linspace(0, 1, 21),
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        kernel_singularity=p["kernel_singularity"], show_warnings=True)
+    assert "optimal_graded_mesh" in capsys.readouterr().out
+
+
+def test_uniform_mesh_with_singularity_warns_vide(capsys, vide_callable_abel):
+    """VIDE fires the same foot-gun warning as VIE-2."""
+    p = vide_callable_abel
+    function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"],
+        mesh_breakpoints=np.linspace(0, 1, 21),
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        kernel_singularity=p["kernel_singularity"], show_warnings=True)
+    assert "optimal_graded_mesh" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
