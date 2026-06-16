@@ -1456,7 +1456,10 @@ tracked boundary values).</p>
 <span class="normal">877</span>
 <span class="normal">878</span>
 <span class="normal">879</span>
-<span class="normal">880</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span>
+<span class="normal">880</span>
+<span class="normal">881</span>
+<span class="normal">882</span>
+<span class="normal">883</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span>
                          <span class="n">mesh_breakpoints</span><span class="p">,</span>
                          <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
                          <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -1545,6 +1548,9 @@ tracked boundary values).</p>
     <span class="c1"># Detect scalar vs vector by sampling kernel at a non-singular point.</span>
     <span class="n">sample_u</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">widths</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">*</span> <span class="mf">0.5</span>
     <span class="n">is_vector</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="n">_detect_kernel_shape</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">sample_u</span><span class="p">)</span>
+
+    <span class="n">_maybe_warn_mesh_uniform_with_singularity</span><span class="p">(</span>
+        <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
 
     <span class="c1"># Precomputed scalar tables: alpha[i,k] = I_k(c_i); w[k] = I_k(1)</span>
     <span class="n">anti</span> <span class="o">=</span> <span class="n">_lagrange_antideriv_coefs</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>  <span class="c1"># (p, p+1)</span>
