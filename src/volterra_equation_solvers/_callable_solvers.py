@@ -507,6 +507,159 @@ def _detect_kernel_shape(kernel, sample_u: float):
         f"{tuple(sample.shape)} at u={sample_u}.")
 
 
+# ---------------------------------------------------------------------------
+# Complex-input dispatch: block-decompose the complex problem into a real one
+# at double the dimension, route through the existing real solver, recombine.
+#
+# Identity used:  K_complex (d x d) <-> [[K_R, -K_I], [K_I, K_R]]  (2d x 2d real)
+# (Same trick as _complex.py for the array-based solvers, but applied to
+# callables rather than pre-sampled arrays.)
+# ---------------------------------------------------------------------------
+
+def _is_complex_value(v) -> bool:
+    """True when np.asarray(v) has a complex dtype."""
+    if v is None:
+        return False
+    return np.iscomplexobj(np.asarray(v))
+
+
+def _samples_indicate_complex(callables, mesh_breakpoints, soln_init_value) -> bool:
+    """Sample each callable at several mesh-interior points to detect complex
+    returns. Multi-point sampling catches the case where one sample happens
+    to be real but other values are complex (e.g. kernels with branches).
+    """
+    widths = np.diff(mesh_breakpoints)
+    T = float(mesh_breakpoints[-1])
+    sample_us = [float(widths[0]) * 0.5, T * 0.25, T * 0.5, T * 0.75, T * 0.9]
+    for fn in callables:
+        if fn is None:
+            continue
+        for u in sample_us:
+            try:
+                if _is_complex_value(fn(u)):
+                    return True
+            except Exception:
+                # Some callables may not accept all sample points; keep trying.
+                pass
+    if _is_complex_value(soln_init_value):
+        return True
+    return False
+
+
+def _detect_complex_d_orig(kernel, sample_u: float) -> int:
+    """Determine the original (complex) problem dimension. 0 = scalar, k = (k, k) matrix."""
+    sample = np.asarray(kernel(sample_u))
+    if sample.ndim == 0:
+        return 0
+    if sample.ndim == 2 and sample.shape[0] == sample.shape[1] and sample.shape[0] >= 1:
+        return int(sample.shape[0])
+    raise ValueError(
+        f"complex kernel(u) must return a scalar or square (d, d) matrix; got shape "
+        f"{tuple(sample.shape)} at u={sample_u}.")
+
+
+def _block_wrap_kernel(kernel, d_orig: int):
+    """Wrap a complex-valued kernel into a real-valued block-matrix kernel.
+
+    Scalar complex K(u) -> (2, 2) real block.
+    Vector complex K(u) of shape (d, d) -> (2d, 2d) real block.
+    Vectorized over u: input shape (n,) gives output shape (n, 2, 2) or (n, 2d, 2d),
+    matching the convention used by `_detect_kernel_vectorized`.
+    """
+    if d_orig == 0:
+        def K_real(u):
+            K = np.asarray(kernel(u), dtype=complex)
+            R, I = K.real, K.imag
+            # R, I are scalar or arrays of u's shape. Output appends two trailing axes.
+            out = np.empty(R.shape + (2, 2), dtype=np.float64)
+            out[..., 0, 0] = R
+            out[..., 0, 1] = -I
+            out[..., 1, 0] = I
+            out[..., 1, 1] = R
+            return out
+        return K_real
+    else:
+        def K_real(u):
+            K = np.asarray(kernel(u), dtype=complex)
+            R, I = K.real, K.imag
+            d2 = 2 * d_orig
+            out = np.empty(R.shape[:-2] + (d2, d2), dtype=np.float64)
+            out[..., :d_orig, :d_orig] = R
+            out[..., :d_orig, d_orig:] = -I
+            out[..., d_orig:, :d_orig] = I
+            out[..., d_orig:, d_orig:] = R
+            return out
+        return K_real
+
+
+def _block_wrap_g(g, d_orig: int):
+    """Wrap complex g into real-valued (2,) or (2d,) callable. None passes through."""
+    if g is None:
+        return None
+    if d_orig == 0:
+        def g_real(t):
+            gv = np.asarray(g(t), dtype=complex)
+            return np.array([gv.real, gv.imag])
+        return g_real
+    else:
+        def g_real(t):
+            gv = np.asarray(g(t), dtype=complex)
+            return np.concatenate([gv.real, gv.imag])
+        return g_real
+
+
+def _block_wrap_a(a, d_orig: int):
+    """a has the same block structure as kernel."""
+    if a is None:
+        return None
+    return _block_wrap_kernel(a, d_orig)
+
+
+def _block_expand_init(init, d_orig: int) -> np.ndarray:
+    """Complex scalar -> (2,) real; complex (d,) -> (2d,) real."""
+    arr = np.asarray(init, dtype=complex)
+    if d_orig == 0:
+        return np.array([float(arr.real), float(arr.imag)])
+    return np.concatenate([arr.real, arr.imag])
+
+
+def _recombine_complex_y(y_real: np.ndarray, d_orig: int) -> np.ndarray:
+    """Convert a real solution from the block-decomposed system back to complex.
+
+    d_orig == 0: y_real shape (M, p, 2) -> (M, p) complex
+    d_orig >  0: y_real shape (M, p, 2*d_orig) -> (M, p, d_orig) complex
+    """
+    if d_orig == 0:
+        return y_real[..., 0] + 1j * y_real[..., 1]
+    return y_real[..., :d_orig] + 1j * y_real[..., d_orig:]
+
+
+class _ComplexSolutionFunction:
+    """Wraps a real-block SolutionFunction so the user sees complex outputs."""
+
+    def __init__(self, real_y_func, d_orig: int):
+        self._real = real_y_func
+        self._d_orig = d_orig
+        self.mesh_breakpoints = real_y_func.mesh_breakpoints
+        # Convert the per-interval (2d,) polynomial arrays into complex.
+        from ._complex import _recombine_polys
+        self.polynomials = _recombine_polys(real_y_func.polynomials, d_orig)
+
+    def __call__(self, t):
+        val = self._real(t)
+        scalar_input = (np.isscalar(t) or np.ndim(t) == 0)
+        if self._d_orig == 0:
+            # real returns shape (2,) for scalar t or (n, 2) for array t
+            if scalar_input:
+                return complex(val[0], val[1])
+            return val[..., 0] + 1j * val[..., 1]
+        # d_orig > 0: real returns (2*d_orig,) for scalar t or (n, 2*d_orig) for array t
+        d = self._d_orig
+        if scalar_input:
+            return val[:d] + 1j * val[d:]
+        return val[..., :d] + 1j * val[..., d:]
+
+
 def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
                           coll_divs: int = 2, coll_choices: list[int] = [0, 1, 2],
                           kernel_singularity=None,
@@ -586,6 +739,24 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         raise TypeError("kernel must be callable")
     if g is not None and not callable(g):
         raise TypeError("g must be callable or None")
+
+    # Complex dispatch: block-decompose to a real problem of doubled dimension.
+    if _samples_indicate_complex([kernel, g], mesh_breakpoints, None):
+        sample_u = float(np.diff(mesh_breakpoints)[0]) * 0.5
+        d_orig = _detect_complex_d_orig(kernel, sample_u)
+        result = function_solve_VIE_2(
+            kernel=_block_wrap_kernel(kernel, d_orig),
+            g=_block_wrap_g(g, d_orig),
+            mesh_breakpoints=mesh_breakpoints,
+            coll_divs=coll_divs, coll_choices=coll_choices,
+            kernel_singularity=kernel_singularity,
+            return_function=return_function, show_warnings=show_warnings,
+            _smooth_gl_order=_smooth_gl_order)
+        if return_function:
+            y_real, y_func_real = result
+            return (_recombine_complex_y(y_real, d_orig),
+                    _ComplexSolutionFunction(y_func_real, d_orig))
+        return _recombine_complex_y(result, d_orig)
 
     M = len(mesh_breakpoints) - 1
     p = len(coll_choices)
@@ -758,6 +929,26 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         raise TypeError("g must be callable or None")
     if a is not None and not callable(a):
         raise TypeError("a must be callable or None")
+
+    # Complex dispatch.
+    if _samples_indicate_complex([kernel, g, a], mesh_breakpoints, soln_init_value):
+        sample_u = float(np.diff(mesh_breakpoints)[0]) * 0.5
+        d_orig = _detect_complex_d_orig(kernel, sample_u)
+        result = function_solve_VIDE(
+            kernel=_block_wrap_kernel(kernel, d_orig),
+            a=_block_wrap_a(a, d_orig),
+            g=_block_wrap_g(g, d_orig),
+            soln_init_value=_block_expand_init(soln_init_value, d_orig),
+            mesh_breakpoints=mesh_breakpoints,
+            coll_divs=coll_divs, coll_choices=coll_choices,
+            kernel_singularity=kernel_singularity,
+            return_function=return_function, show_warnings=show_warnings,
+            _smooth_gl_order=_smooth_gl_order)
+        if return_function:
+            y_real, y_func_real = result
+            return (_recombine_complex_y(y_real, d_orig),
+                    _ComplexSolutionFunction(y_func_real, d_orig))
+        return _recombine_complex_y(result, d_orig)
 
     M = len(mesh_breakpoints) - 1
     p = len(coll_choices)
@@ -1067,6 +1258,31 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         raise ValueError("must specify soln_init_value when force_continuous=True")
     if not force_continuous and soln_init_value is not None and show_warnings:
         print("warning: setting soln_init_value has no effect when force_continuous=False.")
+
+    # Complex dispatch. soln_init_value only contributes to the complex check
+    # when force_continuous=True (otherwise it has no effect on the result).
+    init_for_complex = soln_init_value if force_continuous else None
+    if _samples_indicate_complex([kernel, g], mesh_breakpoints, init_for_complex):
+        sample_u = float(np.diff(mesh_breakpoints)[0]) * 0.5
+        d_orig = _detect_complex_d_orig(kernel, sample_u)
+        init_wrapped = (_block_expand_init(soln_init_value, d_orig)
+                        if force_continuous else None)
+        result = function_solve_VIE_1(
+            kernel=_block_wrap_kernel(kernel, d_orig),
+            g=_block_wrap_g(g, d_orig),
+            soln_init_value=init_wrapped,
+            mesh_breakpoints=mesh_breakpoints,
+            coll_divs=coll_divs, coll_choices=coll_choices,
+            kernel_singularity=kernel_singularity,
+            return_function=return_function,
+            force_continuous=force_continuous,
+            show_warnings=show_warnings,
+            _smooth_gl_order=_smooth_gl_order)
+        if return_function:
+            y_real, y_func_real = result
+            return (_recombine_complex_y(y_real, d_orig),
+                    _ComplexSolutionFunction(y_func_real, d_orig))
+        return _recombine_complex_y(result, d_orig)
 
     M = len(mesh_breakpoints) - 1
     p = len(coll_choices)

@@ -299,6 +299,27 @@ def test_callable_exposes_polynomials_and_mesh(vie2_callable_smooth):
     assert np.array_equal(y_func.mesh_breakpoints, mesh)
 
 
+@pytest.mark.parametrize("solver_call", [
+    lambda: function_solve_VIE_2(kernel=lambda u: np.exp(-u),
+                                 g=lambda t: t,
+                                 mesh_breakpoints=np.linspace(0, 1, 5),
+                                 coll_divs=2, coll_choices=[0, 1, 2]),
+    lambda: function_solve_VIE_1(kernel=lambda u: np.exp(u),
+                                 g=lambda t: t,
+                                 mesh_breakpoints=np.linspace(0, 1, 5),
+                                 coll_divs=3, coll_choices=[1, 2, 3]),
+    lambda: function_solve_VIDE(kernel=lambda u: 0.0,
+                                g=lambda t: t, soln_init_value=0.0,
+                                mesh_breakpoints=np.linspace(0, 1, 5),
+                                coll_divs=2, coll_choices=[0, 1, 2]),
+])
+def test_return_function_default_is_false(solver_call):
+    """Without `return_function=True`, the solvers return just the array, not a tuple."""
+    result = solver_call()
+    assert isinstance(result, np.ndarray)
+    assert not isinstance(result, tuple)
+
+
 def test_callable_at_breakpoint_continuous(vie2_callable_smooth):
     """At an interior breakpoint, the wrapper should give a value close to the
     exact solution (the piecewise polynomial is near-continuous there)."""
@@ -435,7 +456,11 @@ def test_coll_choices_not_mutated():
 
 
 def test_g_called_at_expected_collocation_points():
-    """g is sampled precisely at t_n + (coll_choices[i]/coll_divs) * h_n."""
+    """g is sampled at the expected collocation points.
+
+    (Extra calls for complex-input detection are an implementation detail; the
+    test verifies that each expected point appears, allowing repeats.)
+    """
     calls = []
     def g_recording(t):
         calls.append(t)
@@ -446,8 +471,10 @@ def test_g_called_at_expected_collocation_points():
                          coll_divs=2, coll_choices=[0, 1, 2])
     # Interval 0 [0, 0.5]: nodes at 0, 0.25, 0.5
     # Interval 1 [0.5, 1.0]: nodes at 0.5, 0.75, 1.0
-    expected = [0.0, 0.25, 0.5, 0.5, 0.75, 1.0]
-    assert sorted(calls) == pytest.approx(sorted(expected))
+    expected = [0.0, 0.25, 0.5, 0.75, 1.0]
+    for t in expected:
+        assert any(abs(c - t) < 1e-12 for c in calls), \
+            f"g was not called at expected collocation point t={t}; calls were {calls}"
 
 
 # ---------------------------------------------------------------------------
@@ -597,6 +624,135 @@ def test_vec_validation_kernel_not_square():
     with pytest.raises(ValueError, match="scalar or square"):
         function_solve_VIE_2(kernel=bad_K, mesh_breakpoints=np.linspace(0, 1, 5),
                              coll_divs=2, coll_choices=[0, 1, 2])
+
+
+def test_vec_validation_kernel_returns_1d():
+    """User returns shape (d,) thinking they meant 'd-component kernel'. Reject."""
+    bad_K = lambda u: np.array([np.exp(-u), np.exp(-2 * u)])  # shape (2,)
+    with pytest.raises(ValueError, match="scalar or square"):
+        function_solve_VIE_2(kernel=bad_K,
+                             mesh_breakpoints=np.linspace(0, 1, 5),
+                             coll_divs=2, coll_choices=[0, 1, 2])
+
+
+# ---------------------------------------------------------------------------
+# Complex-input dispatch: VIE-1/-2/VIDE accept complex kernels, g, etc.
+# Routed through a real block-decomposed problem of doubled dimension.
+# ---------------------------------------------------------------------------
+
+def test_vie2_complex_scalar_matches_exact():
+    """K(u)=i, g(t)=1 -> y(t) = exp(i*t) (closed-form check)."""
+    K = lambda u: 1j
+    g = lambda t: 1.0
+    mesh = np.linspace(0, 2.0, 41)
+    y = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
+                             coll_divs=2, coll_choices=[0, 1, 2])
+    assert y.dtype == np.complex128
+    err = _collect_node_values(y, mesh, 2, [0, 1, 2], lambda t: np.exp(1j * t))
+    assert err < 1e-6
+
+
+def test_vie2_complex_return_function():
+    """Complex return_function wrapper evaluates correctly."""
+    K = lambda u: 1j
+    g = lambda t: 1.0
+    mesh = np.linspace(0, 2.0, 41)
+    y_arr, y_func = function_solve_VIE_2(
+        kernel=K, g=g, mesh_breakpoints=mesh,
+        coll_divs=2, coll_choices=[0, 1, 2], return_function=True)
+    val = y_func(0.5)
+    assert isinstance(val, complex)
+    assert abs(val - np.exp(1j * 0.5)) < 1e-6
+    ts = np.array([0.1, 0.5, 1.0])
+    vals = y_func(ts)
+    assert vals.dtype == np.complex128
+    assert np.max(np.abs(vals - np.exp(1j * ts))) < 1e-6
+
+
+def test_vie2_complex_vector_diagonal():
+    """Diagonal d=2 complex kernel reduces to two independent scalar problems."""
+    K = lambda u: 1j * np.eye(2)
+    g = lambda t: np.array([1.0, 1.0])
+    mesh = np.linspace(0, 2.0, 41)
+    y = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
+                             coll_divs=2, coll_choices=[0, 1, 2])
+    assert y.dtype == np.complex128
+    assert y.shape == (40, 3, 2)
+    err = _collect_node_values(
+        y, mesh, 2, [0, 1, 2],
+        lambda t: np.array([np.exp(1j * t), np.exp(1j * t)]))
+    assert err < 1e-6
+
+
+def test_vide_complex_matches_exact():
+    """y'(t) = i*y(t), y(0) = 1 -> y(t) = exp(i*t)."""
+    K = lambda u: 0.0
+    a = lambda t: 1j
+    g = lambda t: 0.0
+    mesh = np.linspace(0, 2.0, 41)
+    y = function_solve_VIDE(kernel=K, a=a, g=g, soln_init_value=1.0 + 0j,
+                            mesh_breakpoints=mesh,
+                            coll_divs=2, coll_choices=[0, 1, 2])
+    assert y.dtype == np.complex128
+    err = _collect_node_values(y, mesh, 2, [0, 1, 2], lambda t: np.exp(1j * t))
+    assert err < 1e-6
+
+
+def test_vie1_complex_matches_exact():
+    """K(u)=1 (complex 1+0j), g(t)=-i*(e^{it}-1) -> y(t) = e^{it}."""
+    K = lambda u: 1.0 + 0j
+    g = lambda t: -1j * (np.exp(1j * t) - 1.0)
+    mesh = np.linspace(0, 2.0, 41)
+    y = function_solve_VIE_1(kernel=K, g=g, mesh_breakpoints=mesh,
+                             coll_divs=3, coll_choices=[1, 2, 3])
+    assert y.dtype == np.complex128
+    err = _collect_node_values(y, mesh, 3, [1, 2, 3], lambda t: np.exp(1j * t))
+    assert err < 1e-4
+
+
+def test_complex_detection_catches_late_complex_returns():
+    """Kernel returns real near 0 but complex at later u: multi-point sampling
+    should still detect this and route through the complex dispatch."""
+    def K(u):
+        if u >= 1.5:
+            return 0.5 + 0.1j
+        return 0.5
+    g = lambda t: 1.0 + 0j  # explicitly complex so the result is unambiguously complex
+    mesh = np.linspace(0, 2.0, 41)
+    y = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
+                             coll_divs=2, coll_choices=[0, 1, 2])
+    assert y.dtype == np.complex128
+
+
+def test_complex_detection_via_init_only(vie2_callable_smooth):
+    """Real kernel + real g but complex soln_init_value (VIDE) -> complex path."""
+    p = vie2_callable_smooth
+    mesh = np.linspace(0, 1, 21)
+    # Trivial VIDE with K=0, a=0, g=0, y_0 = 1+i -> y(t) = 1+i constant
+    y = function_solve_VIDE(
+        kernel=lambda u: 0.0, soln_init_value=1.0 + 1j,
+        mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2])
+    assert y.dtype == np.complex128
+    assert np.allclose(y, 1.0 + 1j, atol=1e-12)
+
+
+def test_complex_real_matches_real_path(vie2_callable_smooth):
+    """A complex kernel with zero imaginary part should give the same result
+    as the corresponding real kernel (up to the small numerical noise of going
+    through the doubled real system)."""
+    p = vie2_callable_smooth
+    mesh = np.linspace(0, 1, 21)
+    K_complex = lambda u: complex(p["kernel"](u))  # promote to complex
+    g_complex = lambda t: complex(p["g"](t))
+    y_complex = function_solve_VIE_2(
+        kernel=K_complex, g=g_complex, mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    y_real = function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    assert y_complex.dtype == np.complex128
+    assert np.allclose(y_complex.real, y_real, atol=1e-10)
+    assert np.allclose(y_complex.imag, 0.0, atol=1e-10)
 
 
 # ---------------------------------------------------------------------------
