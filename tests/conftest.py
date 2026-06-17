@@ -390,3 +390,46 @@ def vie2_callable_vec_coupled():
         coll_divs=3,
         coll_choices=[0, 1, 2, 3],
     )
+
+
+# 2x2 coupled (off-diagonal) constant-kernel VIE-1; polynomial exact solution.
+# Constructed via similarity transform P=[[1,1],[1,-1]] on a diagonal system
+# with K_diag=diag(1,2) and y_diag=[1+t, t] (same as the array-based
+# test_vie1_vec_coupled_kernel):
+#   K = P diag(1,2) P^-1 = [[3/2,-1/2],[-1/2,3/2]]  (all entries non-zero)
+#   y_exact = P [1+t, t]^T   = [1+2t, 1]
+#   g       = P [t+t^2/2, t^2]^T = [t+3t^2/2, t-t^2/2]
+# A diagonal kernel would decouple into independent scalar solves; the
+# off-diagonal entries here exercise the coupling in the per-step block solve.
+@pytest.fixture
+def vie1_callable_vec_coupled():
+    M = np.array([[1.5, -0.5], [-0.5, 1.5]])
+    return dict(
+        d=2,
+        kernel=lambda u: M,
+        g=lambda t: np.array([t + 1.5 * t**2, t - 0.5 * t**2]),
+        y_exact=lambda t: np.array([1.0 + 2.0 * t, 1.0 + 0.0 * t]),
+        coll_divs=2,
+        coll_choices=[1, 2],
+    )
+
+
+# 2x2 fully coupled VIDE with off-diagonal a, K, and g; polynomial exact.
+# Same construction as the array-based test_vide_vec_coupled_a_matrix:
+#   a = K = [[3/2,-1/2],[-1/2,3/2]] (constant), y(0)=[0,0]
+#   y_exact = [t+t^2, t-t^2]
+#   g0 = 1 + t - 5t^2/2 - 2t^3/3,  g1 = 1 - 3t + 3t^2/2 + 2t^3/3
+@pytest.fixture
+def vide_callable_vec_coupled():
+    M = np.array([[1.5, -0.5], [-0.5, 1.5]])
+    return dict(
+        d=2,
+        kernel=lambda u: M,
+        a=lambda t: M,
+        g=lambda t: np.array([1.0 + t - 2.5 * t**2 - (2 / 3) * t**3,
+                              1.0 - 3.0 * t + 1.5 * t**2 + (2 / 3) * t**3]),
+        y_exact=lambda t: np.array([t + t**2, t - t**2]),
+        soln_init_value=np.zeros(2),
+        coll_divs=2,
+        coll_choices=[0, 1, 2],
+    )

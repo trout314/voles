@@ -1875,3 +1875,192 @@ def test_matrix_complex_vide_matches_per_column():
             kernel=kernel, a=lambda t: a_mat, g=(lambda t, j=j: g_col(t, j)),
             soln_init_value=init[:, j], mesh_breakpoints=mesh)
         assert np.allclose(y_mat[..., j], y_col, atol=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# Coupled (non-diagonal) kernels for VIE-1 and VIDE.
+# Diagonal kernels decouple the d-dimensional system into independent scalar
+# solves; these off-diagonal cases exercise the coupling in the per-step
+# (p*d) x (p*d) block solve for the two equation types whose callable vector
+# tests otherwise only used diagonal fixtures.
+# ---------------------------------------------------------------------------
+
+def test_vie1_vec_coupled_matches_exact(vie1_callable_vec_coupled):
+    p = vie1_callable_vec_coupled
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-6
+
+
+def test_vie1_vec_coupled_non_uniform_mesh(vie1_callable_vec_coupled):
+    p = vie1_callable_vec_coupled
+    mesh = np.linspace(0, 1, 21) ** 1.5
+    y = function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-5
+
+
+def test_vide_vec_coupled_matches_exact(vide_callable_vec_coupled):
+    p = vide_callable_vec_coupled
+    mesh = np.linspace(0, 1, 21)
+    y = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-6
+
+
+def test_vide_vec_coupled_non_uniform_mesh(vide_callable_vec_coupled):
+    p = vide_callable_vec_coupled
+    mesh = np.linspace(0, 1, 21) ** 1.5
+    y = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
+    assert err < 1e-5
+
+
+def test_matrix_vie1_coupled_matches_exact_and_columns(vie1_callable_vec_coupled):
+    """Coupled-kernel matrix VIE-1: column 0 (unshifted) hits the analytic
+    solution, and every column matches an independent vector solve."""
+    p = vie1_callable_vec_coupled
+    d = p["d"]
+    mesh = np.linspace(0, 1, 21)
+    shifts = np.array([[0.0, 0.4, -0.2], [0.0, -0.3, 0.5]])  # column 0 is unshifted
+    g_mat = _matrix_g(p["g"], shifts)
+
+    y_mat = function_solve_VIE_1(
+        kernel=p["kernel"], g=g_mat, mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    assert y_mat.shape == (len(mesh) - 1, len(p["coll_choices"]), d, shifts.shape[1])
+
+    # Column 0 reproduces the analytic coupled solution.
+    err0 = _collect_node_values(y_mat[..., 0], mesh, p["coll_divs"],
+                                p["coll_choices"], p["y_exact"])
+    assert err0 < 1e-6
+
+    for j in range(shifts.shape[1]):
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        y_col = function_solve_VIE_1(
+            kernel=p["kernel"], g=g_col, mesh_breakpoints=mesh,
+            coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+
+
+def test_matrix_vide_coupled_matches_exact_and_columns(vide_callable_vec_coupled):
+    """Coupled a/K matrix VIDE: column 0 hits the analytic solution and all
+    columns match independent vector solves."""
+    p = vide_callable_vec_coupled
+    d = p["d"]
+    mesh = np.linspace(0, 1, 21)
+    shifts = np.array([[0.0, 0.3, -0.2], [0.0, -0.1, 0.4]])
+    # Init column 0 is the true y(0)=0; other columns perturb it.
+    init = np.column_stack([p["soln_init_value"],
+                            p["soln_init_value"] + np.array([0.5, -0.3]),
+                            p["soln_init_value"] + np.array([-0.2, 0.6])])
+    g_mat = _matrix_g(p["g"], shifts)
+
+    y_mat = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=g_mat, soln_init_value=init,
+        mesh_breakpoints=mesh, coll_divs=p["coll_divs"],
+        coll_choices=p["coll_choices"])
+    assert y_mat.shape == (len(mesh) - 1, len(p["coll_choices"]), d, init.shape[1])
+
+    err0 = _collect_node_values(y_mat[..., 0], mesh, p["coll_divs"],
+                                p["coll_choices"], p["y_exact"])
+    assert err0 < 1e-6
+
+    for j in range(init.shape[1]):
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        y_col = function_solve_VIDE(
+            kernel=p["kernel"], a=p["a"], g=g_col, soln_init_value=init[:, j],
+            mesh_breakpoints=mesh, coll_divs=p["coll_divs"],
+            coll_choices=p["coll_choices"])
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+
+
+def test_matrix_vie1_return_function(vie1_callable_vec_coupled):
+    """return_function for the matrix VIE-1 path: shapes, polynomials, and
+    per-column agreement with vector solution functions."""
+    p = vie1_callable_vec_coupled
+    d = p["d"]
+    mesh = np.linspace(0, 1, 21)
+    shifts = np.array([[0.0, 0.4], [0.0, -0.3]])
+    m = shifts.shape[1]
+    g_mat = _matrix_g(p["g"], shifts)
+
+    y_arr, y_func = function_solve_VIE_1(
+        kernel=p["kernel"], g=g_mat, mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        return_function=True)
+
+    val = y_func(0.37)
+    assert val.shape == (d, m)
+    ts = np.array([0.1, 0.37, 0.9])
+    vals = y_func(ts)
+    assert vals.shape == (len(ts), d, m)
+    assert len(y_func.polynomials) == len(mesh) - 1
+    assert y_func.polynomials[0].shape == (d, m)
+
+    # Column 0 (unshifted) matches the analytic solution off the mesh nodes.
+    assert np.allclose(vals[..., 0], np.stack([p["y_exact"](t) for t in ts]),
+                       atol=1e-5)
+    for j in range(m):
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        _, f_col = function_solve_VIE_1(
+            kernel=p["kernel"], g=g_col, mesh_breakpoints=mesh,
+            coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+            return_function=True)
+        assert np.allclose(vals[..., j], f_col(ts), atol=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# Larger kernel dimension d (callable vector tests otherwise only use d=2).
+# ---------------------------------------------------------------------------
+
+def test_vec_larger_d_diagonal_matches_scalar():
+    """d=6 diagonal kernel: each component reproduces the scalar smooth solve."""
+    d = 6
+    eye = np.eye(d)
+    kernel = lambda u: np.exp(-u) * eye
+    g_s = lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t))  # exact y = sin(t)
+    g = lambda t: np.full(d, g_s(t))
+    mesh = np.linspace(0, 1, 21)
+
+    y_scalar = function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=g_s,
+                                    mesh_breakpoints=mesh,
+                                    coll_divs=2, coll_choices=[0, 1, 2])
+    y_vec = function_solve_VIE_2(kernel=kernel, g=g, mesh_breakpoints=mesh,
+                                 coll_divs=2, coll_choices=[0, 1, 2])
+    assert y_vec.shape == (len(mesh) - 1, 3, d)
+    for r in range(d):
+        assert np.allclose(y_vec[..., r], y_scalar, atol=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# Real inputs must produce a real-valued (not complex) solution.
+# ---------------------------------------------------------------------------
+
+def test_real_inputs_stay_real(vie2_callable_smooth, vide_callable_smooth,
+                               vie1_callable_smooth):
+    mesh = np.linspace(0, 1, 11)
+    y2 = function_solve_VIE_2(
+        kernel=vie2_callable_smooth["kernel"], g=vie2_callable_smooth["g"],
+        mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2])
+    yd = function_solve_VIDE(
+        kernel=vide_callable_smooth["kernel"], a=vide_callable_smooth["a"],
+        g=vide_callable_smooth["g"], soln_init_value=0.0,
+        mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2])
+    y1 = function_solve_VIE_1(
+        kernel=vie1_callable_smooth["kernel"], g=vie1_callable_smooth["g"],
+        mesh_breakpoints=mesh, coll_divs=3, coll_choices=[1, 2, 3])
+    for y in (y2, yd, y1):
+        assert np.isrealobj(y)
+        assert y.dtype == np.float64
