@@ -105,7 +105,46 @@ print(y(0.5).shape)             # (2,)
 print(y(np.linspace(0, 1, 5)).shape)  # (5, 2)
 ```
 
+## Matrix-valued: many right-hand sides at once
+
+To solve several right-hand sides that share the same kernel, return a
+`(d, m)` array from `g(t)` (and, for `function_solve_VIDE`, pass a `(d, m)`
+`soln_init_value`). The kernel weight tensor — the expensive part to build —
+is computed once and reused across all `m` columns, so this is much cheaper
+than `m` separate calls.
+
+```python
+import numpy as np
+from volterra_equation_solvers import function_solve_VIE_2
+
+d = 2
+identity = np.eye(d)
+kernel = lambda u: np.exp(-u) * identity
+
+# Two right-hand sides (m = 2), stacked column-wise into a (d, m) array.
+def g(t):
+    g0 = np.array([np.sin(t), np.cos(t)])
+    g1 = np.array([t, 1.0 + 0.0 * t])
+    return np.column_stack([g0, g1])   # shape (d, m)
+
+mesh = np.linspace(0, 1, 21)
+y_arr, y = function_solve_VIE_2(
+    kernel=kernel, g=g, mesh_breakpoints=mesh,
+    coll_divs=2, coll_choices=[0, 1, 2],
+    return_function=True,
+)
+
+print(y_arr.shape)              # (M, p, d, m) == (20, 3, 2, 2)
+print(y(0.5).shape)             # (d, m) == (2, 2)
+print(y(np.linspace(0, 1, 5)).shape)  # (len(array), d, m) == (5, 2, 2)
+```
+
+A 2-D `g(t)` return (or a 2-D `soln_init_value` for `function_solve_VIDE`)
+selects the matrix-valued case; matrix problems require a `(d, d)` matrix
+kernel. Complex kernels, `g`, `a`, and initial values are supported here too.
+
 The same `function_solve_VIE_1`, `function_solve_VIDE` entry points exist
 with the analogous API. `function_solve_VIDE` additionally takes an
 `a` callable and a required `soln_init_value`. `function_solve_VIE_1`
-adds the optional `force_continuous` mode.
+adds the optional `force_continuous` mode (whose `soln_init_value` is `(d, m)`
+in the matrix case).

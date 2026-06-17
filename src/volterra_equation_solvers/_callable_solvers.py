@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import functools
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from numpy.polynomial import polynomial as npp
@@ -448,6 +449,99 @@ def _build_W_vector(kernel, mesh_breakpoints, coll_divs, coll_choices,
 
 
 # ---------------------------------------------------------------------------
+# Collocation-point sampling of g and a (shared by vector and matrix paths)
+# ---------------------------------------------------------------------------
+
+def _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d):
+    """Sample a vector forcing term g(t) -> (d,) at the collocation nodes.
+
+    Returns an (M, p, d) array; zeros when g is None.
+    """
+    g_arr = np.zeros((M, p, d), dtype=np.float64)
+    if g is None:
+        return g_arr
+    for n in range(M):
+        t_n = mesh_breakpoints[n]
+        h_n = widths[n]
+        for i in range(p):
+            g_val = np.asarray(g(t_n + node_pos[i] * h_n), dtype=np.float64)
+            if g_val.shape != (d,):
+                raise ValueError(
+                    f"g(t) must return a shape ({d},) array for vector kernel; "
+                    f"got shape {tuple(g_val.shape)}")
+            g_arr[n, i, :] = g_val
+    return g_arr
+
+
+def _sample_a_at_coll(a, mesh_breakpoints, node_pos, widths, M, p, d):
+    """Sample the VIDE coefficient a(t) -> (d, d) at the collocation nodes.
+
+    Returns an (M, p, d, d) array; zeros when a is None. Independent of the
+    number of right-hand sides, so the matrix path samples it once.
+    """
+    a_arr = np.zeros((M, p, d, d), dtype=np.float64)
+    if a is None:
+        return a_arr
+    for n in range(M):
+        t_n = mesh_breakpoints[n]
+        h_n = widths[n]
+        for i in range(p):
+            a_val = np.asarray(a(t_n + node_pos[i] * h_n), dtype=np.float64)
+            if a_val.shape != (d, d):
+                raise ValueError(
+                    f"a(t) must return a shape ({d}, {d}) array for vector "
+                    f"kernel; got shape {tuple(a_val.shape)}")
+            a_arr[n, i, :, :] = a_val
+    return a_arr
+
+
+def _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths, M, p, d, m):
+    """Sample a matrix forcing term g(t) -> (d, m) at the collocation nodes.
+
+    Returns an (M, p, d, m) array; zeros when g is None. g is called once per
+    collocation node (not once per column).
+    """
+    G = np.zeros((M, p, d, m), dtype=np.float64)
+    if g is None:
+        return G
+    for n in range(M):
+        t_n = mesh_breakpoints[n]
+        h_n = widths[n]
+        for i in range(p):
+            g_val = np.asarray(g(t_n + node_pos[i] * h_n), dtype=np.float64)
+            if g_val.shape != (d, m):
+                raise ValueError(
+                    f"g(t) must return a shape ({d}, {m}) array for a "
+                    f"matrix-valued problem; got shape {tuple(g_val.shape)}")
+            G[n, i, :, :] = g_val
+    return G
+
+
+def _detect_g_matrix_cols(g, d, sample_t):
+    """Return the number of right-hand-side columns m if g(sample_t) is a 2-D
+    (d, m) array, else None (scalar/vector forcing).
+
+    A 2-D return signals the matrix-valued problem (m simultaneous RHS); a 1-D
+    (d,) return is an ordinary vector problem. Raises if the first axis does
+    not match the kernel dimension d.
+    """
+    if g is None:
+        return None
+    arr = np.asarray(g(sample_t))
+    if arr.ndim < 2:
+        return None
+    if arr.ndim > 2:
+        raise ValueError(
+            f"g(t) must return a 1-D (d,) or 2-D (d, m) array; got "
+            f"ndim {arr.ndim} (shape {tuple(arr.shape)}).")
+    if arr.shape[0] != d:
+        raise ValueError(
+            f"g(t) returned shape {tuple(arr.shape)}; first axis must equal "
+            f"the kernel dimension d = {d}.")
+    return int(arr.shape[1])
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -459,14 +553,18 @@ class _SolutionFunction:
     For scalar problems, `polynomials` is a list of `numpy.polynomial.Polynomial`
     objects, one per mesh interval. For vector problems with d components,
     `polynomials` is a list of object arrays of shape `(d,)`, each entry a
-    Polynomial for that component on that interval.
+    Polynomial for that component on that interval. For matrix-valued problems
+    (m simultaneous right-hand sides) `polynomials` is a list of `(d, m)` object
+    arrays.
     """
 
-    def __init__(self, polynomials, mesh_breakpoints, d: int = 0):
+    def __init__(self, polynomials, mesh_breakpoints, d: int = 0, m: int = 0):
         self.polynomials = polynomials
         self.mesh_breakpoints = np.asarray(mesh_breakpoints)
-        # d == 0 marks a scalar problem; d >= 1 marks a vector problem
+        # d == 0 marks a scalar problem; d >= 1 marks a vector problem.
+        # m >= 1 marks a matrix problem (m right-hand sides); m == 0 otherwise.
         self._d = d
+        self._m = m
 
     def __call__(self, t):
         scalar_input = (np.isscalar(t) or np.ndim(t) == 0)
@@ -474,6 +572,16 @@ class _SolutionFunction:
         bps = self.mesh_breakpoints
         idx = np.searchsorted(bps, t_arr, side='right') - 1
         idx = np.clip(idx, 0, len(self.polynomials) - 1)
+
+        if self._m:
+            # Matrix case: each interval has a (d, m) array of polynomials.
+            out = np.empty((len(t_arr), self._d, self._m), dtype=float)
+            for j, (ti, ii) in enumerate(zip(t_arr, idx)):
+                polys_n = self.polynomials[int(ii)]
+                for r in range(self._d):
+                    for c in range(self._m):
+                        out[j, r, c] = polys_n[r, c](ti)
+            return out[0] if scalar_input else out
 
         if self._d == 0:
             out = np.empty(t_arr.shape, dtype=float)
@@ -531,6 +639,35 @@ def _build_polynomials_vector(y: np.ndarray, mesh_breakpoints: np.ndarray,
             poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
                                             window=(0.0, 1.0), symbol='t')
             comps[r] = poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim()
+        polys.append(comps)
+    return polys
+
+
+def _build_polynomials_matrix(y: np.ndarray, mesh_breakpoints: np.ndarray,
+                               coll_divs: int, coll_choices: list[int],
+                               d: int, m: int) -> list:
+    """Matrix analogue of _build_polynomials_vector.
+
+    y has shape (M, p, d, m); returns a list of M arrays each of shape (d, m)
+    holding one Polynomial per (component, right-hand-side) pair.
+    """
+    p = len(coll_choices)
+    M = len(mesh_breakpoints) - 1
+    basis = _lagrange_basis_coefs(coll_divs, coll_choices)
+    polys = []
+    for n in range(M):
+        t_l = mesh_breakpoints[n]
+        t_r = mesh_breakpoints[n + 1]
+        comps = np.empty((d, m), dtype=object)
+        for r in range(d):
+            for c in range(m):
+                norm_coef = np.zeros(p)
+                for k in range(p):
+                    norm_coef += y[n, k, r, c] * basis[k]
+                poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
+                                                window=(0.0, 1.0), symbol='t')
+                comps[r, c] = poly.convert(domain=(t_l, t_r),
+                                           window=(t_l, t_r)).trim()
         polys.append(comps)
     return polys
 
@@ -633,7 +770,12 @@ def _block_wrap_kernel(kernel, d_orig: int):
 
 
 def _block_wrap_g(g, d_orig: int):
-    """Wrap complex g into real-valued (2,) or (2d,) callable. None passes through."""
+    """Wrap complex g into a real-valued callable. None passes through.
+
+    Scalar: complex g(t) -> (2,). Vector: complex (d,) -> (2d,). Matrix: complex
+    (d, m) -> (2d, m). Only the component (first) axis doubles; concatenating on
+    axis 0 covers both the vector and matrix cases.
+    """
     if g is None:
         return None
     if d_orig == 0:
@@ -644,7 +786,7 @@ def _block_wrap_g(g, d_orig: int):
     else:
         def g_real(t):
             gv = np.asarray(g(t), dtype=complex)
-            return np.concatenate([gv.real, gv.imag])
+            return np.concatenate([gv.real, gv.imag], axis=0)
         return g_real
 
 
@@ -656,11 +798,12 @@ def _block_wrap_a(a, d_orig: int):
 
 
 def _block_expand_init(init, d_orig: int) -> np.ndarray:
-    """Complex scalar -> (2,) real; complex (d,) -> (2d,) real."""
+    """Complex scalar -> (2,) real; complex (d,) -> (2d,) real; complex (d, m)
+    -> (2d, m) real (component axis doubles)."""
     arr = np.asarray(init, dtype=complex)
     if d_orig == 0:
         return np.array([float(arr.real), float(arr.imag)])
-    return np.concatenate([arr.real, arr.imag])
+    return np.concatenate([arr.real, arr.imag], axis=0)
 
 
 def _recombine_complex_y(y_real: np.ndarray, d_orig: int) -> np.ndarray:
@@ -668,9 +811,13 @@ def _recombine_complex_y(y_real: np.ndarray, d_orig: int) -> np.ndarray:
 
     d_orig == 0: y_real shape (M, p, 2) -> (M, p) complex
     d_orig >  0: y_real shape (M, p, 2*d_orig) -> (M, p, d_orig) complex
+    matrix:      y_real shape (M, p, 2*d_orig, m) -> (M, p, d_orig, m) complex
+                 (the component axis is -2, ahead of the right-hand-side axis)
     """
     if d_orig == 0:
         return y_real[..., 0] + 1j * y_real[..., 1]
+    if y_real.ndim == 4:
+        return y_real[..., :d_orig, :] + 1j * y_real[..., d_orig:, :]
     return y_real[..., :d_orig] + 1j * y_real[..., d_orig:]
 
 
@@ -680,8 +827,10 @@ class _ComplexSolutionFunction:
     def __init__(self, real_y_func, d_orig: int):
         self._real = real_y_func
         self._d_orig = d_orig
+        # m >= 1 marks a matrix problem; inherited from the real wrapper.
+        self._m = getattr(real_y_func, "_m", 0)
         self.mesh_breakpoints = real_y_func.mesh_breakpoints
-        # Convert the per-interval (2d,) polynomial arrays into complex.
+        # Convert the per-interval (2d,) or (2d, m) polynomial arrays to complex.
         from ._complex import _recombine_polys
         self.polynomials = _recombine_polys(real_y_func.polynomials, d_orig)
 
@@ -693,8 +842,14 @@ class _ComplexSolutionFunction:
             if scalar_input:
                 return complex(val[0], val[1])
             return val[..., 0] + 1j * val[..., 1]
-        # d_orig > 0: real returns (2*d_orig,) for scalar t or (n, 2*d_orig) for array t
         d = self._d_orig
+        if self._m:
+            # matrix: real returns (2d, m) for scalar t or (n, 2d, m) for array t;
+            # the component axis is -2.
+            if scalar_input:
+                return val[:d, :] + 1j * val[d:, :]
+            return val[..., :d, :] + 1j * val[..., d:, :]
+        # vector: real returns (2*d,) for scalar t or (n, 2*d) for array t
         if scalar_input:
             return val[:d] + 1j * val[d:]
         return val[..., :d] + 1j * val[..., d:]
@@ -716,9 +871,15 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     Parameters
     ----------
     kernel : callable
-        ``kernel(u)`` returns $K(u)$ for scalar $u > 0$.
+        ``kernel(u)`` returns $K(u)$ for scalar $u > 0$: a scalar for scalar
+        equations, or a square $(d, d)$ matrix for $d$-dimensional vector and
+        matrix-valued equations.
     g : callable, optional
-        ``g(t)`` returns the forcing term $g(t)$. Defaults to zero.
+        ``g(t)`` returns the forcing term $g(t)$. Defaults to zero. Return a
+        scalar for scalar equations, a $(d,)$ array for vector equations, or a
+        $(d, m)$ array to solve $m$ right-hand sides simultaneously (the
+        matrix-valued case). A 2-D return signals the matrix case; matrix-valued
+        problems require a $(d, d)$ matrix kernel.
     mesh_breakpoints : array_like
         Strictly increasing 1-D array starting at 0. Defines the integration
         intervals directly.
@@ -742,17 +903,24 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
 
     Returns
     -------
-    soln_values : ndarray of shape (M, p)
+    soln_values : ndarray
         Solution values at collocation nodes, where M is the number of
-        intervals and p = ``len(coll_choices)``.
+        intervals and p = ``len(coll_choices)``. Shape ``(M, p)`` for scalar
+        equations, ``(M, p, d)`` for vector equations, and ``(M, p, d, m)`` for
+        matrix-valued equations.
     (soln_values, y_callable) : tuple
         When ``return_function=True``. ``y_callable(t)`` evaluates the
-        piecewise polynomial at any time t.
+        piecewise polynomial at any time t, returning a scalar / ``(d,)`` /
+        ``(d, m)`` value for scalar t (with a leading time axis for array t).
 
     Notes
     -----
     See the module docstring for the mesh-convention difference from the
     array-based solvers.
+
+    Matrix-valued problems share the kernel weight tensor across all $m$
+    right-hand sides (it is built once), so they are substantially cheaper than
+    $m$ separate calls.
     """
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
@@ -836,27 +1004,41 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
             return y, y_func
         return y
 
-    # ----- Vector path -----
+    # ----- Vector / matrix path -----
     max_d = _dlang_module.function_solve_max_d_d()
     if d > max_d:
         raise ValueError(
             f"kernel dimension d = {d} exceeds the maximum compiled into the "
             f"D extension ({max_d}).")
 
+    # The weight tensor depends only on the kernel, so it is built once and
+    # shared across all right-hand sides in the matrix case.
     W = _build_W_vector(kernel, mesh_breakpoints, coll_divs, coll_choices,
                         kernel_singularity, _smooth_gl_order, d)
-    g_arr = np.zeros((M, p, d), dtype=np.float64)
-    if g is not None:
-        for n in range(M):
-            t_n = mesh_breakpoints[n]
-            h_n = widths[n]
-            for i in range(p):
-                g_val = np.asarray(g(t_n + node_pos[i] * h_n), dtype=np.float64)
-                if g_val.shape != (d,):
-                    raise ValueError(
-                        f"g(t) must return a shape ({d},) array for vector kernel; "
-                        f"got shape {tuple(g_val.shape)}")
-                g_arr[n, i, :] = g_val
+
+    sample_t = float(mesh_breakpoints[0] + node_pos[0] * widths[0])
+    m = _detect_g_matrix_cols(g, d, sample_t)
+
+    if m is not None:
+        # Matrix-valued problem: m simultaneous right-hand sides sharing W.
+        G = _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths,
+                                     M, p, d, m)
+
+        def _col_solve(j):
+            g_arr_j = np.ascontiguousarray(G[:, :, :, j])
+            return _dlang_module.function_solve_vie2_vec_d(W, g_arr_j)
+
+        with ThreadPoolExecutor(max_workers=m) as ex:
+            cols = list(ex.map(_col_solve, range(m)))
+        y = np.stack(cols, axis=3)  # (M, p, d, m)
+
+        if return_function:
+            polys = _build_polynomials_matrix(y, mesh_breakpoints, coll_divs,
+                                              coll_choices, d, m)
+            return y, _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
+        return y
+
+    g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
     y = _dlang_module.function_solve_vie2_vec_d(W, g_arr)
 
     if return_function:
@@ -914,13 +1096,18 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     Parameters
     ----------
     kernel : callable
-        ``kernel(u)`` returns $K(u)$.
+        ``kernel(u)`` returns $K(u)$: a scalar, or a $(d, d)$ matrix for vector
+        and matrix-valued equations.
     a : callable, optional
-        ``a(t)`` returns the coefficient $a(t)$. Defaults to zero.
+        ``a(t)`` returns the coefficient $a(t)$ (a scalar, or a $(d, d)$ matrix
+        for vector/matrix equations). Defaults to zero. ``a`` does not depend on
+        the right-hand side, so it is sampled once in the matrix case.
     g : callable, optional
-        ``g(t)`` returns the forcing term. Defaults to zero.
-    soln_init_value : float
-        $y(0)$. Required.
+        ``g(t)`` returns the forcing term: scalar, $(d,)$, or $(d, m)$ for the
+        matrix-valued case. Defaults to zero.
+    soln_init_value : float or array_like
+        $y(0)$. Required. A scalar/`(d,)` value gives the scalar/vector case; a
+        $(d, m)$ array selects the matrix-valued case ($m$ right-hand sides).
     mesh_breakpoints : array_like
         Strictly-increasing 1-D array starting at 0.
     coll_divs, coll_choices : int, list of int
@@ -933,8 +1120,9 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
 
     Returns
     -------
-    soln_values : ndarray of shape (M, p)
-        $y$ values at collocation nodes.
+    soln_values : ndarray
+        $y$ values at collocation nodes. Shape ``(M, p)`` (scalar),
+        ``(M, p, d)`` (vector), or ``(M, p, d, m)`` (matrix-valued).
     (soln_values, y_callable) : tuple
         When ``return_function=True``.
 
@@ -1054,53 +1242,69 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
             return y_at_coll, y_func
         return y_at_coll
 
-    # ----- Vector path -----
+    # ----- Vector / matrix path -----
     max_d = _dlang_module.function_solve_max_d_d()
     if d > max_d:
         raise ValueError(
             f"kernel dimension d = {d} exceeds the maximum compiled into the "
             f"D extension ({max_d}).")
 
-    # Validate / normalize soln_init
-    init = np.asarray(soln_init_value, dtype=np.float64)
-    if init.shape != (d,):
-        raise ValueError(
-            f"soln_init_value must have shape ({d},) for vector kernel; "
-            f"got shape {tuple(init.shape)}")
-
+    # W and a(t) depend only on the kernel and a, not on the right-hand side,
+    # so both are built once and shared across all columns in the matrix case.
     vide_basis = _vide_basis_coefs(coll_divs, coll_choices)
     W = _build_W_with_basis_vector(
         kernel, mesh_breakpoints, coll_divs, coll_choices,
         kernel_singularity, _smooth_gl_order, d, vide_basis)
+    a_arr = _sample_a_at_coll(a, mesh_breakpoints, node_pos, widths, M, p, d)
 
-    # g_arr: (M, p, d); a_arr: (M, p, d, d)
-    g_arr = np.zeros((M, p, d), dtype=np.float64)
-    if g is not None:
+    # Matrix-valued problem is signalled by a 2-D (d, m) initial value.
+    init_arr = np.asarray(soln_init_value, dtype=np.float64)
+    if init_arr.ndim == 2:
+        if init_arr.shape[0] != d:
+            raise ValueError(
+                f"soln_init_value shape {tuple(init_arr.shape)} incompatible "
+                f"with kernel dimension d = {d}.")
+        m = init_arr.shape[1]
+        G = _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths,
+                                     M, p, d, m)
+
+        def _col_solve(j):
+            g_arr_j = np.ascontiguousarray(G[:, :, :, j])
+            return _dlang_module.function_solve_vide_vec_d(
+                W, g_arr_j, a_arr, alpha, w_vec, widths,
+                np.ascontiguousarray(init_arr[:, j]))
+
+        with ThreadPoolExecutor(max_workers=m) as ex:
+            results = list(ex.map(_col_solve, range(m)))
+
+        # y_prime_j: (M, p, d); y_boundary_j: (M+1, d). Stack on a new last axis.
+        y_prime = np.stack([r[0] for r in results], axis=3)      # (M, p, d, m)
+        y_boundary = np.stack([r[1] for r in results], axis=2)   # (M+1, d, m)
+
+        y_at_coll = np.zeros((M, p, d, m), dtype=np.float64)
         for n in range(M):
-            t_n = mesh_breakpoints[n]
-            h_n = widths[n]
-            for i in range(p):
-                g_val = np.asarray(g(t_n + node_pos[i] * h_n), dtype=np.float64)
-                if g_val.shape != (d,):
-                    raise ValueError(
-                        f"g(t) must return a shape ({d},) array for vector "
-                        f"kernel; got shape {tuple(g_val.shape)}")
-                g_arr[n, i, :] = g_val
-    a_arr = np.zeros((M, p, d, d), dtype=np.float64)
-    if a is not None:
-        for n in range(M):
-            t_n = mesh_breakpoints[n]
-            h_n = widths[n]
-            for i in range(p):
-                a_val = np.asarray(a(t_n + node_pos[i] * h_n), dtype=np.float64)
-                if a_val.shape != (d, d):
-                    raise ValueError(
-                        f"a(t) must return a shape ({d}, {d}) array for vector "
-                        f"kernel; got shape {tuple(a_val.shape)}")
-                a_arr[n, i, :, :] = a_val
+            # alpha (p,p) @ y_prime[n] (p,d,m) over the p axis -> (p,d,m)
+            y_at_coll[n] = y_boundary[n] + widths[n] * np.tensordot(
+                alpha, y_prime[n], axes=([1], [0]))
+
+        if return_function:
+            polys = _build_vide_polynomials_matrix(
+                y_prime, y_boundary, mesh_breakpoints, coll_divs, coll_choices,
+                d, m)
+            return y_at_coll, _SolutionFunction(polys, mesh_breakpoints,
+                                                d=d, m=m)
+        return y_at_coll
+
+    # Vector path
+    if init_arr.shape != (d,):
+        raise ValueError(
+            f"soln_init_value must have shape ({d},) for vector kernel; "
+            f"got shape {tuple(init_arr.shape)}")
+
+    g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
 
     y_prime, y_boundary = _dlang_module.function_solve_vide_vec_d(
-        W, g_arr, a_arr, alpha, w_vec, widths, init)
+        W, g_arr, a_arr, alpha, w_vec, widths, init_arr)
 
     # Reconstruct y at collocation: y[n,i] = y_n + h_n * sum_k alpha[i,k] Y'_{n,k}
     y_at_coll = np.zeros((M, p, d), dtype=np.float64)
@@ -1138,6 +1342,38 @@ def _build_vide_polynomials_vector(y_prime: np.ndarray, y_boundary: np.ndarray,
             poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
                                             window=(0.0, 1.0), symbol='t')
             comps[r] = poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim()
+        polys.append(comps)
+    return polys
+
+
+def _build_vide_polynomials_matrix(y_prime: np.ndarray, y_boundary: np.ndarray,
+                                    mesh_breakpoints: np.ndarray,
+                                    coll_divs: int, coll_choices: list[int],
+                                    d: int, m: int) -> list:
+    """Matrix analogue of _build_vide_polynomials_vector.
+
+    y_prime has shape (M, p, d, m) and y_boundary shape (M+1, d, m); returns a
+    list of M arrays each of shape (d, m) of Polynomial objects.
+    """
+    p = len(coll_choices)
+    M = len(mesh_breakpoints) - 1
+    anti = _lagrange_antideriv_coefs(coll_divs, coll_choices)
+    polys = []
+    for n in range(M):
+        t_l = mesh_breakpoints[n]
+        t_r = mesh_breakpoints[n + 1]
+        h = t_r - t_l
+        comps = np.empty((d, m), dtype=object)
+        for r in range(d):
+            for c in range(m):
+                norm_coef = np.zeros(p + 1)
+                norm_coef[0] = y_boundary[n, r, c]
+                for k in range(p):
+                    norm_coef += h * y_prime[n, k, r, c] * anti[k]
+                poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
+                                                window=(0.0, 1.0), symbol='t')
+                comps[r, c] = poly.convert(domain=(t_l, t_r),
+                                           window=(t_l, t_r)).trim()
         polys.append(comps)
     return polys
 
@@ -1241,13 +1477,17 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     Parameters
     ----------
     kernel : callable
-        ``kernel(u)`` returns $K(u)$.
+        ``kernel(u)`` returns $K(u)$: a scalar, or a $(d, d)$ matrix for vector
+        and matrix-valued equations.
     g : callable, optional
-        ``g(t)`` returns the right-hand side. Defaults to zero (trivial y=0).
+        ``g(t)`` returns the right-hand side: scalar, $(d,)$, or $(d, m)$ for
+        the matrix-valued case ($m$ right-hand sides). Defaults to zero
+        (trivial y=0). A 2-D return signals the matrix case.
     soln_init_value : float or array_like, optional
         $y(0)$. Required only when ``force_continuous=True``; ignored
         otherwise. A warning is emitted if a value is passed when it has no
-        effect.
+        effect. For a matrix-valued problem with ``force_continuous=True`` it
+        must have shape $(d, m)$.
     mesh_breakpoints : array_like
         Strictly-increasing 1-D array starting at 0.
     coll_divs, coll_choices : int, list of int
@@ -1368,12 +1608,51 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             return y, y_func
         return y
 
-    # ----- Vector path -----
+    # ----- Vector / matrix path -----
     max_d = _dlang_module.function_solve_max_d_d()
     if d > max_d:
         raise ValueError(
             f"kernel dimension d = {d} exceeds the maximum compiled into the "
             f"D extension ({max_d}).")
+
+    # W depends only on the kernel; built once and shared across columns.
+    W = _build_W_vector(kernel, mesh_breakpoints, coll_divs, coll_choices,
+                        kernel_singularity, _smooth_gl_order, d)
+
+    sample_t = float(mesh_breakpoints[0] + node_pos[0] * widths[0])
+    m = _detect_g_matrix_cols(g, d, sample_t)
+
+    if m is not None:
+        # Matrix-valued problem: m simultaneous right-hand sides sharing W.
+        if force_continuous:
+            init_mat = np.asarray(soln_init_value, dtype=np.float64)
+            if init_mat.shape != (d, m):
+                raise ValueError(
+                    f"soln_init_value must have shape ({d}, {m}) for a "
+                    f"matrix-valued problem with force_continuous=True; "
+                    f"got shape {tuple(init_mat.shape)}")
+        else:
+            init_mat = np.zeros((d, m), dtype=np.float64)
+
+        G = _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths,
+                                     M, p, d, m)
+
+        def _col_solve(j):
+            g_arr_j = np.ascontiguousarray(G[:, :, :, j])
+            return _dlang_module.function_solve_vie1_vec_d(
+                W, g_arr_j, force_continuous, L_at_0, L_at_1,
+                np.ascontiguousarray(init_mat[:, j]))
+
+        with ThreadPoolExecutor(max_workers=m) as ex:
+            cols = list(ex.map(_col_solve, range(m)))
+        y = np.stack(cols, axis=3)  # (M, p, d, m)
+
+        if return_function:
+            polys = _build_polynomials_matrix(y, mesh_breakpoints, coll_divs,
+                                              coll_choices, d, m)
+            return y, _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
+        return y
+
     if force_continuous:
         init_vec = np.asarray(soln_init_value, dtype=np.float64)
         if init_vec.shape != (d,):
@@ -1383,20 +1662,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     else:
         init_vec = np.zeros(d, dtype=np.float64)
 
-    W = _build_W_vector(kernel, mesh_breakpoints, coll_divs, coll_choices,
-                        kernel_singularity, _smooth_gl_order, d)
-    g_arr = np.zeros((M, p, d), dtype=np.float64)
-    if g is not None:
-        for n in range(M):
-            t_n = mesh_breakpoints[n]
-            h_n = widths[n]
-            for i in range(p):
-                g_val = np.asarray(g(t_n + node_pos[i] * h_n), dtype=np.float64)
-                if g_val.shape != (d,):
-                    raise ValueError(
-                        f"g(t) must return a shape ({d},) array for vector kernel; "
-                        f"got shape {tuple(g_val.shape)}")
-                g_arr[n, i, :] = g_val
+    g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
     y = _dlang_module.function_solve_vie1_vec_d(
         W, g_arr, force_continuous, L_at_0, L_at_1, init_vec)
 

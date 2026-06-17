@@ -1554,3 +1554,324 @@ def test_stress_t_large_via_mesh():
             t = t_n + pos * h_n
             err = max(err, abs(y[n, i] - np.sin(t)))
     assert err < 1e-3
+
+
+# ---------------------------------------------------------------------------
+# Matrix-valued problems: m simultaneous right-hand sides sharing one kernel.
+# g returns (d, m), soln_init is (d, m), and the solution is (M, p, d, m).
+# The matrix path builds the kernel weight tensor once and fans the columns
+# out across the existing vector solver, so the strongest correctness check is
+# column-by-column equality with m independent vector solves.
+# ---------------------------------------------------------------------------
+
+def _matrix_g(vector_g, shifts):
+    """Build a (d, m) forcing callable: column j is vector_g(t) + shifts[:, j]."""
+    return lambda t: np.stack([np.asarray(vector_g(t)) + shifts[:, j]
+                               for j in range(shifts.shape[1])], axis=1)
+
+
+def test_matrix_vie2_matches_per_column_vector(vie2_callable_vec_diagonal):
+    p = vie2_callable_vec_diagonal
+    d = p["d"]
+    mesh = np.linspace(0, 1, 21)
+    shifts = np.array([[0.0, 0.3, -0.2], [0.0, -0.1, 0.4]])  # (d, m=3)
+    g_mat = _matrix_g(p["g"], shifts)
+
+    y_mat = function_solve_VIE_2(
+        kernel=p["kernel"], g=g_mat, mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    assert y_mat.shape == (len(mesh) - 1, len(p["coll_choices"]), d, shifts.shape[1])
+
+    for j in range(shifts.shape[1]):
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        y_col = function_solve_VIE_2(
+            kernel=p["kernel"], g=g_col, mesh_breakpoints=mesh,
+            coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+
+
+def test_matrix_vie2_single_column_equals_vector(vie2_callable_vec_diagonal):
+    """A (d, 1) forcing is the matrix case with m=1; first axis matches vector."""
+    p = vie2_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 11)
+    g_col = lambda t: np.asarray(p["g"](t)).reshape(p["d"], 1)
+    y_mat = function_solve_VIE_2(
+        kernel=p["kernel"], g=g_col, mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    y_vec = function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    assert y_mat.shape == y_vec.shape + (1,)
+    assert np.allclose(y_mat[..., 0], y_vec, atol=1e-12)
+
+
+def test_matrix_vie2_return_function(vie2_callable_vec_diagonal):
+    p = vie2_callable_vec_diagonal
+    d = p["d"]
+    mesh = np.linspace(0, 1, 21)
+    shifts = np.array([[0.0, 0.3], [0.0, -0.1]])  # (d, m=2)
+    m = shifts.shape[1]
+    g_mat = _matrix_g(p["g"], shifts)
+
+    y_arr, y_func = function_solve_VIE_2(
+        kernel=p["kernel"], g=g_mat, mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        return_function=True)
+
+    # Scalar t -> (d, m); array t -> (len(t), d, m)
+    val = y_func(0.37)
+    assert val.shape == (d, m)
+    ts = np.array([0.1, 0.37, 0.9])
+    vals = y_func(ts)
+    assert vals.shape == (len(ts), d, m)
+
+    # Each column's solution function matches an independent vector solve.
+    for j in range(m):
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        _, f_col = function_solve_VIE_2(
+            kernel=p["kernel"], g=g_col, mesh_breakpoints=mesh,
+            coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+            return_function=True)
+        assert np.allclose(vals[..., j], f_col(ts), atol=1e-10)
+
+    # Polynomials list: M entries, each a (d, m) object array.
+    assert len(y_func.polynomials) == len(mesh) - 1
+    assert y_func.polynomials[0].shape == (d, m)
+
+
+def test_matrix_vie2_breakpoint_continuous(vie2_callable_vec_diagonal):
+    """VIE-2 piecewise polynomial is continuous across mesh breakpoints."""
+    p = vie2_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 11)
+    shifts = np.array([[0.0, 0.3], [0.1, -0.1]])
+    g_mat = _matrix_g(p["g"], shifts)
+    _, y_func = function_solve_VIE_2(
+        kernel=p["kernel"], g=g_mat, mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        return_function=True)
+    for bp in mesh[1:-1]:
+        left = y_func(bp - 1e-9)
+        right = y_func(bp + 1e-9)
+        assert np.allclose(left, right, atol=1e-6)
+
+
+def test_matrix_vie2_matches_array_solver():
+    """Cross-API: callable matrix VIE-2 agrees with the array-based matrix solver."""
+    from volterra_equation_solvers import solve_VIE_2
+    A = np.array([[0.0, 0.2], [-0.1, 0.0]])
+    d = 2
+    coll_divs, coll_choices = 2, [0, 1, 2]
+    time_step = 0.02
+    N = 20 * coll_divs**2 + 1
+    T = (N - 1) * time_step
+    times = np.arange(N) * time_step
+
+    def kernel(u):
+        u = np.asarray(u)
+        if u.ndim == 0:
+            return np.exp(-u) * A
+        return np.exp(-u)[:, None, None] * A
+
+    def g_mat(t):
+        return np.column_stack([np.array([np.sin(t), np.cos(t)]),
+                                np.array([t, 1.0 + 0 * t])])
+
+    K_arr = np.stack([kernel(s) for s in times])
+    g_arr = np.stack([g_mat(t) for t in times])
+    soln_arr = solve_VIE_2(kernel_values=K_arr, g_values=g_arr,
+                           time_step=time_step, coll_divs=coll_divs,
+                           coll_choices=coll_choices)
+
+    mesh = np.linspace(0, T, 21)
+    _, y_func = function_solve_VIE_2(
+        kernel=kernel, g=g_mat, mesh_breakpoints=mesh,
+        coll_divs=coll_divs, coll_choices=coll_choices, return_function=True)
+    assert np.max(np.abs(y_func(times) - soln_arr)) < 1e-3
+
+
+def test_matrix_vie2_g_wrong_shape_raises(vie2_callable_vec_diagonal):
+    """A 2-D g whose first axis != d must raise a clear error."""
+    p = vie2_callable_vec_diagonal
+    bad_g = lambda t: np.zeros((3, 2))  # first axis 3 != d=2
+    with pytest.raises(ValueError, match="first axis must equal"):
+        function_solve_VIE_2(kernel=p["kernel"], g=bad_g,
+                             mesh_breakpoints=np.linspace(0, 1, 6),
+                             coll_divs=p["coll_divs"],
+                             coll_choices=p["coll_choices"])
+
+
+def test_matrix_vide_matches_per_column_vector(vide_callable_vec_diagonal):
+    p = vide_callable_vec_diagonal
+    d = p["d"]
+    mesh = np.linspace(0, 1, 17)
+    m = 3
+    init = np.array([[0.0, 0.5, -0.3], [0.0, -0.2, 0.4]])  # (d, m)
+    shifts = np.array([[0.0, 0.1, -0.1], [0.0, -0.05, 0.2]])
+    g_mat = _matrix_g(p["g"], shifts)
+
+    y_mat = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=g_mat, soln_init_value=init,
+        mesh_breakpoints=mesh, coll_divs=p["coll_divs"],
+        coll_choices=p["coll_choices"])
+    assert y_mat.shape == (len(mesh) - 1, len(p["coll_choices"]), d, m)
+
+    for j in range(m):
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        y_col = function_solve_VIDE(
+            kernel=p["kernel"], a=p["a"], g=g_col,
+            soln_init_value=init[:, j], mesh_breakpoints=mesh,
+            coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+
+
+def test_matrix_vide_return_function(vide_callable_vec_diagonal):
+    p = vide_callable_vec_diagonal
+    d = p["d"]
+    mesh = np.linspace(0, 1, 17)
+    m = 2
+    init = np.array([[0.0, 0.5], [0.0, -0.2]])
+    shifts = np.array([[0.0, 0.1], [0.0, -0.05]])
+    g_mat = _matrix_g(p["g"], shifts)
+
+    y_arr, y_func = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=g_mat, soln_init_value=init,
+        mesh_breakpoints=mesh, coll_divs=p["coll_divs"],
+        coll_choices=p["coll_choices"], return_function=True)
+    ts = np.array([0.1, 0.55, 0.95])
+    vals = y_func(ts)
+    assert vals.shape == (len(ts), d, m)
+    assert y_func.polynomials[0].shape == (d, m)
+    for j in range(m):
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        _, f_col = function_solve_VIDE(
+            kernel=p["kernel"], a=p["a"], g=g_col, soln_init_value=init[:, j],
+            mesh_breakpoints=mesh, coll_divs=p["coll_divs"],
+            coll_choices=p["coll_choices"], return_function=True)
+        assert np.allclose(vals[..., j], f_col(ts), atol=1e-10)
+
+
+def test_matrix_vide_init_wrong_shape_raises(vide_callable_vec_diagonal):
+    p = vide_callable_vec_diagonal
+    bad_init = np.zeros((3, 2))  # first axis 3 != d=2
+    g_mat = _matrix_g(p["g"], np.zeros((p["d"], 2)))
+    with pytest.raises(ValueError, match="incompatible with kernel dimension"):
+        function_solve_VIDE(
+            kernel=p["kernel"], a=p["a"], g=g_mat, soln_init_value=bad_init,
+            mesh_breakpoints=np.linspace(0, 1, 6), coll_divs=p["coll_divs"],
+            coll_choices=p["coll_choices"])
+
+
+def test_matrix_vie1_matches_per_column_vector(vie1_callable_vec_diagonal):
+    p = vie1_callable_vec_diagonal
+    d = p["d"]
+    mesh = np.linspace(0, 1, 19)
+    shifts = np.array([[0.0, 0.2, -0.1], [0.0, -0.15, 0.25]])
+    g_mat = _matrix_g(p["g"], shifts)
+
+    y_mat = function_solve_VIE_1(
+        kernel=p["kernel"], g=g_mat, mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+    assert y_mat.shape == (len(mesh) - 1, len(p["coll_choices"]), d, shifts.shape[1])
+
+    for j in range(shifts.shape[1]):
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        y_col = function_solve_VIE_1(
+            kernel=p["kernel"], g=g_col, mesh_breakpoints=mesh,
+            coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+
+
+def test_matrix_vie1_force_continuous(vie1_callable_vec_diagonal):
+    p = vie1_callable_vec_diagonal
+    d = p["d"]
+    mesh = np.linspace(0, 1, 19)
+    m = 2
+    init = np.array([[1.0, 0.5], [1.0, -0.3]])  # (d, m); y(0)=cos(0)-sin(0)=1
+    shifts = np.array([[0.0, 0.2], [0.0, -0.15]])
+    g_mat = _matrix_g(p["g"], shifts)
+
+    y_mat = function_solve_VIE_1(
+        kernel=p["kernel"], g=g_mat, soln_init_value=init,
+        mesh_breakpoints=mesh, coll_divs=p["coll_divs"],
+        coll_choices=p["coll_choices"], force_continuous=True)
+    for j in range(m):
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        y_col = function_solve_VIE_1(
+            kernel=p["kernel"], g=g_col, soln_init_value=init[:, j],
+            mesh_breakpoints=mesh, coll_divs=p["coll_divs"],
+            coll_choices=p["coll_choices"], force_continuous=True)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+
+
+def test_matrix_vie1_force_continuous_init_wrong_shape(vie1_callable_vec_diagonal):
+    p = vie1_callable_vec_diagonal
+    g_mat = _matrix_g(p["g"], np.zeros((p["d"], 2)))
+    with pytest.raises(ValueError, match=r"shape \(2, 2\)"):
+        function_solve_VIE_1(
+            kernel=p["kernel"], g=g_mat, soln_init_value=np.zeros(2),  # (d,) not (d,m)
+            mesh_breakpoints=np.linspace(0, 1, 10), coll_divs=p["coll_divs"],
+            coll_choices=p["coll_choices"], force_continuous=True)
+
+
+def test_matrix_complex_vie2_matches_per_column():
+    """Complex matrix VIE-2 routes through block decomposition correctly."""
+    d, m = 2, 2
+    rng = np.random.default_rng(7)
+    Kmat = (rng.standard_normal((d, d)) + 1j * rng.standard_normal((d, d))) * 0.2
+
+    def kernel(u):
+        u = np.asarray(u)
+        if u.ndim == 0:
+            return np.exp(-0.5 * u) * Kmat
+        return np.exp(-0.5 * u)[:, None, None] * Kmat
+
+    def g_col(t, j):
+        return np.array([np.sin(t) + 1j * 0.1 * j, np.cos(t) - 1j * 0.2 * j])
+
+    def g_mat(t):
+        return np.stack([g_col(t, j) for j in range(m)], axis=1)
+
+    mesh = np.linspace(0, 2, 13)
+    ts = np.array([0.3, 1.1, 1.9])
+    y_mat, f_mat = function_solve_VIE_2(
+        kernel=kernel, g=g_mat, mesh_breakpoints=mesh, return_function=True)
+    assert y_mat.dtype == np.complex128
+    assert y_mat.shape[2:] == (d, m)
+    for j in range(m):
+        y_col, f_col = function_solve_VIE_2(
+            kernel=kernel, g=(lambda t, j=j: g_col(t, j)),
+            mesh_breakpoints=mesh, return_function=True)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-10)
+        assert np.allclose(f_mat(ts)[..., j], f_col(ts), atol=1e-10)
+
+
+def test_matrix_complex_vide_matches_per_column():
+    d, m = 2, 2
+    rng = np.random.default_rng(11)
+    Kmat = (rng.standard_normal((d, d)) + 1j * rng.standard_normal((d, d))) * 0.2
+
+    def kernel(u):
+        u = np.asarray(u)
+        if u.ndim == 0:
+            return np.exp(-0.5 * u) * Kmat
+        return np.exp(-0.5 * u)[:, None, None] * Kmat
+
+    a_mat = np.array([[-0.2 + 0.05j, 0.1], [0.0, -0.3 - 0.05j]])
+    init = rng.standard_normal((d, m)) + 1j * rng.standard_normal((d, m))
+
+    def g_col(t, j):
+        return np.array([np.sin(t) + 1j * 0.1 * j, np.cos(t) - 1j * 0.2 * j])
+
+    def g_mat(t):
+        return np.stack([g_col(t, j) for j in range(m)], axis=1)
+
+    mesh = np.linspace(0, 2, 13)
+    y_mat = function_solve_VIDE(
+        kernel=kernel, a=lambda t: a_mat, g=g_mat, soln_init_value=init,
+        mesh_breakpoints=mesh)
+    assert y_mat.dtype == np.complex128
+    for j in range(m):
+        y_col = function_solve_VIDE(
+            kernel=kernel, a=lambda t: a_mat, g=(lambda t, j=j: g_col(t, j)),
+            soln_init_value=init[:, j], mesh_breakpoints=mesh)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-10)
