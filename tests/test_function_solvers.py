@@ -2064,3 +2064,49 @@ def test_real_inputs_stay_real(vie2_callable_smooth, vide_callable_smooth,
     for y in (y2, yd, y1):
         assert np.isrealobj(y)
         assert y.dtype == np.float64
+
+
+def test_matrix_complex_vie1_matches_per_column():
+    """Complex matrix VIE-1 routes through block decomposition correctly,
+    in both the default and force_continuous modes."""
+    d, m = 2, 2
+    rng = np.random.default_rng(13)
+    Kmat = (rng.standard_normal((d, d)) + 1j * rng.standard_normal((d, d))) * 0.2
+
+    def kernel(u):
+        u = np.asarray(u)
+        if u.ndim == 0:
+            return np.exp(-0.5 * u) * Kmat
+        return np.exp(-0.5 * u)[:, None, None] * Kmat
+
+    def g_col(t, j):
+        return np.array([t * (0.5 + 0.1j * j), t * (0.2 - 0.1j * j)])
+
+    def g_mat(t):
+        return np.stack([g_col(t, j) for j in range(m)], axis=1)
+
+    mesh = np.linspace(0, 2, 13)
+
+    # Default (discontinuous) mode.
+    y_mat = function_solve_VIE_1(kernel=kernel, g=g_mat, mesh_breakpoints=mesh)
+    assert y_mat.dtype == np.complex128
+    assert y_mat.shape[2:] == (d, m)
+    for j in range(m):
+        y_col = function_solve_VIE_1(
+            kernel=kernel, g=(lambda t, j=j: g_col(t, j)), mesh_breakpoints=mesh)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-10)
+
+    # force_continuous mode with a complex (d, m) initial value.
+    init = rng.standard_normal((d, m)) + 1j * rng.standard_normal((d, m))
+    y_mat_fc, f_mat = function_solve_VIE_1(
+        kernel=kernel, g=g_mat, soln_init_value=init, mesh_breakpoints=mesh,
+        force_continuous=True, return_function=True)
+    assert y_mat_fc.dtype == np.complex128
+    ts = np.array([0.3, 1.1, 1.9])
+    for j in range(m):
+        y_col, f_col = function_solve_VIE_1(
+            kernel=kernel, g=(lambda t, j=j: g_col(t, j)),
+            soln_init_value=init[:, j], mesh_breakpoints=mesh,
+            force_continuous=True, return_function=True)
+        assert np.allclose(y_mat_fc[..., j], y_col, atol=1e-10)
+        assert np.allclose(f_mat(ts)[..., j], f_col(ts), atol=1e-10)
