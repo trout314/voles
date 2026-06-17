@@ -983,6 +983,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#matrix-valued-many-right-hand-sides-at-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matrix-valued: many right-hand sides at once
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1052,6 +1063,17 @@
     <span class="md-ellipsis">
       
         Vector-valued kernel
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#matrix-valued-many-right-hand-sides-at-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matrix-valued: many right-hand sides at once
       
     </span>
   </a>
@@ -1170,10 +1192,44 @@ y_arr, y = function_solve_VIE_2(
 print(y(0.5).shape)             # (2,)
 print(y(np.linspace(0, 1, 5)).shape)  # (5, 2)
 </code></pre>
+<h2 id="matrix-valued-many-right-hand-sides-at-once">Matrix-valued: many right-hand sides at once</h2>
+<p>To solve several right-hand sides that share the same kernel, return a
+<code>(d, m)</code> array from <code>g(t)</code> (and, for <code>function_solve_VIDE</code>, pass a <code>(d, m)</code>
+<code>soln_init_value</code>). The kernel weight tensor — the expensive part to build —
+is computed once and reused across all <code>m</code> columns, so this is much cheaper
+than <code>m</code> separate calls.</p>
+<pre><code class="language-python">import numpy as np
+from volterra_equation_solvers import function_solve_VIE_2
+
+d = 2
+identity = np.eye(d)
+kernel = lambda u: np.exp(-u) * identity
+
+# Two right-hand sides (m = 2), stacked column-wise into a (d, m) array.
+def g(t):
+    g0 = np.array([np.sin(t), np.cos(t)])
+    g1 = np.array([t, 1.0 + 0.0 * t])
+    return np.column_stack([g0, g1])   # shape (d, m)
+
+mesh = np.linspace(0, 1, 21)
+y_arr, y = function_solve_VIE_2(
+    kernel=kernel, g=g, mesh_breakpoints=mesh,
+    coll_divs=2, coll_choices=[0, 1, 2],
+    return_function=True,
+)
+
+print(y_arr.shape)              # (M, p, d, m) == (20, 3, 2, 2)
+print(y(0.5).shape)             # (d, m) == (2, 2)
+print(y(np.linspace(0, 1, 5)).shape)  # (len(array), d, m) == (5, 2, 2)
+</code></pre>
+<p>A 2-D <code>g(t)</code> return (or a 2-D <code>soln_init_value</code> for <code>function_solve_VIDE</code>)
+selects the matrix-valued case; matrix problems require a <code>(d, d)</code> matrix
+kernel. Complex kernels, <code>g</code>, <code>a</code>, and initial values are supported here too.</p>
 <p>The same <code>function_solve_VIE_1</code>, <code>function_solve_VIDE</code> entry points exist
 with the analogous API. <code>function_solve_VIDE</code> additionally takes an
 <code>a</code> callable and a required <code>soln_init_value</code>. <code>function_solve_VIE_1</code>
-adds the optional <code>force_continuous</code> mode.</p>
+adds the optional <code>force_continuous</code> mode (whose <code>soln_init_value</code> is <code>(d, m)</code>
+in the matrix case).</p>
 
 
 
