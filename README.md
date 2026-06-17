@@ -23,7 +23,7 @@ Two solver families are provided.
 
 - The **array-based** family (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`) is the fastest path when the kernel and forcing are already sampled on a uniform time grid. Supports scalar, vector, and matrix-valued solutions, and complex-valued data.
 
-- The **callable-input** family (`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`) accepts the kernel, forcing term, and (for VIDE) coefficient $a$ as Python callables, runs on an arbitrary mesh via `mesh_breakpoints`, and handles weakly singular convolution kernels — useful for Abel-type problems where a graded mesh recovers the optimal convergence order. Supports scalar and vector cases, and complex-valued data. Requires `scipy` (install via the `[callable]` extra). The helper `optimal_graded_mesh` builds a Brunner-graded mesh for an $\alpha$-singular kernel.
+- The **callable-input** family (`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`) accepts the kernel, forcing term, and (for VIDE) coefficient $a$ as Python callables, runs on an arbitrary mesh via `mesh_breakpoints`, and handles weakly singular convolution kernels — useful for Abel-type problems where a graded mesh recovers the optimal convergence order. Supports scalar, vector, and matrix-valued cases, and complex-valued data. Requires `scipy` (install via the `[callable]` extra). The helper `optimal_graded_mesh` builds a Brunner-graded mesh for an $\alpha$-singular kernel.
 
 ### Type-1 Volterra integral equation (VIE-1)
 
@@ -34,7 +34,7 @@ $$g(t) = \int_0^t K(t-s)\\, y(s)\\, ds$$
 | API | Inputs | Solution shape | Reference |
 |---|---|---|---|
 | `solve_VIE_1` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vie1/](https://trout314.github.io/volterra-equation-solvers/api/vie1/) |
-| `function_solve_VIE_1` | callables, arbitrary mesh | scalar / vector | [api/function_vie1/](https://trout314.github.io/volterra-equation-solvers/api/function_vie1/) |
+| `function_solve_VIE_1` | callables, arbitrary mesh | scalar / vector / matrix | [api/function_vie1/](https://trout314.github.io/volterra-equation-solvers/api/function_vie1/) |
 
 ### Type-2 Volterra integral equation (VIE-2)
 
@@ -45,7 +45,7 @@ $$y(t) = g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 | API | Inputs | Solution shape | Reference |
 |---|---|---|---|
 | `solve_VIE_2` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vie2/](https://trout314.github.io/volterra-equation-solvers/api/vie2/) |
-| `function_solve_VIE_2` | callables, arbitrary mesh | scalar / vector | [api/function_vie2/](https://trout314.github.io/volterra-equation-solvers/api/function_vie2/) |
+| `function_solve_VIE_2` | callables, arbitrary mesh | scalar / vector / matrix | [api/function_vie2/](https://trout314.github.io/volterra-equation-solvers/api/function_vie2/) |
 
 ### Volterra integro-differential equation (VIDE)
 
@@ -56,7 +56,7 @@ $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 | API | Inputs | Solution shape | Reference |
 |---|---|---|---|
 | `solve_VIDE` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vide/](https://trout314.github.io/volterra-equation-solvers/api/vide/) |
-| `function_solve_VIDE` | callables, arbitrary mesh | scalar / vector | [api/function_vide/](https://trout314.github.io/volterra-equation-solvers/api/function_vide/) |
+| `function_solve_VIDE` | callables, arbitrary mesh | scalar / vector / matrix | [api/function_vide/](https://trout314.github.io/volterra-equation-solvers/api/function_vide/) |
 
 ### Mesh helper: `optimal_graded_mesh`
 
@@ -107,7 +107,7 @@ The solvers require input arrays to satisfy an internal size constraint. Any len
 
 ## Vector and Matrix Valued Equations
 
-All three solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ is a $d$-dimensional vector, $g(t)$ is also a $d$-dimensional vector and $K(t)$ and $a(t)$ are $d \times d$ matrices. When $y(t)$ is a $d \times m$ matrix, $g(t)$ is also a $d \times m$ matrix and $K(t)$ and $a(t)$ are $d \times d$ matrices. The solver detects which case applies automatically from the shapes of the input arrays.
+All solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ is a $d$-dimensional vector, $g(t)$ is also a $d$-dimensional vector and $K(t)$ and $a(t)$ are $d \times d$ matrices. When $y(t)$ is a $d \times m$ matrix, $g(t)$ is also a $d \times m$ matrix and $K(t)$ and $a(t)$ are $d \times d$ matrices. The case is detected automatically: for the array-based family from the shapes of the input arrays, and for the callable family from the shape returned by `g(t)` (a `(d, m)` return — or a `(d, m)` `soln_init_value` for VIDE — selects the matrix case). The callable family builds the kernel weight tensor once and shares it across the $m$ columns, so a matrix solve is much cheaper than $m$ separate calls; see the [callable-solver examples](https://trout314.github.io/volterra-equation-solvers/examples/function_solvers/) for a worked case.
 
 ```python
 import numpy as np
