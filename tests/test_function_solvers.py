@@ -2110,3 +2110,257 @@ def test_matrix_complex_vie1_matches_per_column():
             force_continuous=True, return_function=True)
         assert np.allclose(y_mat_fc[..., j], y_col, atol=1e-10)
         assert np.allclose(f_mat(ts)[..., j], f_col(ts), atol=1e-10)
+
+
+# ===========================================================================
+# Additional coverage: paths that were previously unguarded.
+# ===========================================================================
+
+# --- (1) Vector / matrix singular kernels (adaptive quad_vec branch) --------
+
+def test_vec_singular_graded_mesh_recovers_high_order():
+    """Vector Abel kernel diag(u^-1/2) on a graded mesh; exact y=[sqrt t, sqrt t].
+
+    Exercises the singularity-handling (adaptive quad_vec) branch of the vector
+    weight-tensor builder, which the scalar singular tests never reach.
+    """
+    d = 2
+    eye = np.eye(d)
+
+    def kernel(u):
+        u = np.asarray(u)
+        if u.ndim == 0:
+            return (1.0 / np.sqrt(u)) * eye if u > 0 else np.zeros((d, d))
+        raise RuntimeError("kernel should be called scalar-wise near singularity")
+
+    g = lambda t: np.full(d, np.sqrt(t) - 0.5 * np.pi * t)
+    y_exact = lambda t: np.full(d, np.sqrt(t))
+    coll_choices = [0, 1, 2]
+    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30, coll_choices=coll_choices)
+    y = function_solve_VIE_2(kernel=kernel, g=g, mesh_breakpoints=mesh,
+                             coll_divs=2, coll_choices=coll_choices,
+                             kernel_singularity=0.0)
+    err = _collect_node_values(y, mesh, 2, coll_choices, y_exact)
+    assert err < 1e-3
+
+
+def test_matrix_singular_graded_mesh():
+    """Matrix (multi-RHS) Abel kernel on a graded mesh: column 0 reproduces the
+    analytic solution and every column matches an independent vector solve."""
+    d, m = 2, 2
+    eye = np.eye(d)
+
+    def kernel(u):
+        u = np.asarray(u)
+        if u.ndim == 0:
+            return (1.0 / np.sqrt(u)) * eye if u > 0 else np.zeros((d, d))
+        raise RuntimeError("kernel should be called scalar-wise near singularity")
+
+    g_vec = lambda t: np.full(d, np.sqrt(t) - 0.5 * np.pi * t)
+    shifts = np.array([[0.0, 0.3], [0.0, -0.2]])
+    g_mat = _matrix_g(g_vec, shifts)
+    coll_choices = [0, 1, 2]
+    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30, coll_choices=coll_choices)
+
+    y_mat = function_solve_VIE_2(kernel=kernel, g=g_mat, mesh_breakpoints=mesh,
+                                 coll_divs=2, coll_choices=coll_choices,
+                                 kernel_singularity=0.0)
+    assert y_mat.shape == (len(mesh) - 1, len(coll_choices), d, m)
+    err0 = _collect_node_values(y_mat[..., 0], mesh, 2, coll_choices,
+                                lambda t: np.full(d, np.sqrt(t)))
+    assert err0 < 1e-3
+    for j in range(m):
+        g_col = lambda t, j=j: g_vec(t) + shifts[:, j]
+        y_col = function_solve_VIE_2(kernel=kernel, g=g_col, mesh_breakpoints=mesh,
+                                     coll_divs=2, coll_choices=coll_choices,
+                                     kernel_singularity=0.0)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+
+
+def test_vec_nonfinite_kernel_raises():
+    """The vector weight-tensor builder's isfinite check fires on a non-finite
+    kernel (vector analogue of test_nan_from_kernel_raises)."""
+    d = 2
+    eye = np.eye(d)
+    K_nan = lambda u: np.full((d, d), np.nan)
+    with pytest.raises(ValueError, match="non-finite"):
+        function_solve_VIE_2(kernel=K_nan, g=lambda t: np.full(d, 1.0),
+                             mesh_breakpoints=np.linspace(0, 1, 11),
+                             coll_divs=2, coll_choices=[0, 1, 2])
+
+
+# --- (2) NaN from a(t) in VIDE ---------------------------------------------
+
+def test_nan_from_a_propagates_vide():
+    """A NaN returned by a(t) at a collocation point must not silently vanish:
+    it either raises or propagates into the solution (matches the array suite)."""
+    def a_nan(t):
+        if 0.3 < t < 0.4:
+            return float("nan")
+        return 0.0
+    try:
+        y = function_solve_VIDE(kernel=lambda u: np.exp(-u), a=a_nan,
+                                g=lambda t: 1.0, soln_init_value=0.0,
+                                mesh_breakpoints=np.linspace(0, 1, 11),
+                                coll_divs=2, coll_choices=[0, 1, 2])
+    except (ValueError, FloatingPointError):
+        return  # raised — acceptable
+    assert np.any(~np.isfinite(y))  # otherwise it must have propagated
+
+
+# --- (3) a not callable -----------------------------------------------------
+
+def test_validation_a_not_callable():
+    with pytest.raises(TypeError, match="a must be callable"):
+        function_solve_VIDE(kernel=lambda u: np.exp(-u), a=3.0,
+                            g=lambda t: 1.0, soln_init_value=0.0,
+                            mesh_breakpoints=np.linspace(0, 1, 11),
+                            coll_divs=2, coll_choices=[0, 1, 2])
+
+
+# --- (4) Matrix VIDE with g=None -------------------------------------------
+
+def test_matrix_vide_g_none(vide_callable_vec_diagonal):
+    """Matrix VIDE with g omitted (zero forcing): shape is (M, p, d, m) and each
+    column matches an independent vector solve with g=None."""
+    p = vide_callable_vec_diagonal
+    d = p["d"]
+    mesh = np.linspace(0, 1, 13)
+    init = np.array([[0.5, -0.3, 0.2], [0.1, 0.4, -0.6]])  # (d, m)
+    m = init.shape[1]
+    y_mat = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], soln_init_value=init,
+        mesh_breakpoints=mesh, coll_divs=p["coll_divs"],
+        coll_choices=p["coll_choices"])
+    assert y_mat.shape == (len(mesh) - 1, len(p["coll_choices"]), d, m)
+    for j in range(m):
+        y_col = function_solve_VIDE(
+            kernel=p["kernel"], a=p["a"], soln_init_value=init[:, j],
+            mesh_breakpoints=mesh, coll_divs=p["coll_divs"],
+            coll_choices=p["coll_choices"])
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+
+
+# --- (5) Exceeding the compiled p / d limits -------------------------------
+
+def test_p_exceeds_compiled_max_raises():
+    from volterra_equation_solvers._dlang import function_solve_max_p_d
+    max_p = function_solve_max_p_d()
+    coll_divs = max_p + 1
+    coll_choices = list(range(coll_divs))  # length max_p + 1 > max_p
+    with pytest.raises(ValueError, match="exceeds the maximum"):
+        function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=lambda t: 1.0,
+                             mesh_breakpoints=np.linspace(0, 1, 5),
+                             coll_divs=coll_divs, coll_choices=coll_choices)
+
+
+def test_d_exceeds_compiled_max_raises():
+    from volterra_equation_solvers._dlang import function_solve_max_d_d
+    d = function_solve_max_d_d() + 1
+    eye = np.eye(d)
+    with pytest.raises(ValueError, match="exceeds the maximum"):
+        function_solve_VIE_2(kernel=lambda u: np.exp(-u) * eye,
+                             g=lambda t: np.zeros(d),
+                             mesh_breakpoints=np.linspace(0, 1, 5),
+                             coll_divs=2, coll_choices=[0, 1, 2])
+
+
+# --- (6) Vectorized vs non-vectorized kernel agree -------------------------
+
+def test_vectorized_and_scalar_kernel_agree():
+    """The same kernel, written to broadcast over an array vs scalar-only, must
+    give identical results (exercises both integrand paths)."""
+    import math
+    mesh = np.linspace(0, 1, 21)
+    g = lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t))
+    common = dict(g=g, mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2])
+    y_vec = function_solve_VIE_2(kernel=lambda u: np.exp(-u), **common)  # broadcasts
+    y_sca = function_solve_VIE_2(kernel=lambda u: math.exp(-u), **common)  # scalar-only
+    assert np.allclose(y_vec, y_sca, atol=1e-12)
+
+
+# --- (7) Breakpoint continuity for vector / VIDE / VIE-1 wrappers ----------
+
+def _assert_breakpoint_continuous(y_func, mesh, atol=1e-6):
+    for bp in mesh[1:-1]:
+        assert np.allclose(y_func(bp - 1e-9), y_func(bp + 1e-9), atol=atol)
+
+
+def test_vec_vie2_breakpoint_continuous(vie2_callable_vec_diagonal):
+    p = vie2_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 11)
+    _, y_func = function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        return_function=True)
+    _assert_breakpoint_continuous(y_func, mesh)
+
+
+def test_vec_vide_breakpoint_continuous(vide_callable_vec_diagonal):
+    p = vide_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 11)
+    _, y_func = function_solve_VIDE(
+        kernel=p["kernel"], a=p["a"], g=p["g"],
+        soln_init_value=p["soln_init_value"], mesh_breakpoints=mesh,
+        coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
+        return_function=True)
+    # VIDE solution is C^1 by construction, so continuity holds comfortably.
+    _assert_breakpoint_continuous(y_func, mesh)
+
+
+def test_vec_vie1_breakpoint_continuous_force_continuous(vie1_callable_vec_diagonal):
+    """The default VIE-1 method is discontinuous across breakpoints; the
+    force_continuous mode is what enforces continuity, so check that mode."""
+    p = vie1_callable_vec_diagonal
+    mesh = np.linspace(0, 1, 19)
+    _, y_func = function_solve_VIE_1(
+        kernel=p["kernel"], g=p["g"], soln_init_value=p["y_exact"](0.0),
+        mesh_breakpoints=mesh, coll_divs=p["coll_divs"],
+        coll_choices=p["coll_choices"], force_continuous=True,
+        return_function=True)
+    _assert_breakpoint_continuous(y_func, mesh, atol=1e-5)
+
+
+# --- (8) Mixed real/complex inputs -----------------------------------------
+
+def test_vie2_real_kernel_complex_g():
+    """Real kernel + complex g: by linearity the complex solution equals the
+    real solve of Re(g) plus i times the real solve of Im(g)."""
+    kernel = lambda u: np.exp(-u)  # real
+    gr = lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t))
+    gi = lambda t: t**2 - 0.3 * t
+    mesh = np.linspace(0, 2, 21)
+    common = dict(mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2])
+
+    y = function_solve_VIE_2(kernel=kernel, g=lambda t: gr(t) + 1j * gi(t), **common)
+    assert y.dtype == np.complex128
+    y_re = function_solve_VIE_2(kernel=kernel, g=gr, **common)
+    y_im = function_solve_VIE_2(kernel=kernel, g=gi, **common)
+    assert np.allclose(y, y_re + 1j * y_im, atol=1e-10)
+
+
+def test_vide_real_kernel_complex_a_matches_array_solver():
+    """Real kernel, complex a and g (VIDE): cross-checked against the array
+    solver on a uniform grid (a complex 'a' couples re/im, so no linearity)."""
+    from volterra_equation_solvers import solve_VIDE
+    coll_divs, coll_choices = 2, [0, 1, 2]
+    time_step = 0.02
+    N = 20 * coll_divs**2 + 1
+    T = (N - 1) * time_step
+    times = np.arange(N) * time_step
+
+    kernel = lambda u: np.exp(-u)            # real
+    a = lambda t: 0.5j / (1.0 + t**2)        # complex
+    g = lambda t: np.cos(t) + 1j * np.sin(0.5 * t)
+    init = 0.2 + 0.1j
+
+    soln_arr = solve_VIDE(
+        kernel_values=kernel(times), a_values=a(times), g_values=g(times),
+        soln_init_value=init, time_step=time_step,
+        coll_divs=coll_divs, coll_choices=coll_choices)
+
+    mesh = np.linspace(0, T, 21)
+    _, y_func = function_solve_VIDE(
+        kernel=kernel, a=a, g=g, soln_init_value=init, mesh_breakpoints=mesh,
+        coll_divs=coll_divs, coll_choices=coll_choices, return_function=True)
+    assert np.max(np.abs(y_func(times) - soln_arr)) < 1e-3
