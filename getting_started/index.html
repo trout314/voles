@@ -429,6 +429,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Input format">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#array-based-solvers-solve_vie_1-solve_vie_2-solve_vide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Array-based solvers (solve_VIE_1, solve_VIE_2, solve_VIDE)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#callable-input-solvers-function_solve_" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Callable-input solvers (function_solve_*)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -469,6 +497,17 @@
     <span class="md-ellipsis">
       
         Returning polynomials
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#callable-input-solvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Callable-input solvers
       
     </span>
   </a>
@@ -1075,6 +1114,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Input format">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#array-based-solvers-solve_vie_1-solve_vie_2-solve_vide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Array-based solvers (solve_VIE_1, solve_VIE_2, solve_VIDE)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#callable-input-solvers-function_solve_" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Callable-input solvers (function_solve_*)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1121,6 +1188,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#callable-input-solvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Callable-input solvers
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1143,11 +1221,19 @@
 
 <h1 id="getting-started">Getting Started</h1>
 <h2 id="installation">Installation</h2>
-<pre><code class="language-bash">pip install git+https://github.com/trout314/voles
+<pre><code class="language-bash">pip install voles
 </code></pre>
-<p><strong>Dependencies:</strong> numpy, numba, and the compiled D extension (included in binary distributions; see <a href="../CONTRIBUTING.md">CONTRIBUTING.md</a> to build from source)</p>
+<p>The callable-input solvers (<code>function_solve_*</code>, <code>optimal_graded_mesh</code>) additionally need <code>scipy</code>:</p>
+<pre><code class="language-bash">pip install &quot;voles[callable]&quot;
+</code></pre>
+<p><strong>Runtime requirements:</strong> numpy, plus the compiled D extension (bundled in the wheel — no extra tooling needed). <code>scipy</code> is required only for the callable-input family. <code>numba</code> is an optional fallback used only when an array-based solver is asked to run a collocation setting that isn't compiled into the D extension.</p>
+<p>To build from a non-wheel platform see <a href="../CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
 <h2 id="input-format">Input format</h2>
-<p>All three solvers accept keyword-only arguments. The key input is <code>kernel_values</code>: an array of kernel values <code>K(s)</code> sampled from <code>s=0</code> in steps of <code>time_step</code>. Its length must satisfy <code>len(kernel_values) = (N × coll_divs²) + 1</code> for some positive integer N; if not, the arrays are silently truncated.</p>
+<p>The two solver families take different input shapes — see the relevant section below.</p>
+<h3 id="array-based-solvers-solve_vie_1-solve_vie_2-solve_vide">Array-based solvers (<code>solve_VIE_1</code>, <code>solve_VIE_2</code>, <code>solve_VIDE</code>)</h3>
+<p>The key input is <code>kernel_values</code>: an array of kernel values <code>K(s)</code> sampled from <code>s=0</code> in steps of <code>time_step</code>. Its length must satisfy <code>len(kernel_values) = (N × coll_divs²) + 1</code> for some positive integer N. If the length is larger than required (e.g. 92 when 91 was needed), the arrays are silently truncated to the nearest valid length and a warning is printed. If the length is smaller than <code>coll_divs² + 1</code> — too short to form a single mesh interval — a <code>ValueError</code> is raised.</p>
+<h3 id="callable-input-solvers-function_solve_">Callable-input solvers (<code>function_solve_*</code>)</h3>
+<p>You pass the kernel, forcing, and (for VIDE) coefficient <code>a</code> as Python callables, plus a 1-D <code>mesh_breakpoints</code> array starting at 0. There's no fixed-length constraint; resolution is controlled by how many breakpoints you pass. See the Callable-Input Solvers section below.</p>
 <h2 id="solve_vie_1">solve_VIE_1</h2>
 <p>Solves <span class="arithmatex">\(g(t) = \int_0^t K(t-s)y(s)ds\)</span> for unknown <span class="arithmatex">\(y(t)\)</span>.</p>
 <pre><code class="language-python">import numpy as np
@@ -1220,6 +1306,38 @@ for poly in polys:
     plt.plot(t, poly(t))
 plt.show()
 </code></pre>
+<h2 id="callable-input-solvers">Callable-input solvers</h2>
+<p>The companion <code>function_solve_VIE_1</code>, <code>function_solve_VIE_2</code>, and <code>function_solve_VIDE</code> accept the kernel, forcing, and (for VIDE) coefficient <code>a</code> as Python callables instead of pre-sampled arrays, run on an arbitrary mesh you supply via <code>mesh_breakpoints</code>, and natively handle weakly singular convolution kernels. Same equations, same scalar / vector / matrix shape support.</p>
+<pre><code class="language-python">import numpy as np
+from voles import function_solve_VIE_2
+
+# Same problem as solve_VIE_2 above; kernel and g are callables now.
+kernel = lambda u: np.exp(-u)
+g      = lambda t: np.sin(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
+
+mesh = np.linspace(0, 4.5, 91)
+soln_values, y = function_solve_VIE_2(
+    kernel=kernel, g=g, mesh_breakpoints=mesh,
+    coll_divs=3, coll_choices=[0, 1, 2, 3],
+    return_function=True,
+)
+# y is callable: y(0.37) → scalar, y(np.linspace(0, 4.5, 200)) → array
+</code></pre>
+<p>For weakly singular kernels <span class="arithmatex">\(K(u) \sim u^{-\alpha}\)</span> (e.g. Abel-type), declare the singularity and use <code>optimal_graded_mesh</code> to recover the full collocation convergence order:</p>
+<pre><code class="language-python">from voles import function_solve_VIE_2, optimal_graded_mesh
+
+kernel = lambda u: 1.0 / np.sqrt(u) if u &gt; 0 else 0.0
+g      = lambda t: np.sqrt(t) - 0.5 * np.pi * t   # exact y(t) = sqrt(t)
+
+coll_choices = [0, 1, 2]
+mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30, coll_choices=coll_choices)
+soln = function_solve_VIE_2(
+    kernel=kernel, g=g, mesh_breakpoints=mesh,
+    coll_divs=2, coll_choices=coll_choices,
+    kernel_singularity=0.0,
+)
+</code></pre>
+<p>See the <a href="../examples/function_solvers/">Callable Inputs and Arbitrary Mesh</a> example for the full walkthrough including vector and matrix-valued cases.</p>
 
 
 

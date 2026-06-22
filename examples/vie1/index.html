@@ -989,12 +989,10 @@ g[0] = 0.0
 sol_vals, soln_polys = solve_VIE_1(
     g_values=g,
     kernel_values=kernel,
-    soln_init_value=1.0,   # cos(0) - sin(0) = 1
     coll_divs=coll_divs,
     coll_choices=[1, 2, 3],
     time_step=time_step,
     return_polys=True,
-    force_continuous=False,
 )
 
 exact = np.cos(times) - np.sin(times)
