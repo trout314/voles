@@ -2,6 +2,56 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-22
+
+### Added
+- **Callable-input solver family** alongside the existing array-based solvers:
+  `function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`. Each
+  accepts `kernel(u)`, `g(t)`, and (for VIDE) `a(t)` as Python callables,
+  runs on an arbitrary mesh via `mesh_breakpoints`, and supports scalar,
+  vector, and matrix-valued cases plus complex-valued data
+- Weakly singular convolution kernels supported via `kernel_singularity`
+  (accepts a float, a list of floats, or a callable returning singular
+  $s$-locations as a function of the collocation point — the last form
+  is forward-compatible with non-convolution kernels)
+- `optimal_graded_mesh(alpha, T, M, coll_choices)`: Brunner-graded mesh
+  $t_n = T (n/M)^r$ with $r = p / (1-\alpha)$ for Abel-type problems with
+  $K(u) \sim u^{-\alpha}$
+- `return_function=True` on the callable-input solvers returns a callable
+  wrapper exposing `.polynomials` and `.mesh_breakpoints`; evaluates the
+  piecewise polynomial solution at any scalar or array of times
+- VIE-1 `force_continuous` mode for the callable family (replaces one
+  collocation equation per interval with a continuity constraint pinned
+  to `soln_init_value`)
+- Optional `[callable]` extra pulling in `scipy` (required for the new
+  family). Existing array-based solvers and their dependency footprint
+  are unchanged
+- Robustness for complex inputs: multi-point sampling detects complex
+  kernel/g/a/soln_init_value and routes through the block-decomposition
+  trick; if sampling misses, numpy's `ComplexWarning` is escalated to a
+  clear `ValueError` rather than silently dropping the imaginary part
+- Foot-gun warning when `kernel_singularity` is declared but the mesh
+  appears uniform, pointing at `optimal_graded_mesh`
+- API-reference and example pages for the new solvers; README
+  restructured to surface both families side-by-side per equation type
+- Mesh-build stress tests on extreme width ratios and 500-interval meshes
+
+### Fixed
+- Array-based solvers now raise a clear `ValueError` when input length
+  truncates to `mesh_divs = 0` (previously: silent truncation to `N=1`
+  followed by the D extension aborting via an uncatchable
+  `core.exception.ArrayIndexError`). Surfaced via a user-submitted
+  notebook crash report
+- Spurious "soln_init_value has no effect" warning fired once per column
+  when matrix-valued `solve_VIE_1` was called without `soln_init_value`;
+  now only fires when init is actually unused, and at most once per call
+
+### Changed
+- W-tensor builder caches Gauss–Legendre nodes/weights and uses
+  vectorized integrand evaluation when the kernel callable broadcasts
+  over numpy arrays — roughly an order of magnitude faster setup for
+  typical numpy-style kernels on large meshes
+
 ## [0.3.2] - 2026-05-15
 
 ### Removed
