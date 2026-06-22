@@ -1,0 +1,47 @@
+name: Publish deprecation stub
+
+# Manually triggered. Publishes a tiny shim package under the old PyPI
+# name 'volterra-equation-solvers' that depends on 'voles' and emits a
+# DeprecationWarning on import. The stub is pure Python (no D extension),
+# so it builds quickly on any platform.
+#
+# One-time PyPI setup required:
+#   1. Go to pypi.org -> Your projects -> volterra-equation-solvers
+#      -> Settings -> Publishing -> Add a new publisher
+#   2. Fill in:
+#        Owner:       trout314
+#        Repository:  voles
+#        Workflow:    publish-stub.yml
+#        Environment: pypi
+#
+# Trigger via the GitHub UI ("Run workflow") or `gh workflow run`.
+on:
+  workflow_dispatch:
+
+jobs:
+  publish-stub:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # required for OIDC trusted publishing
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build stub wheel and sdist
+        working-directory: stub
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      - name: List distributions
+        run: ls -lh stub/dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: stub/dist
