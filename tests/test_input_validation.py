@@ -305,3 +305,36 @@ def test_coll_choices_not_mutated_vide():
     solve_VIDE(kernel_values=_K, g_values=_G, a_values=_A,
                soln_init_value=0.0, coll_divs=2, coll_choices=choices)
     assert choices == [2, 0, 1]
+
+
+# ---------------------------------------------------------------------------
+# Input too short to form a single mesh interval -> clear ValueError.
+# (Previously: silent truncation to N=1, then the D extension overran the
+# kernel array and aborted the process via core.exception.ArrayIndexError.)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
+def test_too_short_input_raises(solver):
+    """coll_divs=3 needs at least 10 points; passing fewer should raise loudly
+    rather than crashing the D extension with an array-bounds abort."""
+    import numpy as np
+    short_K = np.ones(5)
+    short_G = np.ones(5)
+    short_A = np.zeros(5)
+    kwargs = dict(kernel_values=short_K, g_values=short_G,
+                  coll_divs=3,
+                  coll_choices=([1, 2, 3] if solver is _vie1 else [0, 1, 2]))
+    if solver is _vide:
+        kwargs["a_values"] = short_A
+    with pytest.raises(ValueError, match=r"zero mesh intervals"):
+        solver(**kwargs)
+
+
+def test_too_short_input_vector_raises():
+    """Vector path -- the original notebook's failure mode."""
+    import numpy as np
+    with pytest.raises(ValueError, match=r"zero mesh intervals"):
+        solve_VIE_1(kernel_values=np.zeros((5, 2, 2)),
+                    g_values=np.zeros((5, 2)),
+                    time_step=1.0,
+                    coll_divs=3, coll_choices=[1, 2, 3])

@@ -48,7 +48,8 @@ def _truncate_N(kernel_values_, coll_divs, show_warnings):
     """Truncate kernel_values_ to the largest valid length; return (N, kernel_values_).
 
     Valid lengths satisfy N ≡ 1 (mod coll_divs²).  Prints a warning when
-    truncation is needed and show_warnings is True.
+    truncation is needed and show_warnings is True. Raises ValueError if the
+    truncated length leaves zero mesh intervals (i.e. N < coll_divs² + 1).
     """
     N = len(kernel_values_)
     if coll_divs > 1 and N % coll_divs**2 != 1:
@@ -61,8 +62,16 @@ def _truncate_N(kernel_values_, coll_divs, show_warnings):
                 f"of this form ({N_used}) which will also be the length of the "
                 f"returned list of solution values."
             )
-        return N_used, kernel_values_[:N_used]
-    return N, kernel_values_
+    else:
+        N_used = N
+
+    if N_used < coll_divs ** 2 + 1:
+        raise ValueError(
+            f"kernel_values has length {N} (truncated to {N_used}), which leaves "
+            f"zero mesh intervals for coll_divs={coll_divs}. Need at least "
+            f"{coll_divs ** 2 + 1} input points to form one mesh interval."
+        )
+    return N_used, kernel_values_[:N_used]
 
 
 def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, time_step=1.0,
