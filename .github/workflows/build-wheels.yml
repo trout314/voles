@@ -33,12 +33,12 @@ jobs:
             cd /work/dlang
             meson setup build --wipe --buildtype=release
             ninja -C build
-            cp build/volterra_dlang.so /work/src/volterra_equation_solvers/
+            cp build/volterra_dlang.so /work/src/voles/
           "
 
       - name: Verify glibc requirement <= 2.31
         run: |
-          max=$(objdump -T src/volterra_equation_solvers/volterra_dlang.so \
+          max=$(objdump -T src/voles/volterra_dlang.so \
             | awk '/GLIBC/{match($0,/GLIBC_([0-9.]+)/,a); print a[1]}' \
             | sort -V | tail -1)
           echo "Max glibc version required: $max"
@@ -73,7 +73,7 @@ jobs:
           python -m venv /tmp/test-venv
           /tmp/test-venv/bin/pip install numpy
           /tmp/test-venv/bin/pip install dist/*.whl
-          /tmp/test-venv/bin/python -c "from volterra_equation_solvers import solve_VIE_1, solve_VIE_2, solve_VIDE; print('Import OK')"
+          /tmp/test-venv/bin/python -c "from voles import solve_VIE_1, solve_VIE_2, solve_VIDE; print('Import OK')"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -106,7 +106,7 @@ jobs:
           cd dlang
           meson setup build --wipe --buildtype=release
           ninja -C build
-          cp build/volterra_dlang.dylib ../src/volterra_equation_solvers/
+          cp build/volterra_dlang.dylib ../src/voles/
 
       - name: Build wheel and re-tag as macosx_11_0_arm64
         run: |
@@ -133,7 +133,7 @@ jobs:
           python3 -m venv /tmp/test-venv
           /tmp/test-venv/bin/pip install numpy
           /tmp/test-venv/bin/pip install dist/*.whl
-          /tmp/test-venv/bin/python -c "from volterra_equation_solvers import solve_VIE_1, solve_VIE_2, solve_VIDE; print('Import OK')"
+          /tmp/test-venv/bin/python -c "from voles import solve_VIE_1, solve_VIE_2, solve_VIDE; print('Import OK')"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -169,7 +169,7 @@ jobs:
           cd dlang
           meson setup build --wipe --buildtype=release
           ninja -C build
-          Copy-Item build\volterra_dlang.dll ..\src\volterra_equation_solvers\
+          Copy-Item build\volterra_dlang.dll ..\src\voles\
 
       - name: Build wheel and re-tag as win_amd64
         shell: bash
@@ -199,7 +199,7 @@ jobs:
           python -m venv test-venv
           test-venv/Scripts/pip install numpy
           test-venv/Scripts/pip install dist/*.whl
-          test-venv/Scripts/python -c "from volterra_equation_solvers import solve_VIE_1, solve_VIE_2, solve_VIDE; print('Import OK')"
+          test-venv/Scripts/python -c "from voles import solve_VIE_1, solve_VIE_2, solve_VIDE; print('Import OK')"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -215,10 +215,10 @@ jobs:
   # from source following CONTRIBUTING.md.
   #
   # One-time PyPI setup required (no secrets needed after this):
-  #   1. Go to pypi.org → Your projects → volterra-equation-solvers → Publishing
+  #   1. Go to pypi.org → Your projects → voles → Publishing
   #   2. Add a Trusted Publisher:
   #        Owner:    trout314
-  #        Repo:     volterra-equation-solvers
+  #        Repo:     voles
   #        Workflow: build-wheels.yml
   #        Env:      pypi
   # -------------------------------------------------------------------------

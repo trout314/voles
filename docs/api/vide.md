@@ -1,3 +1,3 @@
 # solve_VIDE
 
-::: volterra_equation_solvers.solve_VIDE
+::: voles.solve_VIDE

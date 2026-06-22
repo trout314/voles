@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Scientific Python package (`volterra-equation-solvers`) providing collocation-method solvers for Volterra integral and integro-differential equations. Performance-critical code is in a D language extension; Python layer handles validation, dispatching, and polynomial conversion.
+Scientific Python package (`voles`) providing collocation-method solvers for Volterra integral and integro-differential equations. Performance-critical code is in a D language extension; Python layer handles validation, dispatching, and polynomial conversion.
 
 ## Build & Development
 
@@ -17,7 +17,7 @@ Scientific Python package (`volterra-equation-solvers`) providing collocation-me
 ```bash
 meson setup dlang/build dlang
 ninja -C dlang/build
-cp dlang/build/volterra_dlang.so src/volterra_equation_solvers/  # .dylib on macOS, .dll on Windows
+cp dlang/build/volterra_dlang.so src/voles/  # .dylib on macOS, .dll on Windows
 ```
 
 ### Install in development mode
@@ -36,7 +36,7 @@ Test tolerance is `1e-3`. No linter/formatter is configured.
 
 ## Architecture
 
-### Source layout: `src/volterra_equation_solvers/`
+### Source layout: `src/voles/`
 
 - **`solvers.py`** — Public API (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`). Validates inputs, truncates to compatible lengths, dispatches to D extension or Numba fallback. Handles scalar/vector/matrix cases, threading for matrix columns, and optional piecewise polynomial output.
 - **`_dlang.py`** — ctypes wrapper loading the platform-specific shared library. Defines C function signatures and provides `solve_vie{1,2}_d()`, `solve_vie{1,2}_vec_d()`, `solve_vide_d()`, `solve_vide_vec_d()`. Also exposes `supported_coll_settings_d()` to query compiled settings.

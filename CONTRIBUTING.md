@@ -3,8 +3,8 @@
 ## Development setup
 
 ```bash
-git clone https://github.com/trout314/volterra-equation-solvers
-cd volterra-equation-solvers
+git clone https://github.com/trout314/voles
+cd voles
 pip install -e ".[dev]"
 ```
 
@@ -32,20 +32,20 @@ Then copy the built library into the package:
 
 ```bash
 # Linux
-cp dlang/build/volterra_dlang.so src/volterra_equation_solvers/
+cp dlang/build/volterra_dlang.so src/voles/
 
 # macOS
-cp dlang/build/volterra_dlang.dylib src/volterra_equation_solvers/
+cp dlang/build/volterra_dlang.dylib src/voles/
 
 # Windows (PowerShell)
-Copy-Item dlang\build\volterra_dlang.dll src\volterra_equation_solvers\
+Copy-Item dlang\build\volterra_dlang.dll src\voles\
 ```
 
 Verify it loaded:
 
 ```python
-import volterra_equation_solvers
-print(volterra_equation_solvers.__version__)  # should print without ImportError
+import voles
+print(voles.__version__)  # should print without ImportError
 ```
 
 ## Submitting changes

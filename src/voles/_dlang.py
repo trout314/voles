@@ -158,7 +158,7 @@ def _load() -> None:
             except OSError as e:
                 raise ImportError(f"Found {lib_name} at {path} but could not load it: {e}") from e
     raise ImportError(
-        f"volterra_equation_solvers requires the compiled D extension ({lib_name}). "
+        f"voles requires the compiled D extension ({lib_name}). "
         f"Searched: {candidates}. "
         "Install the package from a pre-built wheel or build the extension manually "
         "(see dlang/README or the project documentation)."

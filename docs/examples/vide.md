@@ -9,7 +9,7 @@ with $a(t) = \frac{1}{1+t^2}$, $K(s) = e^{-s}$, and $g(t)$ chosen so the exact s
 ```python
 import numpy as np
 import matplotlib.pyplot as plt
-from volterra_equation_solvers import solve_VIDE
+from voles import solve_VIDE
 
 time_step = 0.01
 coll_divs = 3

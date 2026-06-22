@@ -9,7 +9,7 @@ with $K(s) = e^s$, $g(t) = \sin(t)$, whose exact solution is $y(t) = \cos(t) - \
 ```python
 import numpy as np
 import matplotlib.pyplot as plt
-from volterra_equation_solvers import solve_VIE_1
+from voles import solve_VIE_1
 
 time_step = 0.1
 coll_divs = 3

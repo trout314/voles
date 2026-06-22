@@ -42,12 +42,12 @@ jobs:
           cd dlang
           meson setup build --wipe --buildtype=release
           ninja -C build
-          Copy-Item build\volterra_dlang.dll ..\src\volterra_equation_solvers\
+          Copy-Item build\volterra_dlang.dll ..\src\voles\
 
       - uses: actions/upload-artifact@v4
         with:
           name: volterra_dlang_dll
-          path: src/volterra_equation_solvers/volterra_dlang.dll
+          path: src/voles/volterra_dlang.dll
 
   test-dlang-windows:
     needs: build-dlang-windows
@@ -62,7 +62,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: volterra_dlang_dll
-          path: src/volterra_equation_solvers/
+          path: src/voles/
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5

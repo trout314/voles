@@ -1,6 +1,6 @@
-site_name: volterra-equation-solvers
+site_name: voles
 site_description: Collocation-method solvers for Volterra integral and integro-differential equations
-repo_url: https://github.com/trout314/volterra-equation-solvers
+repo_url: https://github.com/trout314/voles
 
 theme:
   name: material

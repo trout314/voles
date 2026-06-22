@@ -15,7 +15,7 @@ import argparse
 import sys
 import numpy as np
 
-from volterra_equation_solvers import (
+from voles import (
     solve_VIE_1, solve_VIE_2, solve_VIDE,
     fast_coll_settings_VIE_1,
     fast_coll_settings_VIE_2,

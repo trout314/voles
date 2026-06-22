@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "volterra-equation-solvers"
-version = "0.4.0"
+name = "voles"
+version = "0.5.0"
 description = "Collocation-method solvers for Volterra integral and integro-differential equations"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -47,14 +47,14 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/trout314/volterra-equation-solvers"
-Repository = "https://github.com/trout314/volterra-equation-solvers"
-Documentation = "https://trout314.github.io/volterra-equation-solvers"
-Changelog = "https://github.com/trout314/volterra-equation-solvers/blob/main/CHANGELOG.md"
-"Bug Tracker" = "https://github.com/trout314/volterra-equation-solvers/issues"
+Homepage = "https://github.com/trout314/voles"
+Repository = "https://github.com/trout314/voles"
+Documentation = "https://trout314.github.io/voles"
+Changelog = "https://github.com/trout314/voles/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/trout314/voles/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/volterra_equation_solvers"]
+packages = ["src/voles"]
 artifacts = ["*.so", "*.dylib", "*.dll"]
 
 # ---------------------------------------------------------------------------
@@ -66,9 +66,9 @@ artifacts = ["*.so", "*.dylib", "*.dll"]
 #   meson compile -C dlang/build
 #
 # Then copy the shared library into the package:
-#   Linux:   cp dlang/build/volterra_dlang.so   src/volterra_equation_solvers/
-#   macOS:   cp dlang/build/volterra_dlang.dylib src/volterra_equation_solvers/
-#   Windows: copy dlang\build\volterra_dlang.dll src\volterra_equation_solvers\
+#   Linux:   cp dlang/build/volterra_dlang.so   src/voles/
+#   macOS:   cp dlang/build/volterra_dlang.dylib src/voles/
+#   Windows: copy dlang\build\volterra_dlang.dll src\voles\
 # ---------------------------------------------------------------------------
 
 [tool.pytest.ini_options]

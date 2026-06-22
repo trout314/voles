@@ -24,4 +24,4 @@ __all__ = [
     "fast_coll_settings_VIE_1", "fast_coll_settings_VIE_2", "fast_coll_settings_VIDE",
 ]
 from importlib.metadata import version
-__version__ = version("volterra-equation-solvers")
+__version__ = version("voles")

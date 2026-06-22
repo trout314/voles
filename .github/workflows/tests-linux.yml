@@ -39,12 +39,12 @@ jobs:
             cd /work/dlang
             meson setup build --wipe --buildtype=release
             ninja -C build
-            cp build/volterra_dlang.so /work/src/volterra_equation_solvers/
+            cp build/volterra_dlang.so /work/src/voles/
           "
 
       - name: Verify glibc requirement
         run: |
-          max=$(objdump -T src/volterra_equation_solvers/volterra_dlang.so \
+          max=$(objdump -T src/voles/volterra_dlang.so \
             | awk '/GLIBC/{match($0,/GLIBC_([0-9.]+)/,a); print a[1]}' \
             | sort -V | tail -1)
           echo "Max glibc version required: $max"
@@ -57,7 +57,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: volterra_dlang_so
-          path: src/volterra_equation_solvers/volterra_dlang.so
+          path: src/voles/volterra_dlang.so
 
   test-dlang:
     needs: build-dlang-linux
@@ -72,7 +72,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: volterra_dlang_so
-          path: src/volterra_equation_solvers/
+          path: src/voles/
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -114,14 +114,14 @@ jobs:
           cd dlang
           meson setup build -Dwith-lapack=disabled --buildtype=release
           ninja -C build
-          cp build/volterra_dlang.so ../src/volterra_equation_solvers/
+          cp build/volterra_dlang.so ../src/voles/
 
       - name: Install package and dev dependencies
         run: pip install -e ".[dev,callable]"
 
       - name: Verify the no-LAPACK path is active
         run: |
-          python -c "from volterra_equation_solvers._dlang import have_lapack_d; assert have_lapack_d() == False, 'Expected no-LAPACK build'"
+          python -c "from voles._dlang import have_lapack_d; assert have_lapack_d() == False, 'Expected no-LAPACK build'"
 
       - name: Run tests
         run: pytest tests/ -v

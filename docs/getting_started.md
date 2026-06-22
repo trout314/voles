@@ -3,7 +3,7 @@
 ## Installation
 
 ```bash
-pip install git+https://github.com/trout314/volterra-equation-solvers
+pip install git+https://github.com/trout314/voles
 ```
 
 **Dependencies:** numpy, numba, and the compiled D extension (included in binary distributions; see [CONTRIBUTING.md](../CONTRIBUTING.md) to build from source)
@@ -18,7 +18,7 @@ Solves $g(t) = \int_0^t K(t-s)y(s)ds$ for unknown $y(t)$.
 
 ```python
 import numpy as np
-from volterra_equation_solvers import solve_VIE_1
+from voles import solve_VIE_1
 
 time_step = 0.1
 times = np.arange(0, 9.1, time_step)   # 91 points = 10×3² + 1
@@ -42,7 +42,7 @@ Solves $y(t) = g(t) + \int_0^t K(t-s)y(s)ds$ for unknown $y(t)$.
 
 ```python
 import numpy as np
-from volterra_equation_solvers import solve_VIE_2
+from voles import solve_VIE_2
 
 time_step = 0.05
 times = np.arange(0, 4.55, time_step)  # 91 points = 10×3² + 1
@@ -65,7 +65,7 @@ Solves $y'(t) = a(t)y(t) + g(t) + \int_0^t K(t-s)y(s)ds$ for unknown $y(t)$.
 
 ```python
 import numpy as np
-from volterra_equation_solvers import solve_VIDE
+from voles import solve_VIDE
 
 time_step = 0.01
 times = np.arange(0, 0.91, time_step)  # 91 points = 10×3² + 1

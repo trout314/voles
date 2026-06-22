@@ -17,7 +17,7 @@ and a hand-picked non-uniform mesh:
 
 ```python
 import numpy as np
-from volterra_equation_solvers import function_solve_VIE_2
+from voles import function_solve_VIE_2
 
 kernel = lambda u: np.exp(-u)
 g = lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t))  # exact y(t) = sin(t)
@@ -47,7 +47,7 @@ that a uniform mesh fails to achieve.
 
 ```python
 import numpy as np
-from volterra_equation_solvers import function_solve_VIE_2, optimal_graded_mesh
+from voles import function_solve_VIE_2, optimal_graded_mesh
 
 # Classical Abel equation: integral of (t-s)^(-1/2) y(s) ds = pi*t/2  =>  y = sqrt(t)
 kernel = lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0
@@ -85,7 +85,7 @@ Pass a `kernel(u)` that returns a `(d, d)` matrix; `g(t)` returns `(d,)`:
 
 ```python
 import numpy as np
-from volterra_equation_solvers import function_solve_VIE_2
+from voles import function_solve_VIE_2
 
 d = 2
 identity = np.eye(d)
@@ -115,7 +115,7 @@ than `m` separate calls.
 
 ```python
 import numpy as np
-from volterra_equation_solvers import function_solve_VIE_2
+from voles import function_solve_VIE_2
 
 d = 2
 identity = np.eye(d)

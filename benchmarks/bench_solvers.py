@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from volterra_equation_solvers import solve_VIE_1, solve_VIE_2, solve_VIDE
+from voles import solve_VIE_1, solve_VIE_2, solve_VIDE
 
 # --- VIE-2 (coll_divs=2, pts = n_intervals*4+1) ---
 

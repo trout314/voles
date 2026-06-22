@@ -1,4 +1,4 @@
-# volterra-equation-solvers
+# voles
 
 Collocation-method solvers for Volterra integral and integro-differential equations (VIEs/VIDEs), based on:
 
@@ -24,14 +24,14 @@ with a $u^{-\alpha}$ singularity.
 ## Quick install
 
 ```bash
-pip install git+https://github.com/trout314/volterra-equation-solvers
+pip install git+https://github.com/trout314/voles
 ```
 
 The callable-input solvers (`function_solve_*`, `optimal_graded_mesh`)
 additionally require `scipy`:
 
 ```bash
-pip install "volterra-equation-solvers[callable] @ git+https://github.com/trout314/volterra-equation-solvers"
+pip install "voles[callable] @ git+https://github.com/trout314/voles"
 ```
 
 ## Mathematical derivations
@@ -49,7 +49,7 @@ LaTeX source files are provided alongside the PDFs.
 
 ```python
 import numpy as np
-from volterra_equation_solvers import solve_VIE_2
+from voles import solve_VIE_2
 
 # y(t) = sin(t) satisfies this VIE-2
 time_step = 0.05

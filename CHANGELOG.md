@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-22
+
+### Changed
+- **Package renamed from `volterra-equation-solvers` to `voles`** (both
+  the PyPI package name and the Python import root). Install with
+  `pip install voles`; import with `import voles` (was
+  `import volterra_equation_solvers`). The previous `0.4.0` name will
+  still resolve on PyPI; a final `volterra-equation-solvers` release
+  with a deprecation shim re-exporting from `voles` will land separately.
+
 ## [0.4.0] - 2026-06-22
 
 ### Added

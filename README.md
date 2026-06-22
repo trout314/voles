@@ -1,11 +1,11 @@
-# volterra-equation-solvers
+# voles
 
-[![Tests (Linux)](https://github.com/trout314/volterra-equation-solvers/actions/workflows/tests-linux.yml/badge.svg)](https://github.com/trout314/volterra-equation-solvers/actions/workflows/tests-linux.yml)
-[![Tests (macOS)](https://github.com/trout314/volterra-equation-solvers/actions/workflows/tests-macos.yml/badge.svg)](https://github.com/trout314/volterra-equation-solvers/actions/workflows/tests-macos.yml)
-[![Tests (Windows)](https://github.com/trout314/volterra-equation-solvers/actions/workflows/tests-windows.yml/badge.svg)](https://github.com/trout314/volterra-equation-solvers/actions/workflows/tests-windows.yml)
+[![Tests (Linux)](https://github.com/trout314/voles/actions/workflows/tests-linux.yml/badge.svg)](https://github.com/trout314/voles/actions/workflows/tests-linux.yml)
+[![Tests (macOS)](https://github.com/trout314/voles/actions/workflows/tests-macos.yml/badge.svg)](https://github.com/trout314/voles/actions/workflows/tests-macos.yml)
+[![Tests (Windows)](https://github.com/trout314/voles/actions/workflows/tests-windows.yml/badge.svg)](https://github.com/trout314/voles/actions/workflows/tests-windows.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org)
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://trout314.github.io/volterra-equation-solvers/)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://trout314.github.io/voles/)
 
 <p align="center">
   <img src="docs/vole_chalkboard.png" alt="Volterra equation solvers mascot" width="400">
@@ -33,8 +33,8 @@ $$g(t) = \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 | API | Inputs | Solution shape | Reference |
 |---|---|---|---|
-| `solve_VIE_1` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vie1/](https://trout314.github.io/volterra-equation-solvers/api/vie1/) |
-| `function_solve_VIE_1` | callables, arbitrary mesh | scalar / vector / matrix | [api/function_vie1/](https://trout314.github.io/volterra-equation-solvers/api/function_vie1/) |
+| `solve_VIE_1` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vie1/](https://trout314.github.io/voles/api/vie1/) |
+| `function_solve_VIE_1` | callables, arbitrary mesh | scalar / vector / matrix | [api/function_vie1/](https://trout314.github.io/voles/api/function_vie1/) |
 
 ### Type-2 Volterra integral equation (VIE-2)
 
@@ -44,8 +44,8 @@ $$y(t) = g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 | API | Inputs | Solution shape | Reference |
 |---|---|---|---|
-| `solve_VIE_2` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vie2/](https://trout314.github.io/volterra-equation-solvers/api/vie2/) |
-| `function_solve_VIE_2` | callables, arbitrary mesh | scalar / vector / matrix | [api/function_vie2/](https://trout314.github.io/volterra-equation-solvers/api/function_vie2/) |
+| `solve_VIE_2` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vie2/](https://trout314.github.io/voles/api/vie2/) |
+| `function_solve_VIE_2` | callables, arbitrary mesh | scalar / vector / matrix | [api/function_vie2/](https://trout314.github.io/voles/api/function_vie2/) |
 
 ### Volterra integro-differential equation (VIDE)
 
@@ -55,19 +55,19 @@ $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 | API | Inputs | Solution shape | Reference |
 |---|---|---|---|
-| `solve_VIDE` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vide/](https://trout314.github.io/volterra-equation-solvers/api/vide/) |
-| `function_solve_VIDE` | callables, arbitrary mesh | scalar / vector / matrix | [api/function_vide/](https://trout314.github.io/volterra-equation-solvers/api/function_vide/) |
+| `solve_VIDE` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vide/](https://trout314.github.io/voles/api/vide/) |
+| `function_solve_VIDE` | callables, arbitrary mesh | scalar / vector / matrix | [api/function_vide/](https://trout314.github.io/voles/api/function_vide/) |
 
 ### Mesh helper: `optimal_graded_mesh`
 
 Returns a Brunner-graded mesh $t_n = T (n/M)^r$ with grading exponent $r = p / (1 - \alpha)$, where $p$ is the number of collocation nodes per interval. Designed for weakly singular convolution kernels $K(u) \sim u^{-\alpha}$ with $\alpha \in [0, 1)$. Feed the result to a callable-input solver via `mesh_breakpoints` to recover the optimal convergence order on Abel-type problems.
 
-API reference: [api/optimal_graded_mesh/](https://trout314.github.io/volterra-equation-solvers/api/optimal_graded_mesh/)
+API reference: [api/optimal_graded_mesh/](https://trout314.github.io/voles/api/optimal_graded_mesh/)
 
 ## Installation
 
 ```bash
-pip install volterra-equation-solvers
+pip install voles
 ```
 
 Pre-built wheels are provided for Linux x86_64, macOS arm64 (Apple Silicon), and Windows x64. The D extension is bundled in the wheel and requires no extra tooling. Intel Macs are no longer supported as of 0.3.2; users can pin to `volterra-equation-solvers==0.3.1` or build from source (see CONTRIBUTING.md).
@@ -83,7 +83,7 @@ To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](CO
 
 ```python
 import numpy as np
-from volterra_equation_solvers import solve_VIE_2
+from voles import solve_VIE_2
 
 # y(t) = sin(t) satisfies this VIE-2 with K(s) = exp(-s)
 time_step = 0.05
@@ -107,11 +107,11 @@ The solvers require input arrays to satisfy an internal size constraint. Any len
 
 ## Vector and Matrix Valued Equations
 
-All solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ is a $d$-dimensional vector, $g(t)$ is also a $d$-dimensional vector and $K(t)$ and $a(t)$ are $d \times d$ matrices. When $y(t)$ is a $d \times m$ matrix, $g(t)$ is also a $d \times m$ matrix and $K(t)$ and $a(t)$ are $d \times d$ matrices. The case is detected automatically: for the array-based family from the shapes of the input arrays, and for the callable family from the shape returned by `g(t)` (a `(d, m)` return — or a `(d, m)` `soln_init_value` for VIDE — selects the matrix case). The callable family builds the kernel weight tensor once and shares it across the $m$ columns, so a matrix solve is much cheaper than $m$ separate calls; see the [callable-solver examples](https://trout314.github.io/volterra-equation-solvers/examples/function_solvers/) for a worked case.
+All solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ is a $d$-dimensional vector, $g(t)$ is also a $d$-dimensional vector and $K(t)$ and $a(t)$ are $d \times d$ matrices. When $y(t)$ is a $d \times m$ matrix, $g(t)$ is also a $d \times m$ matrix and $K(t)$ and $a(t)$ are $d \times d$ matrices. The case is detected automatically: for the array-based family from the shapes of the input arrays, and for the callable family from the shape returned by `g(t)` (a `(d, m)` return — or a `(d, m)` `soln_init_value` for VIDE — selects the matrix case). The callable family builds the kernel weight tensor once and shares it across the $m$ columns, so a matrix solve is much cheaper than $m$ separate calls; see the [callable-solver examples](https://trout314.github.io/voles/examples/function_solvers/) for a worked case.
 
 ```python
 import numpy as np
-from volterra_equation_solvers import solve_VIE_1
+from voles import solve_VIE_1
 
 # 2×2 VIE-1 with constant kernel K = [[3/2, -1/2], [-1/2, 3/2]],
 # g(t) = [t + (3/2)t², t - (1/2)t²], and exact solution y(t) = [1+2t, 1]
@@ -137,7 +137,7 @@ All three solvers accept complex-valued inputs. Pass complex NumPy arrays for th
 
 ```python
 import numpy as np
-from volterra_equation_solvers import solve_VIE_2
+from voles import solve_VIE_2
 
 time_step = 0.05
 times = np.arange(0, 2.1, time_step)
@@ -166,7 +166,7 @@ Passing `return_polys=True` to any solver returns a `(soln_values, polys)` tuple
 
 ```python
 import numpy as np
-from volterra_equation_solvers import solve_VIDE
+from voles import solve_VIDE
 
 # y(t) = sin(t) satisfies this VIDE with K(s) = exp(-s), a(t) = -1
 time_step = 0.1
@@ -210,6 +210,6 @@ Run on a GitHub Actions `ubuntu-22.04` runner (2-core x86_64 VM on an Intel Xeon
 
 ![Benchmarks](benchmarks/results.png)
 
-See the [Getting Started](https://trout314.github.io/volterra-equation-solvers/getting_started/) page for complete examples.
+See the [Getting Started](https://trout314.github.io/voles/getting_started/) page for complete examples.
 
 Worked derivations of the analytic solutions used in the test suite are in [`docs/scalar_solutions.pdf`](docs/scalar_solutions.pdf) and [`docs/coupled_vector_solutions.pdf`](docs/coupled_vector_solutions.pdf).

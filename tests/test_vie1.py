@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from volterra_equation_solvers import solve_VIE_1
+from voles import solve_VIE_1
 from conftest import TOLERANCE
 
 

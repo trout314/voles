@@ -9,7 +9,7 @@ continue to pass after the D port.
 import numpy as np
 import pytest
 
-from volterra_equation_solvers._callable_solvers import (
+from voles._callable_solvers import (
     function_solve_VIE_2, function_solve_VIDE, function_solve_VIE_1,
     optimal_graded_mesh,
 )
@@ -493,7 +493,7 @@ def test_scipy_missing_friendly_import_error(monkeypatch, vie2_callable_abel):
             "`pip install volterra-equation-solvers[callable]`.")
 
     monkeypatch.setattr(
-        "volterra_equation_solvers._callable_solvers._import_scipy_quad",
+        "voles._callable_solvers._import_scipy_quad",
         raise_import)
 
     with pytest.raises(ImportError, match=r"\[callable\]"):
@@ -742,7 +742,7 @@ def test_complex_late_detection_raises_clear_error(monkeypatch):
     escalation should catch the lossy cast and raise a clean ValueError --
     not silently produce a real-valued wrong answer.
     """
-    import volterra_equation_solvers._callable_solvers as cs
+    import voles._callable_solvers as cs
     # Force sampling to say "no complex detected" -- simulates a kernel whose
     # complex range escaped the 5 sample points.
     monkeypatch.setattr(cs, "_samples_indicate_complex",
@@ -757,7 +757,7 @@ def test_complex_late_detection_raises_clear_error(monkeypatch):
 
 
 def test_complex_late_detection_raises_for_vie1(monkeypatch):
-    import volterra_equation_solvers._callable_solvers as cs
+    import voles._callable_solvers as cs
     monkeypatch.setattr(cs, "_samples_indicate_complex",
                         lambda *args, **kwargs: False)
     K = lambda u: 1.0 + 0.001j
@@ -768,7 +768,7 @@ def test_complex_late_detection_raises_for_vie1(monkeypatch):
 
 
 def test_complex_late_detection_raises_for_vide(monkeypatch):
-    import volterra_equation_solvers._callable_solvers as cs
+    import voles._callable_solvers as cs
     monkeypatch.setattr(cs, "_samples_indicate_complex",
                         lambda *args, **kwargs: False)
     K = lambda u: 1.0 + 0.001j
@@ -1442,7 +1442,7 @@ def test_abel_convergence_with_graded_mesh(vie2_callable_abel):
 # ---------------------------------------------------------------------------
 
 def test_package_level_exports():
-    import volterra_equation_solvers as ves
+    import voles as ves
     assert ves.function_solve_VIE_1 is function_solve_VIE_1
     assert ves.function_solve_VIE_2 is function_solve_VIE_2
     assert ves.function_solve_VIDE is function_solve_VIDE
@@ -1657,7 +1657,7 @@ def test_matrix_vie2_breakpoint_continuous(vie2_callable_vec_diagonal):
 
 def test_matrix_vie2_matches_array_solver():
     """Cross-API: callable matrix VIE-2 agrees with the array-based matrix solver."""
-    from volterra_equation_solvers import solve_VIE_2
+    from voles import solve_VIE_2
     A = np.array([[0.0, 0.2], [-0.1, 0.0]])
     d = 2
     coll_divs, coll_choices = 2, [0, 1, 2]
@@ -2244,7 +2244,7 @@ def test_matrix_vide_g_none(vide_callable_vec_diagonal):
 # --- (5) Exceeding the compiled p / d limits -------------------------------
 
 def test_p_exceeds_compiled_max_raises():
-    from volterra_equation_solvers._dlang import function_solve_max_p_d
+    from voles._dlang import function_solve_max_p_d
     max_p = function_solve_max_p_d()
     coll_divs = max_p + 1
     coll_choices = list(range(coll_divs))  # length max_p + 1 > max_p
@@ -2255,7 +2255,7 @@ def test_p_exceeds_compiled_max_raises():
 
 
 def test_d_exceeds_compiled_max_raises():
-    from volterra_equation_solvers._dlang import function_solve_max_d_d
+    from voles._dlang import function_solve_max_d_d
     d = function_solve_max_d_d() + 1
     eye = np.eye(d)
     with pytest.raises(ValueError, match="exceeds the maximum"):
@@ -2342,7 +2342,7 @@ def test_vie2_real_kernel_complex_g():
 def test_vide_real_kernel_complex_a_matches_array_solver():
     """Real kernel, complex a and g (VIDE): cross-checked against the array
     solver on a uniform grid (a complex 'a' couples re/im, so no linearity)."""
-    from volterra_equation_solvers import solve_VIDE
+    from voles import solve_VIDE
     coll_divs, coll_choices = 2, [0, 1, 2]
     time_step = 0.02
     N = 20 * coll_divs**2 + 1

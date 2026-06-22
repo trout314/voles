@@ -32,13 +32,13 @@ jobs:
             cd /work/dlang
             meson setup build --wipe --buildtype=release
             ninja -C build
-            cp build/volterra_dlang.so /work/src/volterra_equation_solvers/
+            cp build/volterra_dlang.so /work/src/voles/
           "
 
       - uses: actions/upload-artifact@v4
         with:
           name: volterra_dlang_so_bench
-          path: src/volterra_equation_solvers/volterra_dlang.so
+          path: src/voles/volterra_dlang.so
 
   benchmark:
     needs: build-dlang
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: volterra_dlang_so_bench
-          path: src/volterra_equation_solvers/
+          path: src/voles/
 
       - uses: actions/setup-python@v5
         with:
@@ -67,7 +67,7 @@ jobs:
             --benchmark-warmup-iterations=1
 
       - name: Remove D library before gh-pages branch switch
-        run: rm -f src/volterra_equation_solvers/volterra_dlang.so
+        run: rm -f src/voles/volterra_dlang.so
 
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@v1
