@@ -24,14 +24,14 @@ with a $u^{-\alpha}$ singularity.
 ## Quick install
 
 ```bash
-pip install git+https://github.com/trout314/voles
+pip install voles
 ```
 
 The callable-input solvers (`function_solve_*`, `optimal_graded_mesh`)
 additionally require `scipy`:
 
 ```bash
-pip install "voles[callable] @ git+https://github.com/trout314/voles"
+pip install "voles[callable]"
 ```
 
 ## Mathematical derivations
