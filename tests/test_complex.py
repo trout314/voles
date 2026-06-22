@@ -468,3 +468,43 @@ class TestVIE2ComplexMatrix:
         assert np.iscomplexobj(soln)
         assert soln.shape == self.exact.shape
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+
+
+# ---------------------------------------------------------------------------
+# Notebook-bug regression: large-d complex matrix-valued VIE-1 -> VIDE chain.
+#
+# Before the _truncate_N fix, calling solve_VIE_1 with too-short input plus
+# large coll_divs silently truncated to mesh_divs=0 and the D extension
+# aborted via an uncatchable ArrayIndexError. This test exercises a
+# *long-enough* input at the same large d (49) the user's notebook used,
+# to confirm the workflow itself runs cleanly when N >= coll_divs**2 + 1.
+# ---------------------------------------------------------------------------
+
+def test_complex_matrix_valued_d49_workflow_smoke():
+    d = 49
+    N = 19  # = 2 * coll_divs**2 + 1 for coll_divs=3, so mesh_divs = 2
+
+    rng = np.random.default_rng(0)
+    C = (rng.standard_normal((N, d, d))
+         + 1j * rng.standard_normal((N, d, d))).astype(np.complex128)
+    lhs = (rng.standard_normal((N, d, d))
+           + 1j * rng.standard_normal((N, d, d))).astype(np.complex128)
+    L = (rng.standard_normal((d, d))
+         + 1j * rng.standard_normal((d, d))).astype(np.complex128)
+
+    K = solve_VIE_1(
+        g_values=lhs, kernel_values=C, time_step=1.0,
+        coll_divs=3, coll_choices=[1, 2, 3], force_continuous=False)
+    assert K.shape == (N, d, d)
+    assert K.dtype == np.complex128
+    assert np.all(np.isfinite(K))
+
+    a_arr = np.broadcast_to(L, K.shape).copy()
+    soln = solve_VIDE(
+        kernel_values=K, a_values=a_arr,
+        soln_init_value=C[0],
+        time_step=1.0,
+        coll_divs=3, coll_choices=[0, 1, 2, 3])
+    assert soln.shape == (N, d, d)
+    assert soln.dtype == np.complex128
+    assert np.all(np.isfinite(soln))
