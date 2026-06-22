@@ -31,10 +31,10 @@ Given $K$ and $g$, solve for $y(t)$ in:
 
 $$g(t) = \int_0^t K(t-s)\\, y(s)\\, ds$$
 
-| API | Inputs | Solution shape | Reference |
-|---|---|---|---|
-| `solve_VIE_1` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vie1/](https://trout314.github.io/voles/api/vie1/) |
-| `function_solve_VIE_1` | callables, arbitrary mesh | scalar / vector / matrix | [api/function_vie1/](https://trout314.github.io/voles/api/function_vie1/) |
+| Solver | Inputs | Reference |
+|---|---|---|
+| `solve_VIE_1` | sampled arrays, uniform grid | [api/vie1/](https://trout314.github.io/voles/api/vie1/) |
+| `function_solve_VIE_1` | callables, arbitrary mesh | [api/function_vie1/](https://trout314.github.io/voles/api/function_vie1/) |
 
 ### Type-2 Volterra integral equation (VIE-2)
 
@@ -42,10 +42,10 @@ Given $K$ and $g$, solve for $y(t)$ in:
 
 $$y(t) = g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
-| API | Inputs | Solution shape | Reference |
-|---|---|---|---|
-| `solve_VIE_2` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vie2/](https://trout314.github.io/voles/api/vie2/) |
-| `function_solve_VIE_2` | callables, arbitrary mesh | scalar / vector / matrix | [api/function_vie2/](https://trout314.github.io/voles/api/function_vie2/) |
+| Solver | Inputs | Reference |
+|---|---|---|
+| `solve_VIE_2` | sampled arrays, uniform grid | [api/vie2/](https://trout314.github.io/voles/api/vie2/) |
+| `function_solve_VIE_2` | callables, arbitrary mesh | [api/function_vie2/](https://trout314.github.io/voles/api/function_vie2/) |
 
 ### Volterra integro-differential equation (VIDE)
 
@@ -53,10 +53,10 @@ Given $K$, $a$, $g$, and initial value $y(0)$, solve for $y(t)$ in:
 
 $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
-| API | Inputs | Solution shape | Reference |
-|---|---|---|---|
-| `solve_VIDE` | sampled arrays, uniform grid | scalar / vector / matrix | [api/vide/](https://trout314.github.io/voles/api/vide/) |
-| `function_solve_VIDE` | callables, arbitrary mesh | scalar / vector / matrix | [api/function_vide/](https://trout314.github.io/voles/api/function_vide/) |
+| Solver | Inputs | Reference |
+|---|---|---|
+| `solve_VIDE` | sampled arrays, uniform grid | [api/vide/](https://trout314.github.io/voles/api/vide/) |
+| `function_solve_VIDE` | callables, arbitrary mesh | [api/function_vide/](https://trout314.github.io/voles/api/function_vide/) |
 
 ### Mesh helper: `optimal_graded_mesh`
 
