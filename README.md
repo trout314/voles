@@ -15,15 +15,15 @@ The Volterra Equation Solvers (VOLES) package is a collection of collocation-met
 
 > Brunner H. *Collocation Methods for Volterra Integral and Related Functional Differential Equations.* Cambridge University Press; 2004.
 
-The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code. All solvers support real-valued and complex-valued data, and scalar-, vector-, and matrix-valued equations.
+The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code. All solvers support real-valued and complex-valued data, and scalar-, vector-, and matrix-valued equations. Currently, only convolution type kernels are supported.
 
 ## Solvers
 
 Two solver families are provided.
 
-- The **array-based** family (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`) is the fastest path when the kernel and forcing are already sampled on a uniform time grid. Supports scalar, vector, and matrix-valued solutions, and complex-valued data.
+- The **array-based** family (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`) take the kernel and other input functions as arrays of values given on a uniform time grid. They do not support singular kernels.
 
-- The **callable-input** family (`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`) accepts the kernel, forcing term, and (for VIDE) coefficient $a$ as Python callables, runs on an arbitrary mesh via `mesh_breakpoints`, and handles weakly singular convolution kernels — useful for Abel-type problems where a graded mesh recovers the optimal convergence order. Supports scalar, vector, and matrix-valued cases, and complex-valued data. Requires `scipy` (install via the `[callable]` extra). The helper `optimal_graded_mesh` builds a Brunner-graded mesh for an $\alpha$-singular kernel.
+- The **callable-input** family (`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`) accept the kernel and other input functions as Python callables, and support arbitrary collocation mesh intervals. These solvers support kernels with integrable singularities, but the user must specify the location of the singular points. Requires `scipy` (install via the `[callable]` extra). A helper function `optimal_graded_mesh` is provided for building an optimal graded mesh in the case of a convolution kernel with a power law singularity at time zero.
 
 ### Type-1 Volterra integral equation (VIE-1)
 
