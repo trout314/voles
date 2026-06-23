@@ -1182,6 +1182,23 @@ Default is <code>[1, 2, 3]</code>.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
+                <code>return_function</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>True</code>, also return a callable solution object as the second
+element of a tuple (see Returns). Default is <code>False</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
                 <code>return_polys</code>
             </td>
             <td>
@@ -1189,12 +1206,12 @@ Default is <code>[1, 2, 3]</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If <code>True</code>, also return the piecewise polynomial solution.
-Default is <code>False</code>.</p>
+                <p>Deprecated alias for <code>return_function</code>; passing it emits a
+<code>DeprecationWarning</code>.</p>
               </div>
             </td>
             <td>
-                  <code>False</code>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1255,23 +1272,25 @@ fallback is used.</p>
             <td>
               <div class="doc-md-description">
                 <p>Solution values <span class="arithmatex">\(y(t)\)</span> at the same times as the input arrays.
-Returned when <code>return_polys=False</code> (default).</p>
+Returned when <code>return_function=False</code> (default).</p>
               </div>
             </td>
           </tr>
           <tr class="doc-section-item">
 <td></td>            <td>
-                  <code>(soln_values, polys) : tuple</code>
+                  <code>(soln_values, solution) : tuple</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Returned when <code>return_polys=True</code>. <code>soln_values</code> is as above.
-For scalar equations, <code>polys</code> is a list of
-<code>numpy.polynomial.Polynomial</code> objects, one per mesh interval, each
-mapping <span class="arithmatex">\(t\)</span> to the polynomial approximation of <span class="arithmatex">\(y(t)\)</span> on that
-interval. For vector equations, each element of <code>polys</code> is an object
-array of shape <code>(d,)</code> (or <code>(d, m)</code> for matrix equations) containing
-one polynomial per component.</p>
+                <p>Returned when <code>return_function=True</code>. <code>soln_values</code> is as above.
+<code>solution</code> is callable -- <code>solution(t)</code> evaluates the piecewise
+polynomial solution at scalar or array <code>t</code> -- and also behaves like
+the previous list of per-interval polynomials: <code>len(solution)</code>,
+<code>solution[n]</code>, and iteration operate on <code>solution.polynomials</code>.
+For scalar equations each polynomial is a
+<code>numpy.polynomial.Polynomial</code>; for vector equations each interval entry
+is an object array of shape <code>(d,)</code> (or <code>(d, m)</code> for matrix
+equations), one polynomial per component.</p>
               </div>
             </td>
           </tr>
@@ -1305,49 +1324,7 @@ used. For vector equations only the compiled settings are supported.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">337</span>
-<span class="normal">338</span>
-<span class="normal">339</span>
-<span class="normal">340</span>
-<span class="normal">341</span>
-<span class="normal">342</span>
-<span class="normal">343</span>
-<span class="normal">344</span>
-<span class="normal">345</span>
-<span class="normal">346</span>
-<span class="normal">347</span>
-<span class="normal">348</span>
-<span class="normal">349</span>
-<span class="normal">350</span>
-<span class="normal">351</span>
-<span class="normal">352</span>
-<span class="normal">353</span>
-<span class="normal">354</span>
-<span class="normal">355</span>
-<span class="normal">356</span>
-<span class="normal">357</span>
-<span class="normal">358</span>
-<span class="normal">359</span>
-<span class="normal">360</span>
-<span class="normal">361</span>
-<span class="normal">362</span>
-<span class="normal">363</span>
-<span class="normal">364</span>
-<span class="normal">365</span>
-<span class="normal">366</span>
-<span class="normal">367</span>
-<span class="normal">368</span>
-<span class="normal">369</span>
-<span class="normal">370</span>
-<span class="normal">371</span>
-<span class="normal">372</span>
-<span class="normal">373</span>
-<span class="normal">374</span>
-<span class="normal">375</span>
-<span class="normal">376</span>
-<span class="normal">377</span>
-<span class="normal">378</span>
-<span class="normal">379</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">379</span>
 <span class="normal">380</span>
 <span class="normal">381</span>
 <span class="normal">382</span>
@@ -1587,8 +1564,61 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="normal">616</span>
 <span class="normal">617</span>
 <span class="normal">618</span>
-<span class="normal">619</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
-                <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">force_continuous</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="normal">619</span>
+<span class="normal">620</span>
+<span class="normal">621</span>
+<span class="normal">622</span>
+<span class="normal">623</span>
+<span class="normal">624</span>
+<span class="normal">625</span>
+<span class="normal">626</span>
+<span class="normal">627</span>
+<span class="normal">628</span>
+<span class="normal">629</span>
+<span class="normal">630</span>
+<span class="normal">631</span>
+<span class="normal">632</span>
+<span class="normal">633</span>
+<span class="normal">634</span>
+<span class="normal">635</span>
+<span class="normal">636</span>
+<span class="normal">637</span>
+<span class="normal">638</span>
+<span class="normal">639</span>
+<span class="normal">640</span>
+<span class="normal">641</span>
+<span class="normal">642</span>
+<span class="normal">643</span>
+<span class="normal">644</span>
+<span class="normal">645</span>
+<span class="normal">646</span>
+<span class="normal">647</span>
+<span class="normal">648</span>
+<span class="normal">649</span>
+<span class="normal">650</span>
+<span class="normal">651</span>
+<span class="normal">652</span>
+<span class="normal">653</span>
+<span class="normal">654</span>
+<span class="normal">655</span>
+<span class="normal">656</span>
+<span class="normal">657</span>
+<span class="normal">658</span>
+<span class="normal">659</span>
+<span class="normal">660</span>
+<span class="normal">661</span>
+<span class="normal">662</span>
+<span class="normal">663</span>
+<span class="normal">664</span>
+<span class="normal">665</span>
+<span class="normal">666</span>
+<span class="normal">667</span>
+<span class="normal">668</span>
+<span class="normal">669</span>
+<span class="normal">670</span>
+<span class="normal">671</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                <span class="n">force_continuous</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&#39;&#39;&#39;</span>
 <span class="sd">    Solve a Volterra integral equation of the first kind.</span>
 
@@ -1622,9 +1652,12 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="sd">        ``coll_divs``, placed in $(0, 1]$; zero is excluded. Entries must be</span>
 <span class="sd">        distinct integers in $\{1, \ldots, \text{coll\_divs}\}$.</span>
 <span class="sd">        Default is ``[1, 2, 3]``.</span>
+<span class="sd">    return_function : bool, optional</span>
+<span class="sd">        If ``True``, also return a callable solution object as the second</span>
+<span class="sd">        element of a tuple (see Returns). Default is ``False``.</span>
 <span class="sd">    return_polys : bool, optional</span>
-<span class="sd">        If ``True``, also return the piecewise polynomial solution.</span>
-<span class="sd">        Default is ``False``.</span>
+<span class="sd">        Deprecated alias for ``return_function``; passing it emits a</span>
+<span class="sd">        ``DeprecationWarning``.</span>
 <span class="sd">    force_continuous : bool, optional</span>
 <span class="sd">        If ``True``, enforce continuity of the piecewise polynomial solution</span>
 <span class="sd">        across mesh-interval boundaries, using ``soln_init_value`` as the</span>
@@ -1640,15 +1673,17 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="sd">    -------</span>
 <span class="sd">    soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)</span>
 <span class="sd">        Solution values $y(t)$ at the same times as the input arrays.</span>
-<span class="sd">        Returned when ``return_polys=False`` (default).</span>
-<span class="sd">    (soln_values, polys) : tuple</span>
-<span class="sd">        Returned when ``return_polys=True``. ``soln_values`` is as above.</span>
-<span class="sd">        For scalar equations, ``polys`` is a list of</span>
-<span class="sd">        `numpy.polynomial.Polynomial` objects, one per mesh interval, each</span>
-<span class="sd">        mapping $t$ to the polynomial approximation of $y(t)$ on that</span>
-<span class="sd">        interval. For vector equations, each element of ``polys`` is an object</span>
-<span class="sd">        array of shape ``(d,)`` (or ``(d, m)`` for matrix equations) containing</span>
-<span class="sd">        one polynomial per component.</span>
+<span class="sd">        Returned when ``return_function=False`` (default).</span>
+<span class="sd">    (soln_values, solution) : tuple</span>
+<span class="sd">        Returned when ``return_function=True``. ``soln_values`` is as above.</span>
+<span class="sd">        ``solution`` is callable -- ``solution(t)`` evaluates the piecewise</span>
+<span class="sd">        polynomial solution at scalar or array ``t`` -- and also behaves like</span>
+<span class="sd">        the previous list of per-interval polynomials: ``len(solution)``,</span>
+<span class="sd">        ``solution[n]``, and iteration operate on ``solution.polynomials``.</span>
+<span class="sd">        For scalar equations each polynomial is a</span>
+<span class="sd">        `numpy.polynomial.Polynomial`; for vector equations each interval entry</span>
+<span class="sd">        is an object array of shape ``(d,)`` (or ``(d, m)`` for matrix</span>
+<span class="sd">        equations), one polynomial per component.</span>
 
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
@@ -1674,6 +1709,7 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="sd">       Functional Differential Equations.* Cambridge University Press, 2004.</span>
 <span class="sd">       Sections 2.4.1, 2.4.3, and 2.4.5.</span>
 <span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">return_function</span> <span class="o">=</span> <span class="n">_resolve_return_flag</span><span class="p">(</span><span class="n">return_function</span><span class="p">,</span> <span class="n">return_polys</span><span class="p">)</span>
     <span class="c1"># ------------------------------------------------------------------ complex dispatch</span>
     <span class="k">if</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">is_complex</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">):</span>
         <span class="n">K_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">)</span>
@@ -1685,12 +1721,12 @@ used. For vector equations only the compiled settings are supported.</p>
         <span class="n">result</span> <span class="o">=</span> <span class="n">solve_VIE_1</span><span class="p">(</span>
             <span class="n">kernel_values</span><span class="o">=</span><span class="n">K_real</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="n">g_real</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="n">init_real</span><span class="p">,</span>
             <span class="n">time_step</span><span class="o">=</span><span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="n">coll_choices</span><span class="p">,</span>
-            <span class="n">return_polys</span><span class="o">=</span><span class="n">return_polys</span><span class="p">,</span> <span class="n">force_continuous</span><span class="o">=</span><span class="n">force_continuous</span><span class="p">,</span>
+            <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span> <span class="n">force_continuous</span><span class="o">=</span><span class="n">force_continuous</span><span class="p">,</span>
             <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">return_polys</span><span class="p">:</span>
-            <span class="n">soln_real</span><span class="p">,</span> <span class="n">polys_real</span> <span class="o">=</span> <span class="n">result</span>
+        <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
+            <span class="n">soln_real</span><span class="p">,</span> <span class="n">sf_real</span> <span class="o">=</span> <span class="n">result</span>
             <span class="k">return</span> <span class="p">(</span><span class="n">_cplx</span><span class="o">.</span><span class="n">_recombine</span><span class="p">(</span><span class="n">soln_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">),</span>
-                    <span class="n">_cplx</span><span class="o">.</span><span class="n">_recombine_polys</span><span class="p">(</span><span class="n">polys_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">))</span>
+                    <span class="n">_ComplexSolutionFunction</span><span class="p">(</span><span class="n">sf_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">_recombine</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">)</span>
 
     <span class="n">kernel_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
@@ -1733,12 +1769,12 @@ used. For vector equations only the compiled settings are supported.</p>
                                        <span class="n">soln_init_value</span><span class="o">=</span><span class="n">init_cols</span><span class="p">[:,</span> <span class="n">j</span><span class="p">]</span> <span class="k">if</span> <span class="n">init_cols</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
                                        <span class="n">time_step</span><span class="o">=</span><span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="n">coll_divs</span><span class="p">,</span>
                                        <span class="n">coll_choices</span><span class="o">=</span><span class="n">coll_choices</span><span class="p">,</span>
-                                       <span class="n">return_polys</span><span class="o">=</span><span class="n">return_polys</span><span class="p">,</span>
+                                       <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span>
                                        <span class="n">force_continuous</span><span class="o">=</span><span class="n">force_continuous</span><span class="p">,</span>
                                        <span class="n">show_warnings</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
                 <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">m_cols</span><span class="p">)</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
                     <span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ex</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_col_vie1</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="n">m_cols</span><span class="p">)))</span>
-                <span class="k">if</span> <span class="n">return_polys</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
                     <span class="n">col_solns</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]</span>
                     <span class="n">col_polys</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]</span>
                     <span class="n">soln</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">col_solns</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
@@ -1749,7 +1785,8 @@ used. For vector equations only the compiled settings are supported.</p>
                         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m_cols</span><span class="p">):</span>
                             <span class="n">arr</span><span class="p">[:,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">col_polys</span><span class="p">[</span><span class="n">j</span><span class="p">][</span><span class="n">n</span><span class="p">]</span>
                         <span class="n">mat_polys</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
-                    <span class="k">return</span> <span class="p">(</span><span class="n">soln</span><span class="p">,</span> <span class="n">mat_polys</span><span class="p">)</span>
+                    <span class="k">return</span> <span class="p">(</span><span class="n">soln</span><span class="p">,</span> <span class="n">_wrap_polys</span><span class="p">(</span><span class="n">mat_polys</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span>
+                                              <span class="n">d</span><span class="o">=</span><span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="n">m_cols</span><span class="p">))</span>
                 <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
@@ -1797,9 +1834,11 @@ used. For vector equations only the compiled settings are supported.</p>
         <span class="n">mesh_divs</span> <span class="o">=</span> <span class="p">(</span><span class="n">N_used</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="n">coll_divs</span><span class="o">**</span><span class="mi">2</span>
         <span class="n">soln_vals</span><span class="p">,</span> <span class="n">poly_coefs</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vie1_vec_d</span><span class="p">(</span>
             <span class="n">g_c</span><span class="p">,</span> <span class="n">k_c</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span>
-            <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_polys</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">return_polys</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">(</span><span class="n">soln_vals</span><span class="p">,</span> <span class="n">_build_vec_polys</span><span class="p">(</span><span class="n">poly_coefs</span><span class="p">,</span> <span class="n">mesh_divs</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">time_step</span><span class="p">))</span>
+            <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">soln_vals</span><span class="p">,</span> <span class="n">_wrap_polys</span><span class="p">(</span>
+                <span class="n">_build_vec_polys</span><span class="p">(</span><span class="n">poly_coefs</span><span class="p">,</span> <span class="n">mesh_divs</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">time_step</span><span class="p">),</span>
+                <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">d</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">soln_vals</span>
 
     <span class="c1"># ------------------------------------------------------------------ scalar path</span>
@@ -1846,13 +1885,13 @@ used. For vector equations only the compiled settings are supported.</p>
     <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_fast_settings_VIE_1</span><span class="p">:</span>
         <span class="n">soln_vals</span><span class="p">,</span> <span class="n">poly_coefs</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vie1_d</span><span class="p">(</span>
             <span class="n">g_values_</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span>
-            <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_polys</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
+            <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
     <span class="k">elif</span> <span class="n">_numba_available</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">show_warnings</span><span class="p">:</span>
             <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;warning: falling back to slower python/numba code&quot;</span><span class="p">)</span>
         <span class="n">soln_vals</span><span class="p">,</span> <span class="n">poly_coefs</span> <span class="o">=</span> <span class="n">_numba_solvers</span><span class="o">.</span><span class="n">solve_VIE_1_jit</span><span class="p">(</span>
             <span class="n">g_values_</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span>
-            <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_polys</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
+            <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">&quot;Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) is not &quot;</span>
@@ -1860,14 +1899,14 @@ used. For vector equations only the compiled settings are supported.</p>
             <span class="sa">f</span><span class="s2">&quot;use a supported setting (see fast_coll_settings_VIE_1).&quot;</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">return_polys</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
         <span class="n">polys</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">coefs</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">poly_coefs</span><span class="p">):</span>
             <span class="n">domain</span> <span class="o">=</span> <span class="p">(</span><span class="n">i</span> <span class="o">*</span> <span class="n">coll_divs</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">time_step</span><span class="p">,</span> <span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">coll_divs</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">time_step</span><span class="p">)</span>
             <span class="n">poly</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polynomial</span><span class="o">.</span><span class="n">Polynomial</span><span class="p">(</span><span class="n">coefs</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">window</span><span class="o">=</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span> <span class="n">symbol</span><span class="o">=</span><span class="s1">&#39;t&#39;</span><span class="p">)</span>
             <span class="n">poly</span> <span class="o">=</span> <span class="n">poly</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">window</span><span class="o">=</span><span class="n">domain</span><span class="p">)</span>
             <span class="n">polys</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">poly</span><span class="o">.</span><span class="n">trim</span><span class="p">())</span>
-        <span class="k">return</span> <span class="p">(</span><span class="n">soln_vals</span><span class="p">,</span> <span class="n">polys</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">soln_vals</span><span class="p">,</span> <span class="n">_wrap_polys</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">soln_vals</span>
 </code></pre></div></td></tr></table></div>
