@@ -172,10 +172,44 @@ def test_vie2_return_polys(vie2_data):
         time_step=d["time_step"],
         coll_divs=d["coll_divs"],
         coll_choices=d["coll_choices"],
-        return_polys=True,
+        return_function=True,
     )
     assert isinstance(result, tuple) and len(result) == 2
     soln, polys = result
     assert isinstance(soln, np.ndarray)
     assert len(polys) > 0
     assert hasattr(polys[0], "__call__")
+
+
+def test_vie2_return_function_callable_and_list_semantics(vie2_data):
+    """The second return value is callable AND indexes/iterates like the old
+    list of per-interval polynomials."""
+    d = vie2_data
+    soln, sol = solve_VIE_2(
+        kernel_values=d["kernel"], g_values=d["g"], time_step=d["time_step"],
+        coll_divs=d["coll_divs"], coll_choices=d["coll_choices"],
+        return_function=True)
+    # Callable: evaluating at an interior point matches the owning interval poly.
+    h = d["coll_divs"] ** 2 * d["time_step"]
+    t_mid = 0.5 * h
+    assert sol(t_mid) == pytest.approx(sol[0](t_mid))
+    # List semantics: len / index / iterate delegate to .polynomials.
+    assert len(sol) == len(sol.polynomials)
+    assert list(sol) == sol.polynomials
+    # Callable agrees with the array solution at the final node.
+    assert sol(d["time_step"] * (len(soln) - 1)) == pytest.approx(soln[-1], abs=TOLERANCE)
+
+
+def test_vie2_return_polys_deprecated_alias(vie2_data):
+    """`return_polys` still works but emits a DeprecationWarning and yields the
+    same callable solution object as `return_function`."""
+    d = vie2_data
+    kw = dict(kernel_values=d["kernel"], g_values=d["g"], time_step=d["time_step"],
+              coll_divs=d["coll_divs"], coll_choices=d["coll_choices"])
+    with pytest.warns(DeprecationWarning):
+        soln_old, sol_old = solve_VIE_2(return_polys=True, **kw)
+    soln_new, sol_new = solve_VIE_2(return_function=True, **kw)
+    assert np.array_equal(soln_old, soln_new)
+    assert type(sol_old) is type(sol_new)
+    assert sol_old(0.5 * d["coll_divs"] ** 2 * d["time_step"]) == pytest.approx(
+        sol_new(0.5 * d["coll_divs"] ** 2 * d["time_step"]))

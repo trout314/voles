@@ -58,7 +58,7 @@ class TestVIE2Complex:
         soln, polys = solve_VIE_2(
             kernel_values=self.kernel, g_values=self.g,
             time_step=self.time_step, coll_divs=self.coll_divs,
-            coll_choices=self.coll_choices, return_polys=True)
+            coll_choices=self.coll_choices, return_function=True)
         assert np.iscomplexobj(soln)
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
         # Polynomials should evaluate to complex values
@@ -174,7 +174,7 @@ class TestVIE1Complex:
         soln, polys = solve_VIE_1(
             kernel_values=self.kernel, g_values=self.g,
             time_step=self.time_step, coll_divs=self.coll_divs,
-            coll_choices=self.coll_choices, return_polys=True)
+            coll_choices=self.coll_choices, return_function=True)
         assert np.iscomplexobj(soln)
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
         h = self.coll_divs**2 * self.time_step
@@ -272,7 +272,7 @@ class TestVIDEComplex:
             kernel_values=self.kernel, a_values=self.a,
             g_values=self.g, soln_init_value=self.soln_init,
             time_step=self.time_step, coll_divs=self.coll_divs,
-            coll_choices=self.coll_choices, return_polys=True)
+            coll_choices=self.coll_choices, return_function=True)
         assert np.iscomplexobj(soln)
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
         h = self.coll_divs**2 * self.time_step

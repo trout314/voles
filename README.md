@@ -101,7 +101,7 @@ soln = solve_VIE_2(
 print(f"Max error: {max(abs(soln - np.sin(times[:len(soln)]))):.2e}")
 ```
 
-All solvers accept `return_polys=True` to also return the piecewise polynomial solution as a list of `numpy.polynomial.Polynomial` objects.
+All solvers accept `return_function=True` to also return a callable solution object (`return_polys=True` is a deprecated alias). The object evaluates the piecewise polynomial solution at any time and also indexes/iterates like a list of `numpy.polynomial.Polynomial` objects.
 
 The solvers require input arrays to satisfy an internal size constraint. Any length can be passed; if the length doesn't meet the constraint, the arrays are automatically truncated to the nearest valid length and a warning is printed. See the API reference for each solver for details.
 
@@ -162,7 +162,7 @@ The figure below illustrates the idea. The time axis is split into mesh interval
 
 ## Polynomial Solutions
 
-Passing `return_polys=True` to any solver returns a `(soln_values, polys)` tuple, where `polys` is a list of `numpy.polynomial.Polynomial` objects covering successive mesh intervals. These can be evaluated at any point, differentiated, integrated, and so on. The following example uses `solve_VIDE` to solve for $y(t) = \sin(t)$, then evaluates the solution and its derivative at a point not on the time grid:
+Passing `return_function=True` to any solver returns a `(soln_values, solution)` tuple (`return_polys=True` is a deprecated alias). `solution(t)` evaluates the piecewise polynomial at any time, and `solution` also indexes/iterates like a list of `numpy.polynomial.Polynomial` objects covering successive mesh intervals — these can be evaluated at any point, differentiated, integrated, and so on. The following example uses `solve_VIDE` to solve for $y(t) = \sin(t)$, then evaluates the solution and its derivative at a point not on the time grid:
 
 ```python
 import numpy as np
@@ -175,19 +175,20 @@ kernel = np.exp(-times)
 a = np.full(len(times), -1.0)
 g = 1.5*np.cos(times) + 0.5*np.sin(times) - 0.5*np.exp(-times)
 
-soln_vals, polys = solve_VIDE(
+soln_vals, solution = solve_VIDE(
     kernel_values=kernel,
     a_values=a,
     g_values=g,
     soln_init_value=0.0,
     time_step=time_step,
-    return_polys=True,
+    return_function=True,
 )
 
-# polys[i] is a numpy.polynomial.Polynomial covering mesh interval i.
-# Evaluate at a point not on the time grid:
-p = polys[0]                            # covers t ∈ [0, 0.4]
-print(f"y(0.2)  ≈ {p(0.2):.6f},  exact = {np.sin(0.2):.6f}")
+# solution(t) evaluates the piecewise polynomial directly:
+print(f"y(0.2)  ≈ {solution(0.2):.6f},  exact = {np.sin(0.2):.6f}")
+
+# solution also indexes like the per-interval polynomials:
+p = solution[0]                         # numpy.polynomial.Polynomial on t ∈ [0, 0.4]
 
 # Differentiate to recover y'(t):
 print(f"y'(0.2) ≈ {p.deriv()(0.2):.6f},  exact = {np.cos(0.2):.6f}")

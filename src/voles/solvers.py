@@ -1,7 +1,39 @@
+import warnings
+
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from . import _dlang as _dlang_module
 from . import _complex as _cplx
+from ._solution import _SolutionFunction, _ComplexSolutionFunction
+
+
+def _resolve_return_flag(return_function, return_polys):
+    """Reconcile the public ``return_function`` flag with the deprecated
+    ``return_polys`` alias, returning a single effective boolean.
+
+    ``return_polys`` defaults to ``None`` (not passed); any non-None value means
+    the caller used the old keyword and gets a DeprecationWarning.
+    """
+    if return_polys is not None:
+        warnings.warn(
+            "`return_polys` is deprecated; use `return_function`. The second "
+            "return value is now a callable solution object that also indexes "
+            "and iterates like the old list of polynomials.",
+            DeprecationWarning, stacklevel=3)
+        return bool(return_function) or bool(return_polys)
+    return bool(return_function)
+
+
+def _wrap_polys(polys, time_step, coll_divs, d=0, m=0):
+    """Wrap a per-interval list of polynomials in a callable `_SolutionFunction`.
+
+    The array-based solvers use a uniform mesh of width ``coll_divs**2 *
+    time_step``; the breakpoints are reconstructed from the interval count.
+    """
+    polys = list(polys)
+    h = coll_divs ** 2 * time_step
+    mesh_breakpoints = np.arange(len(polys) + 1) * h
+    return _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
 
 
 def _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step):
@@ -75,7 +107,8 @@ def _truncate_N(kernel_values_, coll_divs, show_warnings):
 
 
 def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, time_step=1.0,
-               coll_divs=2, coll_choices=[0,1,2], return_polys=False, show_warnings=True):
+               coll_divs=2, coll_choices=[0,1,2], return_function=False, return_polys=None,
+               show_warnings=True):
     r'''
     Solve a Volterra integro-differential equation.
 
@@ -110,9 +143,12 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         Each entry $k$ corresponds to the node $k / c$ where $c$ =
         ``coll_divs``, placed in $[0, 1]$. Entries must be distinct integers
         in $\{0, 1, \ldots, \text{coll\_divs}\}$. Default is ``[0, 1, 2]``.
+    return_function : bool, optional
+        If ``True``, also return a callable solution object as the second
+        element of a tuple (see Returns). Default is ``False``.
     return_polys : bool, optional
-        If ``True``, also return the piecewise polynomial solution.
-        Default is ``False``.
+        Deprecated alias for ``return_function``; passing it emits a
+        ``DeprecationWarning``.
     show_warnings : bool, optional
         If ``True`` (default), print a warning when ``kernel_values`` is
         truncated or when the Numba fallback is used.
@@ -121,15 +157,17 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     -------
     soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)
         Solution values $y(t)$ at the same times as the input arrays.
-        Returned when ``return_polys=False`` (default).
-    (soln_values, polys) : tuple
-        Returned when ``return_polys=True``. ``soln_values`` is as above.
-        For scalar equations, ``polys`` is a list of
-        `numpy.polynomial.Polynomial` objects, one per mesh interval, each
-        mapping $t$ to the polynomial approximation of $y(t)$ on that
-        interval. For vector equations, each element of ``polys`` is an object
-        array of shape ``(d,)`` (or ``(d, m)`` for matrix equations) containing
-        one polynomial per component.
+        Returned when ``return_function=False`` (default).
+    (soln_values, solution) : tuple
+        Returned when ``return_function=True``. ``soln_values`` is as above.
+        ``solution`` is callable -- ``solution(t)`` evaluates the piecewise
+        polynomial solution at scalar or array ``t`` -- and also behaves like
+        the previous list of per-interval polynomials: ``len(solution)``,
+        ``solution[n]``, and iteration operate on ``solution.polynomials``.
+        For scalar equations each polynomial is a
+        `numpy.polynomial.Polynomial`; for vector equations each interval entry
+        is an object array of shape ``(d,)`` (or ``(d, m)`` for matrix
+        equations), one polynomial per component.
 
     Notes
     -----
@@ -150,6 +188,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
        Functional Differential Equations.* Cambridge University Press, 2004.
        Chapter 3, pp. 160–167.
     '''
+    return_function = _resolve_return_flag(return_function, return_polys)
     # ------------------------------------------------------------------ complex dispatch
     if _cplx.is_complex(kernel_values, a_values, g_values, soln_init_value):
         K_arr = np.asarray(kernel_values)
@@ -162,12 +201,12 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         result = solve_VIDE(
             kernel_values=K_real, a_values=a_real, g_values=g_real,
             soln_init_value=init_real, time_step=time_step, coll_divs=coll_divs,
-            coll_choices=coll_choices, return_polys=return_polys,
+            coll_choices=coll_choices, return_function=return_function,
             show_warnings=show_warnings)
-        if return_polys:
-            soln_real, polys_real = result
+        if return_function:
+            soln_real, sf_real = result
             return (_cplx._recombine(soln_real, d_orig),
-                    _cplx._recombine_polys(polys_real, d_orig))
+                    _ComplexSolutionFunction(sf_real, d_orig))
         return _cplx._recombine(result, d_orig)
 
     kernel_values_ = np.asarray(kernel_values, dtype=float)
@@ -213,11 +252,11 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
                                   soln_init_value=soln_init_values_[:, j],
                                   time_step=time_step, coll_divs=coll_divs,
                                   coll_choices=coll_choices,
-                                  return_polys=return_polys,
+                                  return_function=return_function,
                                   show_warnings=show_warnings)
             with ThreadPoolExecutor(max_workers=m_cols) as ex:
                 results = list(ex.map(_col_vide, range(m_cols)))
-            if return_polys:
+            if return_function:
                 col_solns = [r[0] for r in results]
                 col_polys = [r[1] for r in results]
                 soln = np.stack(col_solns, axis=2)
@@ -228,7 +267,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
                     for j in range(m_cols):
                         arr[:, j] = col_polys[j][n]
                     mat_polys.append(arr)
-                return (soln, mat_polys)
+                return (soln, _wrap_polys(mat_polys, time_step, coll_divs,
+                                          d=d, m=m_cols))
             return np.stack(results, axis=2)
 
         if g_values is not None:
@@ -273,9 +313,11 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         N_used = len(k_c)
         mesh_divs = (N_used - 1) // coll_divs**2
         soln_vals, poly_coefs = _dlang_module.solve_vide_vec_d(
-            g_c, k_c, a_c, soln_init_values_, time_step, coll_divs, coll_choices, return_polys)
-        if return_polys:
-            return (soln_vals, _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step))
+            g_c, k_c, a_c, soln_init_values_, time_step, coll_divs, coll_choices, return_function)
+        if return_function:
+            return (soln_vals, _wrap_polys(
+                _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step),
+                time_step, coll_divs, d=d))
         return soln_vals
 
     # ------------------------------------------------------------------ scalar path
@@ -308,34 +350,35 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     if (coll_divs, coll_choices) in _fast_settings_VIDE:
         soln_vals, poly_coefs = _dlang_module.solve_vide_d(
             g_values_, kernel_values_, a_values_, soln_init_value,
-            time_step, coll_divs, coll_choices, return_polys)
+            time_step, coll_divs, coll_choices, return_function)
     elif _numba_available:
         if show_warnings:
             print("warning: falling back to slower python/numba code")
         soln_vals, poly_coefs = _numba_solvers.solve_VIDE_jit(
             g_values_, kernel_values_, a_values_, soln_init_value,
-            time_step, coll_divs, coll_choices, return_polys)
+            time_step, coll_divs, coll_choices, return_function)
     else:
         raise NotImplementedError(
             f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) is not "
             f"supported by the D extension. Install numba to enable the fallback solver, or "
             f"use a supported setting (see fast_coll_settings_VIDE)."
         )
-    if return_polys:
+    if return_function:
         polys = []
         for i, coefs in enumerate(poly_coefs):
             domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
             poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
             poly = poly.convert(domain=domain, window=domain)
             polys.append(poly)
-        return (soln_vals, polys)
+        return (soln_vals, _wrap_polys(polys, time_step, coll_divs, d=0))
     else:
         return soln_vals
 
 
 
 def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step=1.0, coll_divs=3,
-                coll_choices=[1,2,3], return_polys=False, force_continuous=False, show_warnings=True):
+                coll_choices=[1,2,3], return_function=False, return_polys=None,
+                force_continuous=False, show_warnings=True):
     r'''
     Solve a Volterra integral equation of the first kind.
 
@@ -369,9 +412,12 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         ``coll_divs``, placed in $(0, 1]$; zero is excluded. Entries must be
         distinct integers in $\{1, \ldots, \text{coll\_divs}\}$.
         Default is ``[1, 2, 3]``.
+    return_function : bool, optional
+        If ``True``, also return a callable solution object as the second
+        element of a tuple (see Returns). Default is ``False``.
     return_polys : bool, optional
-        If ``True``, also return the piecewise polynomial solution.
-        Default is ``False``.
+        Deprecated alias for ``return_function``; passing it emits a
+        ``DeprecationWarning``.
     force_continuous : bool, optional
         If ``True``, enforce continuity of the piecewise polynomial solution
         across mesh-interval boundaries, using ``soln_init_value`` as the
@@ -387,15 +433,17 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     -------
     soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)
         Solution values $y(t)$ at the same times as the input arrays.
-        Returned when ``return_polys=False`` (default).
-    (soln_values, polys) : tuple
-        Returned when ``return_polys=True``. ``soln_values`` is as above.
-        For scalar equations, ``polys`` is a list of
-        `numpy.polynomial.Polynomial` objects, one per mesh interval, each
-        mapping $t$ to the polynomial approximation of $y(t)$ on that
-        interval. For vector equations, each element of ``polys`` is an object
-        array of shape ``(d,)`` (or ``(d, m)`` for matrix equations) containing
-        one polynomial per component.
+        Returned when ``return_function=False`` (default).
+    (soln_values, solution) : tuple
+        Returned when ``return_function=True``. ``soln_values`` is as above.
+        ``solution`` is callable -- ``solution(t)`` evaluates the piecewise
+        polynomial solution at scalar or array ``t`` -- and also behaves like
+        the previous list of per-interval polynomials: ``len(solution)``,
+        ``solution[n]``, and iteration operate on ``solution.polynomials``.
+        For scalar equations each polynomial is a
+        `numpy.polynomial.Polynomial`; for vector equations each interval entry
+        is an object array of shape ``(d,)`` (or ``(d, m)`` for matrix
+        equations), one polynomial per component.
 
     Notes
     -----
@@ -421,6 +469,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
        Functional Differential Equations.* Cambridge University Press, 2004.
        Sections 2.4.1, 2.4.3, and 2.4.5.
     '''
+    return_function = _resolve_return_flag(return_function, return_polys)
     # ------------------------------------------------------------------ complex dispatch
     if _cplx.is_complex(kernel_values, g_values, soln_init_value):
         K_arr = np.asarray(kernel_values)
@@ -432,12 +481,12 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         result = solve_VIE_1(
             kernel_values=K_real, g_values=g_real, soln_init_value=init_real,
             time_step=time_step, coll_divs=coll_divs, coll_choices=coll_choices,
-            return_polys=return_polys, force_continuous=force_continuous,
+            return_function=return_function, force_continuous=force_continuous,
             show_warnings=show_warnings)
-        if return_polys:
-            soln_real, polys_real = result
+        if return_function:
+            soln_real, sf_real = result
             return (_cplx._recombine(soln_real, d_orig),
-                    _cplx._recombine_polys(polys_real, d_orig))
+                    _ComplexSolutionFunction(sf_real, d_orig))
         return _cplx._recombine(result, d_orig)
 
     kernel_values_ = np.asarray(kernel_values, dtype=float)
@@ -480,12 +529,12 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                                        soln_init_value=init_cols[:, j] if init_cols is not None else None,
                                        time_step=time_step, coll_divs=coll_divs,
                                        coll_choices=coll_choices,
-                                       return_polys=return_polys,
+                                       return_function=return_function,
                                        force_continuous=force_continuous,
                                        show_warnings=False)
                 with ThreadPoolExecutor(max_workers=m_cols) as ex:
                     results = list(ex.map(_col_vie1, range(m_cols)))
-                if return_polys:
+                if return_function:
                     col_solns = [r[0] for r in results]
                     col_polys = [r[1] for r in results]
                     soln = np.stack(col_solns, axis=2)
@@ -496,7 +545,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                         for j in range(m_cols):
                             arr[:, j] = col_polys[j][n]
                         mat_polys.append(arr)
-                    return (soln, mat_polys)
+                    return (soln, _wrap_polys(mat_polys, time_step, coll_divs,
+                                              d=d, m=m_cols))
                 return np.stack(results, axis=2)
             else:
                 if g_values_.shape != (N_orig, d):
@@ -544,9 +594,11 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         mesh_divs = (N_used - 1) // coll_divs**2
         soln_vals, poly_coefs = _dlang_module.solve_vie1_vec_d(
             g_c, k_c, soln_init_value_, time_step,
-            coll_divs, coll_choices, return_polys, force_continuous)
-        if return_polys:
-            return (soln_vals, _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step))
+            coll_divs, coll_choices, return_function, force_continuous)
+        if return_function:
+            return (soln_vals, _wrap_polys(
+                _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step),
+                time_step, coll_divs, d=d))
         return soln_vals
 
     # ------------------------------------------------------------------ scalar path
@@ -593,13 +645,13 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     if (coll_divs, coll_choices) in _fast_settings_VIE_1:
         soln_vals, poly_coefs = _dlang_module.solve_vie1_d(
             g_values_, kernel_values_, soln_init_value_, time_step,
-            coll_divs, coll_choices, return_polys, force_continuous)
+            coll_divs, coll_choices, return_function, force_continuous)
     elif _numba_available:
         if show_warnings:
             print("warning: falling back to slower python/numba code")
         soln_vals, poly_coefs = _numba_solvers.solve_VIE_1_jit(
             g_values_, kernel_values_, soln_init_value_, time_step,
-            coll_divs, coll_choices, return_polys, force_continuous)
+            coll_divs, coll_choices, return_function, force_continuous)
     else:
         raise NotImplementedError(
             f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) is not "
@@ -607,19 +659,20 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             f"use a supported setting (see fast_coll_settings_VIE_1)."
         )
 
-    if return_polys:
+    if return_function:
         polys = []
         for i, coefs in enumerate(poly_coefs):
             domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
             poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
             poly = poly.convert(domain=domain, window=domain)
             polys.append(poly.trim())
-        return (soln_vals, polys)
+        return (soln_vals, _wrap_polys(polys, time_step, coll_divs, d=0))
     else:
         return soln_vals
 
 def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
-                coll_choices=[0,1,2], return_polys=False, show_warnings=True):
+                coll_choices=[0,1,2], return_function=False, return_polys=None,
+                show_warnings=True):
     r'''
     Solve a Volterra integral equation of the second kind.
 
@@ -648,9 +701,12 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         Each entry $k$ corresponds to the node $k / c$ where $c$ =
         ``coll_divs``, placed in $[0, 1]$. Entries must be distinct integers
         in $\{0, 1, \ldots, \text{coll\_divs}\}$. Default is ``[0, 1, 2]``.
+    return_function : bool, optional
+        If ``True``, also return a callable solution object as the second
+        element of a tuple (see Returns). Default is ``False``.
     return_polys : bool, optional
-        If ``True``, also return the piecewise polynomial solution.
-        Default is ``False``.
+        Deprecated alias for ``return_function``; passing it emits a
+        ``DeprecationWarning``.
     show_warnings : bool, optional
         If ``True`` (default), print a warning when ``kernel_values`` is
         truncated or when the Numba fallback is used.
@@ -659,15 +715,17 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     -------
     soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)
         Solution values $y(t)$ at the same times as the input arrays.
-        Returned when ``return_polys=False`` (default).
-    (soln_values, polys) : tuple
-        Returned when ``return_polys=True``. ``soln_values`` is as above.
-        For scalar equations, ``polys`` is a list of
-        `numpy.polynomial.Polynomial` objects, one per mesh interval, each
-        mapping $t$ to the polynomial approximation of $y(t)$ on that
-        interval. For vector equations, each element of ``polys`` is an object
-        array of shape ``(d,)`` (or ``(d, m)`` for matrix equations) containing
-        one polynomial per component.
+        Returned when ``return_function=False`` (default).
+    (soln_values, solution) : tuple
+        Returned when ``return_function=True``. ``soln_values`` is as above.
+        ``solution`` is callable -- ``solution(t)`` evaluates the piecewise
+        polynomial solution at scalar or array ``t`` -- and also behaves like
+        the previous list of per-interval polynomials: ``len(solution)``,
+        ``solution[n]``, and iteration operate on ``solution.polynomials``.
+        For scalar equations each polynomial is a
+        `numpy.polynomial.Polynomial`; for vector equations each interval entry
+        is an object array of shape ``(d,)`` (or ``(d, m)`` for matrix
+        equations), one polynomial per component.
 
     Notes
     -----
@@ -688,6 +746,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
        Functional Differential Equations.* Cambridge University Press, 2004.
        Section 2.2.
     '''
+    return_function = _resolve_return_flag(return_function, return_polys)
     # ------------------------------------------------------------------ complex dispatch
     if _cplx.is_complex(kernel_values, g_values):
         K_arr = np.asarray(kernel_values)
@@ -698,11 +757,11 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         result = solve_VIE_2(
             kernel_values=K_real, g_values=g_real,
             time_step=time_step, coll_divs=coll_divs, coll_choices=coll_choices,
-            return_polys=return_polys, show_warnings=show_warnings)
-        if return_polys:
-            soln_real, polys_real = result
+            return_function=return_function, show_warnings=show_warnings)
+        if return_function:
+            soln_real, sf_real = result
             return (_cplx._recombine(soln_real, d_orig),
-                    _cplx._recombine_polys(polys_real, d_orig))
+                    _ComplexSolutionFunction(sf_real, d_orig))
         return _cplx._recombine(result, d_orig)
 
     kernel_values_ = np.asarray(kernel_values, dtype=float)
@@ -735,11 +794,11 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                                        g_values=g_cols[:, :, j],
                                        time_step=time_step, coll_divs=coll_divs,
                                        coll_choices=coll_choices,
-                                       return_polys=return_polys,
+                                       return_function=return_function,
                                        show_warnings=show_warnings)
                 with ThreadPoolExecutor(max_workers=m_cols) as ex:
                     results = list(ex.map(_col_vie2, range(m_cols)))
-                if return_polys:
+                if return_function:
                     col_solns = [r[0] for r in results]
                     col_polys = [r[1] for r in results]
                     soln = np.stack(col_solns, axis=2)
@@ -750,7 +809,8 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                         for j in range(m_cols):
                             arr[:, j] = col_polys[j][n]
                         mat_polys.append(arr)
-                    return (soln, mat_polys)
+                    return (soln, _wrap_polys(mat_polys, time_step, coll_divs,
+                                              d=d, m=m_cols))
                 return np.stack(results, axis=2)
             else:
                 if g_values_.shape != (N_orig, d):
@@ -778,9 +838,11 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         N_used = len(k_c)
         mesh_divs = (N_used - 1) // coll_divs**2
         soln_vals, poly_coefs = _dlang_module.solve_vie2_vec_d(
-            g_c, k_c, time_step, coll_divs, coll_choices, return_polys)
-        if return_polys:
-            return (soln_vals, _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step))
+            g_c, k_c, time_step, coll_divs, coll_choices, return_function)
+        if return_function:
+            return (soln_vals, _wrap_polys(
+                _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step),
+                time_step, coll_divs, d=d))
         return soln_vals
 
     # ------------------------------------------------------------------ scalar path
@@ -804,12 +866,12 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     coll_choices = sorted(coll_choices)
     if (coll_divs, coll_choices) in _fast_settings_VIE_2:
         soln_vals, poly_coefs = _dlang_module.solve_vie2_d(
-            g_values_, kernel_values_, time_step, coll_divs, coll_choices, return_polys)
+            g_values_, kernel_values_, time_step, coll_divs, coll_choices, return_function)
     elif _numba_available:
         if show_warnings:
             print("warning: falling back to slower python/numba code")
         soln_vals, poly_coefs = _numba_solvers.solve_VIE_2_jit(
-            g_values_, kernel_values_, time_step, coll_divs, coll_choices, return_polys)
+            g_values_, kernel_values_, time_step, coll_divs, coll_choices, return_function)
     else:
         raise NotImplementedError(
             f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) is not "
@@ -817,13 +879,13 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
             f"use a supported setting (see fast_coll_settings_VIE_2)."
         )
 
-    if return_polys:
+    if return_function:
         polys = []
         for i, coefs in enumerate(poly_coefs):
             domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
             poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
             poly = poly.convert(domain=domain, window=domain)
             polys.append(poly.trim())
-        return (soln_vals, polys)
+        return (soln_vals, _wrap_polys(polys, time_step, coll_divs, d=0))
     else:
         return soln_vals

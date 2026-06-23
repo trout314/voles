@@ -102,19 +102,23 @@ soln = solve_VIDE(
 # exact solution: sin(t)
 ```
 
-## Returning polynomials
+## Returning a callable solution
 
-Pass `return_polys=True` to also get the piecewise polynomial solution as a list of `numpy.polynomial.Polynomial` objects:
+Pass `return_function=True` to also get a callable solution object. Call it at any time to evaluate the piecewise polynomial; it also indexes and iterates like a list of per-interval `numpy.polynomial.Polynomial` objects (matching the callable-input solvers' `return_function`):
 
 ```python
-soln_values, polys = solve_VIE_2(..., return_polys=True)
+soln_values, solution = solve_VIE_2(..., return_function=True)
+
+solution(0.42)            # evaluate the piecewise polynomial at any time
 
 import matplotlib.pyplot as plt
-for poly in polys:
+for poly in solution:     # iterate over per-interval polynomials
     t = np.linspace(poly.domain[0], poly.domain[1], 20)
     plt.plot(t, poly(t))
 plt.show()
 ```
+
+`return_polys=True` remains as a deprecated alias.
 
 ## Callable-input solvers
 

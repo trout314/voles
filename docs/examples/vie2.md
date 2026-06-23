@@ -25,7 +25,7 @@ soln_vals, soln_polys = solve_VIE_2(
     coll_divs=coll_divs,
     coll_choices=[0, 1, 2, 3],
     time_step=time_step,
-    return_polys=True,
+    return_function=True,
 )
 
 exact = np.sin(times)

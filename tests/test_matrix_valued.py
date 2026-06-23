@@ -94,7 +94,7 @@ class TestVIE2Matrix:
     def test_return_polys(self):
         result = solve_VIE_2(kernel_values=self.kernel, g_values=self.g_matrix,
                              time_step=self.time_step, coll_divs=self.coll_divs,
-                             coll_choices=self.coll_choices, return_polys=True)
+                             coll_choices=self.coll_choices, return_function=True)
         assert isinstance(result, tuple) and len(result) == 2
         soln, polys = result
         assert soln.shape == self.exact.shape
@@ -169,7 +169,7 @@ class TestVIE1Matrix:
     def test_return_polys(self):
         result = solve_VIE_1(kernel_values=self.kernel, g_values=self.g_matrix,
                              time_step=self.time_step, coll_divs=self.coll_divs,
-                             coll_choices=self.coll_choices, return_polys=True)
+                             coll_choices=self.coll_choices, return_function=True)
         assert isinstance(result, tuple) and len(result) == 2
         soln, polys = result
         assert soln.shape == self.exact.shape
@@ -254,7 +254,7 @@ class TestVIDEMatrix:
         result = solve_VIDE(kernel_values=self.kernel, a_values=self.a_values,
                             g_values=self.g_matrix, soln_init_value=self.soln_init,
                             time_step=self.time_step, coll_divs=self.coll_divs,
-                            coll_choices=self.coll_choices, return_polys=True)
+                            coll_choices=self.coll_choices, return_function=True)
         assert isinstance(result, tuple) and len(result) == 2
         soln, polys = result
         assert soln.shape == self.exact.shape
@@ -308,7 +308,7 @@ class TestVectorReturnPolys:
         soln, polys = solve_VIE_2(
             kernel_values=self.kernel, g_values=self.g_vec,
             time_step=self.time_step, coll_divs=self.coll_divs,
-            coll_choices=self.coll_choices, return_polys=True)
+            coll_choices=self.coll_choices, return_function=True)
         assert soln.shape == (len(self.times), 2)
         assert len(polys) == self.mesh_divs
         assert polys[0].shape == (2,)
@@ -319,7 +319,7 @@ class TestVectorReturnPolys:
         soln, polys = solve_VIE_2(
             kernel_values=self.kernel, g_values=self.g_vec,
             time_step=self.time_step, coll_divs=self.coll_divs,
-            coll_choices=self.coll_choices, return_polys=True)
+            coll_choices=self.coll_choices, return_function=True)
         h = self.coll_divs**2 * self.time_step
         for n, poly_arr in enumerate(polys):
             t_mid = (n + 0.5) * h
@@ -339,7 +339,7 @@ class TestVectorReturnPolys:
         soln, polys = solve_VIE_1(
             kernel_values=kernel, g_values=g_vec,
             time_step=self.time_step, coll_divs=self.coll_divs,
-            coll_choices=[1, 2, 3], return_polys=True)
+            coll_choices=[1, 2, 3], return_function=True)
         assert soln.shape == (len(self.times), 2)
         assert len(polys) == self.mesh_divs
         assert polys[0].shape == (2,)
@@ -359,7 +359,7 @@ class TestVectorReturnPolys:
             kernel_values=self.kernel, a_values=a_values,
             g_values=g_vec, soln_init_value=soln_init,
             time_step=self.time_step, coll_divs=self.coll_divs,
-            coll_choices=[1, 2, 3], return_polys=True)
+            coll_choices=[1, 2, 3], return_function=True)
         assert soln.shape == (len(self.times), 2)
         assert len(polys) == self.mesh_divs
         assert polys[0].shape == (2,)

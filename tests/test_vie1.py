@@ -185,7 +185,7 @@ def test_vie1_return_polys(vie1_data):
         time_step=d["time_step"],
         coll_divs=d["coll_divs"],
         coll_choices=d["coll_choices"],
-        return_polys=True,
+        return_function=True,
     )
     assert isinstance(result, tuple) and len(result) == 2
     soln, polys = result
@@ -231,7 +231,7 @@ def test_vie1_polys_continuous_at_mesh_boundaries(vie1_data):
         coll_choices=d["coll_choices"],
         soln_init_value=float(d["exact"][0]),
         force_continuous=True,
-        return_polys=True,
+        return_function=True,
     )
     h = d["coll_divs"] ** 2 * d["time_step"]
     for n in range(len(polys) - 1):
@@ -258,7 +258,7 @@ def test_vie1_vec_polys_continuous_at_mesh_boundaries():
         time_step=time_step, coll_divs=coll_divs,
         coll_choices=[1, 2, 3],
         soln_init_value=np.array([0.0, 0.0]), force_continuous=True,
-        return_polys=True)
+        return_function=True)
 
     h = coll_divs**2 * time_step
     for n in range(len(polys) - 1):
@@ -289,7 +289,7 @@ def test_vie1_matrix_polys_continuous_at_mesh_boundaries():
         time_step=time_step, coll_divs=coll_divs,
         coll_choices=[1, 2, 3],
         soln_init_value=np.zeros((2, 2)), force_continuous=True,
-        return_polys=True)
+        return_function=True)
 
     h = coll_divs**2 * time_step
     for n in range(len(polys) - 1):

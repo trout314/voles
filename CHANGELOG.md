@@ -2,7 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- The array-based solvers (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`) accept
+  `return_function=True`, returning a callable solution object as the second
+  element of the tuple (matching the callable-input solvers). The object
+  evaluates the piecewise polynomial at any time and also indexes/iterates like
+  the previous list of per-interval polynomials, so existing code keeps working.
+
 ### Changed
+- **`return_polys` is deprecated in favour of `return_function`** on the
+  array-based solvers; it remains as an alias and now emits a
+  `DeprecationWarning`. Its return value is the new callable solution object
+  rather than a plain list (backward compatible via list-like access).
 - **`optimal_graded_mesh` now takes `order` (int) instead of `coll_choices`**
   (breaking). Only the method order was ever used; pass
   `order=len(coll_choices)` to match the solver's collocation setting.

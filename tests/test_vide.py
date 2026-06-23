@@ -145,7 +145,7 @@ def test_vide_return_polys(vide_data):
         time_step=d["time_step"],
         coll_divs=d["coll_divs"],
         coll_choices=d["coll_choices"],
-        return_polys=True,
+        return_function=True,
     )
     assert isinstance(result, tuple) and len(result) == 2
     soln, polys = result
