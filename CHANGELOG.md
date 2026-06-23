@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+- **`optimal_graded_mesh` now takes `order` (int) instead of `coll_choices`**
+  (breaking). Only the method order was ever used; pass
+  `order=len(coll_choices)` to match the solver's collocation setting.
+- `optimal_graded_mesh` returns a uniform mesh ($r = 1$) at `alpha == 0`,
+  where the kernel is non-singular and grading would only waste resolution
+  near the origin (previously used $r = $ order).
+
 ## [0.5.0] - 2026-06-22
 
 ### Changed

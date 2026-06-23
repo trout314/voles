@@ -146,7 +146,7 @@ kernel = lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0
 g      = lambda t: np.sqrt(t) - 0.5 * np.pi * t   # exact y(t) = sqrt(t)
 
 coll_choices = [0, 1, 2]
-mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30, coll_choices=coll_choices)
+mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30, order=len(coll_choices))
 soln = function_solve_VIE_2(
     kernel=kernel, g=g, mesh_breakpoints=mesh,
     coll_divs=2, coll_choices=coll_choices,

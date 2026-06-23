@@ -1227,7 +1227,7 @@ def test_vie1_silent_when_show_warnings_false(capsys):
 # ---------------------------------------------------------------------------
 
 def test_graded_mesh_basic_properties():
-    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=20, coll_choices=[0, 1, 2])
+    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=20, order=3)
     assert mesh.shape == (21,)
     assert mesh[0] == 0.0
     assert mesh[-1] == pytest.approx(1.0)
@@ -1237,34 +1237,34 @@ def test_graded_mesh_basic_properties():
 def test_graded_mesh_grading_increases_with_alpha():
     """Higher alpha -> stronger grading (larger ratio of last/first interval)."""
     M = 20
-    cc = [0, 1, 2]
+    order = 3
     def ratio(alpha):
-        mesh = optimal_graded_mesh(alpha=alpha, T=1.0, M=M, coll_choices=cc)
+        mesh = optimal_graded_mesh(alpha=alpha, T=1.0, M=M, order=order)
         widths = np.diff(mesh)
         return widths[-1] / widths[0]
     assert ratio(0.0) < ratio(0.3) < ratio(0.5) < ratio(0.7)
 
 
 def test_graded_mesh_alpha_zero_is_uniform():
-    """alpha=0 -> r=p, but the asymptotic uniformity holds only when p=1.
-    Still, increasing M makes the result approach a smooth power-law mesh."""
-    mesh = optimal_graded_mesh(alpha=0.0, T=1.0, M=10, coll_choices=[1])
-    # r = 1 means t_n = T*(n/M), i.e. uniform.
+    """alpha=0 -> uniform mesh (r=1) regardless of order, since the kernel is
+    non-singular and the solution smooth."""
     expected = np.linspace(0.0, 1.0, 11)
-    assert np.allclose(mesh, expected)
+    for order in (1, 3, 5):
+        mesh = optimal_graded_mesh(alpha=0.0, T=1.0, M=10, order=order)
+        assert np.allclose(mesh, expected)
 
 
 def test_graded_mesh_validation():
     with pytest.raises(ValueError, match="alpha"):
-        optimal_graded_mesh(alpha=1.0, T=1.0, M=10, coll_choices=[1, 2])
+        optimal_graded_mesh(alpha=1.0, T=1.0, M=10, order=2)
     with pytest.raises(ValueError, match="alpha"):
-        optimal_graded_mesh(alpha=-0.1, T=1.0, M=10, coll_choices=[1, 2])
+        optimal_graded_mesh(alpha=-0.1, T=1.0, M=10, order=2)
     with pytest.raises(ValueError, match="T"):
-        optimal_graded_mesh(alpha=0.5, T=-1.0, M=10, coll_choices=[1, 2])
+        optimal_graded_mesh(alpha=0.5, T=-1.0, M=10, order=2)
     with pytest.raises(ValueError, match="M"):
-        optimal_graded_mesh(alpha=0.5, T=1.0, M=0, coll_choices=[1, 2])
-    with pytest.raises(ValueError, match="coll_choices"):
-        optimal_graded_mesh(alpha=0.5, T=1.0, M=10, coll_choices=[])
+        optimal_graded_mesh(alpha=0.5, T=1.0, M=0, order=2)
+    with pytest.raises(ValueError, match="order"):
+        optimal_graded_mesh(alpha=0.5, T=1.0, M=10, order=0)
 
 
 def test_graded_mesh_recovers_high_order_on_abel(vie2_callable_abel):
@@ -1276,7 +1276,7 @@ def test_graded_mesh_recovers_high_order_on_abel(vie2_callable_abel):
                   kernel_singularity=p["kernel_singularity"],
                   show_warnings=False)
     uniform = np.linspace(0, 1, M + 1)
-    graded = optimal_graded_mesh(alpha=0.5, T=1.0, M=M, coll_choices=p["coll_choices"])
+    graded = optimal_graded_mesh(alpha=0.5, T=1.0, M=M, order=len(p["coll_choices"]))
     y_uniform = function_solve_VIE_2(mesh_breakpoints=uniform, **common)
     y_graded = function_solve_VIE_2(mesh_breakpoints=graded, **common)
     err_u = _collect_node_values(y_uniform, uniform, p["coll_divs"], p["coll_choices"], p["y_exact"])
@@ -1300,7 +1300,7 @@ def test_uniform_mesh_with_singularity_warns(capsys, vie2_callable_abel):
 
 def test_graded_mesh_with_singularity_silent(capsys, vie2_callable_abel):
     p = vie2_callable_abel
-    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=20, coll_choices=p["coll_choices"])
+    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=20, order=len(p["coll_choices"]))
     function_solve_VIE_2(
         kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
         coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
@@ -1367,7 +1367,7 @@ def test_vie1_singular_kernel_graded_mesh(vie1_callable_abel):
                   show_warnings=False)
     uniform = np.linspace(0, 1, M + 1)
     graded = optimal_graded_mesh(alpha=p["alpha"], T=1.0, M=M,
-                                 coll_choices=p["coll_choices"])
+                                 order=len(p["coll_choices"]))
     y_uniform = function_solve_VIE_1(mesh_breakpoints=uniform, **common)
     y_graded = function_solve_VIE_1(mesh_breakpoints=graded, **common)
     err_u = _collect_node_values(y_uniform, uniform, p["coll_divs"],
@@ -1382,7 +1382,7 @@ def test_vide_singular_kernel_graded_mesh(vide_callable_abel):
     p = vide_callable_abel
     M = 40
     graded = optimal_graded_mesh(alpha=p["alpha"], T=1.0, M=M,
-                                 coll_choices=p["coll_choices"])
+                                 order=len(p["coll_choices"]))
     y = function_solve_VIDE(
         kernel=p["kernel"], a=p["a"], g=p["g"],
         soln_init_value=p["soln_init_value"],
@@ -1422,7 +1422,7 @@ def test_abel_convergence_with_graded_mesh(vie2_callable_abel):
     p = vie2_callable_abel
     def err_at(M):
         mesh = optimal_graded_mesh(alpha=p["alpha"], T=1.0, M=M,
-                                   coll_choices=p["coll_choices"])
+                                   order=len(p["coll_choices"]))
         y = function_solve_VIE_2(
             kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
             coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
@@ -2136,7 +2136,7 @@ def test_vec_singular_graded_mesh_recovers_high_order():
     g = lambda t: np.full(d, np.sqrt(t) - 0.5 * np.pi * t)
     y_exact = lambda t: np.full(d, np.sqrt(t))
     coll_choices = [0, 1, 2]
-    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30, coll_choices=coll_choices)
+    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30, order=len(coll_choices))
     y = function_solve_VIE_2(kernel=kernel, g=g, mesh_breakpoints=mesh,
                              coll_divs=2, coll_choices=coll_choices,
                              kernel_singularity=0.0)
@@ -2160,7 +2160,7 @@ def test_matrix_singular_graded_mesh():
     shifts = np.array([[0.0, 0.3], [0.0, -0.2]])
     g_mat = _matrix_g(g_vec, shifts)
     coll_choices = [0, 1, 2]
-    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30, coll_choices=coll_choices)
+    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30, order=len(coll_choices))
 
     y_mat = function_solve_VIE_2(kernel=kernel, g=g_mat, mesh_breakpoints=mesh,
                                  coll_divs=2, coll_choices=coll_choices,

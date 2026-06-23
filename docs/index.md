@@ -18,7 +18,7 @@ meshes, and handles weakly singular kernels.
 | $y'(t) = a(t)y(t) + g(t) + \int_0^t K(t-s)y(s)ds$ | `solve_VIDE` | `function_solve_VIDE` |
 
 The callable-input solvers also expose `optimal_graded_mesh(alpha, T, M,
-coll_choices)` for building a Brunner-graded mesh suitable for kernels
+order)` for building a Brunner-graded mesh suitable for kernels
 with a $u^{-\alpha}$ singularity.
 
 ## Quick install

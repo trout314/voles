@@ -60,7 +60,7 @@ $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 ### Mesh helper: `optimal_graded_mesh`
 
-Returns a Brunner-graded mesh $t_n = T (n/M)^r$ with grading exponent $r = p / (1 - \alpha)$, where $p$ is the number of collocation nodes per interval. Designed for weakly singular convolution kernels $K(u) \sim u^{-\alpha}$ with $\alpha \in [0, 1)$. Feed the result to a callable-input solver via `mesh_breakpoints` to recover the optimal convergence order on Abel-type problems.
+Returns a Brunner-graded mesh $t_n = T (n/M)^r$ with grading exponent $r = p / (1 - \alpha)$, where $p$ is the method order (number of collocation nodes per interval), passed as `order`. For a matched mesh, set `order=len(coll_choices)`. Designed for weakly singular convolution kernels $K(u) \sim u^{-\alpha}$ with $\alpha \in [0, 1)$ (at $\alpha = 0$ it returns a uniform mesh). Feed the result to a callable-input solver via `mesh_breakpoints` to recover the optimal convergence order on Abel-type problems.
 
 API reference: [api/optimal_graded_mesh/](https://trout314.github.io/voles/api/optimal_graded_mesh/)
 

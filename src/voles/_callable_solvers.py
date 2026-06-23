@@ -1383,14 +1383,16 @@ def _build_vide_polynomials_matrix(y_prime: np.ndarray, y_boundary: np.ndarray,
 # ---------------------------------------------------------------------------
 
 def optimal_graded_mesh(*, alpha: float, T: float, M: int,
-                        coll_choices: list[int]) -> np.ndarray:
+                        order: int) -> np.ndarray:
     r"""Return a graded mesh of M+1 breakpoints suitable for a weakly
     singular convolution kernel $K(u) \sim u^{-\alpha}$, $\alpha \in [0, 1)$.
 
     Grading: $t_n = T \cdot (n/M)^r$ with $r = p / (1 - \alpha)$, where
-    $p = $ ``len(coll_choices)`` is the order of the collocation method
-    (number of collocation nodes per interval). This recovers the optimal
-    convergence order for Abel-type kernels (per Brunner ch. 6).
+    $p = $ ``order`` is the order of the collocation method (number of
+    collocation nodes per interval). This recovers the optimal convergence
+    order for Abel-type kernels (per Brunner ch. 6). At ``alpha == 0`` the
+    kernel is non-singular and the solution smooth, so a uniform mesh
+    ($r = 1$) is returned instead.
 
     Parameters
     ----------
@@ -1400,14 +1402,26 @@ def optimal_graded_mesh(*, alpha: float, T: float, M: int,
         Right endpoint of the mesh (positive).
     M : int
         Number of intervals (positive). The returned array has length M+1.
-    coll_choices : list of int
-        Collocation choice list that will be passed to the solver. Only the
-        length is used (determines the method order).
+    order : int
+        Order of the collocation method (positive). For a matched mesh,
+        pass the same order you give the solver, i.e. ``len(coll_choices)``.
 
     Returns
     -------
     mesh_breakpoints : ndarray of shape (M+1,)
         Strictly-increasing breakpoints with ``[0] == 0`` and ``[-1] == T``.
+
+    Examples
+    --------
+    Best practice is to grade for the same order as the solver's collocation
+    method, i.e. ``order=len(coll_choices)``::
+
+        coll_choices = [1, 2, 3]
+        mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30,
+                                   order=len(coll_choices))
+        y = function_solve_VIE_2(kernel=..., g=..., mesh_breakpoints=mesh,
+                                 coll_divs=3, coll_choices=coll_choices,
+                                 kernel_singularity=0.0)
     """
     if not 0.0 <= alpha < 1.0:
         raise ValueError(f"alpha must satisfy 0 <= alpha < 1, got {alpha}")
@@ -1415,10 +1429,14 @@ def optimal_graded_mesh(*, alpha: float, T: float, M: int,
         raise ValueError(f"T must be positive, got {T}")
     if M < 1:
         raise ValueError(f"M must be a positive integer, got {M}")
-    if not coll_choices:
-        raise ValueError("coll_choices must be non-empty")
-    p = len(coll_choices)
-    r = p / (1.0 - alpha)
+    if isinstance(order, bool) or not isinstance(order, (int, np.integer)):
+        raise ValueError(f"order must be a positive integer, got {order!r}")
+    if order < 1:
+        raise ValueError(f"order must be a positive integer, got {order}")
+    p = order
+    # At alpha=0 the kernel is non-singular and the solution is smooth, so a
+    # uniform mesh (r=1) is optimal; grading would only waste resolution near 0.
+    r = p / (1.0 - alpha) if alpha > 0.0 else 1.0
     n = np.arange(M + 1, dtype=np.float64)
     return T * (n / M) ** r
 
@@ -1439,7 +1457,7 @@ def _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints: np.ndarray,
             "uniform (max/min interval ratio = {:.2f}). For optimal "
             "convergence on weakly singular problems, consider "
             "`optimal_graded_mesh(alpha=..., T=..., M=..., "
-            "coll_choices=...)`.".format(ratio)
+            "order=len(coll_choices))`.".format(ratio)
         )
 
 
