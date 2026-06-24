@@ -156,7 +156,7 @@ Because the solution on each mesh interval is an explicit polynomial, the solver
 
 ## Piecewise Polynomial Illustration
 
-The figure below illustrates the idea. The time axis is split into mesh intervals (dashed vertical lines), and on each interval the solver finds a polynomial $p_i(t)$ that satisfies the equation at a set of collocation points (dots). Stitching the pieces together produces a piecewise polynomial that closely tracks the exact solution.
+The figure below shows an actual `voles` solution to a first-kind VIE ($g(t) = \sin t$, $K(s) = e^{s}$, exact solution $y(t) = \cos t - \sin t$). The time axis is split into mesh intervals at breakpoints $t_0, \ldots, t_4$ (dashed vertical lines); on each interval the solver finds a polynomial $p_i(t)$ that satisfies the equation at a set of collocation points (dots). A deliberately coarse mesh is used so the structure is visible: the pieces are **discontinuous across interval boundaries** — first-kind collocation does not enforce continuity by default — and visibly deviate from the exact solution (dashed). Refining the mesh shrinks both the jumps and the error.
 
 ![Piecewise polynomial illustration](docs/piecewise_polynomial.png)
 
