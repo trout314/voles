@@ -212,14 +212,14 @@ Mean wall-clock execution time in milliseconds for the **array-based** solvers, 
 <!-- BENCHMARKS:START -->
 | Solver \ N | 500 | 1000 | 2000 | 4000 | 8000 |
 |---|---|---|---|---|---|
-| VIE-1 | 0.33 | 1.16 | 4.33 | 16.8 | 66.2 |
-| VIE-1 (continuous) | 0.35 | 1.20 | 4.42 | 16.9 | 66.5 |
-| VIE-2 | 1.38 | 5.32 | 20.9 | 82.9 | 331 |
-| VIDE | 6.33 | 20.8 | 74.6 | 280 | 1089 |
-| VIE-1 (d=2) | 1.14 | 4.21 | 16.2 | 63.7 | 253 |
-| VIE-1 (d=2, continuous) | 1.18 | 4.27 | 16.5 | 64.1 | 254 |
-| VIE-2 (d=2) | 5.10 | 20.1 | 80.2 | 322 | 1273 |
-| VIDE (d=2) | 17.9 | 68.5 | 265 | 1048 | 4164 |
+| VIE-1 | 0.03 | 0.06 | 0.14 | 0.46 | 1.69 |
+| VIE-1 (continuous) | 0.04 | 0.08 | 0.18 | 0.52 | 1.81 |
+| VIE-2 | 0.06 | 0.16 | 0.53 | 1.99 | 7.75 |
+| VIDE | 0.58 | 1.46 | 4.21 | 13.7 | 49.0 |
+| VIE-1 (d=2) | 0.10 | 0.26 | 0.84 | 3.09 | 12.0 |
+| VIE-1 (d=2, continuous) | 0.11 | 0.27 | 0.87 | 3.15 | 12.2 |
+| VIE-2 (d=2) | 0.27 | 0.99 | 3.79 | 15.0 | 59.3 |
+| VIDE (d=2) | 1.00 | 3.32 | 11.9 | 45.1 | 178 |
 <!-- BENCHMARKS:END -->
 
 The **callable-input** solvers run the general path (Python + adaptive quadrature, no Toeplitz reuse), so they are benchmarked on much smaller problems, sized by the number of mesh intervals $M$ (each carrying `len(coll_choices)` collocation nodes). The *weakly singular* row uses an Abel kernel $K(u) = u^{-1/2}$ on a graded mesh with the singularity declared:
@@ -227,10 +227,10 @@ The **callable-input** solvers run the general path (Python + adaptive quadratur
 <!-- CALLABLE_BENCHMARKS:START -->
 | Solver \ M | 25 | 50 | 100 |
 |---|---|---|---|
-| function_solve_VIE_1 | 21.8 | 85.6 | 330 |
-| function_solve_VIE_2 | 22.2 | 86.6 | 350 |
-| function_solve_VIDE | 22.8 | 89.8 | 352 |
-| function_solve_VIE_2 (weakly singular) | 189 | 445 | 1175 |
+| function_solve_VIE_1 | 20.5 | 78.7 | 309 |
+| function_solve_VIE_2 | 21.0 | 81.3 | 321 |
+| function_solve_VIDE | 21.5 | 86.5 | 325 |
+| function_solve_VIE_2 (weakly singular) | 156 | 370 | 974 |
 <!-- CALLABLE_BENCHMARKS:END -->
 
 Run on a GitHub Actions `ubuntu-22.04` runner (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost). Mean time is averaged over a variable number of calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
