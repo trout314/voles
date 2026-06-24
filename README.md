@@ -212,14 +212,14 @@ Mean wall-clock execution time in milliseconds, by solver and input length (numb
 <!-- BENCHMARKS:START -->
 | Solver | 500 | 1000 | 2000 | 3000 | 4000 |
 |---|---|---|---|---|---|
-| VIE-1 | 0.33 | 1.19 | 4.34 | 9.57 | 16.8 |
-| VIE-1 (continuous) | 0.36 | 1.21 | 4.43 | 9.70 | 17.0 |
-| VIE-2 | 1.37 | 5.30 | 20.9 | 46.8 | 82.8 |
-| VIDE | 6.35 | 21.0 | 74.8 | 161 | 280 |
-| VIE-1 (d=2) | 1.14 | 4.22 | 16.2 | 36.2 | 64.1 |
-| VIE-1 (d=2, continuous) | 1.17 | 4.31 | 16.5 | 36.4 | 64.7 |
-| VIE-2 (d=2) | 5.06 | 19.9 | 79.2 | 178 | 318 |
-| VIDE (d=2) | 18.0 | 68.4 | 265 | 592 | 1049 |
+| VIE-1 | 0.04 | 0.06 | 0.14 | 0.27 | 0.45 |
+| VIE-1 (continuous) | 0.05 | 0.08 | 0.17 | 0.31 | 0.51 |
+| VIE-2 | 0.06 | 0.16 | 0.54 | 1.15 | 2.00 |
+| VIDE | 0.58 | 1.46 | 4.17 | 8.20 | 13.5 |
+| VIE-1 (d=2) | 0.10 | 0.24 | 0.77 | 1.63 | 2.81 |
+| VIE-1 (d=2, continuous) | 0.10 | 0.26 | 0.80 | 1.67 | 2.85 |
+| VIE-2 (d=2) | 0.25 | 0.89 | 3.39 | 7.53 | 13.3 |
+| VIDE (d=2) | 0.98 | 3.21 | 11.6 | 25.0 | 43.7 |
 <!-- BENCHMARKS:END -->
 
 Run on a GitHub Actions `ubuntu-22.04` runner (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost). Mean time is averaged over a variable number of calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
