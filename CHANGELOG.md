@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Performance
+- The callable-input solvers (`function_solve_VIE_1/2/VIDE`) build the kernel
+  weight tensor substantially faster. On each smooth quadrature block the kernel
+  is now sampled once and combined with all basis functions via a small matmul
+  (with the basis-at-nodes values precomputed), instead of repeating quadrature
+  and `polyval` per basis function. Roughly 4× faster for smooth kernels and
+  ~2.5× for weakly singular ones (whose adaptive diagonal blocks are unchanged);
+  results are unchanged.
+
 ### Added
 - The array-based solvers (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`) accept
   `return_function=True`, returning a callable solution object as the second
