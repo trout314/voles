@@ -57,7 +57,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]" matplotlib
+        run: pip install -e ".[dev]"
 
       - name: Run benchmarks
         run: |
@@ -77,14 +77,14 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
 
-      - name: Generate benchmark charts
-        run: python benchmarks/plot_results.py output.json benchmarks/results.png
+      - name: Generate benchmark table
+        run: python benchmarks/make_table.py output.json README.md
 
-      - name: Commit benchmark charts
+      - name: Commit benchmark table
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git pull --rebase --autostash
-          git add benchmarks/results.png
-          git diff --cached --quiet || git commit -m "Update benchmark charts [skip ci]"
+          git add README.md
+          git diff --cached --quiet || git commit -m "Update benchmark table [skip ci]"
           git push

@@ -207,9 +207,22 @@ All three solvers have the same expected asymptotic complexity in N, d, and m, w
 
 The quadratic time scaling arises because each new mesh step requires a history sum over all previous steps. The `coll_divs` and `coll_choices` parameters affect the constant factor but not the asymptotic scaling in N, d, and m.
 
-Run on a GitHub Actions `ubuntu-22.04` runner (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost). Mean time is averaged over a variable number of calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
+Mean wall-clock execution time in milliseconds, by solver and input length (number of points):
 
-![Benchmarks](benchmarks/results.png)
+<!-- BENCHMARKS:START -->
+| Solver | 500 | 1000 | 2000 | 3000 | 4000 |
+|---|---|---|---|---|---|
+| VIE-1 | 0.33 | 1.19 | 4.34 | 9.57 | 16.8 |
+| VIE-1 (continuous) | 0.36 | 1.21 | 4.43 | 9.70 | 17.0 |
+| VIE-2 | 1.37 | 5.30 | 20.9 | 46.8 | 82.8 |
+| VIDE | 6.35 | 21.0 | 74.8 | 161 | 280 |
+| VIE-1 (d=2) | 1.14 | 4.22 | 16.2 | 36.2 | 64.1 |
+| VIE-1 (d=2, continuous) | 1.17 | 4.31 | 16.5 | 36.4 | 64.7 |
+| VIE-2 (d=2) | 5.06 | 19.9 | 79.2 | 178 | 318 |
+| VIDE (d=2) | 18.0 | 68.4 | 265 | 592 | 1049 |
+<!-- BENCHMARKS:END -->
+
+Run on a GitHub Actions `ubuntu-22.04` runner (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost). Mean time is averaged over a variable number of calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
 
 See the [Getting Started](https://trout314.github.io/voles/getting_started/) page for complete examples.
 
