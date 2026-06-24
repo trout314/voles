@@ -14,6 +14,13 @@ pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
+The Python code blocks in `docs/` are also executed in CI to keep the examples
+working. Run them locally with:
+
+```bash
+pytest --markdown-docs docs/
+```
+
 ## Building the D extension (required)
 
 The D extension is a required part of the package. Tests will fail without it.

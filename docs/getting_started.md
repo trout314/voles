@@ -107,15 +107,24 @@ soln = solve_VIDE(
 Pass `return_function=True` to also get a callable solution object. Call it at any time to evaluate the piecewise polynomial; it also indexes and iterates like a list of per-interval `numpy.polynomial.Polynomial` objects (matching the callable-input solvers' `return_function`):
 
 ```python
-soln_values, solution = solve_VIE_2(..., return_function=True)
+import numpy as np
+from voles import solve_VIE_2
 
-solution(0.42)            # evaluate the piecewise polynomial at any time
+time_step = 0.05
+times = np.arange(0, 4.55, time_step)  # 91 points = 10×3² + 1
+kernel = np.exp(-times)
+g = np.sin(times) - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
 
-import matplotlib.pyplot as plt
-for poly in solution:     # iterate over per-interval polynomials
-    t = np.linspace(poly.domain[0], poly.domain[1], 20)
-    plt.plot(t, poly(t))
-plt.show()
+soln_values, solution = solve_VIE_2(
+    kernel_values=kernel, g_values=g, time_step=time_step,
+    coll_divs=3, coll_choices=[0, 1, 2, 3],
+    return_function=True,
+)
+
+solution(0.42)             # evaluate the piecewise polynomial at any time
+first_interval = solution[0]   # indexes/iterates like the per-interval polynomials
+for poly in solution:          # each is a numpy.polynomial.Polynomial
+    pass
 ```
 
 `return_polys=True` remains as a deprecated alias.
@@ -144,6 +153,7 @@ soln_values, y = function_solve_VIE_2(
 For weakly singular kernels $K(u) \sim u^{-\alpha}$ (e.g. Abel-type), declare the singularity and use `optimal_graded_mesh` to recover the full collocation convergence order:
 
 ```python
+import numpy as np
 from voles import function_solve_VIE_2, optimal_graded_mesh
 
 kernel = lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0

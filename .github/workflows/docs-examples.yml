@@ -1,0 +1,56 @@
+name: Doc examples
+
+# Execute the Python code blocks in the docs so example code stays correct as
+# the API evolves. Runs on both source and docs changes (unlike the main test
+# workflows, which ignore docs/**).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'dlang/**'
+      - 'pyproject.toml'
+      - '.github/workflows/docs-examples.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/**'
+      - 'dlang/**'
+      - 'pyproject.toml'
+      - '.github/workflows/docs-examples.yml'
+
+jobs:
+  run-doc-examples:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build curl xz-utils
+          pip install -q 'meson==1.5.2'
+          curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.36.0/ldc2-1.36.0-linux-x86_64.tar.xz \
+            | tar -xJ -C /tmp
+          echo "/tmp/ldc2-1.36.0-linux-x86_64/bin" >> $GITHUB_PATH
+
+      - name: Build D extension
+        run: |
+          cd dlang
+          meson setup build --buildtype=release
+          ninja -C build
+          cp build/volterra_dlang.so ../src/voles/
+
+      - name: Install package and dependencies
+        run: pip install -e ".[dev,callable]"
+
+      - name: Run documentation examples
+        run: pytest --markdown-docs docs/ -v
