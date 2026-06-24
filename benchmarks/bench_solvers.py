@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
-from voles import solve_VIE_1, solve_VIE_2, solve_VIDE
+from voles import (solve_VIE_1, solve_VIE_2, solve_VIDE,
+                   function_solve_VIE_1, function_solve_VIE_2, function_solve_VIDE,
+                   optimal_graded_mesh)
 
 # --- VIE-2 (coll_divs=2, pts = n_intervals*4+1) ---
 
@@ -24,12 +26,12 @@ def test_vie2_2000(benchmark):
     kernel, g, dt = _vie2_inputs(499)          # 1997 pts
     benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
 
-def test_vie2_3000(benchmark):
-    kernel, g, dt = _vie2_inputs(749)          # 2997 pts
-    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
-
 def test_vie2_4000(benchmark):
     kernel, g, dt = _vie2_inputs(999)          # 3997 pts
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+
+def test_vie2_8000(benchmark):
+    kernel, g, dt = _vie2_inputs(1999)         # 7997 pts
     benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
 
 # --- VIE-1 (coll_divs=3, pts = n_intervals*9+1) ---
@@ -54,12 +56,12 @@ def test_vie1_2000(benchmark):
     kernel, g, dt = _vie1_inputs(222)          # 1999 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
 
-def test_vie1_3000(benchmark):
-    kernel, g, dt = _vie1_inputs(333)          # 2998 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
-
 def test_vie1_4000(benchmark):
     kernel, g, dt = _vie1_inputs(444)          # 3997 pts
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+
+def test_vie1_8000(benchmark):
+    kernel, g, dt = _vie1_inputs(888)          # 7993 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
 
 # --- VIE-1 with force_continuous=True (coll_divs=3, pts = n_intervals*9+1) ---
@@ -79,13 +81,13 @@ def test_vie1_fc_2000(benchmark):
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
               soln_init_value=0.0, force_continuous=True)
 
-def test_vie1_fc_3000(benchmark):
-    kernel, g, dt = _vie1_inputs(333)          # 2998 pts
+def test_vie1_fc_4000(benchmark):
+    kernel, g, dt = _vie1_inputs(444)          # 3997 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
               soln_init_value=0.0, force_continuous=True)
 
-def test_vie1_fc_4000(benchmark):
-    kernel, g, dt = _vie1_inputs(444)          # 3997 pts
+def test_vie1_fc_8000(benchmark):
+    kernel, g, dt = _vie1_inputs(888)          # 7993 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
               soln_init_value=0.0, force_continuous=True)
 
@@ -117,13 +119,13 @@ def test_vide_2000(benchmark):
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
               soln_init_value=0.0, time_step=dt)
 
-def test_vide_3000(benchmark):
-    kernel, g, a, dt = _vide_inputs(749)       # 2997 pts
+def test_vide_4000(benchmark):
+    kernel, g, a, dt = _vide_inputs(999)       # 3997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
               soln_init_value=0.0, time_step=dt)
 
-def test_vide_4000(benchmark):
-    kernel, g, a, dt = _vide_inputs(999)       # 3997 pts
+def test_vide_8000(benchmark):
+    kernel, g, a, dt = _vide_inputs(1999)      # 7997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
               soln_init_value=0.0, time_step=dt)
 
@@ -154,12 +156,12 @@ def test_vie1_vec_2000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(222)      # 1999 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
 
-def test_vie1_vec_3000(benchmark):
-    kernel, g, dt = _vie1_vec_inputs(333)      # 2998 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
-
 def test_vie1_vec_4000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(444)      # 3997 pts
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+
+def test_vie1_vec_8000(benchmark):
+    kernel, g, dt = _vie1_vec_inputs(888)      # 7993 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
 
 
@@ -180,13 +182,13 @@ def test_vie1_vec_fc_2000(benchmark):
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
               soln_init_value=np.zeros(2), force_continuous=True)
 
-def test_vie1_vec_fc_3000(benchmark):
-    kernel, g, dt = _vie1_vec_inputs(333)      # 2998 pts
+def test_vie1_vec_fc_4000(benchmark):
+    kernel, g, dt = _vie1_vec_inputs(444)      # 3997 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
               soln_init_value=np.zeros(2), force_continuous=True)
 
-def test_vie1_vec_fc_4000(benchmark):
-    kernel, g, dt = _vie1_vec_inputs(444)      # 3997 pts
+def test_vie1_vec_fc_8000(benchmark):
+    kernel, g, dt = _vie1_vec_inputs(888)      # 7993 pts
     benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
               soln_init_value=np.zeros(2), force_continuous=True)
 
@@ -217,12 +219,12 @@ def test_vie2_vec_2000(benchmark):
     kernel, g, dt = _vie2_vec_inputs(499)      # 1997 pts
     benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
 
-def test_vie2_vec_3000(benchmark):
-    kernel, g, dt = _vie2_vec_inputs(749)      # 2997 pts
-    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
-
 def test_vie2_vec_4000(benchmark):
     kernel, g, dt = _vie2_vec_inputs(999)      # 3997 pts
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+
+def test_vie2_vec_8000(benchmark):
+    kernel, g, dt = _vie2_vec_inputs(1999)     # 7997 pts
     benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
 
 
@@ -261,12 +263,134 @@ def test_vide_vec_2000(benchmark):
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
               soln_init_value=init, time_step=dt)
 
-def test_vide_vec_3000(benchmark):
-    kernel, g, a, init, dt = _vide_vec_inputs(749)   # 2997 pts
-    benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-              soln_init_value=init, time_step=dt)
-
 def test_vide_vec_4000(benchmark):
     kernel, g, a, init, dt = _vide_vec_inputs(999)   # 3997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
               soln_init_value=init, time_step=dt)
+
+def test_vide_vec_8000(benchmark):
+    kernel, g, a, init, dt = _vide_vec_inputs(1999)  # 7997 pts
+    benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
+              soln_init_value=init, time_step=dt)
+
+
+# =====================================================================
+# Callable-input solvers (function_solve_*). Size axis is the number of
+# mesh intervals M (each with len(coll_choices) collocation nodes), NOT the
+# number of sampled points. The general path runs in Python + scipy
+# quadrature and is far slower per unit work than the array path, so it is
+# benchmarked at small M and with reduced rounds.
+# =====================================================================
+
+_FN_T = 4.0  # integration interval [0, T] for the smooth callable cases
+
+def _fn_vie2_smooth(M):
+    kernel = lambda u: np.exp(-u)
+    g = lambda t: np.sin(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
+    mesh = np.linspace(0.0, _FN_T, M + 1)
+    return kernel, g, mesh
+
+def _fn_vie1_smooth(M):
+    kernel = lambda u: np.exp(u)
+    g = lambda t: np.sin(t)
+    mesh = np.linspace(0.0, _FN_T, M + 1)
+    return kernel, g, mesh
+
+def _fn_vide_smooth(M):
+    kernel = lambda u: np.exp(-u)
+    a = lambda t: 1.0 / (1.0 + t**2)
+    g = lambda t: (np.cos(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
+                   - np.sin(t) / (1.0 + t**2))
+    mesh = np.linspace(0.0, _FN_T, M + 1)
+    return kernel, a, g, mesh
+
+def _fn_vie2_singular(M):
+    # Abel kernel K(u) = u^(-1/2); exact y(t) = sqrt(t). Graded mesh + declared
+    # singularity so the adaptive-quadrature diagonal path is exercised.
+    kernel = lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0
+    g = lambda t: np.sqrt(t) - 0.5 * np.pi * t
+    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=M, order=3)
+    return kernel, g, mesh
+
+
+# function_solve_VIE_1 (smooth)
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie1_25(benchmark):
+    k, g, mesh = _fn_vie1_smooth(25)
+    benchmark(function_solve_VIE_1, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie1_50(benchmark):
+    k, g, mesh = _fn_vie1_smooth(50)
+    benchmark(function_solve_VIE_1, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie1_100(benchmark):
+    k, g, mesh = _fn_vie1_smooth(100)
+    benchmark(function_solve_VIE_1, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
+
+# function_solve_VIE_2 (smooth)
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie2_25(benchmark):
+    k, g, mesh = _fn_vie2_smooth(25)
+    benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie2_50(benchmark):
+    k, g, mesh = _fn_vie2_smooth(50)
+    benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie2_100(benchmark):
+    k, g, mesh = _fn_vie2_smooth(100)
+    benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+
+# function_solve_VIDE (smooth)
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vide_25(benchmark):
+    k, a, g, mesh = _fn_vide_smooth(25)
+    benchmark(function_solve_VIDE, kernel=k, a=a, g=g, soln_init_value=0.0,
+              mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2],
+              show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vide_50(benchmark):
+    k, a, g, mesh = _fn_vide_smooth(50)
+    benchmark(function_solve_VIDE, kernel=k, a=a, g=g, soln_init_value=0.0,
+              mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2],
+              show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vide_100(benchmark):
+    k, a, g, mesh = _fn_vide_smooth(100)
+    benchmark(function_solve_VIDE, kernel=k, a=a, g=g, soln_init_value=0.0,
+              mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2],
+              show_warnings=False)
+
+# function_solve_VIE_2, weakly singular (Abel kernel, graded mesh)
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie2_sing_25(benchmark):
+    k, g, mesh = _fn_vie2_singular(25)
+    benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2], kernel_singularity=0.0,
+              show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie2_sing_50(benchmark):
+    k, g, mesh = _fn_vie2_singular(50)
+    benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2], kernel_singularity=0.0,
+              show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie2_sing_100(benchmark):
+    k, g, mesh = _fn_vie2_singular(100)
+    benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2], kernel_singularity=0.0,
+              show_warnings=False)
