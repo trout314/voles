@@ -397,10 +397,10 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 Bd[i, k] = npp.polyval(xn, basis[k])
         B_diag[o] = Bd
 
-    def smooth_block_vals(a_int, b_int, tau, is_diag, i):
-        """Order-(ord) and order-(ord+2) estimates of the integral of
-        K(tau - s) * L_k(s_norm) over [a_int, b_int] for all basis functions k
-        at once. Returns two (n_basis, d, d) arrays."""
+    def smooth_diag_vals(a_int, b_int, tau, i):
+        """Two-order estimates for the partial diagonal block l == n, whose upper
+        limit is the collocation node tau and whose basis-at-nodes table is the
+        node-specific B_diag[o][i]. Returns two (n_basis, d, d) arrays."""
         half = 0.5 * (b_int - a_int)
         mid = 0.5 * (a_int + b_int)
         est = []
@@ -413,83 +413,131 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             else:
                 kvals = np.array([np.asarray(kernel(a), dtype=np.float64)
                                   for a in arg])  # (o, d, d)
-            B = B_diag[o][i] if is_diag else B_off[o]  # (n_basis, o)
-            est.append(half * np.einsum('kq,q,qde->kde', B, weights, kvals))
+            est.append(half * np.einsum('kq,q,qde->kde', B_diag[o][i], weights, kvals))
+        return est[0], est[1]
+
+    def smooth_offdiag_vals(a_int, b_int, taus):
+        """Two-order estimates for a full off-diagonal block [a_int, b_int] shared
+        by all collocation nodes in `taus`. The kernel is sampled once across the
+        (n_i, order) grid of tau_i - s; returns two (n_i, n_basis, d, d) arrays."""
+        half = 0.5 * (b_int - a_int)
+        mid = 0.5 * (a_int + b_int)
+        est = []
+        for o in orders:
+            nodes, weights = gl[o]
+            s_points = mid + half * nodes              # (o,)
+            arg = taus[:, None] - s_points[None, :]    # (n_i, o)
+            if kernel_vec:
+                flat = np.asarray(kernel(arg.reshape(-1)), dtype=np.float64)
+                kvals = flat.reshape(len(taus), o, d, d)  # (n_i, o, d, d)
+            else:
+                kvals = np.array([[np.asarray(kernel(a), dtype=np.float64)
+                                   for a in row] for row in arg])  # (n_i, o, d, d)
+            est.append(half * np.einsum('kq,q,iqde->ikde', B_off[o], weights, kvals))
         return est[0], est[1]
 
     quad_vec = None
     W = np.zeros((M, p, M, n_basis, d, d), dtype=np.float64)
 
-    for n in range(M):
-        h_n = widths[n]
-        t_n = mesh_breakpoints[n]
-        tau_n = t_n + node_pos * h_n
+    def get_quad_vec():
+        nonlocal quad_vec
+        if quad_vec is None:
+            quad_vec = _import_scipy_quad_vec()
+        return quad_vec
 
+    def make_integrand(tau, t_l, h_l, k):
+        L_k_coefs = basis[k]
+        if kernel_vec:
+            def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs):
+                x_norm = (s - _t_l) / _h_l
+                K = np.asarray(kernel(_tau - s), dtype=np.float64)
+                # poly is scalar/(n,); K is (d,d)/(n,d,d). Broadcast.
+                return K * npp.polyval(x_norm, _L_k)[..., None, None] \
+                    if K.ndim == 3 else K * float(npp.polyval(x_norm, _L_k))
+        else:
+            def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs):
+                x_norm = (s - _t_l) / _h_l
+                K = np.asarray(kernel(_tau - s), dtype=np.float64)
+                return K * _eval_poly_at(_L_k, x_norm)
+        return integrand
+
+    def classify_sing(sing, a_int, b_int):
+        """Split declared singular s-locations into interior points and an
+        endpoint flag for [a_int, b_int]; returns (interior, use_adaptive)."""
+        tol = 1e-12 * max(1.0, abs(b_int - a_int))
+        interior = [sp for sp in sing if a_int + tol < sp < b_int - tol]
+        endpoint = any(abs(sp - a_int) < tol or abs(sp - b_int) < tol for sp in sing)
+        return interior, (bool(interior) or endpoint)
+
+    def adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing):
+        """Singular block: per-basis adaptive quadrature."""
+        for k in range(n_basis):
+            kwargs = {'limit': 100}
+            if interior_sing:
+                kwargs['points'] = interior_sing
+            val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, k),
+                                       a_int, b_int, **kwargs)
+            W[n, i, l, k, :, :] = val
+
+    def store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2):
+        """Store the order-(ord+2) estimate v2 for every basis function, then
+        fall back to adaptive quadrature for any that fails the two-order check.
+        Accept basis k iff max|v1 - v2| <= tol * max(1, max|v2|) over the (d, d)
+        entries; the negation (which also catches NaN) triggers the fallback."""
+        W[n, i, l, :, :, :] = v2
+        err = np.max(np.abs(v1 - v2), axis=(1, 2))  # (n_basis,)
+        ref = np.maximum(1.0, np.max(np.abs(v2), axis=(1, 2)))
+        for k in np.nonzero(~(err <= smooth_check_tol * ref))[0]:
+            val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, int(k)),
+                                       a_int, b_int, limit=100)
+            W[n, i, l, int(k), :, :] = val
+
+    for n in range(M):
+        t_n = mesh_breakpoints[n]
+        h_n = widths[n]
+        tau_n = t_n + node_pos * h_n
+        sing_per_i = [singular_locs(tau_n[i]) for i in range(p)]
+
+        # Off-diagonal blocks l < n share the interval [t_l, t_{l+1}] across all
+        # collocation nodes; only tau_i differs. Sample the kernel once across the
+        # smooth nodes and combine via a single einsum, peeling off any node whose
+        # declared singularity falls in this block to the adaptive path.
+        for l in range(n):
+            t_l = mesh_breakpoints[l]
+            t_lp1 = mesh_breakpoints[l + 1]
+            h_l = widths[l]
+            a_int, b_int = t_l, t_lp1
+
+            smooth_is = []
+            for i in range(p):
+                interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
+                if use_adaptive:
+                    adaptive_block(n, i, l, tau_n[i], t_l, h_l, a_int, b_int, interior_sing)
+                else:
+                    smooth_is.append(i)
+
+            if smooth_is:
+                v1, v2 = smooth_offdiag_vals(a_int, b_int, tau_n[smooth_is])
+                for idx, i in enumerate(smooth_is):
+                    store_smooth(n, i, l, tau_n[i], t_l, h_l, a_int, b_int,
+                                 v1[idx], v2[idx])
+
+        # Diagonal block l == n: the upper limit is tau_i, so it stays per-node.
+        l = n
+        t_l = mesh_breakpoints[l]
+        h_l = widths[l]
+        a_int = t_l
         for i in range(p):
             tau = tau_n[i]
-            sing_for_tau = singular_locs(tau)
-
-            for l in range(n + 1):
-                t_l = mesh_breakpoints[l]
-                t_lp1 = mesh_breakpoints[l + 1]
-                h_l = widths[l]
-                a_int = t_l
-                b_int = t_lp1 if l < n else tau
-
-                if b_int <= a_int:
-                    continue
-
-                tol = 1e-12 * max(1.0, abs(b_int - a_int))
-                interior_sing = [sp for sp in sing_for_tau
-                                 if a_int + tol < sp < b_int - tol]
-                endpoint_sing = any(abs(sp - a_int) < tol or abs(sp - b_int) < tol
-                                    for sp in sing_for_tau)
-                use_adaptive = bool(interior_sing) or endpoint_sing
-
-                def make_integrand(k):
-                    L_k_coefs = basis[k]
-                    if kernel_vec:
-                        def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs):
-                            x_norm = (s - _t_l) / _h_l
-                            K = np.asarray(kernel(_tau - s), dtype=np.float64)
-                            # poly is scalar/(n,); K is (d,d)/(n,d,d). Broadcast.
-                            return K * npp.polyval(x_norm, _L_k)[..., None, None] \
-                                if K.ndim == 3 else K * float(npp.polyval(x_norm, _L_k))
-                    else:
-                        def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs):
-                            x_norm = (s - _t_l) / _h_l
-                            K = np.asarray(kernel(_tau - s), dtype=np.float64)
-                            return K * _eval_poly_at(_L_k, x_norm)
-                    return integrand
-
-                if use_adaptive:
-                    # Singular block: per-basis adaptive quadrature.
-                    for k in range(n_basis):
-                        if quad_vec is None:
-                            quad_vec = _import_scipy_quad_vec()
-                        kwargs = {'limit': 100}
-                        if interior_sing:
-                            kwargs['points'] = interior_sing
-                        val, _err = quad_vec(make_integrand(k), a_int, b_int, **kwargs)
-                        W[n, i, l, k, :, :] = val
-                    continue
-
-                # Smooth block: batched two-order check across basis functions.
-                # Accept basis k iff max|v1 - v2| <= tol * max(1, max|v2|) over the
-                # (d, d) entries; the negation (which also catches NaN, matching
-                # the per-k scalar logic) falls back to adaptive quadrature.
-                v1, v2 = smooth_block_vals(a_int, b_int, tau, l == n, i)
-                W[n, i, l, :, :, :] = v2
-                err = np.max(np.abs(v1 - v2), axis=(1, 2))  # (n_basis,)
-                ref = np.maximum(1.0, np.max(np.abs(v2), axis=(1, 2)))
-                ok = err <= smooth_check_tol * ref
-                bad = np.nonzero(~ok)[0]
-                for k in bad:
-                    if quad_vec is None:
-                        quad_vec = _import_scipy_quad_vec()
-                    val, _err = quad_vec(make_integrand(int(k)), a_int, b_int,
-                                         limit=100)
-                    W[n, i, l, int(k), :, :] = val
+            b_int = tau
+            if b_int <= a_int:
+                continue
+            interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
+            if use_adaptive:
+                adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing)
+                continue
+            v1, v2 = smooth_diag_vals(a_int, b_int, tau, i)
+            store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2)
 
     if not np.isfinite(W).all():
         raise ValueError(
