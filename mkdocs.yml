@@ -12,6 +12,9 @@ theme:
 markdown_extensions:
   - pymdownx.arithmatex:
       generic: true
+  - pymdownx.snippets:
+      base_path: ['.']
+      check_paths: true
 
 extra_javascript:
   - javascripts/mathjax.js
@@ -44,3 +47,7 @@ nav:
       - VIE Type 2: examples/vie2.md
       - VIDE: examples/vide.md
       - Callable inputs and arbitrary mesh: examples/function_solvers.md
+      - Vector- and matrix-valued equations: examples/matrix_vector.md
+      - Complex-valued equations: examples/complex.md
+      - Polynomial solutions (return_function): examples/polynomial_solutions.md
+  - Benchmarks: benchmarks.md

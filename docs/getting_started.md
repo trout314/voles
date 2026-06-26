@@ -2,19 +2,8 @@
 
 ## Installation
 
-```bash
-pip install voles
-```
-
-The callable-input solvers (`function_solve_*`, `optimal_graded_mesh`) additionally need `scipy`:
-
-```bash
-pip install "voles[callable]"
-```
-
-**Runtime requirements:** numpy, plus the compiled D extension (bundled in the wheel — no extra tooling needed). `scipy` is required only for the callable-input family. `numba` is an optional fallback used only when an array-based solver is asked to run a collocation setting that isn't compiled into the D extension.
-
-To build from a non-wheel platform see [CONTRIBUTING.md](../CONTRIBUTING.md).
+<!-- Single-sourced from README.md so the two never drift. -->
+--8<-- "README.md:install"
 
 ## Input format
 

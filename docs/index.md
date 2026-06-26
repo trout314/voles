@@ -21,18 +21,10 @@ The callable-input solvers also expose `optimal_graded_mesh(alpha, T, M,
 order)` for building a Brunner-graded mesh suitable for kernels
 with a $u^{-\alpha}$ singularity.
 
-## Quick install
+## Installation
 
-```bash
-pip install voles
-```
-
-The callable-input solvers (`function_solve_*`, `optimal_graded_mesh`)
-additionally require `scipy`:
-
-```bash
-pip install "voles[callable]"
-```
+<!-- Single-sourced from README.md so the two never drift. -->
+--8<-- "README.md:install"
 
 ## Mathematical derivations
 

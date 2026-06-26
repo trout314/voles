@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'README.md'
       - 'src/**'
       - 'dlang/**'
       - 'pyproject.toml'
@@ -16,6 +17,7 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'README.md'
       - 'src/**'
       - 'dlang/**'
       - 'pyproject.toml'
@@ -53,4 +55,4 @@ jobs:
         run: pip install -e ".[dev,callable]"
 
       - name: Run documentation examples
-        run: pytest --markdown-docs docs/ -v
+        run: pytest --markdown-docs docs/ README.md -v

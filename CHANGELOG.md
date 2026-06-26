@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Documentation
+- The install/dependency instructions are now single-sourced: the README
+  install block is the canonical copy, and the docs site pulls it in via a
+  snippet, so the two can no longer drift. Fixed the stale docs that still
+  described `scipy` as an optional `[callable]` extra (it has been a core
+  dependency since 0.6.0).
+- Measured benchmark tables moved from the README to a dedicated
+  `docs/benchmarks.md` page (the README keeps the asymptotic-complexity table
+  and links out). The benchmark CI job now regenerates that page instead of the
+  README, and was hardened to never commit Git conflict markers.
+- Added worked example pages for vector/matrix-valued equations, complex-valued
+  equations, and polynomial (`return_function`) solutions; the README now links
+  to these rather than duplicating the code. README code blocks are now executed
+  in CI (`pytest --markdown-docs`) alongside the docs examples.
+
 ## [0.7.0] - 2026-06-26
 
 ### Performance

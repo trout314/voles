@@ -68,11 +68,12 @@ API reference: [api/optimal_graded_mesh/](https://trout314.github.io/voles/api/o
 
 ## Installation
 
+<!-- --8<-- [start:install] -->
 ```bash
 pip install voles[full]
 ```
 
-This gives you the fully-capable package, so everything just works out of the box. Pre-built wheels are provided for Linux x86_64, macOS arm64 (Apple Silicon), and Windows x64. The D extension is bundled in the wheel and requires no extra tooling. Intel Macs are no longer supported as of 0.3.2; users can pin to `volterra-equation-solvers==0.3.1` or build from source (see CONTRIBUTING.md).
+This gives you the fully-capable package, so everything just works out of the box. Pre-built wheels are provided for Linux x86_64, macOS arm64 (Apple Silicon), and Windows x64. The D extension is bundled in the wheel and requires no extra tooling. Intel Macs are no longer supported as of 0.3.2; users can pin to `volterra-equation-solvers==0.3.1` or build from source (see [CONTRIBUTING.md](https://github.com/trout314/voles/blob/main/CONTRIBUTING.md)).
 
 **Requirements:** Python ≥ 3.10, numpy, scipy
 
@@ -87,7 +88,10 @@ pip install voles --no-deps && pip install numpy   # leanest: numpy only, no sci
 - `scipy` (core dependency) — required for the callable-input `function_solve_*` family.
 - `numba` (added by `[full]`) — only needed for the array-based solvers when using non-standard collocation settings not compiled into the D extension.
 
-To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](CONTRIBUTING.md).
+To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](https://github.com/trout314/voles/blob/main/CONTRIBUTING.md).
+<!-- --8<-- [end:install] -->
+
+> 📊 **Performance:** asymptotic complexity is summarized [below](#benchmarks); detailed measured timings live in the [benchmarks page of the docs](https://trout314.github.io/voles/benchmarks/).
 
 ## Quick start
 
@@ -117,46 +121,13 @@ The solvers require input arrays to satisfy an internal size constraint. Any len
 
 ## Vector and Matrix Valued Equations
 
-All solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ is a $d$-dimensional vector, $g(t)$ is also a $d$-dimensional vector and $K(t)$ and $a(t)$ are $d \times d$ matrices. When $y(t)$ is a $d \times m$ matrix, $g(t)$ is also a $d \times m$ matrix and $K(t)$ and $a(t)$ are $d \times d$ matrices. The case is detected automatically: for the array-based family from the shapes of the input arrays, and for the callable family from the shape returned by `g(t)` (a `(d, m)` return — or a `(d, m)` `soln_init_value` for VIDE — selects the matrix case). The callable family builds the kernel weight tensor once and shares it across the $m$ columns, so a matrix solve is much cheaper than $m$ separate calls; see the [callable-solver examples](https://trout314.github.io/voles/examples/function_solvers/) for a worked case.
+All solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ is a $d$-dimensional vector, $g(t)$ is also a $d$-dimensional vector and $K(t)$ and $a(t)$ are $d \times d$ matrices. When $y(t)$ is a $d \times m$ matrix, $g(t)$ is also a $d \times m$ matrix and $K(t)$ and $a(t)$ are $d \times d$ matrices. The case is detected automatically: for the array-based family from the shapes of the input arrays, and for the callable family from the shape returned by `g(t)` (a `(d, m)` return — or a `(d, m)` `soln_init_value` for VIDE — selects the matrix case). The callable family builds the kernel weight tensor once and shares it across the $m$ columns, so a matrix solve is much cheaper than $m$ separate calls.
 
-```python
-import numpy as np
-from voles import solve_VIE_1
-
-# 2×2 VIE-1 with constant kernel K = [[3/2, -1/2], [-1/2, 3/2]],
-# g(t) = [t + (3/2)t², t - (1/2)t²], and exact solution y(t) = [1+2t, 1]
-time_step = 0.1
-times = np.arange(0, 9.1, time_step)   # 91 pts = 10×3² + 1
-N = len(times)
-
-kernel = np.full((N, 2, 2), [[1.5, -0.5], [-0.5, 1.5]])
-
-g = np.zeros((N, 2))
-g[:, 0] = times + 1.5 * times**2
-g[:, 1] = times - 0.5 * times**2
-
-soln = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=time_step)
-# soln shape: (N, 2)
-exact = np.column_stack([1 + 2*times, np.ones(N)])
-print(f"Max error: {np.max(np.abs(soln - exact)):.2e}")
-```
+See the worked examples: [vector- and matrix-valued equations](https://trout314.github.io/voles/examples/matrix_vector/), and the [callable-solver examples](https://trout314.github.io/voles/examples/function_solvers/) for the matrix-valued callable case.
 
 ## Complex-Valued Equations
 
-All three solvers accept complex-valued inputs. Pass complex NumPy arrays for the kernel, forcing function, and (for VIDE) initial value, and the solver returns a complex-valued solution. This works for scalar, vector, and matrix cases alike.
-
-```python
-import numpy as np
-from voles import solve_VIE_2
-
-time_step = 0.05
-times = np.arange(0, 2.1, time_step)
-kernel = np.exp(-1j * times)               # complex kernel
-g = np.ones_like(times, dtype=complex)
-
-soln = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=time_step)
-# soln is a complex-valued array
-```
+All three solvers accept complex-valued inputs. Pass complex NumPy arrays (or, for the callable family, callables returning complex values) for the kernel, forcing function, and (for VIDE) initial value, and the solver returns a complex-valued solution. This works for scalar, vector, and matrix cases alike. See the [complex-valued equations example](https://trout314.github.io/voles/examples/complex/).
 
 ## How the Collocation Method Works
 
@@ -172,37 +143,7 @@ The figure below shows an actual `voles` solution to a first-kind VIE ($g(t) = \
 
 ## Polynomial Solutions
 
-Passing `return_function=True` to any solver returns a `(soln_values, solution)` tuple (`return_polys=True` is a deprecated alias). `solution(t)` evaluates the piecewise polynomial at any time, and `solution` also indexes/iterates like a list of `numpy.polynomial.Polynomial` objects covering successive mesh intervals — these can be evaluated at any point, differentiated, integrated, and so on. The following example uses `solve_VIDE` to solve for $y(t) = \sin(t)$, then evaluates the solution and its derivative at a point not on the time grid:
-
-```python
-import numpy as np
-from voles import solve_VIDE
-
-# y(t) = sin(t) satisfies this VIDE with K(s) = exp(-s), a(t) = -1
-time_step = 0.1
-times = np.arange(0, 9.1, time_step)   # 91 points
-kernel = np.exp(-times)
-a = np.full(len(times), -1.0)
-g = 1.5*np.cos(times) + 0.5*np.sin(times) - 0.5*np.exp(-times)
-
-soln_vals, solution = solve_VIDE(
-    kernel_values=kernel,
-    a_values=a,
-    g_values=g,
-    soln_init_value=0.0,
-    time_step=time_step,
-    return_function=True,
-)
-
-# solution(t) evaluates the piecewise polynomial directly:
-print(f"y(0.2)  ≈ {solution(0.2):.6f},  exact = {np.sin(0.2):.6f}")
-
-# solution also indexes like the per-interval polynomials:
-p = solution[0]                         # numpy.polynomial.Polynomial on t ∈ [0, 0.4]
-
-# Differentiate to recover y'(t):
-print(f"y'(0.2) ≈ {p.deriv()(0.2):.6f},  exact = {np.cos(0.2):.6f}")
-```
+Passing `return_function=True` to any solver returns a `(soln_values, solution)` tuple (`return_polys=True` is a deprecated alias). `solution(t)` evaluates the piecewise polynomial at any time, and `solution` also indexes/iterates like a list of `numpy.polynomial.Polynomial` objects covering successive mesh intervals — these can be evaluated at any point, differentiated, integrated, and so on. See the [polynomial-solutions example](https://trout314.github.io/voles/examples/polynomial_solutions/) for a worked case that evaluates the solution and its derivative off the time grid.
 
 ## Benchmarks
 
@@ -217,34 +158,7 @@ All three solvers have the same expected asymptotic complexity in N, d, and m, w
 
 The quadratic time scaling arises because each new mesh step requires a history sum over all previous steps. The `coll_divs` and `coll_choices` parameters affect the constant factor but not the asymptotic scaling in N, d, and m.
 
-Mean wall-clock execution time in milliseconds for the **array-based** solvers, by input length $N$ (number of sampled points):
-
-<!-- BENCHMARKS:START -->
-| Solver \ N | 500 | 1000 | 2000 | 4000 | 8000 |
-|---|---|---|---|---|---|
-| VIE-1 | 0.04 | 0.06 | 0.15 | 0.47 | 1.63 |
-| VIE-1 (continuous) | 0.05 | 0.08 | 0.18 | 0.51 | 1.75 |
-| VIE-2 | 0.07 | 0.17 | 0.56 | 2.05 | 7.76 |
-| VIDE | 0.58 | 1.44 | 4.15 | 13.4 | 47.5 |
-| VIE-1 (d=2) | 0.10 | 0.25 | 0.80 | 2.86 | 11.0 |
-| VIE-1 (d=2, continuous) | 0.11 | 0.26 | 0.82 | 2.96 | 11.1 |
-| VIE-2 (d=2) | 0.26 | 0.90 | 3.40 | 13.3 | 53.1 |
-| VIDE (d=2) | 0.99 | 3.23 | 11.6 | 43.9 | 171 |
-<!-- BENCHMARKS:END -->
-
-The **callable-input** solvers run the general path (Python + adaptive quadrature, no Toeplitz reuse), so they are benchmarked on much smaller problems, sized by the number of mesh intervals $M$ (each carrying `len(coll_choices)` collocation nodes). The *weakly singular* row uses an Abel kernel $K(u) = u^{-1/2}$ on a graded mesh with the singularity declared:
-
-<!-- CALLABLE_BENCHMARKS:START -->
-| Solver \ M | 25 | 50 | 100 |
-|---|---|---|---|
-| function_solve_VIE_1 | 15.9 | 57.3 | 213 |
-| function_solve_VIE_2 | 15.4 | 57.2 | 217 |
-| function_solve_VIE_2 (vector, d=3) | 26.9 | 101 | 392 |
-| function_solve_VIDE | 16.0 | 58.1 | 222 |
-| function_solve_VIE_2 (weakly singular) | 161 | 368 | 944 |
-<!-- CALLABLE_BENCHMARKS:END -->
-
-Run on a GitHub Actions `ubuntu-22.04` runner (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost). Mean time is averaged over a variable number of calibrated rounds (from ~9 for large inputs up to ~6000 for small inputs).
+**Measured timings** for both solver families (regenerated automatically on each push) live on the [benchmarks page of the documentation](https://trout314.github.io/voles/benchmarks/), alongside an [interactive history dashboard](https://trout314.github.io/voles/dev/bench/).
 
 See the [Getting Started](https://trout314.github.io/voles/getting_started/) page for complete examples.
 
