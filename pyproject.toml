@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "voles"
-version = "0.5.0"
+version = "0.6.0"
 description = "Collocation-method solvers for Volterra integral and integro-differential equations"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -26,13 +26,21 @@ classifiers = [
 ]
 dependencies = [
     "numpy",
+    "scipy",
 ]
 
 [project.optional-dependencies]
+# The fully-capable install (recommended). scipy is already a core
+# dependency; this extra adds the numba JIT fallback for non-standard
+# collocation settings not compiled into the D extension.
+full = [
+    "numba",
+]
 numba = [
     "numba",
-    "scipy",
 ]
+# Retained for backwards compatibility: scipy is now a core dependency,
+# so `voles[callable]` resolves to the same thing as a plain install.
 callable = [
     "scipy",
 ]

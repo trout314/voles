@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-26
+
+### Dependencies
+- **`scipy` is now a core dependency** (was the `[callable]` extra), so the
+  callable-input `function_solve_*` family works out of the box.
+- **Recommended install is now `pip install voles[full]`**, which additionally
+  pulls in `numba` for the array-based solvers' fallback on non-standard
+  collocation settings. Plain `pip install voles` still gives a working package
+  (numpy + scipy, no numba); see the README for slimmer install options if you
+  hit trouble installing a dependency.
+- The `[callable]` extra is retained as a no-op alias for backwards
+  compatibility (scipy is now always installed).
+
 ### Performance
 - The callable-input solvers (`function_solve_VIE_1/2/VIDE`) build the kernel
   weight tensor substantially faster. On each smooth quadrature block the kernel

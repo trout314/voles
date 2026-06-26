@@ -23,7 +23,7 @@ Two solver families are provided.
 
 - The **array-input** family (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`) take the kernel and other input functions as arrays of values given on a uniform time grid. They do not support singular kernels.
 
-- The **callable-input** family (`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`) accept the kernel and other input functions as Python callables, and allow arbitrary collocation mesh intervals. These solvers support kernels with integrable singularities, but the user must specify the location of the singular points. A helper function `optimal_graded_mesh` is provided for building an optimal set of mesh points in the case of a convolution kernel with a known power-law singularity at time zero. Note that the callable-input family of solvers require `scipy` (install via the `[callable]` extra).
+- The **callable-input** family (`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`) accept the kernel and other input functions as Python callables, and allow arbitrary collocation mesh intervals. These solvers support kernels with integrable singularities, but the user must specify the location of the singular points. A helper function `optimal_graded_mesh` is provided for building an optimal set of mesh points in the case of a convolution kernel with a known power-law singularity at time zero. Note that the callable-input family of solvers require `scipy`, which is included by default.
 
 ### Type-1 Volterra integral equation (VIE-1)
 
@@ -67,15 +67,23 @@ API reference: [api/optimal_graded_mesh/](https://trout314.github.io/voles/api/o
 ## Installation
 
 ```bash
-pip install voles
+pip install voles[full]
 ```
 
-Pre-built wheels are provided for Linux x86_64, macOS arm64 (Apple Silicon), and Windows x64. The D extension is bundled in the wheel and requires no extra tooling. Intel Macs are no longer supported as of 0.3.2; users can pin to `volterra-equation-solvers==0.3.1` or build from source (see CONTRIBUTING.md).
+This gives you the fully-capable package, so everything just works out of the box. Pre-built wheels are provided for Linux x86_64, macOS arm64 (Apple Silicon), and Windows x64. The D extension is bundled in the wheel and requires no extra tooling. Intel Macs are no longer supported as of 0.3.2; users can pin to `volterra-equation-solvers==0.3.1` or build from source (see CONTRIBUTING.md).
 
-**Requirements:** Python ≥ 3.10, numpy
-**Optional extras:**
-- `[callable]` (scipy) — required for the `function_solve_*` family.
-- `[numba]` (numba, scipy) — only needed for the array-based solvers when using non-standard collocation settings not compiled into the D extension.
+**Requirements:** Python ≥ 3.10, numpy, scipy
+
+**If you have trouble installing a dependency**, you can use a slimmer install instead. `numba` and `scipy` are only needed for some features (see below), so any of these will still give you a working package:
+
+```bash
+pip install voles          # core: numpy + scipy (no numba)
+pip install voles --no-deps && pip install numpy   # leanest: numpy only, no scipy or numba
+```
+
+**What the optional pieces buy you:**
+- `scipy` (core dependency) — required for the callable-input `function_solve_*` family.
+- `numba` (added by `[full]`) — only needed for the array-based solvers when using non-standard collocation settings not compiled into the D extension.
 
 To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
