@@ -13,16 +13,18 @@
   smooth vector/matrix kernels (e.g. `function_solve_VIE_2` at M=200, d=3:
   ~4.1 s → ~1.0 s). Removed the now-unused
   `_fixed_order_quad`/`_fixed_order_quad_matrix` helpers.
-- The vector/matrix build further batches the **off-diagonal blocks** across
-  collocation nodes: since all `p` nodes of a step share the same integration
-  interval `[t_l, t_{l+1}]` (only the kernel argument `tau_i - s` differs), the
-  kernel is now sampled once across the whole `(p, order)` node grid and combined
-  via one `einsum`, instead of once per node. Nodes whose declared singularity
-  falls in a block are peeled off to the adaptive path, and the diagonal block
-  (whose upper limit is `tau_i`) stays per-node. A further **~1.45×** on top of
-  the above (M=200, d=3: ~1.0 s → ~0.71 s), bringing the vector path to ~1.2×
-  the scalar path (down from ~7× before both changes); results are unchanged
-  (matches a brute-force reference to ~1e-12).
+- Both the scalar and vector/matrix builds further batch the **off-diagonal
+  blocks** across collocation nodes: since all `p` nodes of a step share the same
+  integration interval `[t_l, t_{l+1}]` (only the kernel argument `tau_i - s`
+  differs), the kernel is now sampled once across the whole `(p, order)` node grid
+  and combined via one `einsum`, instead of once per node. Nodes whose declared
+  singularity falls in a block are peeled off to the adaptive path, and the
+  diagonal block (whose upper limit is `tau_i`) stays per-node. This is a further
+  **~1.45×** for vector/matrix kernels (M=200, d=3: ~1.0 s → ~0.71 s, now ~1.2×
+  the scalar path, down from ~7× before both changes) and **~1.37×** for scalar
+  kernels (M=200: ~0.59 s → ~0.43 s). Results are unchanged: the optimized weight
+  tensor matches a brute-force per-element reference to ~1e-12 in both the smooth
+  and weakly-singular (Abel kernel) cases.
 
 ## [0.6.0] - 2026-06-26
 
