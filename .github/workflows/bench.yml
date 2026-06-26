@@ -77,14 +77,36 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
 
-      - name: Generate benchmark table
-        run: python benchmarks/make_table.py output.json README.md
-
-      - name: Commit benchmark table
+      - name: Update benchmark table in README
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase --autostash
-          git add README.md
-          git diff --cached --quiet || git commit -m "Update benchmark table [skip ci]"
-          git push
+          # Regenerate the table against the freshest main and push, with a retry
+          # loop for concurrent benchmark runs. We deliberately do NOT stash/rebase
+          # a locally-edited README (the previous `git pull --rebase --autostash`
+          # could leave Git conflict markers and then commit them): instead each
+          # attempt resets to the latest origin tip and re-runs make_table.py on it.
+          for attempt in 1 2 3 4 5; do
+            git fetch origin "${GITHUB_REF_NAME}"
+            git reset --hard "origin/${GITHUB_REF_NAME}"   # untracked output.json is preserved
+            python benchmarks/make_table.py output.json README.md
+            # Hard safety net: never commit a README containing conflict markers.
+            if grep -nE '^(<{7}|>{7}|={7})' README.md; then
+              echo "::error::Conflict markers present in README after table generation; aborting." >&2
+              exit 1
+            fi
+            if git diff --quiet -- README.md; then
+              echo "No benchmark-table changes to commit."
+              exit 0
+            fi
+            git add README.md
+            git commit -m "Update benchmark table [skip ci]"
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "Pushed benchmark table update on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push rejected (likely a concurrent run); retrying..."
+            sleep $((RANDOM % 5 + 2))
+          done
+          echo "::error::Failed to push benchmark table after 5 attempts." >&2
+          exit 1
