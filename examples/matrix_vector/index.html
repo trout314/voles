@@ -11,10 +11,10 @@
       
       
       
-        <link rel="prev" href="../vie2/">
+        <link rel="prev" href="../function_solvers/">
       
       
-        <link rel="next" href="../function_solvers/">
+        <link rel="next" href="../complex/">
       
       
         
@@ -25,7 +25,7 @@
     
     
       
-        <title>VIDE - voles</title>
+        <title>Vector- and matrix-valued equations - voles</title>
       
     
     
@@ -68,7 +68,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#example-volterra-integro-differential-equation" class="md-skip">
+        <a href="#example-vector-and-matrix-valued-equations" class="md-skip">
           Skip to content
         </a>
       
@@ -102,7 +102,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              VIDE
+              Vector- and matrix-valued equations
             
           </span>
         </div>
@@ -881,19 +881,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../vide/" class="md-nav__link">
         
   
   
@@ -909,7 +900,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -947,10 +937,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../matrix_vector/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector- and matrix-valued equations
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -966,6 +983,37 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#array-based-22-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Array-based 2×2 example
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1081,6 +1129,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#array-based-22-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Array-based 2×2 example
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1099,42 +1166,40 @@
   
 
 
-<h1 id="example-volterra-integro-differential-equation">Example: Volterra Integro-Differential Equation</h1>
-<p>Solve the VIDE</p>
-<div class="arithmatex">\[y'(t) = a(t)y(t) + g(t) + \int_0^t K(t-s)y(s)ds\]</div>
-<p>with <span class="arithmatex">\(a(t) = \frac{1}{1+t^2}\)</span>, <span class="arithmatex">\(K(s) = e^{-s}\)</span>, and <span class="arithmatex">\(g(t)\)</span> chosen so the exact solution is <span class="arithmatex">\(y(t) = \sin(t)\)</span>.</p>
+<h1 id="example-vector-and-matrix-valued-equations">Example: Vector- and Matrix-Valued Equations</h1>
+<p>All solvers can solve for vector-valued and matrix-valued functions <span class="arithmatex">\(y(t)\)</span>.
+When <span class="arithmatex">\(y(t)\)</span> is a <span class="arithmatex">\(d\)</span>-dimensional vector, <span class="arithmatex">\(g(t)\)</span> is also a <span class="arithmatex">\(d\)</span>-dimensional vector
+and <span class="arithmatex">\(K(t)\)</span> and <span class="arithmatex">\(a(t)\)</span> are <span class="arithmatex">\(d \times d\)</span> matrices. When <span class="arithmatex">\(y(t)\)</span> is a <span class="arithmatex">\(d \times m\)</span>
+matrix, <span class="arithmatex">\(g(t)\)</span> is also a <span class="arithmatex">\(d \times m\)</span> matrix and <span class="arithmatex">\(K(t)\)</span> and <span class="arithmatex">\(a(t)\)</span> are
+<span class="arithmatex">\(d \times d\)</span> matrices.</p>
+<p>The case is detected automatically: for the array-based family from the shapes
+of the input arrays, and for the callable family from the shape returned by
+<code>g(t)</code> (a <code>(d, m)</code> return — or a <code>(d, m)</code> <code>soln_init_value</code> for VIDE — selects
+the matrix case). The callable family builds the kernel weight tensor once and
+shares it across the <span class="arithmatex">\(m\)</span> columns, so a matrix solve is much cheaper than <span class="arithmatex">\(m\)</span>
+separate calls; see the <a href="../function_solvers/">callable-solver examples</a> for a
+worked case.</p>
+<h2 id="array-based-22-example">Array-based 2×2 example</h2>
+<p>A 2×2 VIE-1 with constant kernel <span class="arithmatex">\(K = \begin{bmatrix} 3/2 &amp; -1/2 \\ -1/2 &amp; 3/2 \end{bmatrix}\)</span>,
+<span class="arithmatex">\(g(t) = [t + \tfrac{3}{2}t^2,\ t - \tfrac{1}{2}t^2]\)</span>, and exact solution
+<span class="arithmatex">\(y(t) = [1 + 2t,\ 1]\)</span>:</p>
 <pre><code class="language-python">import numpy as np
-from voles import solve_VIDE
+from voles import solve_VIE_1
 
-time_step = 0.01
-coll_divs = 3
-num_pts = 10 * coll_divs**2 + 1   # 91
-times = np.array([i * time_step for i in range(num_pts)])
+time_step = 0.1
+times = np.arange(0, 9.1, time_step)   # 91 pts = 10×3² + 1
+N = len(times)
 
-kernel = np.exp(-times)
-a = 1.0 / (1.0 + times**2)
-g = (np.cos(times)
-     - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
-     - np.sin(times) / (1.0 + times**2))
+kernel = np.full((N, 2, 2), [[1.5, -0.5], [-0.5, 1.5]])
 
-soln_vals, solution = solve_VIDE(
-    g_values=g,
-    kernel_values=kernel,
-    a_values=a,
-    soln_init_value=0.0,   # sin(0) = 0
-    coll_divs=coll_divs,
-    coll_choices=[1, 2, 3],
-    time_step=time_step,
-    return_function=True,
-)
+g = np.zeros((N, 2))
+g[:, 0] = times + 1.5 * times**2
+g[:, 1] = times - 0.5 * times**2
 
-exact = np.sin(times)
-print(f&quot;Max error: {np.max(np.abs(soln_vals - exact)):.2e}&quot;)
-assert np.max(np.abs(soln_vals - exact)) &lt; 1e-3
-
-# `solution` is callable at any time, and also indexes/iterates like the
-# per-interval polynomials (solution[n], for poly in solution, ...).
-print(f&quot;y(0.5) = {solution(0.5):.6f}  (exact {np.sin(0.5):.6f})&quot;)
+soln = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=time_step)
+# soln shape: (N, 2)
+exact = np.column_stack([1 + 2*times, np.ones(N)])
+print(f&quot;Max error: {np.max(np.abs(soln - exact)):.2e}&quot;)
 </code></pre>
 
 

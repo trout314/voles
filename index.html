@@ -269,6 +269,25 @@
   
 
       
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -392,10 +411,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-install" class="md-nav__link">
+  <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick install
+        Installation
       
     </span>
   </a>
@@ -998,9 +1017,120 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="examples/matrix_vector/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector- and matrix-valued equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="examples/complex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complex-valued equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="examples/polynomial_solutions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polynomial solutions (return_function)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1043,10 +1173,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-install" class="md-nav__link">
+  <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick install
+        Installation
       
     </span>
   </a>
@@ -1134,13 +1264,21 @@ meshes, and handles weakly singular kernels.</p>
 <p>The callable-input solvers also expose <code>optimal_graded_mesh(alpha, T, M,
 order)</code> for building a Brunner-graded mesh suitable for kernels
 with a <span class="arithmatex">\(u^{-\alpha}\)</span> singularity.</p>
-<h2 id="quick-install">Quick install</h2>
-<pre><code class="language-bash">pip install voles
+<h2 id="installation">Installation</h2>
+<!-- Single-sourced from README.md so the two never drift. -->
+
+<pre><code class="language-bash">pip install voles[full]
 </code></pre>
-<p>The callable-input solvers (<code>function_solve_*</code>, <code>optimal_graded_mesh</code>)
-additionally require <code>scipy</code>:</p>
-<pre><code class="language-bash">pip install &quot;voles[callable]&quot;
+<p>This gives you the fully-capable package, so everything just works out of the box. Pre-built wheels are provided for Linux x86_64, macOS arm64 (Apple Silicon), and Windows x64. The D extension is bundled in the wheel and requires no extra tooling. Intel Macs are no longer supported as of 0.3.2; users can pin to <code>volterra-equation-solvers==0.3.1</code> or build from source (see <a href="https://github.com/trout314/voles/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>).</p>
+<p><strong>Requirements:</strong> Python ≥ 3.10, numpy, scipy</p>
+<p><strong>If you have trouble installing a dependency</strong>, you can use a slimmer install instead. <code>numba</code> and <code>scipy</code> are only needed for some features (see below), so any of these will still give you a working package:</p>
+<pre><code class="language-bash">pip install voles          # core: numpy + scipy (no numba)
+pip install voles --no-deps &amp;&amp; pip install numpy   # leanest: numpy only, no scipy or numba
 </code></pre>
+<p><strong>What the optional pieces buy you:</strong>
+- <code>scipy</code> (core dependency) — required for the callable-input <code>function_solve_*</code> family.
+- <code>numba</code> (added by <code>[full]</code>) — only needed for the array-based solvers when using non-standard collocation settings not compiled into the D extension.</p>
+<p>To build from source (e.g. on an unsupported platform), see <a href="https://github.com/trout314/voles/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
 <h2 id="mathematical-derivations">Mathematical derivations</h2>
 <p>The <code>docs/</code> directory contains worked derivations of the analytic solutions used in the test suite:</p>
 <table>
