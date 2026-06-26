@@ -62,7 +62,7 @@ $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 ### Mesh helper: `optimal_graded_mesh`
 
-Returns the graded mesh points $t_n = T (n/M)^r$ for $n=0,1,\ldots, M$. Here $M$ is the desired number of mesh intervals, and the grading exponent $r = p / (1 - \alpha)$ where $p$ is the method order set by the paramerer `order` and `$\alpha`. To get an optimal mesh for a given set of collocation parameters, one should set `order=len(coll_choices)`. These meshes are designed for weakly singular convolution kernels $K(u) \sim u^{-\alpha}$ with $\alpha \in [0, 1)$. (For $\alpha = 0$ it returns a uniform mesh). Feeding the result to a callable-input solver via `mesh_breakpoints` gives optimal convergence in such situations.
+This function should be used when the kernel has a single weak singularity at time zero with a known singular exponent.  Returns the graded mesh points $t_n = T (n/M)^r$ for $n=0,1,\ldots, M$ where $M$ is the desired number of mesh intervals. The grading exponent is $r = p / (1 - \alpha)$ where $p$ is the method order set by the paramerer `order`, and $\alpha$ is the power for the kernel singularity, i.e. $K(u)\tilde u^{-\alpha}$ near $u=0$. To get an optimal mesh for a given set of collocation parameters, one should set `order=len(coll_choices)`. These meshes are designed for weakly singular convolution kernels $K(u) \sim u^{-\alpha}$ with $\alpha \in [0, 1)$. (For $\alpha = 0$ it returns a uniform mesh). Feeding the result to a callable-input solver via `mesh_breakpoints` gives optimal convergence in such situations.
 
 API reference: [api/optimal_graded_mesh/](https://trout314.github.io/voles/api/optimal_graded_mesh/)
 
