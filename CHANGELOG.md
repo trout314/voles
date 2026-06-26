@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Performance
+- The callable-input solvers' **vector/matrix** weight-tensor build now uses the
+  same batched smooth-block path as the scalar build (added in 0.6.0): the
+  `(d, d)` kernel is sampled once per block per Gauss-Legendre order and combined
+  with all basis functions via a single `einsum`, instead of a separate
+  quadrature (with its own kernel evals and `polyval`) per basis function. The
+  two-order convergence check and the scipy adaptive fallback for singular
+  blocks are unchanged, and results are identical. Roughly **4× faster** for
+  smooth vector/matrix kernels (e.g. `function_solve_VIE_2` at M=200, d=3:
+  ~4.1 s → ~1.0 s); the vector path is now ~1.75× the scalar path rather than
+  ~7×. Removed the now-unused `_fixed_order_quad`/`_fixed_order_quad_matrix`
+  helpers.
+
 ## [0.6.0] - 2026-06-26
 
 ### Dependencies

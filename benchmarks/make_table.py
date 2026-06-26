@@ -43,6 +43,7 @@ CALLABLE = {
     "rows": [
         ("function_solve_VIE_1",                  "test_fn_vie1"),
         ("function_solve_VIE_2",                  "test_fn_vie2"),
+        ("function_solve_VIE_2 (vector, d=3)",    "test_fn_vie2_vec"),
         ("function_solve_VIDE",                   "test_fn_vide"),
         ("function_solve_VIE_2 (weakly singular)", "test_fn_vie2_sing"),
     ],

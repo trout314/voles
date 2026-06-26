@@ -187,49 +187,6 @@ def _gauss_legendre_nodes_weights(order: int) -> tuple[np.ndarray, np.ndarray]:
     return nodes, weights
 
 
-def _fixed_order_quad(integrand, a: float, b: float, order: int,
-                      vectorized: bool = False) -> float:
-    """Apply Gauss-Legendre of given order on [a, b].
-
-    When ``vectorized`` is True, the integrand is called once with the full
-    array of GL nodes; otherwise it is called once per node (compatible with
-    integrands that only accept scalar input).
-    """
-    if b <= a:
-        return 0.0
-    nodes, weights = _gauss_legendre_nodes_weights(order)
-    half = 0.5 * (b - a)
-    mid = 0.5 * (a + b)
-    s_points = mid + half * nodes
-    if vectorized:
-        vals = np.asarray(integrand(s_points), dtype=np.float64)
-    else:
-        vals = np.array([integrand(s) for s in s_points])
-    return float(half * np.dot(weights, vals))
-
-
-def _fixed_order_quad_matrix(integrand, a: float, b: float, order: int,
-                              d: int, vectorized: bool = False) -> np.ndarray:
-    """Gauss-Legendre on a (d, d)-valued integrand on [a, b].
-
-    Vectorized path expects the integrand to return shape ``(order, d, d)``
-    when called with the (order,) array of GL nodes.
-    """
-    if b <= a:
-        return np.zeros((d, d), dtype=np.float64)
-    nodes, weights = _gauss_legendre_nodes_weights(order)
-    half = 0.5 * (b - a)
-    mid = 0.5 * (a + b)
-    if vectorized:
-        s_points = mid + half * nodes
-        vals = np.asarray(integrand(s_points), dtype=np.float64)
-        return half * np.einsum('i,ijk->jk', weights, vals)
-    result = np.zeros((d, d), dtype=np.float64)
-    for x, w in zip(nodes, weights):
-        result += w * np.asarray(integrand(mid + half * x), dtype=np.float64)
-    return half * result
-
-
 def _detect_kernel_vectorized(kernel, sample_u: float, is_vector: bool, d: int) -> bool:
     """Return True if ``kernel`` returns the expected shape when called with
     a small array of u values. Detected once at the top of a W build to pick
@@ -416,6 +373,50 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
     sample_u = float(widths[0]) * 0.5
     kernel_vec = _detect_kernel_vectorized(kernel, sample_u, is_vector=True, d=d)
 
+    # Same factorization as the scalar path: on a smooth block the (d, d) kernel
+    # K(tau - s) sampled at the Gauss-Legendre nodes is the same for every basis
+    # function, and the basis values at those nodes are the same for every block
+    # of a given kind. Precompute, per GL order, the nodes/weights and the
+    # basis-at-nodes tables (B_off for full off-diagonal blocks, B_diag for the
+    # partial diagonal block l == n). Each smooth block then costs one kernel
+    # evaluation per order plus a small einsum across all basis functions at
+    # once, instead of a separate (d, d) quadrature per basis function.
+    orders = (smooth_gl_order, smooth_gl_order + 2)
+    gl = {}
+    B_off = {}
+    B_diag = {}
+    for o in orders:
+        nodes, weights = _gauss_legendre_nodes_weights(o)
+        gl[o] = (nodes, weights)
+        xn_full = 0.5 * (nodes + 1.0)
+        B_off[o] = np.array([npp.polyval(xn_full, basis[k]) for k in range(n_basis)])
+        Bd = np.empty((p, n_basis, o), dtype=np.float64)
+        for i in range(p):
+            xn = node_pos[i] * 0.5 * (nodes + 1.0)
+            for k in range(n_basis):
+                Bd[i, k] = npp.polyval(xn, basis[k])
+        B_diag[o] = Bd
+
+    def smooth_block_vals(a_int, b_int, tau, is_diag, i):
+        """Order-(ord) and order-(ord+2) estimates of the integral of
+        K(tau - s) * L_k(s_norm) over [a_int, b_int] for all basis functions k
+        at once. Returns two (n_basis, d, d) arrays."""
+        half = 0.5 * (b_int - a_int)
+        mid = 0.5 * (a_int + b_int)
+        est = []
+        for o in orders:
+            nodes, weights = gl[o]
+            s_points = mid + half * nodes
+            arg = tau - s_points
+            if kernel_vec:
+                kvals = np.asarray(kernel(arg), dtype=np.float64)  # (o, d, d)
+            else:
+                kvals = np.array([np.asarray(kernel(a), dtype=np.float64)
+                                  for a in arg])  # (o, d, d)
+            B = B_diag[o][i] if is_diag else B_off[o]  # (n_basis, o)
+            est.append(half * np.einsum('kq,q,qde->kde', B, weights, kvals))
+        return est[0], est[1]
+
     quad_vec = None
     W = np.zeros((M, p, M, n_basis, d, d), dtype=np.float64)
 
@@ -445,9 +446,8 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                                     for sp in sing_for_tau)
                 use_adaptive = bool(interior_sing) or endpoint_sing
 
-                for k in range(n_basis):
+                def make_integrand(k):
                     L_k_coefs = basis[k]
-
                     if kernel_vec:
                         def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs):
                             x_norm = (s - _t_l) / _h_l
@@ -460,30 +460,36 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                             x_norm = (s - _t_l) / _h_l
                             K = np.asarray(kernel(_tau - s), dtype=np.float64)
                             return K * _eval_poly_at(_L_k, x_norm)
+                    return integrand
 
-                    if use_adaptive:
+                if use_adaptive:
+                    # Singular block: per-basis adaptive quadrature.
+                    for k in range(n_basis):
                         if quad_vec is None:
                             quad_vec = _import_scipy_quad_vec()
                         kwargs = {'limit': 100}
                         if interior_sing:
                             kwargs['points'] = interior_sing
-                        val, _err = quad_vec(integrand, a_int, b_int, **kwargs)
-                    else:
-                        v1 = _fixed_order_quad_matrix(integrand, a_int, b_int,
-                                                     smooth_gl_order, d, vectorized=kernel_vec)
-                        v2 = _fixed_order_quad_matrix(integrand, a_int, b_int,
-                                                     smooth_gl_order + 2, d, vectorized=kernel_vec)
-                        err = float(np.max(np.abs(v1 - v2)))
-                        ref = max(1.0, float(np.max(np.abs(v2))))
-                        if err <= smooth_check_tol * ref:
-                            val = v2
-                        else:
-                            if quad_vec is None:
-                                quad_vec = _import_scipy_quad_vec()
-                            val, _err = quad_vec(integrand, a_int, b_int,
-                                                 limit=100)
+                        val, _err = quad_vec(make_integrand(k), a_int, b_int, **kwargs)
+                        W[n, i, l, k, :, :] = val
+                    continue
 
-                    W[n, i, l, k, :, :] = val
+                # Smooth block: batched two-order check across basis functions.
+                # Accept basis k iff max|v1 - v2| <= tol * max(1, max|v2|) over the
+                # (d, d) entries; the negation (which also catches NaN, matching
+                # the per-k scalar logic) falls back to adaptive quadrature.
+                v1, v2 = smooth_block_vals(a_int, b_int, tau, l == n, i)
+                W[n, i, l, :, :, :] = v2
+                err = np.max(np.abs(v1 - v2), axis=(1, 2))  # (n_basis,)
+                ref = np.maximum(1.0, np.max(np.abs(v2), axis=(1, 2)))
+                ok = err <= smooth_check_tol * ref
+                bad = np.nonzero(~ok)[0]
+                for k in bad:
+                    if quad_vec is None:
+                        quad_vec = _import_scipy_quad_vec()
+                    val, _err = quad_vec(make_integrand(int(k)), a_int, b_int,
+                                         limit=100)
+                    W[n, i, l, int(k), :, :] = val
 
     if not np.isfinite(W).all():
         raise ValueError(

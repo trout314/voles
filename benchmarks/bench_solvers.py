@@ -394,3 +394,38 @@ def test_fn_vie2_sing_100(benchmark):
     benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
               coll_divs=2, coll_choices=[0, 1, 2], kernel_singularity=0.0,
               show_warnings=False)
+
+# function_solve_VIE_2, vector kernel (d=3 smooth). Exercises the vector
+# weight-tensor build (the batched smooth path); cost is dominated by the
+# Python build and is nearly independent of d.
+_FN_D = 3
+
+def _fn_vie2_smooth_vector(M):
+    A = np.eye(_FN_D) * 1.5 - 0.5  # (d, d) coupling
+    def kernel(u):
+        u = np.asarray(u, dtype=float)
+        base = np.exp(-u)  # scalar or (n,)
+        if base.ndim == 0:
+            return A * float(base)
+        return A[None, :, :] * base[:, None, None]  # (n, d, d)
+    g = lambda t: np.full(_FN_D, np.sin(t))
+    mesh = np.linspace(0.0, _FN_T, M + 1)
+    return kernel, g, mesh
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie2_vec_25(benchmark):
+    k, g, mesh = _fn_vie2_smooth_vector(25)
+    benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie2_vec_50(benchmark):
+    k, g, mesh = _fn_vie2_smooth_vector(50)
+    benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie2_vec_100(benchmark):
+    k, g, mesh = _fn_vie2_smooth_vector(100)
+    benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
