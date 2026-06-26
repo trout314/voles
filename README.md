@@ -29,7 +29,7 @@ Note that the callable-input family of solvers require the package `scipy`, whic
 
 ### Type-1 Volterra integral equation (VIE-1)
 
-Given $K$ and $g$, solve for $y(t)$ in:
+Given functions $K$ and $g$, solve for the unknown function $y(t)$ in:
 
 $$g(t) = \int_0^t K(t-s)\\, y(s)\\, ds$$
 
@@ -40,7 +40,7 @@ $$g(t) = \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 ### Type-2 Volterra integral equation (VIE-2)
 
-Given $K$ and $g$, solve for $y(t)$ in:
+Given functions $K$ and $g$, solve for the function $y(t)$ in:
 
 $$y(t) = g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
@@ -51,7 +51,7 @@ $$y(t) = g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 ### Volterra integro-differential equation (VIDE)
 
-Given $K$, $a$, $g$, and initial value $y(0)$, solve for $y(t)$ in:
+Given functions $K$, $a$, $g$, and initial value $y(0)$, solve for the function $y(t)$ in:
 
 $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
