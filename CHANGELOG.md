@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-26
+
 ### Performance
 - The callable-input solvers' **vector/matrix** weight-tensor build now uses the
   same batched smooth-block path as the scalar build (added in 0.6.0): the
