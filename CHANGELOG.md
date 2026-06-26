@@ -25,6 +25,15 @@
   kernels (M=200: ~0.59 s → ~0.43 s). Results are unchanged: the optimized weight
   tensor matches a brute-force per-element reference to ~1e-12 in both the smooth
   and weakly-singular (Abel kernel) cases.
+- The off-diagonal accept/store step is now **vectorized across collocation
+  nodes** as well: the two-order convergence check and the weight-tensor write
+  for a full block are done for all its smooth nodes in one indexed assignment,
+  instead of a per-node Python loop, with only the rare failing pairs falling
+  back to adaptive quadrature. A further **~1.4×** for vector/matrix kernels
+  (M=200, d=3: ~0.71 s → ~0.50 s) and **~1.34×** for scalar kernels
+  (M=200: ~0.43 s → ~0.32 s); results are again identical. Cumulatively over
+  this release the smooth vector/matrix build is ~8× faster (M=200, d=3:
+  ~4.1 s → ~0.50 s) and the scalar build ~1.8× faster than in 0.6.0.
 
 ## [0.6.0] - 2026-06-26
 

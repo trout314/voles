@@ -340,6 +340,19 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                                    a_int, b_int, limit=100)
             W[n, i, l, int(k)] = val
 
+    def store_smooth_offdiag(n, l, smooth_is, taus, t_l, h_l, a_int, b_int, v1, v2):
+        """Vectorized store + two-order check for a full off-diagonal block across
+        all its smooth collocation nodes at once. v1, v2: (n_i, n_basis). The
+        accepted estimate is written for every (node, basis) in one indexed assign;
+        only the rare failing pairs fall back to per-node adaptive quadrature."""
+        W[n, np.asarray(smooth_is), l, :] = v2
+        ok = np.abs(v1 - v2) <= smooth_check_tol * np.maximum(1.0, np.abs(v2))
+        bad_i, bad_k = np.nonzero(~ok)
+        for bi, bk in zip(bad_i.tolist(), bad_k.tolist()):
+            val, _err = get_quad()(make_integrand(taus[bi], t_l, h_l, bk),
+                                   a_int, b_int, limit=100)
+            W[n, smooth_is[bi], l, bk] = val
+
     for n in range(M):
         t_n = mesh_breakpoints[n]
         h_n = widths[n]
@@ -365,10 +378,10 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                     smooth_is.append(i)
 
             if smooth_is:
-                v1, v2 = smooth_offdiag_vals(a_int, b_int, tau_n[smooth_is])
-                for idx, i in enumerate(smooth_is):
-                    store_smooth(n, i, l, tau_n[i], t_l, h_l, a_int, b_int,
-                                 v1[idx], v2[idx])
+                taus = tau_n[smooth_is]
+                v1, v2 = smooth_offdiag_vals(a_int, b_int, taus)
+                store_smooth_offdiag(n, l, smooth_is, taus, t_l, h_l,
+                                     a_int, b_int, v1, v2)
 
         # Diagonal block l == n: the upper limit is tau_i, so it stays per-node.
         l = n
@@ -542,6 +555,20 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                                        a_int, b_int, limit=100)
             W[n, i, l, int(k), :, :] = val
 
+    def store_smooth_offdiag(n, l, smooth_is, taus, t_l, h_l, a_int, b_int, v1, v2):
+        """Vectorized store + two-order check for a full off-diagonal block across
+        all its smooth collocation nodes at once. v1, v2: (n_i, n_basis, d, d). The
+        accepted estimate is written for every (node, basis) in one indexed assign;
+        only the rare failing pairs fall back to per-node adaptive quadrature."""
+        W[n, np.asarray(smooth_is), l, :, :, :] = v2
+        err = np.max(np.abs(v1 - v2), axis=(2, 3))  # (n_i, n_basis)
+        ref = np.maximum(1.0, np.max(np.abs(v2), axis=(2, 3)))
+        bad_i, bad_k = np.nonzero(~(err <= smooth_check_tol * ref))
+        for bi, bk in zip(bad_i.tolist(), bad_k.tolist()):
+            val, _err = get_quad_vec()(make_integrand(taus[bi], t_l, h_l, bk),
+                                       a_int, b_int, limit=100)
+            W[n, smooth_is[bi], l, bk, :, :] = val
+
     for n in range(M):
         t_n = mesh_breakpoints[n]
         h_n = widths[n]
@@ -567,10 +594,10 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                     smooth_is.append(i)
 
             if smooth_is:
-                v1, v2 = smooth_offdiag_vals(a_int, b_int, tau_n[smooth_is])
-                for idx, i in enumerate(smooth_is):
-                    store_smooth(n, i, l, tau_n[i], t_l, h_l, a_int, b_int,
-                                 v1[idx], v2[idx])
+                taus = tau_n[smooth_is]
+                v1, v2 = smooth_offdiag_vals(a_int, b_int, taus)
+                store_smooth_offdiag(n, l, smooth_is, taus, t_l, h_l,
+                                     a_int, b_int, v1, v2)
 
         # Diagonal block l == n: the upper limit is tau_i, so it stays per-node.
         l = n
