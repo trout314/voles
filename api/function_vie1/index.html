@@ -1283,11 +1283,13 @@ must have shape <span class="arithmatex">\((d, m)\)</span>.</p>
             <td>
               <div class="doc-md-description">
                 <p>Collocation nodes lie at <code>coll_choices[k] / coll_divs</code> in (0, 1].
-Zero is excluded from <code>coll_choices</code>.</p>
+Zero is excluded from <code>coll_choices</code>. Defaults to
+<code>coll_divs=3, coll_choices=[1, 2, 3]</code>. Mutually exclusive with
+<code>coll_nodes</code>.</p>
               </div>
             </td>
             <td>
-                  <code>3</code>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1300,11 +1302,32 @@ Zero is excluded from <code>coll_choices</code>.</p>
             <td>
               <div class="doc-md-description">
                 <p>Collocation nodes lie at <code>coll_choices[k] / coll_divs</code> in (0, 1].
-Zero is excluded from <code>coll_choices</code>.</p>
+Zero is excluded from <code>coll_choices</code>. Defaults to
+<code>coll_divs=3, coll_choices=[1, 2, 3]</code>. Mutually exclusive with
+<code>coll_nodes</code>.</p>
               </div>
             </td>
             <td>
-                  <code>3</code>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>coll_nodes</code>
+            </td>
+            <td>
+                  <code><span title="array_like">array_like</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Collocation node positions given directly as floats in <span class="arithmatex">\((0, 1]\)</span> (zero
+excluded); see <code>function_solve_VIE_2</code>. Mutually exclusive with
+<code>coll_divs</code>/<code>coll_choices</code>. The convergence check (see Notes) is
+applied to both the integer and the <code>coll_nodes</code> paths.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1316,11 +1339,13 @@ Zero is excluded from <code>coll_choices</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If <code>True</code>, replace one collocation equation per interval with a
-continuity constraint on the piecewise polynomial solution. The first
-interval uses <code>soln_init_value</code> as the starting condition; later
-intervals match the previous interval's right endpoint. The default
-discontinuous method is generally more accurate.</p>
+                <p>If <code>True</code>, use the continuous collocation method (Brunner's
+<span class="arithmatex">\(S_m^{(0)}\)</span>): the solution is a globally <span class="arithmatex">\(C^0\)</span> piecewise polynomial of
+degree $m = $ <code>len(coll_choices)</code>, anchored at $y(0) = $
+<code>soln_init_value</code>. This requires the last node to be the right
+endpoint, <span class="arithmatex">\(c_m = 1\)</span> (see Notes for the convergence condition). The
+default discontinuous method (<span class="arithmatex">\(S_{m-1}^{(-1)}\)</span>) imposes no such
+restriction and is generally the better default.</p>
               </div>
             </td>
             <td>
@@ -1376,224 +1401,338 @@ discontinuous method is generally more accurate.</p>
     </table>
 
 
+<details class="note" open>
+  <summary>Notes</summary>
+  <p>Whether a given node set yields a convergent method depends on the nodes
+(Brunner 2004, smooth-kernel chapter). For a smooth kernel with
+<span class="arithmatex">\(|K(t, t)| \ge k_0 &gt; 0\)</span>, writing <span class="arithmatex">\(c_1 &lt; \dots &lt; c_m\)</span> for the nodes:</p>
+<ul>
+<li>Discontinuous (default): converges iff
+  <span class="arithmatex">\(|\rho_m| := \prod_{i=1}^{m} (1 - c_i)/c_i \le 1\)</span> (Thm 2.4.2), with global
+  order <span class="arithmatex">\(m\)</span> (reduced to <span class="arithmatex">\(m - 1\)</span> at <span class="arithmatex">\(\rho_m = 1\)</span>).</li>
+<li>Continuous (<code>force_continuous</code>): requires <span class="arithmatex">\(c_m = 1\)</span> and converges iff
+  <span class="arithmatex">\(|\rho_{m-1}| := \prod_{i=1}^{m-1} (1 - c_i)/c_i \le 1\)</span> (Thm 2.4.5), with
+  global order <span class="arithmatex">\(m + 1\)</span> (reduced to <span class="arithmatex">\(m\)</span> at <span class="arithmatex">\(\rho_{m-1} = 1\)</span>).</li>
+</ul>
+<p>Node sets violating these are rejected with a <code>ValueError</code>. The criteria
+do not apply to weakly-singular kernels (where <span class="arithmatex">\(|K(t, t)|\)</span> is unbounded), so
+the check is skipped when <code>kernel_singularity</code> is given and convergence is
+then the caller's responsibility.</p>
+<p>These theorems are proved for a <em>uniform</em> mesh. The amplification factors
+<span class="arithmatex">\(\rho\)</span> depend only on the nodes, so the conditions carry over to
+<em>quasi-uniform</em> meshes (all interval widths within fixed constant multiples
+of each other). They are not guaranteed on <em>strongly graded</em> meshes -- e.g.
+the geometric refinement of <code>optimal_graded_mesh</code>, where the smallest
+interval shrinks far faster than the largest -- but such meshes normally
+accompany a declared <code>kernel_singularity</code>, for which the check is already
+skipped.</p>
+</details>
+
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1581</span>
-<span class="normal">1582</span>
-<span class="normal">1583</span>
-<span class="normal">1584</span>
-<span class="normal">1585</span>
-<span class="normal">1586</span>
-<span class="normal">1587</span>
-<span class="normal">1588</span>
-<span class="normal">1589</span>
-<span class="normal">1590</span>
-<span class="normal">1591</span>
-<span class="normal">1592</span>
-<span class="normal">1593</span>
-<span class="normal">1594</span>
-<span class="normal">1595</span>
-<span class="normal">1596</span>
-<span class="normal">1597</span>
-<span class="normal">1598</span>
-<span class="normal">1599</span>
-<span class="normal">1600</span>
-<span class="normal">1601</span>
-<span class="normal">1602</span>
-<span class="normal">1603</span>
-<span class="normal">1604</span>
-<span class="normal">1605</span>
-<span class="normal">1606</span>
-<span class="normal">1607</span>
-<span class="normal">1608</span>
-<span class="normal">1609</span>
-<span class="normal">1610</span>
-<span class="normal">1611</span>
-<span class="normal">1612</span>
-<span class="normal">1613</span>
-<span class="normal">1614</span>
-<span class="normal">1615</span>
-<span class="normal">1616</span>
-<span class="normal">1617</span>
-<span class="normal">1618</span>
-<span class="normal">1619</span>
-<span class="normal">1620</span>
-<span class="normal">1621</span>
-<span class="normal">1622</span>
-<span class="normal">1623</span>
-<span class="normal">1624</span>
-<span class="normal">1625</span>
-<span class="normal">1626</span>
-<span class="normal">1627</span>
-<span class="normal">1628</span>
-<span class="normal">1629</span>
-<span class="normal">1630</span>
-<span class="normal">1631</span>
-<span class="normal">1632</span>
-<span class="normal">1633</span>
-<span class="normal">1634</span>
-<span class="normal">1635</span>
-<span class="normal">1636</span>
-<span class="normal">1637</span>
-<span class="normal">1638</span>
-<span class="normal">1639</span>
-<span class="normal">1640</span>
-<span class="normal">1641</span>
-<span class="normal">1642</span>
-<span class="normal">1643</span>
-<span class="normal">1644</span>
-<span class="normal">1645</span>
-<span class="normal">1646</span>
-<span class="normal">1647</span>
-<span class="normal">1648</span>
-<span class="normal">1649</span>
-<span class="normal">1650</span>
-<span class="normal">1651</span>
-<span class="normal">1652</span>
-<span class="normal">1653</span>
-<span class="normal">1654</span>
-<span class="normal">1655</span>
-<span class="normal">1656</span>
-<span class="normal">1657</span>
-<span class="normal">1658</span>
-<span class="normal">1659</span>
-<span class="normal">1660</span>
-<span class="normal">1661</span>
-<span class="normal">1662</span>
-<span class="normal">1663</span>
-<span class="normal">1664</span>
-<span class="normal">1665</span>
-<span class="normal">1666</span>
-<span class="normal">1667</span>
-<span class="normal">1668</span>
-<span class="normal">1669</span>
-<span class="normal">1670</span>
-<span class="normal">1671</span>
-<span class="normal">1672</span>
-<span class="normal">1673</span>
-<span class="normal">1674</span>
-<span class="normal">1675</span>
-<span class="normal">1676</span>
-<span class="normal">1677</span>
-<span class="normal">1678</span>
-<span class="normal">1679</span>
-<span class="normal">1680</span>
-<span class="normal">1681</span>
-<span class="normal">1682</span>
-<span class="normal">1683</span>
-<span class="normal">1684</span>
-<span class="normal">1685</span>
-<span class="normal">1686</span>
-<span class="normal">1687</span>
-<span class="normal">1688</span>
-<span class="normal">1689</span>
-<span class="normal">1690</span>
-<span class="normal">1691</span>
-<span class="normal">1692</span>
-<span class="normal">1693</span>
-<span class="normal">1694</span>
-<span class="normal">1695</span>
-<span class="normal">1696</span>
-<span class="normal">1697</span>
-<span class="normal">1698</span>
-<span class="normal">1699</span>
-<span class="normal">1700</span>
-<span class="normal">1701</span>
-<span class="normal">1702</span>
-<span class="normal">1703</span>
-<span class="normal">1704</span>
-<span class="normal">1705</span>
-<span class="normal">1706</span>
-<span class="normal">1707</span>
-<span class="normal">1708</span>
-<span class="normal">1709</span>
-<span class="normal">1710</span>
-<span class="normal">1711</span>
-<span class="normal">1712</span>
-<span class="normal">1713</span>
-<span class="normal">1714</span>
-<span class="normal">1715</span>
-<span class="normal">1716</span>
-<span class="normal">1717</span>
-<span class="normal">1718</span>
-<span class="normal">1719</span>
-<span class="normal">1720</span>
-<span class="normal">1721</span>
-<span class="normal">1722</span>
-<span class="normal">1723</span>
-<span class="normal">1724</span>
-<span class="normal">1725</span>
-<span class="normal">1726</span>
-<span class="normal">1727</span>
-<span class="normal">1728</span>
-<span class="normal">1729</span>
-<span class="normal">1730</span>
-<span class="normal">1731</span>
-<span class="normal">1732</span>
-<span class="normal">1733</span>
-<span class="normal">1734</span>
-<span class="normal">1735</span>
-<span class="normal">1736</span>
-<span class="normal">1737</span>
-<span class="normal">1738</span>
-<span class="normal">1739</span>
-<span class="normal">1740</span>
-<span class="normal">1741</span>
-<span class="normal">1742</span>
-<span class="normal">1743</span>
-<span class="normal">1744</span>
-<span class="normal">1745</span>
-<span class="normal">1746</span>
-<span class="normal">1747</span>
-<span class="normal">1748</span>
-<span class="normal">1749</span>
-<span class="normal">1750</span>
-<span class="normal">1751</span>
-<span class="normal">1752</span>
-<span class="normal">1753</span>
-<span class="normal">1754</span>
-<span class="normal">1755</span>
-<span class="normal">1756</span>
-<span class="normal">1757</span>
-<span class="normal">1758</span>
-<span class="normal">1759</span>
-<span class="normal">1760</span>
-<span class="normal">1761</span>
-<span class="normal">1762</span>
-<span class="normal">1763</span>
-<span class="normal">1764</span>
-<span class="normal">1765</span>
-<span class="normal">1766</span>
-<span class="normal">1767</span>
-<span class="normal">1768</span>
-<span class="normal">1769</span>
-<span class="normal">1770</span>
-<span class="normal">1771</span>
-<span class="normal">1772</span>
-<span class="normal">1773</span>
-<span class="normal">1774</span>
-<span class="normal">1775</span>
-<span class="normal">1776</span>
-<span class="normal">1777</span>
-<span class="normal">1778</span>
-<span class="normal">1779</span>
-<span class="normal">1780</span>
-<span class="normal">1781</span>
-<span class="normal">1782</span>
-<span class="normal">1783</span>
-<span class="normal">1784</span>
-<span class="normal">1785</span>
-<span class="normal">1786</span>
-<span class="normal">1787</span>
-<span class="normal">1788</span>
-<span class="normal">1789</span>
-<span class="normal">1790</span>
-<span class="normal">1791</span>
-<span class="normal">1792</span>
-<span class="normal">1793</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1881</span>
+<span class="normal">1882</span>
+<span class="normal">1883</span>
+<span class="normal">1884</span>
+<span class="normal">1885</span>
+<span class="normal">1886</span>
+<span class="normal">1887</span>
+<span class="normal">1888</span>
+<span class="normal">1889</span>
+<span class="normal">1890</span>
+<span class="normal">1891</span>
+<span class="normal">1892</span>
+<span class="normal">1893</span>
+<span class="normal">1894</span>
+<span class="normal">1895</span>
+<span class="normal">1896</span>
+<span class="normal">1897</span>
+<span class="normal">1898</span>
+<span class="normal">1899</span>
+<span class="normal">1900</span>
+<span class="normal">1901</span>
+<span class="normal">1902</span>
+<span class="normal">1903</span>
+<span class="normal">1904</span>
+<span class="normal">1905</span>
+<span class="normal">1906</span>
+<span class="normal">1907</span>
+<span class="normal">1908</span>
+<span class="normal">1909</span>
+<span class="normal">1910</span>
+<span class="normal">1911</span>
+<span class="normal">1912</span>
+<span class="normal">1913</span>
+<span class="normal">1914</span>
+<span class="normal">1915</span>
+<span class="normal">1916</span>
+<span class="normal">1917</span>
+<span class="normal">1918</span>
+<span class="normal">1919</span>
+<span class="normal">1920</span>
+<span class="normal">1921</span>
+<span class="normal">1922</span>
+<span class="normal">1923</span>
+<span class="normal">1924</span>
+<span class="normal">1925</span>
+<span class="normal">1926</span>
+<span class="normal">1927</span>
+<span class="normal">1928</span>
+<span class="normal">1929</span>
+<span class="normal">1930</span>
+<span class="normal">1931</span>
+<span class="normal">1932</span>
+<span class="normal">1933</span>
+<span class="normal">1934</span>
+<span class="normal">1935</span>
+<span class="normal">1936</span>
+<span class="normal">1937</span>
+<span class="normal">1938</span>
+<span class="normal">1939</span>
+<span class="normal">1940</span>
+<span class="normal">1941</span>
+<span class="normal">1942</span>
+<span class="normal">1943</span>
+<span class="normal">1944</span>
+<span class="normal">1945</span>
+<span class="normal">1946</span>
+<span class="normal">1947</span>
+<span class="normal">1948</span>
+<span class="normal">1949</span>
+<span class="normal">1950</span>
+<span class="normal">1951</span>
+<span class="normal">1952</span>
+<span class="normal">1953</span>
+<span class="normal">1954</span>
+<span class="normal">1955</span>
+<span class="normal">1956</span>
+<span class="normal">1957</span>
+<span class="normal">1958</span>
+<span class="normal">1959</span>
+<span class="normal">1960</span>
+<span class="normal">1961</span>
+<span class="normal">1962</span>
+<span class="normal">1963</span>
+<span class="normal">1964</span>
+<span class="normal">1965</span>
+<span class="normal">1966</span>
+<span class="normal">1967</span>
+<span class="normal">1968</span>
+<span class="normal">1969</span>
+<span class="normal">1970</span>
+<span class="normal">1971</span>
+<span class="normal">1972</span>
+<span class="normal">1973</span>
+<span class="normal">1974</span>
+<span class="normal">1975</span>
+<span class="normal">1976</span>
+<span class="normal">1977</span>
+<span class="normal">1978</span>
+<span class="normal">1979</span>
+<span class="normal">1980</span>
+<span class="normal">1981</span>
+<span class="normal">1982</span>
+<span class="normal">1983</span>
+<span class="normal">1984</span>
+<span class="normal">1985</span>
+<span class="normal">1986</span>
+<span class="normal">1987</span>
+<span class="normal">1988</span>
+<span class="normal">1989</span>
+<span class="normal">1990</span>
+<span class="normal">1991</span>
+<span class="normal">1992</span>
+<span class="normal">1993</span>
+<span class="normal">1994</span>
+<span class="normal">1995</span>
+<span class="normal">1996</span>
+<span class="normal">1997</span>
+<span class="normal">1998</span>
+<span class="normal">1999</span>
+<span class="normal">2000</span>
+<span class="normal">2001</span>
+<span class="normal">2002</span>
+<span class="normal">2003</span>
+<span class="normal">2004</span>
+<span class="normal">2005</span>
+<span class="normal">2006</span>
+<span class="normal">2007</span>
+<span class="normal">2008</span>
+<span class="normal">2009</span>
+<span class="normal">2010</span>
+<span class="normal">2011</span>
+<span class="normal">2012</span>
+<span class="normal">2013</span>
+<span class="normal">2014</span>
+<span class="normal">2015</span>
+<span class="normal">2016</span>
+<span class="normal">2017</span>
+<span class="normal">2018</span>
+<span class="normal">2019</span>
+<span class="normal">2020</span>
+<span class="normal">2021</span>
+<span class="normal">2022</span>
+<span class="normal">2023</span>
+<span class="normal">2024</span>
+<span class="normal">2025</span>
+<span class="normal">2026</span>
+<span class="normal">2027</span>
+<span class="normal">2028</span>
+<span class="normal">2029</span>
+<span class="normal">2030</span>
+<span class="normal">2031</span>
+<span class="normal">2032</span>
+<span class="normal">2033</span>
+<span class="normal">2034</span>
+<span class="normal">2035</span>
+<span class="normal">2036</span>
+<span class="normal">2037</span>
+<span class="normal">2038</span>
+<span class="normal">2039</span>
+<span class="normal">2040</span>
+<span class="normal">2041</span>
+<span class="normal">2042</span>
+<span class="normal">2043</span>
+<span class="normal">2044</span>
+<span class="normal">2045</span>
+<span class="normal">2046</span>
+<span class="normal">2047</span>
+<span class="normal">2048</span>
+<span class="normal">2049</span>
+<span class="normal">2050</span>
+<span class="normal">2051</span>
+<span class="normal">2052</span>
+<span class="normal">2053</span>
+<span class="normal">2054</span>
+<span class="normal">2055</span>
+<span class="normal">2056</span>
+<span class="normal">2057</span>
+<span class="normal">2058</span>
+<span class="normal">2059</span>
+<span class="normal">2060</span>
+<span class="normal">2061</span>
+<span class="normal">2062</span>
+<span class="normal">2063</span>
+<span class="normal">2064</span>
+<span class="normal">2065</span>
+<span class="normal">2066</span>
+<span class="normal">2067</span>
+<span class="normal">2068</span>
+<span class="normal">2069</span>
+<span class="normal">2070</span>
+<span class="normal">2071</span>
+<span class="normal">2072</span>
+<span class="normal">2073</span>
+<span class="normal">2074</span>
+<span class="normal">2075</span>
+<span class="normal">2076</span>
+<span class="normal">2077</span>
+<span class="normal">2078</span>
+<span class="normal">2079</span>
+<span class="normal">2080</span>
+<span class="normal">2081</span>
+<span class="normal">2082</span>
+<span class="normal">2083</span>
+<span class="normal">2084</span>
+<span class="normal">2085</span>
+<span class="normal">2086</span>
+<span class="normal">2087</span>
+<span class="normal">2088</span>
+<span class="normal">2089</span>
+<span class="normal">2090</span>
+<span class="normal">2091</span>
+<span class="normal">2092</span>
+<span class="normal">2093</span>
+<span class="normal">2094</span>
+<span class="normal">2095</span>
+<span class="normal">2096</span>
+<span class="normal">2097</span>
+<span class="normal">2098</span>
+<span class="normal">2099</span>
+<span class="normal">2100</span>
+<span class="normal">2101</span>
+<span class="normal">2102</span>
+<span class="normal">2103</span>
+<span class="normal">2104</span>
+<span class="normal">2105</span>
+<span class="normal">2106</span>
+<span class="normal">2107</span>
+<span class="normal">2108</span>
+<span class="normal">2109</span>
+<span class="normal">2110</span>
+<span class="normal">2111</span>
+<span class="normal">2112</span>
+<span class="normal">2113</span>
+<span class="normal">2114</span>
+<span class="normal">2115</span>
+<span class="normal">2116</span>
+<span class="normal">2117</span>
+<span class="normal">2118</span>
+<span class="normal">2119</span>
+<span class="normal">2120</span>
+<span class="normal">2121</span>
+<span class="normal">2122</span>
+<span class="normal">2123</span>
+<span class="normal">2124</span>
+<span class="normal">2125</span>
+<span class="normal">2126</span>
+<span class="normal">2127</span>
+<span class="normal">2128</span>
+<span class="normal">2129</span>
+<span class="normal">2130</span>
+<span class="normal">2131</span>
+<span class="normal">2132</span>
+<span class="normal">2133</span>
+<span class="normal">2134</span>
+<span class="normal">2135</span>
+<span class="normal">2136</span>
+<span class="normal">2137</span>
+<span class="normal">2138</span>
+<span class="normal">2139</span>
+<span class="normal">2140</span>
+<span class="normal">2141</span>
+<span class="normal">2142</span>
+<span class="normal">2143</span>
+<span class="normal">2144</span>
+<span class="normal">2145</span>
+<span class="normal">2146</span>
+<span class="normal">2147</span>
+<span class="normal">2148</span>
+<span class="normal">2149</span>
+<span class="normal">2150</span>
+<span class="normal">2151</span>
+<span class="normal">2152</span>
+<span class="normal">2153</span>
+<span class="normal">2154</span>
+<span class="normal">2155</span>
+<span class="normal">2156</span>
+<span class="normal">2157</span>
+<span class="normal">2158</span>
+<span class="normal">2159</span>
+<span class="normal">2160</span>
+<span class="normal">2161</span>
+<span class="normal">2162</span>
+<span class="normal">2163</span>
+<span class="normal">2164</span>
+<span class="normal">2165</span>
+<span class="normal">2166</span>
+<span class="normal">2167</span>
+<span class="normal">2168</span>
+<span class="normal">2169</span>
+<span class="normal">2170</span>
+<span class="normal">2171</span>
+<span class="normal">2172</span>
+<span class="normal">2173</span>
+<span class="normal">2174</span>
+<span class="normal">2175</span>
+<span class="normal">2176</span>
+<span class="normal">2177</span>
+<span class="normal">2178</span>
+<span class="normal">2179</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">mesh_breakpoints</span><span class="p">,</span>
-                          <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span>
+                          <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                          <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">return_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                           <span class="n">force_continuous</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
@@ -1622,17 +1761,53 @@ discontinuous method is generally more accurate.</p>
 <span class="sd">        must have shape $(d, m)$.</span>
 <span class="sd">    mesh_breakpoints : array_like</span>
 <span class="sd">        Strictly-increasing 1-D array starting at 0.</span>
-<span class="sd">    coll_divs, coll_choices : int, list of int</span>
+<span class="sd">    coll_divs, coll_choices : int, list of int, optional</span>
 <span class="sd">        Collocation nodes lie at ``coll_choices[k] / coll_divs`` in (0, 1].</span>
-<span class="sd">        Zero is excluded from ``coll_choices``.</span>
+<span class="sd">        Zero is excluded from ``coll_choices``. Defaults to</span>
+<span class="sd">        ``coll_divs=3, coll_choices=[1, 2, 3]``. Mutually exclusive with</span>
+<span class="sd">        ``coll_nodes``.</span>
+<span class="sd">    coll_nodes : array_like, optional</span>
+<span class="sd">        Collocation node positions given directly as floats in $(0, 1]$ (zero</span>
+<span class="sd">        excluded); see ``function_solve_VIE_2``. Mutually exclusive with</span>
+<span class="sd">        ``coll_divs``/``coll_choices``. The convergence check (see Notes) is</span>
+<span class="sd">        applied to both the integer and the ``coll_nodes`` paths.</span>
 <span class="sd">    force_continuous : bool, optional</span>
-<span class="sd">        If ``True``, replace one collocation equation per interval with a</span>
-<span class="sd">        continuity constraint on the piecewise polynomial solution. The first</span>
-<span class="sd">        interval uses ``soln_init_value`` as the starting condition; later</span>
-<span class="sd">        intervals match the previous interval&#39;s right endpoint. The default</span>
-<span class="sd">        discontinuous method is generally more accurate.</span>
+<span class="sd">        If ``True``, use the continuous collocation method (Brunner&#39;s</span>
+<span class="sd">        $S_m^{(0)}$): the solution is a globally $C^0$ piecewise polynomial of</span>
+<span class="sd">        degree $m = $ ``len(coll_choices)``, anchored at $y(0) = $</span>
+<span class="sd">        ``soln_init_value``. This requires the last node to be the right</span>
+<span class="sd">        endpoint, $c_m = 1$ (see Notes for the convergence condition). The</span>
+<span class="sd">        default discontinuous method ($S_{m-1}^{(-1)}$) imposes no such</span>
+<span class="sd">        restriction and is generally the better default.</span>
 <span class="sd">    kernel_singularity, return_function, show_warnings :</span>
 <span class="sd">        See ``function_solve_VIE_2``.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    Whether a given node set yields a convergent method depends on the nodes</span>
+<span class="sd">    (Brunner 2004, smooth-kernel chapter). For a smooth kernel with</span>
+<span class="sd">    $|K(t, t)| \ge k_0 &gt; 0$, writing $c_1 &lt; \dots &lt; c_m$ for the nodes:</span>
+
+<span class="sd">    - Discontinuous (default): converges iff</span>
+<span class="sd">      $|\rho_m| := \prod_{i=1}^{m} (1 - c_i)/c_i \le 1$ (Thm 2.4.2), with global</span>
+<span class="sd">      order $m$ (reduced to $m - 1$ at $\rho_m = 1$).</span>
+<span class="sd">    - Continuous (``force_continuous``): requires $c_m = 1$ and converges iff</span>
+<span class="sd">      $|\rho_{m-1}| := \prod_{i=1}^{m-1} (1 - c_i)/c_i \le 1$ (Thm 2.4.5), with</span>
+<span class="sd">      global order $m + 1$ (reduced to $m$ at $\rho_{m-1} = 1$).</span>
+
+<span class="sd">    Node sets violating these are rejected with a ``ValueError``. The criteria</span>
+<span class="sd">    do not apply to weakly-singular kernels (where $|K(t, t)|$ is unbounded), so</span>
+<span class="sd">    the check is skipped when ``kernel_singularity`` is given and convergence is</span>
+<span class="sd">    then the caller&#39;s responsibility.</span>
+
+<span class="sd">    These theorems are proved for a *uniform* mesh. The amplification factors</span>
+<span class="sd">    $\rho$ depend only on the nodes, so the conditions carry over to</span>
+<span class="sd">    *quasi-uniform* meshes (all interval widths within fixed constant multiples</span>
+<span class="sd">    of each other). They are not guaranteed on *strongly graded* meshes -- e.g.</span>
+<span class="sd">    the geometric refinement of ``optimal_graded_mesh``, where the smallest</span>
+<span class="sd">    interval shrinks far faster than the largest -- but such meshes normally</span>
+<span class="sd">    accompany a declared ``kernel_singularity``, for which the check is already</span>
+<span class="sd">    skipped.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">mesh_breakpoints</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">mesh_breakpoints</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
@@ -1642,27 +1817,41 @@ discontinuous method is generally more accurate.</p>
     <span class="k">if</span> <span class="n">mesh_breakpoints</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;mesh_breakpoints[0] must be 0&quot;</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">coll_divs</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;coll_divs must be a positive integer&quot;</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">integer</span><span class="p">)):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;coll_choices must be a list of integers, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="n">coll_choices</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">)</span>
-    <span class="k">if</span> <span class="mi">0</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="s2">&quot;zero is not a valid VIE-1 collocation choice (both sides of the &quot;</span>
-            <span class="s2">&quot;equation vanish at t=0)&quot;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">))</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;coll_choices entries must be distinct&quot;</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">c</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;coll_choices must lie in [1, </span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+    <span class="n">node_pos</span><span class="p">,</span> <span class="n">_divs</span><span class="p">,</span> <span class="n">_choices</span> <span class="o">=</span> <span class="n">_resolve_node_pos</span><span class="p">(</span>
+        <span class="n">coll_nodes</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
+        <span class="n">default_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">default_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span>
+        <span class="n">exclude_zero</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">fname</span><span class="o">=</span><span class="s2">&quot;function_solve_VIE_1&quot;</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">))</span> <span class="ow">in</span> <span class="n">_VIE1_NONCONVERGENT</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;does not produce a convergent VIE-1 solver and is not supported.&quot;</span><span class="p">)</span>
+    <span class="c1"># Reject node sets for which the chosen VIE-1 method does not converge.</span>
+    <span class="c1"># The criteria assume a smooth kernel (Brunner Thm 2.4.2(b): |K(t,t)|&gt;=k0&gt;0),</span>
+    <span class="c1"># so they are skipped when a weakly-singular kernel is declared.</span>
+    <span class="k">if</span> <span class="n">kernel_singularity</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
+            <span class="c1"># Continuous S_m^(0): converges iff c_m = 1 and |rho_{m-1}| &lt;= 1.</span>
+            <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">node_pos</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">1e-12</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;force_continuous (continuous S_m^(0) collocation) requires the &quot;</span>
+                    <span class="s2">&quot;last collocation node to be the right endpoint c_m = 1; got &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;c_m = </span><span class="si">{</span><span class="n">node_pos</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">:</span><span class="s2">.6g</span><span class="si">}</span><span class="s2">. Append 1.0 to your nodes.&quot;</span><span class="p">)</span>
+            <span class="n">rho</span> <span class="o">=</span> <span class="n">_vie1_cont_amplification</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">rho</span> <span class="o">&gt;</span> <span class="mf">1.0</span> <span class="o">+</span> <span class="mf">1e-9</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;Collocation nodes do not yield a convergent continuous (S_m^(0)) &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;VIE-1 solver: the leading-node amplification |rho_</span><span class="se">{{</span><span class="s2">m-1</span><span class="se">}}</span><span class="s2">| = &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;prod_(i&lt;m) (1 - c_i)/c_i = </span><span class="si">{</span><span class="n">rho</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2"> exceeds 1 (Brunner Thm 2.4.5).&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="n">_vie1_convergent</span><span class="p">(</span><span class="n">node_pos</span><span class="p">):</span>
+            <span class="c1"># Discontinuous S_{m-1}^{(-1)}: converges iff |rho_m| &lt;= 1.</span>
+            <span class="n">rho</span> <span class="o">=</span> <span class="n">_vie1_amplification</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">_choices</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">_choices</span><span class="si">}</span><span class="s2">) &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;does not produce a convergent VIE-1 solver and is not supported &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;(amplification |rho_m| = </span><span class="si">{</span><span class="n">rho</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2"> &gt; 1).&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Collocation nodes </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">array2string</span><span class="p">(</span><span class="n">node_pos</span><span class="p">,</span><span class="w"> </span><span class="n">precision</span><span class="o">=</span><span class="mi">6</span><span class="p">)</span><span class="si">}</span><span class="s2"> do not &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;produce a convergent VIE-1 solver: the amplification factor &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;|rho_m| = prod (1 - c_i)/c_i = </span><span class="si">{</span><span class="n">rho</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2"> exceeds 1. Choose nodes &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;with a smaller amplification (e.g. include c = 1, as Radau IIA does).&quot;</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">kernel</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;kernel must be callable&quot;</span><span class="p">)</span>
@@ -1687,7 +1876,7 @@ discontinuous method is generally more accurate.</p>
             <span class="n">g</span><span class="o">=</span><span class="n">_block_wrap_g</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">),</span>
             <span class="n">soln_init_value</span><span class="o">=</span><span class="n">init_wrapped</span><span class="p">,</span>
             <span class="n">mesh_breakpoints</span><span class="o">=</span><span class="n">mesh_breakpoints</span><span class="p">,</span>
-            <span class="n">coll_divs</span><span class="o">=</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="n">coll_choices</span><span class="p">,</span>
+            <span class="n">coll_nodes</span><span class="o">=</span><span class="n">node_pos</span><span class="p">,</span>
             <span class="n">kernel_singularity</span><span class="o">=</span><span class="n">kernel_singularity</span><span class="p">,</span>
             <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span>
             <span class="n">force_continuous</span><span class="o">=</span><span class="n">force_continuous</span><span class="p">,</span>
@@ -1700,16 +1889,15 @@ discontinuous method is generally more accurate.</p>
         <span class="k">return</span> <span class="n">_recombine_complex_y</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">)</span>
 
     <span class="n">M</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
-    <span class="n">p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">)</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
     <span class="n">widths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span>
-    <span class="n">node_pos</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="o">/</span> <span class="n">coll_divs</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_dlang</span> <span class="k">as</span> <span class="n">_dlang_module</span>
     <span class="n">max_p</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_max_p_d</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">p</span> <span class="o">&gt;</span> <span class="n">max_p</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;len(coll_choices) = </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> exceeds the maximum compiled into the &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;D extension (</span><span class="si">{</span><span class="n">max_p</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
+            <span class="sa">f</span><span class="s2">&quot;number of collocation nodes p = </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> exceeds the maximum compiled &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;into the D extension (</span><span class="si">{</span><span class="n">max_p</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
 
     <span class="n">sample_u</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">widths</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">*</span> <span class="mf">0.5</span>
     <span class="n">is_vector</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="n">_detect_kernel_shape</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">sample_u</span><span class="p">)</span>
@@ -1717,13 +1905,7 @@ discontinuous method is generally more accurate.</p>
     <span class="n">_maybe_warn_mesh_uniform_with_singularity</span><span class="p">(</span>
         <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
 
-    <span class="c1"># Continuity-constraint vectors (only used when force_continuous=True).</span>
-    <span class="n">L_at_0</span> <span class="o">=</span> <span class="n">_lagrange_at</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
-    <span class="n">L_at_1</span> <span class="o">=</span> <span class="n">_lagrange_at</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
-
     <span class="k">if</span> <span class="ow">not</span> <span class="n">is_vector</span><span class="p">:</span>
-        <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_scalar</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
-                            <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">)</span>
         <span class="n">g_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">g</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">M</span><span class="p">):</span>
@@ -1731,11 +1913,28 @@ discontinuous method is generally more accurate.</p>
                 <span class="n">h_n</span> <span class="o">=</span> <span class="n">widths</span><span class="p">[</span><span class="n">n</span><span class="p">]</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
                     <span class="n">g_arr</span><span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">g</span><span class="p">(</span><span class="n">t_n</span> <span class="o">+</span> <span class="n">node_pos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">h_n</span><span class="p">))</span>
-        <span class="n">init_scalar</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">)</span> <span class="k">if</span> <span class="n">force_continuous</span> <span class="k">else</span> <span class="mf">0.0</span>
-        <span class="n">y</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie1_d</span><span class="p">(</span>
-            <span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">,</span> <span class="n">L_at_0</span><span class="p">,</span> <span class="n">L_at_1</span><span class="p">,</span> <span class="n">init_scalar</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
+            <span class="c1"># Brunner S_m^(0): degree-m polynomial on {0} ∪ node_pos, with the</span>
+            <span class="c1"># boundary value carried forward for continuity. Extended weight</span>
+            <span class="c1"># tensor against the augmented basis (value cols + boundary col).</span>
+            <span class="n">cont_basis</span> <span class="o">=</span> <span class="n">_vie1_cont_basis_coefs</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
+            <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_with_basis_scalar</span><span class="p">(</span>
+                <span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
+                <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">cont_basis</span><span class="p">)</span>
+            <span class="n">adv_U</span><span class="p">,</span> <span class="n">adv_0</span> <span class="o">=</span> <span class="n">_vie1_cont_advance</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
+            <span class="n">y</span><span class="p">,</span> <span class="n">boundary</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie1_cont_d</span><span class="p">(</span>
+                <span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">,</span> <span class="n">adv_U</span><span class="p">,</span> <span class="n">adv_0</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
+                <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_vie1_cont_polynomials_scalar</span><span class="p">(</span>
+                    <span class="n">y</span><span class="p">,</span> <span class="n">boundary</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">y</span><span class="p">,</span> <span class="n">_SolutionFunction</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">y</span>
+
+        <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_scalar</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
+                            <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie1_d</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
-            <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
+            <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">)</span>
             <span class="n">y_func</span> <span class="o">=</span> <span class="n">_SolutionFunction</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">y</span><span class="p">,</span> <span class="n">y_func</span>
         <span class="k">return</span> <span class="n">y</span>
@@ -1747,9 +1946,17 @@ discontinuous method is generally more accurate.</p>
             <span class="sa">f</span><span class="s2">&quot;kernel dimension d = </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2"> exceeds the maximum compiled into the &quot;</span>
             <span class="sa">f</span><span class="s2">&quot;D extension (</span><span class="si">{</span><span class="n">max_d</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
 
-    <span class="c1"># W depends only on the kernel; built once and shared across columns.</span>
-    <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_vector</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
-                        <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+    <span class="c1"># W depends only on the kernel; built once and shared across columns. The</span>
+    <span class="c1"># continuous (S_m^(0)) method uses the augmented value+boundary basis.</span>
+    <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
+        <span class="n">cont_basis</span> <span class="o">=</span> <span class="n">_vie1_cont_basis_coefs</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
+        <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_with_basis_vector</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
+                                       <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span>
+                                       <span class="n">cont_basis</span><span class="p">)</span>
+        <span class="n">adv_U</span><span class="p">,</span> <span class="n">adv_0</span> <span class="o">=</span> <span class="n">_vie1_cont_advance</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_vector</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
+                            <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
 
     <span class="n">sample_t</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">node_pos</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">widths</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
     <span class="n">m</span> <span class="o">=</span> <span class="n">_detect_g_matrix_cols</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">sample_t</span><span class="p">)</span>
@@ -1763,27 +1970,41 @@ discontinuous method is generally more accurate.</p>
                     <span class="sa">f</span><span class="s2">&quot;soln_init_value must have shape (</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s2">) for a &quot;</span>
                     <span class="sa">f</span><span class="s2">&quot;matrix-valued problem with force_continuous=True; &quot;</span>
                     <span class="sa">f</span><span class="s2">&quot;got shape </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">init_mat</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">init_mat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
 
         <span class="n">G</span> <span class="o">=</span> <span class="n">_sample_g_at_coll_matrix</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">widths</span><span class="p">,</span>
                                      <span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
 
+        <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
+            <span class="k">def</span><span class="w"> </span><span class="nf">_col_solve</span><span class="p">(</span><span class="n">j</span><span class="p">):</span>
+                <span class="n">g_arr_j</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">G</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">])</span>
+                <span class="k">return</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie1_cont_vec_d</span><span class="p">(</span>
+                    <span class="n">W</span><span class="p">,</span> <span class="n">g_arr_j</span><span class="p">,</span> <span class="n">adv_U</span><span class="p">,</span> <span class="n">adv_0</span><span class="p">,</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">init_mat</span><span class="p">[:,</span> <span class="n">j</span><span class="p">]))</span>
+            <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">m</span><span class="p">)</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
+                <span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ex</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_col_solve</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">)))</span>
+            <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>        <span class="c1"># (M, p, d, m)</span>
+            <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
+                <span class="n">boundary</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># (M+1, d, m)</span>
+                <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_vie1_cont_polynomials_matrix</span><span class="p">(</span>
+                    <span class="n">y</span><span class="p">,</span> <span class="n">boundary</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">y</span><span class="p">,</span> <span class="n">_SolutionFunction</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="n">m</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">y</span>
+
         <span class="k">def</span><span class="w"> </span><span class="nf">_col_solve</span><span class="p">(</span><span class="n">j</span><span class="p">):</span>
             <span class="n">g_arr_j</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">G</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">])</span>
-            <span class="k">return</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie1_vec_d</span><span class="p">(</span>
-                <span class="n">W</span><span class="p">,</span> <span class="n">g_arr_j</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">,</span> <span class="n">L_at_0</span><span class="p">,</span> <span class="n">L_at_1</span><span class="p">,</span>
-                <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">init_mat</span><span class="p">[:,</span> <span class="n">j</span><span class="p">]))</span>
+            <span class="k">return</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie1_vec_d</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">g_arr_j</span><span class="p">)</span>
 
         <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">m</span><span class="p">)</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
             <span class="n">cols</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ex</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_col_solve</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">)))</span>
         <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>  <span class="c1"># (M, p, d, m)</span>
 
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
-            <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials_matrix</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span>
-                                              <span class="n">coll_choices</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
+            <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials_matrix</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
+                                              <span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">y</span><span class="p">,</span> <span class="n">_SolutionFunction</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="n">m</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">y</span>
+
+    <span class="n">g_arr</span> <span class="o">=</span> <span class="n">_sample_g_at_coll_vec</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">widths</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
         <span class="n">init_vec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
@@ -1791,15 +2012,18 @@ discontinuous method is generally more accurate.</p>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;soln_init_value must have shape (</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">,) for vector kernel; &quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;got shape </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">init_vec</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">init_vec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">y</span><span class="p">,</span> <span class="n">boundary</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie1_cont_vec_d</span><span class="p">(</span>
+            <span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">,</span> <span class="n">adv_U</span><span class="p">,</span> <span class="n">adv_0</span><span class="p">,</span> <span class="n">init_vec</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
+            <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_vie1_cont_polynomials_vector</span><span class="p">(</span>
+                <span class="n">y</span><span class="p">,</span> <span class="n">boundary</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">y</span><span class="p">,</span> <span class="n">_SolutionFunction</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">d</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">y</span>
 
-    <span class="n">g_arr</span> <span class="o">=</span> <span class="n">_sample_g_at_coll_vec</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">widths</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
-    <span class="n">y</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie1_vec_d</span><span class="p">(</span>
-        <span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">,</span> <span class="n">L_at_0</span><span class="p">,</span> <span class="n">L_at_1</span><span class="p">,</span> <span class="n">init_vec</span><span class="p">)</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie1_vec_d</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
-        <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials_vector</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+        <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials_vector</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
         <span class="n">y_func</span> <span class="o">=</span> <span class="n">_SolutionFunction</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">d</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">y</span><span class="p">,</span> <span class="n">y_func</span>
     <span class="k">return</span> <span class="n">y</span>

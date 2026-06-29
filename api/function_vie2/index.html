@@ -1268,11 +1268,13 @@ intervals directly.</p>
               <div class="doc-md-description">
                 <p>Collocation node positions: nodes lie at
 <code>coll_choices[k] / coll_divs</code> in each interval. Unlike the array-
-based solvers, <code>coll_divs</code> does <em>not</em> sub-divide intervals.</p>
+based solvers, <code>coll_divs</code> does <em>not</em> sub-divide intervals. Defaults
+to <code>coll_divs=2, coll_choices=[0, 1, 2]</code> when neither these nor
+<code>coll_nodes</code> are given. Mutually exclusive with <code>coll_nodes</code>.</p>
               </div>
             </td>
             <td>
-                  <code>2</code>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1286,11 +1288,34 @@ based solvers, <code>coll_divs</code> does <em>not</em> sub-divide intervals.</p
               <div class="doc-md-description">
                 <p>Collocation node positions: nodes lie at
 <code>coll_choices[k] / coll_divs</code> in each interval. Unlike the array-
-based solvers, <code>coll_divs</code> does <em>not</em> sub-divide intervals.</p>
+based solvers, <code>coll_divs</code> does <em>not</em> sub-divide intervals. Defaults
+to <code>coll_divs=2, coll_choices=[0, 1, 2]</code> when neither these nor
+<code>coll_nodes</code> are given. Mutually exclusive with <code>coll_nodes</code>.</p>
               </div>
             </td>
             <td>
-                  <code>2</code>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>coll_nodes</code>
+            </td>
+            <td>
+                  <code><span title="array_like">array_like</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Collocation node positions given directly as floats in <span class="arithmatex">\([0, 1]\)</span>, for
+node sets that are not rational multiples of <span class="arithmatex">\(1/c\)</span> (e.g. Gauss-Legendre
+or Radau IIA points; see <code>gauss_legendre_nodes</code>, <code>radau_iia_nodes</code>,
+<code>lobatto_nodes</code>). Mutually exclusive with
+<code>coll_divs</code>/<code>coll_choices</code>. Convergence of the chosen node set is
+the caller's responsibility.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1402,76 +1427,7 @@ right-hand sides (it is built once), so they are substantially cheaper than
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 960</span>
-<span class="normal"> 961</span>
-<span class="normal"> 962</span>
-<span class="normal"> 963</span>
-<span class="normal"> 964</span>
-<span class="normal"> 965</span>
-<span class="normal"> 966</span>
-<span class="normal"> 967</span>
-<span class="normal"> 968</span>
-<span class="normal"> 969</span>
-<span class="normal"> 970</span>
-<span class="normal"> 971</span>
-<span class="normal"> 972</span>
-<span class="normal"> 973</span>
-<span class="normal"> 974</span>
-<span class="normal"> 975</span>
-<span class="normal"> 976</span>
-<span class="normal"> 977</span>
-<span class="normal"> 978</span>
-<span class="normal"> 979</span>
-<span class="normal"> 980</span>
-<span class="normal"> 981</span>
-<span class="normal"> 982</span>
-<span class="normal"> 983</span>
-<span class="normal"> 984</span>
-<span class="normal"> 985</span>
-<span class="normal"> 986</span>
-<span class="normal"> 987</span>
-<span class="normal"> 988</span>
-<span class="normal"> 989</span>
-<span class="normal"> 990</span>
-<span class="normal"> 991</span>
-<span class="normal"> 992</span>
-<span class="normal"> 993</span>
-<span class="normal"> 994</span>
-<span class="normal"> 995</span>
-<span class="normal"> 996</span>
-<span class="normal"> 997</span>
-<span class="normal"> 998</span>
-<span class="normal"> 999</span>
-<span class="normal">1000</span>
-<span class="normal">1001</span>
-<span class="normal">1002</span>
-<span class="normal">1003</span>
-<span class="normal">1004</span>
-<span class="normal">1005</span>
-<span class="normal">1006</span>
-<span class="normal">1007</span>
-<span class="normal">1008</span>
-<span class="normal">1009</span>
-<span class="normal">1010</span>
-<span class="normal">1011</span>
-<span class="normal">1012</span>
-<span class="normal">1013</span>
-<span class="normal">1014</span>
-<span class="normal">1015</span>
-<span class="normal">1016</span>
-<span class="normal">1017</span>
-<span class="normal">1018</span>
-<span class="normal">1019</span>
-<span class="normal">1020</span>
-<span class="normal">1021</span>
-<span class="normal">1022</span>
-<span class="normal">1023</span>
-<span class="normal">1024</span>
-<span class="normal">1025</span>
-<span class="normal">1026</span>
-<span class="normal">1027</span>
-<span class="normal">1028</span>
-<span class="normal">1029</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1029</span>
 <span class="normal">1030</span>
 <span class="normal">1031</span>
 <span class="normal">1032</span>
@@ -1593,9 +1549,78 @@ right-hand sides (it is built once), so they are substantially cheaper than
 <span class="normal">1148</span>
 <span class="normal">1149</span>
 <span class="normal">1150</span>
-<span class="normal">1151</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">1151</span>
+<span class="normal">1152</span>
+<span class="normal">1153</span>
+<span class="normal">1154</span>
+<span class="normal">1155</span>
+<span class="normal">1156</span>
+<span class="normal">1157</span>
+<span class="normal">1158</span>
+<span class="normal">1159</span>
+<span class="normal">1160</span>
+<span class="normal">1161</span>
+<span class="normal">1162</span>
+<span class="normal">1163</span>
+<span class="normal">1164</span>
+<span class="normal">1165</span>
+<span class="normal">1166</span>
+<span class="normal">1167</span>
+<span class="normal">1168</span>
+<span class="normal">1169</span>
+<span class="normal">1170</span>
+<span class="normal">1171</span>
+<span class="normal">1172</span>
+<span class="normal">1173</span>
+<span class="normal">1174</span>
+<span class="normal">1175</span>
+<span class="normal">1176</span>
+<span class="normal">1177</span>
+<span class="normal">1178</span>
+<span class="normal">1179</span>
+<span class="normal">1180</span>
+<span class="normal">1181</span>
+<span class="normal">1182</span>
+<span class="normal">1183</span>
+<span class="normal">1184</span>
+<span class="normal">1185</span>
+<span class="normal">1186</span>
+<span class="normal">1187</span>
+<span class="normal">1188</span>
+<span class="normal">1189</span>
+<span class="normal">1190</span>
+<span class="normal">1191</span>
+<span class="normal">1192</span>
+<span class="normal">1193</span>
+<span class="normal">1194</span>
+<span class="normal">1195</span>
+<span class="normal">1196</span>
+<span class="normal">1197</span>
+<span class="normal">1198</span>
+<span class="normal">1199</span>
+<span class="normal">1200</span>
+<span class="normal">1201</span>
+<span class="normal">1202</span>
+<span class="normal">1203</span>
+<span class="normal">1204</span>
+<span class="normal">1205</span>
+<span class="normal">1206</span>
+<span class="normal">1207</span>
+<span class="normal">1208</span>
+<span class="normal">1209</span>
+<span class="normal">1210</span>
+<span class="normal">1211</span>
+<span class="normal">1212</span>
+<span class="normal">1213</span>
+<span class="normal">1214</span>
+<span class="normal">1215</span>
+<span class="normal">1216</span>
+<span class="normal">1217</span>
+<span class="normal">1218</span>
+<span class="normal">1219</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIE_2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span>
-                          <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
+                          <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                          <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">return_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                           <span class="n">show_warnings</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
@@ -1621,10 +1646,19 @@ right-hand sides (it is built once), so they are substantially cheaper than
 <span class="sd">    mesh_breakpoints : array_like</span>
 <span class="sd">        Strictly increasing 1-D array starting at 0. Defines the integration</span>
 <span class="sd">        intervals directly.</span>
-<span class="sd">    coll_divs, coll_choices : int, list of int</span>
+<span class="sd">    coll_divs, coll_choices : int, list of int, optional</span>
 <span class="sd">        Collocation node positions: nodes lie at</span>
 <span class="sd">        ``coll_choices[k] / coll_divs`` in each interval. Unlike the array-</span>
-<span class="sd">        based solvers, ``coll_divs`` does *not* sub-divide intervals.</span>
+<span class="sd">        based solvers, ``coll_divs`` does *not* sub-divide intervals. Defaults</span>
+<span class="sd">        to ``coll_divs=2, coll_choices=[0, 1, 2]`` when neither these nor</span>
+<span class="sd">        ``coll_nodes`` are given. Mutually exclusive with ``coll_nodes``.</span>
+<span class="sd">    coll_nodes : array_like, optional</span>
+<span class="sd">        Collocation node positions given directly as floats in $[0, 1]$, for</span>
+<span class="sd">        node sets that are not rational multiples of $1/c$ (e.g. Gauss-Legendre</span>
+<span class="sd">        or Radau IIA points; see ``gauss_legendre_nodes``, ``radau_iia_nodes``,</span>
+<span class="sd">        ``lobatto_nodes``). Mutually exclusive with</span>
+<span class="sd">        ``coll_divs``/``coll_choices``. Convergence of the chosen node set is</span>
+<span class="sd">        the caller&#39;s responsibility.</span>
 <span class="sd">    kernel_singularity : None, float, list of float, or callable</span>
 <span class="sd">        Declare the singularity structure of the kernel.</span>
 
@@ -1668,19 +1702,10 @@ right-hand sides (it is built once), so they are substantially cheaper than
     <span class="k">if</span> <span class="n">mesh_breakpoints</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;mesh_breakpoints[0] must be 0&quot;</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">coll_divs</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;coll_divs must be a positive integer&quot;</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-        <span class="c1"># bool is a subclass of int in Python; reject anyway since it&#39;s never intended</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">integer</span><span class="p">)):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;coll_choices must be a list of integers, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="n">coll_choices</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">)</span>
-    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">))</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;coll_choices entries must be distinct&quot;</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">c</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;coll_choices must lie in [0, </span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+    <span class="n">node_pos</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_resolve_node_pos</span><span class="p">(</span>
+        <span class="n">coll_nodes</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
+        <span class="n">default_divs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">default_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
+        <span class="n">exclude_zero</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">fname</span><span class="o">=</span><span class="s2">&quot;function_solve_VIE_2&quot;</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">kernel</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;kernel must be callable&quot;</span><span class="p">)</span>
@@ -1695,7 +1720,7 @@ right-hand sides (it is built once), so they are substantially cheaper than
             <span class="n">kernel</span><span class="o">=</span><span class="n">_block_wrap_kernel</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">),</span>
             <span class="n">g</span><span class="o">=</span><span class="n">_block_wrap_g</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">),</span>
             <span class="n">mesh_breakpoints</span><span class="o">=</span><span class="n">mesh_breakpoints</span><span class="p">,</span>
-            <span class="n">coll_divs</span><span class="o">=</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="n">coll_choices</span><span class="p">,</span>
+            <span class="n">coll_nodes</span><span class="o">=</span><span class="n">node_pos</span><span class="p">,</span>
             <span class="n">kernel_singularity</span><span class="o">=</span><span class="n">kernel_singularity</span><span class="p">,</span>
             <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span><span class="p">,</span>
             <span class="n">_smooth_gl_order</span><span class="o">=</span><span class="n">_smooth_gl_order</span><span class="p">)</span>
@@ -1706,9 +1731,8 @@ right-hand sides (it is built once), so they are substantially cheaper than
         <span class="k">return</span> <span class="n">_recombine_complex_y</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">)</span>
 
     <span class="n">M</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
-    <span class="n">p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">)</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
     <span class="n">widths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span>
-    <span class="n">node_pos</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="o">/</span> <span class="n">coll_divs</span>
 
     <span class="c1"># Detect scalar vs vector kernel by sampling at a non-singular point.</span>
     <span class="n">sample_u</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">widths</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">*</span> <span class="mf">0.5</span>
@@ -1721,11 +1745,11 @@ right-hand sides (it is built once), so they are substantially cheaper than
     <span class="n">max_p</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_max_p_d</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">p</span> <span class="o">&gt;</span> <span class="n">max_p</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;len(coll_choices) = </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> exceeds the maximum compiled into the &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;D extension (</span><span class="si">{</span><span class="n">max_p</span><span class="si">}</span><span class="s2">). Use a smaller coll_choices.&quot;</span><span class="p">)</span>
+            <span class="sa">f</span><span class="s2">&quot;number of collocation nodes p = </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> exceeds the maximum compiled &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;into the D extension (</span><span class="si">{</span><span class="n">max_p</span><span class="si">}</span><span class="s2">). Use fewer collocation nodes.&quot;</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">is_vector</span><span class="p">:</span>
-        <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_scalar</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
+        <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_scalar</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
                             <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">)</span>
         <span class="n">g_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">g</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1737,7 +1761,7 @@ right-hand sides (it is built once), so they are substantially cheaper than
         <span class="n">y</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie2_d</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
-            <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
+            <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">)</span>
             <span class="n">y_func</span> <span class="o">=</span> <span class="n">_SolutionFunction</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">y</span><span class="p">,</span> <span class="n">y_func</span>
         <span class="k">return</span> <span class="n">y</span>
@@ -1751,7 +1775,7 @@ right-hand sides (it is built once), so they are substantially cheaper than
 
     <span class="c1"># The weight tensor depends only on the kernel, so it is built once and</span>
     <span class="c1"># shared across all right-hand sides in the matrix case.</span>
-    <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_vector</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
+    <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_vector</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
                         <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
 
     <span class="n">sample_t</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">node_pos</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">widths</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
@@ -1771,8 +1795,8 @@ right-hand sides (it is built once), so they are substantially cheaper than
         <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>  <span class="c1"># (M, p, d, m)</span>
 
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
-            <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials_matrix</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span>
-                                              <span class="n">coll_choices</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
+            <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials_matrix</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
+                                              <span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">y</span><span class="p">,</span> <span class="n">_SolutionFunction</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="n">m</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">y</span>
 
@@ -1780,8 +1804,7 @@ right-hand sides (it is built once), so they are substantially cheaper than
     <span class="n">y</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie2_vec_d</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
-        <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials_vector</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span>
-                                          <span class="n">coll_choices</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+        <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials_vector</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
         <span class="n">y_func</span> <span class="o">=</span> <span class="n">_SolutionFunction</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">d</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">y</span><span class="p">,</span> <span class="n">y_func</span>
     <span class="k">return</span> <span class="n">y</span>

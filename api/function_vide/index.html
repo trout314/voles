@@ -1297,11 +1297,13 @@ matrix-valued case. Defaults to zero.</p>
             <td>
               <div class="doc-md-description">
                 <p>Collocation node positions; see <code>function_solve_VIE_2</code> for the
-convention (differs from the array-based solvers).</p>
+convention (differs from the array-based solvers). Defaults to
+<code>coll_divs=2, coll_choices=[0, 1, 2]</code>. Mutually exclusive with
+<code>coll_nodes</code>.</p>
               </div>
             </td>
             <td>
-                  <code>2</code>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1314,11 +1316,31 @@ convention (differs from the array-based solvers).</p>
             <td>
               <div class="doc-md-description">
                 <p>Collocation node positions; see <code>function_solve_VIE_2</code> for the
-convention (differs from the array-based solvers).</p>
+convention (differs from the array-based solvers). Defaults to
+<code>coll_divs=2, coll_choices=[0, 1, 2]</code>. Mutually exclusive with
+<code>coll_nodes</code>.</p>
               </div>
             </td>
             <td>
-                  <code>2</code>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>coll_nodes</code>
+            </td>
+            <td>
+                  <code><span title="array_like">array_like</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Collocation node positions given directly as floats in <span class="arithmatex">\([0, 1]\)</span>; see
+<code>function_solve_VIE_2</code>. Mutually exclusive with
+<code>coll_divs</code>/<code>coll_choices</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1400,75 +1422,7 @@ tracked boundary values).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1184</span>
-<span class="normal">1185</span>
-<span class="normal">1186</span>
-<span class="normal">1187</span>
-<span class="normal">1188</span>
-<span class="normal">1189</span>
-<span class="normal">1190</span>
-<span class="normal">1191</span>
-<span class="normal">1192</span>
-<span class="normal">1193</span>
-<span class="normal">1194</span>
-<span class="normal">1195</span>
-<span class="normal">1196</span>
-<span class="normal">1197</span>
-<span class="normal">1198</span>
-<span class="normal">1199</span>
-<span class="normal">1200</span>
-<span class="normal">1201</span>
-<span class="normal">1202</span>
-<span class="normal">1203</span>
-<span class="normal">1204</span>
-<span class="normal">1205</span>
-<span class="normal">1206</span>
-<span class="normal">1207</span>
-<span class="normal">1208</span>
-<span class="normal">1209</span>
-<span class="normal">1210</span>
-<span class="normal">1211</span>
-<span class="normal">1212</span>
-<span class="normal">1213</span>
-<span class="normal">1214</span>
-<span class="normal">1215</span>
-<span class="normal">1216</span>
-<span class="normal">1217</span>
-<span class="normal">1218</span>
-<span class="normal">1219</span>
-<span class="normal">1220</span>
-<span class="normal">1221</span>
-<span class="normal">1222</span>
-<span class="normal">1223</span>
-<span class="normal">1224</span>
-<span class="normal">1225</span>
-<span class="normal">1226</span>
-<span class="normal">1227</span>
-<span class="normal">1228</span>
-<span class="normal">1229</span>
-<span class="normal">1230</span>
-<span class="normal">1231</span>
-<span class="normal">1232</span>
-<span class="normal">1233</span>
-<span class="normal">1234</span>
-<span class="normal">1235</span>
-<span class="normal">1236</span>
-<span class="normal">1237</span>
-<span class="normal">1238</span>
-<span class="normal">1239</span>
-<span class="normal">1240</span>
-<span class="normal">1241</span>
-<span class="normal">1242</span>
-<span class="normal">1243</span>
-<span class="normal">1244</span>
-<span class="normal">1245</span>
-<span class="normal">1246</span>
-<span class="normal">1247</span>
-<span class="normal">1248</span>
-<span class="normal">1249</span>
-<span class="normal">1250</span>
-<span class="normal">1251</span>
-<span class="normal">1252</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1252</span>
 <span class="normal">1253</span>
 <span class="normal">1254</span>
 <span class="normal">1255</span>
@@ -1638,10 +1592,77 @@ tracked boundary values).</p>
 <span class="normal">1419</span>
 <span class="normal">1420</span>
 <span class="normal">1421</span>
-<span class="normal">1422</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">1422</span>
+<span class="normal">1423</span>
+<span class="normal">1424</span>
+<span class="normal">1425</span>
+<span class="normal">1426</span>
+<span class="normal">1427</span>
+<span class="normal">1428</span>
+<span class="normal">1429</span>
+<span class="normal">1430</span>
+<span class="normal">1431</span>
+<span class="normal">1432</span>
+<span class="normal">1433</span>
+<span class="normal">1434</span>
+<span class="normal">1435</span>
+<span class="normal">1436</span>
+<span class="normal">1437</span>
+<span class="normal">1438</span>
+<span class="normal">1439</span>
+<span class="normal">1440</span>
+<span class="normal">1441</span>
+<span class="normal">1442</span>
+<span class="normal">1443</span>
+<span class="normal">1444</span>
+<span class="normal">1445</span>
+<span class="normal">1446</span>
+<span class="normal">1447</span>
+<span class="normal">1448</span>
+<span class="normal">1449</span>
+<span class="normal">1450</span>
+<span class="normal">1451</span>
+<span class="normal">1452</span>
+<span class="normal">1453</span>
+<span class="normal">1454</span>
+<span class="normal">1455</span>
+<span class="normal">1456</span>
+<span class="normal">1457</span>
+<span class="normal">1458</span>
+<span class="normal">1459</span>
+<span class="normal">1460</span>
+<span class="normal">1461</span>
+<span class="normal">1462</span>
+<span class="normal">1463</span>
+<span class="normal">1464</span>
+<span class="normal">1465</span>
+<span class="normal">1466</span>
+<span class="normal">1467</span>
+<span class="normal">1468</span>
+<span class="normal">1469</span>
+<span class="normal">1470</span>
+<span class="normal">1471</span>
+<span class="normal">1472</span>
+<span class="normal">1473</span>
+<span class="normal">1474</span>
+<span class="normal">1475</span>
+<span class="normal">1476</span>
+<span class="normal">1477</span>
+<span class="normal">1478</span>
+<span class="normal">1479</span>
+<span class="normal">1480</span>
+<span class="normal">1481</span>
+<span class="normal">1482</span>
+<span class="normal">1483</span>
+<span class="normal">1484</span>
+<span class="normal">1485</span>
+<span class="normal">1486</span>
+<span class="normal">1487</span>
+<span class="normal">1488</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span>
                          <span class="n">mesh_breakpoints</span><span class="p">,</span>
-                         <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
+                         <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                         <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                          <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                          <span class="n">return_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                          <span class="n">show_warnings</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
@@ -1669,9 +1690,15 @@ tracked boundary values).</p>
 <span class="sd">        $(d, m)$ array selects the matrix-valued case ($m$ right-hand sides).</span>
 <span class="sd">    mesh_breakpoints : array_like</span>
 <span class="sd">        Strictly-increasing 1-D array starting at 0.</span>
-<span class="sd">    coll_divs, coll_choices : int, list of int</span>
+<span class="sd">    coll_divs, coll_choices : int, list of int, optional</span>
 <span class="sd">        Collocation node positions; see ``function_solve_VIE_2`` for the</span>
-<span class="sd">        convention (differs from the array-based solvers).</span>
+<span class="sd">        convention (differs from the array-based solvers). Defaults to</span>
+<span class="sd">        ``coll_divs=2, coll_choices=[0, 1, 2]``. Mutually exclusive with</span>
+<span class="sd">        ``coll_nodes``.</span>
+<span class="sd">    coll_nodes : array_like, optional</span>
+<span class="sd">        Collocation node positions given directly as floats in $[0, 1]$; see</span>
+<span class="sd">        ``function_solve_VIE_2``. Mutually exclusive with</span>
+<span class="sd">        ``coll_divs``/``coll_choices``.</span>
 <span class="sd">    kernel_singularity : None, float, list of float, or callable</span>
 <span class="sd">        Declare integrable singularities; see ``function_solve_VIE_2``.</span>
 <span class="sd">    return_function : bool, optional</span>
@@ -1699,18 +1726,10 @@ tracked boundary values).</p>
     <span class="k">if</span> <span class="n">mesh_breakpoints</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;mesh_breakpoints[0] must be 0&quot;</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">coll_divs</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;coll_divs must be a positive integer&quot;</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">integer</span><span class="p">)):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;coll_choices must be a list of integers, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="n">coll_choices</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">)</span>
-    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">))</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;coll_choices entries must be distinct&quot;</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">c</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;coll_choices must lie in [0, </span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+    <span class="n">node_pos</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_resolve_node_pos</span><span class="p">(</span>
+        <span class="n">coll_nodes</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
+        <span class="n">default_divs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">default_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
+        <span class="n">exclude_zero</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">fname</span><span class="o">=</span><span class="s2">&quot;function_solve_VIDE&quot;</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">kernel</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;kernel must be callable&quot;</span><span class="p">)</span>
@@ -1729,7 +1748,7 @@ tracked boundary values).</p>
             <span class="n">g</span><span class="o">=</span><span class="n">_block_wrap_g</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">),</span>
             <span class="n">soln_init_value</span><span class="o">=</span><span class="n">_block_expand_init</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">),</span>
             <span class="n">mesh_breakpoints</span><span class="o">=</span><span class="n">mesh_breakpoints</span><span class="p">,</span>
-            <span class="n">coll_divs</span><span class="o">=</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="n">coll_choices</span><span class="p">,</span>
+            <span class="n">coll_nodes</span><span class="o">=</span><span class="n">node_pos</span><span class="p">,</span>
             <span class="n">kernel_singularity</span><span class="o">=</span><span class="n">kernel_singularity</span><span class="p">,</span>
             <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span><span class="p">,</span>
             <span class="n">_smooth_gl_order</span><span class="o">=</span><span class="n">_smooth_gl_order</span><span class="p">)</span>
@@ -1740,16 +1759,15 @@ tracked boundary values).</p>
         <span class="k">return</span> <span class="n">_recombine_complex_y</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">)</span>
 
     <span class="n">M</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
-    <span class="n">p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">)</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
     <span class="n">widths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span>
-    <span class="n">node_pos</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="o">/</span> <span class="n">coll_divs</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_dlang</span> <span class="k">as</span> <span class="n">_dlang_module</span>
     <span class="n">max_p</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_max_p_d</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">p</span> <span class="o">&gt;</span> <span class="n">max_p</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;len(coll_choices) = </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> exceeds the maximum compiled into the &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;D extension (</span><span class="si">{</span><span class="n">max_p</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
+            <span class="sa">f</span><span class="s2">&quot;number of collocation nodes p = </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> exceeds the maximum compiled &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;into the D extension (</span><span class="si">{</span><span class="n">max_p</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
 
     <span class="c1"># Detect scalar vs vector by sampling kernel at a non-singular point.</span>
     <span class="n">sample_u</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">widths</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">*</span> <span class="mf">0.5</span>
@@ -1759,7 +1777,7 @@ tracked boundary values).</p>
         <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
 
     <span class="c1"># Precomputed scalar tables: alpha[i,k] = I_k(c_i); w[k] = I_k(1)</span>
-    <span class="n">anti</span> <span class="o">=</span> <span class="n">_lagrange_antideriv_coefs</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>  <span class="c1"># (p, p+1)</span>
+    <span class="n">anti</span> <span class="o">=</span> <span class="n">_lagrange_antideriv_coefs</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>  <span class="c1"># (p, p+1)</span>
     <span class="n">alpha</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">p</span><span class="p">,</span> <span class="n">p</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
@@ -1780,9 +1798,9 @@ tracked boundary values).</p>
         <span class="k">return</span> <span class="n">out</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">is_vector</span><span class="p">:</span>
-        <span class="n">vide_basis</span> <span class="o">=</span> <span class="n">_vide_basis_coefs</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
+        <span class="n">vide_basis</span> <span class="o">=</span> <span class="n">_vide_basis_coefs</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
         <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_with_basis_scalar</span><span class="p">(</span>
-            <span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
+            <span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
             <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">vide_basis</span><span class="p">)</span>
         <span class="n">g_arr</span> <span class="o">=</span> <span class="n">_sample_callable_scalar</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
         <span class="n">a_arr</span> <span class="o">=</span> <span class="n">_sample_callable_scalar</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
@@ -1796,7 +1814,7 @@ tracked boundary values).</p>
 
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
             <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_vide_polynomials_scalar</span><span class="p">(</span>
-                <span class="n">y_prime</span><span class="p">,</span> <span class="n">y_boundary</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
+                <span class="n">y_prime</span><span class="p">,</span> <span class="n">y_boundary</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">)</span>
             <span class="n">y_func</span> <span class="o">=</span> <span class="n">_SolutionFunction</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">y_at_coll</span><span class="p">,</span> <span class="n">y_func</span>
         <span class="k">return</span> <span class="n">y_at_coll</span>
@@ -1810,9 +1828,9 @@ tracked boundary values).</p>
 
     <span class="c1"># W and a(t) depend only on the kernel and a, not on the right-hand side,</span>
     <span class="c1"># so both are built once and shared across all columns in the matrix case.</span>
-    <span class="n">vide_basis</span> <span class="o">=</span> <span class="n">_vide_basis_coefs</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
+    <span class="n">vide_basis</span> <span class="o">=</span> <span class="n">_vide_basis_coefs</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
     <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_with_basis_vector</span><span class="p">(</span>
-        <span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
+        <span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
         <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">vide_basis</span><span class="p">)</span>
     <span class="n">a_arr</span> <span class="o">=</span> <span class="n">_sample_a_at_coll</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">widths</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
 
@@ -1848,7 +1866,7 @@ tracked boundary values).</p>
 
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
             <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_vide_polynomials_matrix</span><span class="p">(</span>
-                <span class="n">y_prime</span><span class="p">,</span> <span class="n">y_boundary</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
+                <span class="n">y_prime</span><span class="p">,</span> <span class="n">y_boundary</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
                 <span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">y_at_coll</span><span class="p">,</span> <span class="n">_SolutionFunction</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span>
                                                 <span class="n">d</span><span class="o">=</span><span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="n">m</span><span class="p">)</span>
@@ -1873,7 +1891,7 @@ tracked boundary values).</p>
 
     <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
         <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_vide_polynomials_vector</span><span class="p">(</span>
-            <span class="n">y_prime</span><span class="p">,</span> <span class="n">y_boundary</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+            <span class="n">y_prime</span><span class="p">,</span> <span class="n">y_boundary</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
         <span class="n">y_func</span> <span class="o">=</span> <span class="n">_SolutionFunction</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">d</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">y_at_coll</span><span class="p">,</span> <span class="n">y_func</span>
     <span class="k">return</span> <span class="n">y_at_coll</span>
