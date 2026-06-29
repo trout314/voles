@@ -9,6 +9,7 @@ from voles._callable_solvers import (
     gauss_legendre_nodes, radau_iia_nodes, lobatto_nodes,
     optimal_graded_mesh,
 )
+from voles import solve_VIE_1, solve_VIE_2, solve_VIDE
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +407,64 @@ def test_vie2_iterated_gauss_superconvergence_2m():
 def test_vie2_iterated_lobatto_superconvergence_2m_minus_2():
     # Lobatto(3): iterated solution superconverges at 2m-2 = 4.
     assert min(_vie2_iterated_mesh_rates(lobatto_nodes(3))) > 3.6
+
+
+# ---------------------------------------------------------------------------
+# Array-input vs callable-input cross-validation. For K=1 the weight tensor is
+# exact in both paths, so the two solvers must agree to machine precision --
+# cross-validating the array path against the Brunner-verified callable path.
+# ---------------------------------------------------------------------------
+
+def _array_grid(M, c):
+    dt = (1.0 / M) / c**2
+    N = M * c**2 + 1
+    return dt, N, np.arange(N) * dt
+
+
+def test_array_path_matches_callable_vie2():
+    c, ch, M = 2, [0, 1, 2], 4
+    dt, N, ts = _array_grid(M, c)
+    g = lambda t: (np.exp(2 * t) + 1) / 2
+    _, fa = solve_VIE_2(kernel_values=np.ones(N), g_values=g(ts), time_step=dt,
+                        coll_divs=c, coll_choices=ch, return_function=True,
+                        show_warnings=False)
+    _, fc = function_solve_VIE_2(kernel=lambda u: 1.0, g=g,
+                                 mesh_breakpoints=np.linspace(0, 1, M + 1),
+                                 coll_nodes=[i / c for i in ch],
+                                 return_function=True, show_warnings=False)
+    tc = np.linspace(0.03, 0.97, 41)
+    assert np.max(np.abs([fa(t) - fc(t) for t in tc])) < 1e-12
+
+
+def test_array_path_matches_callable_vie1():
+    c, ch, M = 2, [1, 2], 4
+    dt, N, ts = _array_grid(M, c)
+    g = lambda t: (np.exp(2 * t) - 1) / 2
+    _, fa = solve_VIE_1(kernel_values=np.ones(N), g_values=g(ts), time_step=dt,
+                        coll_divs=c, coll_choices=ch, return_function=True,
+                        show_warnings=False)
+    _, fc = function_solve_VIE_1(kernel=lambda u: 1.0, g=g,
+                                 mesh_breakpoints=np.linspace(0, 1, M + 1),
+                                 coll_nodes=[i / c for i in ch],
+                                 return_function=True, show_warnings=False)
+    tc = np.linspace(0.03, 0.97, 41)
+    assert np.max(np.abs([fa(t) - fc(t) for t in tc])) < 1e-12
+
+
+def test_array_path_matches_callable_vide():
+    c, ch, M = 2, [0, 1, 2], 4
+    dt, N, ts = _array_grid(M, c)
+    g = lambda t: (3 * np.exp(2 * t) + 1) / 2
+    _, fa = solve_VIDE(kernel_values=np.ones(N), a_values=np.zeros(N),
+                       g_values=g(ts), soln_init_value=1.0, time_step=dt,
+                       coll_divs=c, coll_choices=ch, return_function=True,
+                       show_warnings=False)
+    _, fc = function_solve_VIDE(kernel=lambda u: 1.0, g=g, soln_init_value=1.0,
+                                mesh_breakpoints=np.linspace(0, 1, M + 1),
+                                coll_nodes=[i / c for i in ch],
+                                return_function=True, show_warnings=False)
+    tc = np.linspace(0.03, 0.97, 41)
+    assert np.max(np.abs([fa(t) - fc(t) for t in tc])) < 1e-12
 
 
 def test_vie1_continuous_vector_order_m_plus_1():
