@@ -98,15 +98,15 @@ def _import_scipy_quad_vec():
 # Lagrange basis construction (normalized [0, 1] coordinates)
 # ---------------------------------------------------------------------------
 
-def _lagrange_basis_coefs(coll_divs: int, coll_choices: list[int]) -> np.ndarray:
-    """Return coefficient array (num_c_params, num_c_params) for the Lagrange
-    basis polynomials L_k(x) on the normalized [0, 1] interval.
+def _lagrange_basis_coefs(node_pos: np.ndarray) -> np.ndarray:
+    """Return coefficient array (p, p) for the Lagrange basis polynomials
+    L_k(x) on the normalized [0, 1] interval, given the collocation node
+    positions `node_pos` (a float array in [0, 1]).
 
     Row k holds the polynomial coefficients (lowest-degree first) of L_k, the
-    basis polynomial that is 1 at node k and 0 at the other nodes. Nodes are
-    at positions `coll_choices[k] / coll_divs`.
+    basis polynomial that is 1 at node k and 0 at the other nodes.
     """
-    nodes = np.asarray(coll_choices, dtype=float) / coll_divs
+    nodes = np.asarray(node_pos, dtype=float)
     p = len(nodes)
     basis = np.zeros((p, p))
     for k in range(p):
@@ -120,7 +120,7 @@ def _lagrange_basis_coefs(coll_divs: int, coll_choices: list[int]) -> np.ndarray
     return basis
 
 
-def _lagrange_antideriv_coefs(coll_divs: int, coll_choices: list[int]) -> np.ndarray:
+def _lagrange_antideriv_coefs(node_pos: np.ndarray) -> np.ndarray:
     """Return (p, p+1) coefficient array of the antiderivative-of-Lagrange basis
     polynomials I_k(x) = integral from 0 to x of L_k(u) du.
 
@@ -128,7 +128,7 @@ def _lagrange_antideriv_coefs(coll_divs: int, coll_choices: list[int]) -> np.nda
         y(s) = y_n + h * sum_k Y'_k * I_k((s - t_n) / h)
     where Y'_k are the (unknown) values of y' at the collocation nodes.
     """
-    lag = _lagrange_basis_coefs(coll_divs, coll_choices)
+    lag = _lagrange_basis_coefs(node_pos)
     p = lag.shape[0]
     anti = np.zeros((p, p + 1))
     for k in range(p):
@@ -137,14 +137,14 @@ def _lagrange_antideriv_coefs(coll_divs: int, coll_choices: list[int]) -> np.nda
     return anti
 
 
-def _vide_basis_coefs(coll_divs: int, coll_choices: list[int]) -> np.ndarray:
+def _vide_basis_coefs(node_pos: np.ndarray) -> np.ndarray:
     """Return (p+1, p+1) extended basis used to build the VIDE weight tensor.
 
     First p rows are the antiderivative-of-Lagrange basis (one per Y'_k); the
     last row is the constant function `1`, used for the y_n boundary-value
     contribution to the kernel integral.
     """
-    anti = _lagrange_antideriv_coefs(coll_divs, coll_choices)
+    anti = _lagrange_antideriv_coefs(node_pos)
     p = anti.shape[0]
     basis = np.zeros((p + 1, p + 1))
     basis[:p] = anti
@@ -155,6 +155,74 @@ def _vide_basis_coefs(coll_divs: int, coll_choices: list[int]) -> np.ndarray:
 def _eval_poly_at(coefs: np.ndarray, x: float) -> float:
     """Evaluate polynomial with coefficients `coefs` (lowest-degree first) at x."""
     return float(npp.polyval(x, coefs))
+
+
+# ---------------------------------------------------------------------------
+# Collocation-node resolution
+# ---------------------------------------------------------------------------
+
+def _resolve_node_pos(coll_nodes, coll_divs, coll_choices, *,
+                      default_divs: int, default_choices: list[int],
+                      exclude_zero: bool, fname: str):
+    """Resolve collocation node positions in [0, 1] from either an explicit
+    ``coll_nodes`` float array or the ``(coll_divs, coll_choices)`` integer pair.
+
+    Exactly one specification may be given; supplying ``coll_nodes`` together
+    with either integer parameter is an error. When neither integer parameter is
+    supplied they fall back to ``(default_divs, default_choices)``.
+
+    ``exclude_zero`` is ``True`` for VIE-1, where 0 is not a permitted node.
+
+    Returns ``(node_pos, divs, choices)``: a sorted float array of node
+    positions, plus the resolved integer setting -- or ``(None, None)`` for the
+    ``coll_nodes`` path, so callers can skip integer-only checks (e.g. the
+    VIE-1 non-convergent-setting blocklist).
+    """
+    if coll_nodes is not None:
+        if coll_divs is not None or coll_choices is not None:
+            raise ValueError(
+                f"{fname}: pass either coll_nodes or coll_divs/coll_choices, "
+                f"not both")
+        nodes = np.asarray(coll_nodes, dtype=float)
+        if nodes.ndim != 1 or nodes.size < 1:
+            raise ValueError(
+                "coll_nodes must be a 1-D array with at least one entry")
+        if not np.all(np.isfinite(nodes)):
+            raise ValueError("coll_nodes entries must be finite")
+        if exclude_zero:
+            if np.any(nodes <= 0.0) or np.any(nodes > 1.0):
+                raise ValueError("coll_nodes must lie in (0, 1]")
+        else:
+            if np.any(nodes < 0.0) or np.any(nodes > 1.0):
+                raise ValueError("coll_nodes must lie in [0, 1]")
+        nodes = np.sort(nodes)
+        if nodes.size > 1 and np.min(np.diff(nodes)) < 1e-12:
+            raise ValueError("coll_nodes entries must be distinct")
+        return nodes, None, None
+
+    # Integer (coll_divs, coll_choices) path -- preserves the original messages.
+    divs = default_divs if coll_divs is None else coll_divs
+    choices = default_choices if coll_choices is None else coll_choices
+    if divs < 1:
+        raise ValueError("coll_divs must be a positive integer")
+    for c in choices:
+        # bool is a subclass of int in Python; reject anyway since it's never intended
+        if isinstance(c, bool) or not isinstance(c, (int, np.integer)):
+            raise ValueError(
+                f"coll_choices must be a list of integers, got {type(c).__name__}")
+    choices = sorted(int(c) for c in choices)
+    if exclude_zero and 0 in choices:
+        raise ValueError(
+            "zero is not a valid VIE-1 collocation choice (both sides of the "
+            "equation vanish at t=0)")
+    if len(set(choices)) != len(choices):
+        raise ValueError("coll_choices entries must be distinct")
+    lo = 1 if exclude_zero else 0
+    for c in choices:
+        if not lo <= c <= divs:
+            raise ValueError(f"coll_choices must lie in [{lo}, {divs}]")
+    node_pos = np.asarray(choices, dtype=float) / divs
+    return node_pos, divs, choices
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +271,7 @@ def _detect_kernel_vectorized(kernel, sample_u: float, is_vector: bool, d: int) 
 
 
 def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
-                                coll_divs: int, coll_choices: list[int],
+                                node_pos: np.ndarray,
                                 kernel_singularity,
                                 smooth_gl_order: int, basis: np.ndarray,
                                 smooth_check_tol: float = 1e-9) -> np.ndarray:
@@ -213,11 +281,12 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
     `basis` rows hold the polynomial coefficients of each basis function in
     normalized [0, 1] coordinates. VIE-2 uses the Lagrange basis (n_basis = p);
     VIDE uses the antiderivative basis plus a constant function (n_basis = p+1).
+    `node_pos` holds the collocation node positions in [0, 1].
     """
     M = len(mesh_breakpoints) - 1
-    p = len(coll_choices)
+    node_pos = np.asarray(node_pos, dtype=float)
+    p = len(node_pos)
     n_basis = basis.shape[0]
-    node_pos = np.asarray(coll_choices, dtype=float) / coll_divs
     widths = np.diff(mesh_breakpoints)
     singular_locs = _normalize_kernel_singularity(kernel_singularity)
 
@@ -410,26 +479,26 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
     return W
 
 
-def _build_W_scalar(kernel, mesh_breakpoints, coll_divs, coll_choices,
+def _build_W_scalar(kernel, mesh_breakpoints, node_pos,
                     kernel_singularity, smooth_gl_order,
                     smooth_check_tol=1e-9):
     """VIE-2 weight tensor: Lagrange basis, shape (M, p, M, p)."""
-    basis = _lagrange_basis_coefs(coll_divs, coll_choices)
-    return _build_W_with_basis_scalar(kernel, mesh_breakpoints, coll_divs,
-                                       coll_choices, kernel_singularity,
+    basis = _lagrange_basis_coefs(node_pos)
+    return _build_W_with_basis_scalar(kernel, mesh_breakpoints, node_pos,
+                                       kernel_singularity,
                                        smooth_gl_order, basis, smooth_check_tol)
 
 
 def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
-                                coll_divs: int, coll_choices: list[int],
+                                node_pos: np.ndarray,
                                 kernel_singularity, smooth_gl_order: int,
                                 d: int, basis: np.ndarray,
                                 smooth_check_tol: float = 1e-9) -> np.ndarray:
     """Vector analogue of _build_W_with_basis_scalar. Returns (M, p, M, n_basis, d, d)."""
     M = len(mesh_breakpoints) - 1
-    p = len(coll_choices)
+    node_pos = np.asarray(node_pos, dtype=float)
+    p = len(node_pos)
     n_basis = basis.shape[0]
-    node_pos = np.asarray(coll_choices, dtype=float) / coll_divs
     widths = np.diff(mesh_breakpoints)
     singular_locs = _normalize_kernel_singularity(kernel_singularity)
 
@@ -626,13 +695,13 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
     return W
 
 
-def _build_W_vector(kernel, mesh_breakpoints, coll_divs, coll_choices,
+def _build_W_vector(kernel, mesh_breakpoints, node_pos,
                     kernel_singularity, smooth_gl_order, d,
                     smooth_check_tol=1e-9):
     """VIE-2 vector weight tensor: Lagrange basis, shape (M, p, M, p, d, d)."""
-    basis = _lagrange_basis_coefs(coll_divs, coll_choices)
-    return _build_W_with_basis_vector(kernel, mesh_breakpoints, coll_divs,
-                                       coll_choices, kernel_singularity,
+    basis = _lagrange_basis_coefs(node_pos)
+    return _build_W_with_basis_vector(kernel, mesh_breakpoints, node_pos,
+                                       kernel_singularity,
                                        smooth_gl_order, d, basis, smooth_check_tol)
 
 
@@ -735,14 +804,14 @@ def _detect_g_matrix_cols(g, d, sample_t):
 
 
 def _build_polynomials(y: np.ndarray, mesh_breakpoints: np.ndarray,
-                       coll_divs: int, coll_choices: list[int]) -> list:
+                       node_pos: np.ndarray) -> list:
     """Convert collocation-node values y[n,k] to a list of M Polynomial objects.
 
     Each Polynomial maps actual time t to the Lagrange interpolant on interval n.
     """
-    p = len(coll_choices)
+    p = len(node_pos)
     M = len(mesh_breakpoints) - 1
-    basis = _lagrange_basis_coefs(coll_divs, coll_choices)
+    basis = _lagrange_basis_coefs(node_pos)
     polys = []
     for n in range(M):
         t_l = mesh_breakpoints[n]
@@ -757,12 +826,12 @@ def _build_polynomials(y: np.ndarray, mesh_breakpoints: np.ndarray,
 
 
 def _build_polynomials_vector(y: np.ndarray, mesh_breakpoints: np.ndarray,
-                               coll_divs: int, coll_choices: list[int],
+                               node_pos: np.ndarray,
                                d: int) -> list:
     """Vector analogue: y has shape (M, p, d); return list of (d,) Polynomial arrays."""
-    p = len(coll_choices)
+    p = len(node_pos)
     M = len(mesh_breakpoints) - 1
-    basis = _lagrange_basis_coefs(coll_divs, coll_choices)
+    basis = _lagrange_basis_coefs(node_pos)
     polys = []
     for n in range(M):
         t_l = mesh_breakpoints[n]
@@ -780,16 +849,16 @@ def _build_polynomials_vector(y: np.ndarray, mesh_breakpoints: np.ndarray,
 
 
 def _build_polynomials_matrix(y: np.ndarray, mesh_breakpoints: np.ndarray,
-                               coll_divs: int, coll_choices: list[int],
+                               node_pos: np.ndarray,
                                d: int, m: int) -> list:
     """Matrix analogue of _build_polynomials_vector.
 
     y has shape (M, p, d, m); returns a list of M arrays each of shape (d, m)
     holding one Polynomial per (component, right-hand-side) pair.
     """
-    p = len(coll_choices)
+    p = len(node_pos)
     M = len(mesh_breakpoints) - 1
-    basis = _lagrange_basis_coefs(coll_divs, coll_choices)
+    basis = _lagrange_basis_coefs(node_pos)
     polys = []
     for n in range(M):
         t_l = mesh_breakpoints[n]
@@ -959,7 +1028,8 @@ def _recombine_complex_y(y_real: np.ndarray, d_orig: int) -> np.ndarray:
 
 @_escalate_complex_warning
 def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
-                          coll_divs: int = 2, coll_choices: list[int] = [0, 1, 2],
+                          coll_divs: int = None, coll_choices: list[int] = None,
+                          coll_nodes=None,
                           kernel_singularity=None,
                           return_function: bool = False,
                           show_warnings: bool = True,
@@ -985,10 +1055,19 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     mesh_breakpoints : array_like
         Strictly increasing 1-D array starting at 0. Defines the integration
         intervals directly.
-    coll_divs, coll_choices : int, list of int
+    coll_divs, coll_choices : int, list of int, optional
         Collocation node positions: nodes lie at
         ``coll_choices[k] / coll_divs`` in each interval. Unlike the array-
-        based solvers, ``coll_divs`` does *not* sub-divide intervals.
+        based solvers, ``coll_divs`` does *not* sub-divide intervals. Defaults
+        to ``coll_divs=2, coll_choices=[0, 1, 2]`` when neither these nor
+        ``coll_nodes`` are given. Mutually exclusive with ``coll_nodes``.
+    coll_nodes : array_like, optional
+        Collocation node positions given directly as floats in $[0, 1]$, for
+        node sets that are not rational multiples of $1/c$ (e.g. Gauss-Legendre
+        or Radau IIA points; see ``gauss_legendre_nodes``, ``radau_iia_nodes``,
+        ``lobatto_nodes``). Mutually exclusive with
+        ``coll_divs``/``coll_choices``. Convergence of the chosen node set is
+        the caller's responsibility.
     kernel_singularity : None, float, list of float, or callable
         Declare the singularity structure of the kernel.
 
@@ -1032,19 +1111,10 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     if mesh_breakpoints[0] != 0.0:
         raise ValueError("mesh_breakpoints[0] must be 0")
 
-    if coll_divs < 1:
-        raise ValueError("coll_divs must be a positive integer")
-    for c in coll_choices:
-        # bool is a subclass of int in Python; reject anyway since it's never intended
-        if isinstance(c, bool) or not isinstance(c, (int, np.integer)):
-            raise ValueError(
-                f"coll_choices must be a list of integers, got {type(c).__name__}")
-    coll_choices = sorted(int(c) for c in coll_choices)
-    if len(set(coll_choices)) != len(coll_choices):
-        raise ValueError("coll_choices entries must be distinct")
-    for c in coll_choices:
-        if not 0 <= c <= coll_divs:
-            raise ValueError(f"coll_choices must lie in [0, {coll_divs}]")
+    node_pos, _, _ = _resolve_node_pos(
+        coll_nodes, coll_divs, coll_choices,
+        default_divs=2, default_choices=[0, 1, 2],
+        exclude_zero=False, fname="function_solve_VIE_2")
 
     if not callable(kernel):
         raise TypeError("kernel must be callable")
@@ -1059,7 +1129,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
             kernel=_block_wrap_kernel(kernel, d_orig),
             g=_block_wrap_g(g, d_orig),
             mesh_breakpoints=mesh_breakpoints,
-            coll_divs=coll_divs, coll_choices=coll_choices,
+            coll_nodes=node_pos,
             kernel_singularity=kernel_singularity,
             return_function=return_function, show_warnings=show_warnings,
             _smooth_gl_order=_smooth_gl_order)
@@ -1070,9 +1140,8 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         return _recombine_complex_y(result, d_orig)
 
     M = len(mesh_breakpoints) - 1
-    p = len(coll_choices)
+    p = len(node_pos)
     widths = np.diff(mesh_breakpoints)
-    node_pos = np.asarray(coll_choices, dtype=float) / coll_divs
 
     # Detect scalar vs vector kernel by sampling at a non-singular point.
     sample_u = float(widths[0]) * 0.5
@@ -1085,11 +1154,11 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     max_p = _dlang_module.function_solve_max_p_d()
     if p > max_p:
         raise ValueError(
-            f"len(coll_choices) = {p} exceeds the maximum compiled into the "
-            f"D extension ({max_p}). Use a smaller coll_choices.")
+            f"number of collocation nodes p = {p} exceeds the maximum compiled "
+            f"into the D extension ({max_p}). Use fewer collocation nodes.")
 
     if not is_vector:
-        W = _build_W_scalar(kernel, mesh_breakpoints, coll_divs, coll_choices,
+        W = _build_W_scalar(kernel, mesh_breakpoints, node_pos,
                             kernel_singularity, _smooth_gl_order)
         g_arr = np.zeros((M, p), dtype=np.float64)
         if g is not None:
@@ -1101,7 +1170,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         y = _dlang_module.function_solve_vie2_d(W, g_arr)
 
         if return_function:
-            polys = _build_polynomials(y, mesh_breakpoints, coll_divs, coll_choices)
+            polys = _build_polynomials(y, mesh_breakpoints, node_pos)
             y_func = _SolutionFunction(polys, mesh_breakpoints, d=0)
             return y, y_func
         return y
@@ -1115,7 +1184,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
 
     # The weight tensor depends only on the kernel, so it is built once and
     # shared across all right-hand sides in the matrix case.
-    W = _build_W_vector(kernel, mesh_breakpoints, coll_divs, coll_choices,
+    W = _build_W_vector(kernel, mesh_breakpoints, node_pos,
                         kernel_singularity, _smooth_gl_order, d)
 
     sample_t = float(mesh_breakpoints[0] + node_pos[0] * widths[0])
@@ -1135,8 +1204,8 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         y = np.stack(cols, axis=3)  # (M, p, d, m)
 
         if return_function:
-            polys = _build_polynomials_matrix(y, mesh_breakpoints, coll_divs,
-                                              coll_choices, d, m)
+            polys = _build_polynomials_matrix(y, mesh_breakpoints, node_pos,
+                                              d, m)
             return y, _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
         return y
 
@@ -1144,8 +1213,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     y = _dlang_module.function_solve_vie2_vec_d(W, g_arr)
 
     if return_function:
-        polys = _build_polynomials_vector(y, mesh_breakpoints, coll_divs,
-                                          coll_choices, d)
+        polys = _build_polynomials_vector(y, mesh_breakpoints, node_pos, d)
         y_func = _SolutionFunction(polys, mesh_breakpoints, d=d)
         return y, y_func
     return y
@@ -1157,15 +1225,15 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
 
 def _build_vide_polynomials_scalar(y_prime: np.ndarray, y_boundary: np.ndarray,
                                     mesh_breakpoints: np.ndarray,
-                                    coll_divs: int, coll_choices: list[int]) -> list:
+                                    node_pos: np.ndarray) -> list:
     """Build per-interval Polynomial objects for y(t) given y' values + boundary y values.
 
     On interval n, y(t) = y_n + h_n * sum_k y_prime[n, k] * I_k((t - t_n)/h_n),
     where I_k is the antiderivative-of-Lagrange basis.
     """
-    p = len(coll_choices)
+    p = len(node_pos)
     M = len(mesh_breakpoints) - 1
-    anti = _lagrange_antideriv_coefs(coll_divs, coll_choices)  # (p, p+1)
+    anti = _lagrange_antideriv_coefs(node_pos)  # (p, p+1)
     polys = []
     for n in range(M):
         t_l = mesh_breakpoints[n]
@@ -1184,7 +1252,8 @@ def _build_vide_polynomials_scalar(y_prime: np.ndarray, y_boundary: np.ndarray,
 @_escalate_complex_warning
 def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
                          mesh_breakpoints,
-                         coll_divs: int = 2, coll_choices: list[int] = [0, 1, 2],
+                         coll_divs: int = None, coll_choices: list[int] = None,
+                         coll_nodes=None,
                          kernel_singularity=None,
                          return_function: bool = False,
                          show_warnings: bool = True,
@@ -1212,9 +1281,15 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         $(d, m)$ array selects the matrix-valued case ($m$ right-hand sides).
     mesh_breakpoints : array_like
         Strictly-increasing 1-D array starting at 0.
-    coll_divs, coll_choices : int, list of int
+    coll_divs, coll_choices : int, list of int, optional
         Collocation node positions; see ``function_solve_VIE_2`` for the
-        convention (differs from the array-based solvers).
+        convention (differs from the array-based solvers). Defaults to
+        ``coll_divs=2, coll_choices=[0, 1, 2]``. Mutually exclusive with
+        ``coll_nodes``.
+    coll_nodes : array_like, optional
+        Collocation node positions given directly as floats in $[0, 1]$; see
+        ``function_solve_VIE_2``. Mutually exclusive with
+        ``coll_divs``/``coll_choices``.
     kernel_singularity : None, float, list of float, or callable
         Declare integrable singularities; see ``function_solve_VIE_2``.
     return_function : bool, optional
@@ -1242,18 +1317,10 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     if mesh_breakpoints[0] != 0.0:
         raise ValueError("mesh_breakpoints[0] must be 0")
 
-    if coll_divs < 1:
-        raise ValueError("coll_divs must be a positive integer")
-    for c in coll_choices:
-        if isinstance(c, bool) or not isinstance(c, (int, np.integer)):
-            raise ValueError(
-                f"coll_choices must be a list of integers, got {type(c).__name__}")
-    coll_choices = sorted(int(c) for c in coll_choices)
-    if len(set(coll_choices)) != len(coll_choices):
-        raise ValueError("coll_choices entries must be distinct")
-    for c in coll_choices:
-        if not 0 <= c <= coll_divs:
-            raise ValueError(f"coll_choices must lie in [0, {coll_divs}]")
+    node_pos, _, _ = _resolve_node_pos(
+        coll_nodes, coll_divs, coll_choices,
+        default_divs=2, default_choices=[0, 1, 2],
+        exclude_zero=False, fname="function_solve_VIDE")
 
     if not callable(kernel):
         raise TypeError("kernel must be callable")
@@ -1272,7 +1339,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
             g=_block_wrap_g(g, d_orig),
             soln_init_value=_block_expand_init(soln_init_value, d_orig),
             mesh_breakpoints=mesh_breakpoints,
-            coll_divs=coll_divs, coll_choices=coll_choices,
+            coll_nodes=node_pos,
             kernel_singularity=kernel_singularity,
             return_function=return_function, show_warnings=show_warnings,
             _smooth_gl_order=_smooth_gl_order)
@@ -1283,16 +1350,15 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         return _recombine_complex_y(result, d_orig)
 
     M = len(mesh_breakpoints) - 1
-    p = len(coll_choices)
+    p = len(node_pos)
     widths = np.diff(mesh_breakpoints)
-    node_pos = np.asarray(coll_choices, dtype=float) / coll_divs
 
     from . import _dlang as _dlang_module
     max_p = _dlang_module.function_solve_max_p_d()
     if p > max_p:
         raise ValueError(
-            f"len(coll_choices) = {p} exceeds the maximum compiled into the "
-            f"D extension ({max_p}).")
+            f"number of collocation nodes p = {p} exceeds the maximum compiled "
+            f"into the D extension ({max_p}).")
 
     # Detect scalar vs vector by sampling kernel at a non-singular point.
     sample_u = float(widths[0]) * 0.5
@@ -1302,7 +1368,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         mesh_breakpoints, kernel_singularity, show_warnings)
 
     # Precomputed scalar tables: alpha[i,k] = I_k(c_i); w[k] = I_k(1)
-    anti = _lagrange_antideriv_coefs(coll_divs, coll_choices)  # (p, p+1)
+    anti = _lagrange_antideriv_coefs(node_pos)  # (p, p+1)
     alpha = np.zeros((p, p), dtype=np.float64)
     for i in range(p):
         for k in range(p):
@@ -1323,9 +1389,9 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         return out
 
     if not is_vector:
-        vide_basis = _vide_basis_coefs(coll_divs, coll_choices)
+        vide_basis = _vide_basis_coefs(node_pos)
         W = _build_W_with_basis_scalar(
-            kernel, mesh_breakpoints, coll_divs, coll_choices,
+            kernel, mesh_breakpoints, node_pos,
             kernel_singularity, _smooth_gl_order, vide_basis)
         g_arr = _sample_callable_scalar(g)
         a_arr = _sample_callable_scalar(a)
@@ -1339,7 +1405,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
 
         if return_function:
             polys = _build_vide_polynomials_scalar(
-                y_prime, y_boundary, mesh_breakpoints, coll_divs, coll_choices)
+                y_prime, y_boundary, mesh_breakpoints, node_pos)
             y_func = _SolutionFunction(polys, mesh_breakpoints, d=0)
             return y_at_coll, y_func
         return y_at_coll
@@ -1353,9 +1419,9 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
 
     # W and a(t) depend only on the kernel and a, not on the right-hand side,
     # so both are built once and shared across all columns in the matrix case.
-    vide_basis = _vide_basis_coefs(coll_divs, coll_choices)
+    vide_basis = _vide_basis_coefs(node_pos)
     W = _build_W_with_basis_vector(
-        kernel, mesh_breakpoints, coll_divs, coll_choices,
+        kernel, mesh_breakpoints, node_pos,
         kernel_singularity, _smooth_gl_order, d, vide_basis)
     a_arr = _sample_a_at_coll(a, mesh_breakpoints, node_pos, widths, M, p, d)
 
@@ -1391,7 +1457,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
 
         if return_function:
             polys = _build_vide_polynomials_matrix(
-                y_prime, y_boundary, mesh_breakpoints, coll_divs, coll_choices,
+                y_prime, y_boundary, mesh_breakpoints, node_pos,
                 d, m)
             return y_at_coll, _SolutionFunction(polys, mesh_breakpoints,
                                                 d=d, m=m)
@@ -1416,7 +1482,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
 
     if return_function:
         polys = _build_vide_polynomials_vector(
-            y_prime, y_boundary, mesh_breakpoints, coll_divs, coll_choices, d)
+            y_prime, y_boundary, mesh_breakpoints, node_pos, d)
         y_func = _SolutionFunction(polys, mesh_breakpoints, d=d)
         return y_at_coll, y_func
     return y_at_coll
@@ -1424,12 +1490,12 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
 
 def _build_vide_polynomials_vector(y_prime: np.ndarray, y_boundary: np.ndarray,
                                     mesh_breakpoints: np.ndarray,
-                                    coll_divs: int, coll_choices: list[int],
+                                    node_pos: np.ndarray,
                                     d: int) -> list:
     """Vector analogue of _build_vide_polynomials_scalar."""
-    p = len(coll_choices)
+    p = len(node_pos)
     M = len(mesh_breakpoints) - 1
-    anti = _lagrange_antideriv_coefs(coll_divs, coll_choices)
+    anti = _lagrange_antideriv_coefs(node_pos)
     polys = []
     for n in range(M):
         t_l = mesh_breakpoints[n]
@@ -1450,16 +1516,16 @@ def _build_vide_polynomials_vector(y_prime: np.ndarray, y_boundary: np.ndarray,
 
 def _build_vide_polynomials_matrix(y_prime: np.ndarray, y_boundary: np.ndarray,
                                     mesh_breakpoints: np.ndarray,
-                                    coll_divs: int, coll_choices: list[int],
+                                    node_pos: np.ndarray,
                                     d: int, m: int) -> list:
     """Matrix analogue of _build_vide_polynomials_vector.
 
     y_prime has shape (M, p, d, m) and y_boundary shape (M+1, d, m); returns a
     list of M arrays each of shape (d, m) of Polynomial objects.
     """
-    p = len(coll_choices)
+    p = len(node_pos)
     M = len(mesh_breakpoints) - 1
-    anti = _lagrange_antideriv_coefs(coll_divs, coll_choices)
+    anti = _lagrange_antideriv_coefs(node_pos)
     polys = []
     for n in range(M):
         t_l = mesh_breakpoints[n]
@@ -1543,6 +1609,112 @@ def optimal_graded_mesh(*, alpha: float, T: float, M: int,
     return T * (n / M) ** r
 
 
+# ---------------------------------------------------------------------------
+# Collocation node sets
+#
+# Each helper returns p collocation node positions on the normalized interval
+# [0, 1], sorted ascending, for use as the ``coll_nodes`` argument of the
+# callable-input solvers. The classical families below are obtained by mapping
+# the standard Gauss-type nodes from [-1, 1] onto [0, 1]. Convergence for a
+# given equation is the caller's responsibility (see the solver docstrings).
+# ---------------------------------------------------------------------------
+
+def _check_node_count(p, *, minimum: int, name: str) -> int:
+    if isinstance(p, bool) or not isinstance(p, (int, np.integer)):
+        raise ValueError(f"p must be a positive integer, got {p!r}")
+    if p < minimum:
+        raise ValueError(
+            f"p must be an integer >= {minimum} for {name} nodes, got {p}")
+    return int(p)
+
+
+def gauss_legendre_nodes(p: int) -> np.ndarray:
+    r"""Return the ``p`` Gauss-Legendre collocation nodes on $[0, 1]$.
+
+    These interior nodes (none at 0 or 1) give the maximal collocation order:
+    local order $2p$, with global superconvergence of order $2p$ at the mesh
+    points for VIE-2 / VIDE. Suitable for all three callable solvers.
+
+    Parameters
+    ----------
+    p : int
+        Number of nodes (the order of the collocation method), ``p >= 1``.
+
+    Returns
+    -------
+    ndarray of shape (p,)
+        Node positions in $(0, 1)$, sorted ascending.
+    """
+    p = _check_node_count(p, minimum=1, name="Gauss-Legendre")
+    x, _ = np.polynomial.legendre.leggauss(p)
+    return np.sort(0.5 * (x + 1.0))
+
+
+def radau_iia_nodes(p: int) -> np.ndarray:
+    r"""Return the ``p`` Radau IIA collocation nodes on $[0, 1]$.
+
+    The Radau IIA nodes include the right endpoint (``1.0``) and exclude 0,
+    with local order $2p - 1$. The right-endpoint node makes them a common
+    choice for stiff VIDEs, and -- because 0 is excluded -- they are valid for
+    VIE-1.
+
+    Parameters
+    ----------
+    p : int
+        Number of nodes, ``p >= 1``.
+
+    Returns
+    -------
+    ndarray of shape (p,)
+        Node positions in $(0, 1]$ (the last is exactly ``1.0``), sorted
+        ascending.
+    """
+    p = _check_node_count(p, minimum=1, name="Radau IIA")
+    # On [-1, 1] the Radau IIA nodes are the roots of P_{p-1}(x) - P_p(x); one
+    # of those roots is +1. Map the roots to [0, 1].
+    c = np.zeros(p + 1)
+    c[p - 1] += 1.0
+    c[p] -= 1.0
+    x = np.polynomial.legendre.legroots(c)
+    nodes = np.sort(0.5 * (x + 1.0))
+    nodes[-1] = 1.0  # pin the endpoint exactly
+    return nodes
+
+
+def lobatto_nodes(p: int) -> np.ndarray:
+    r"""Return the ``p`` Gauss-Lobatto collocation nodes on $[0, 1]$ (``p >= 2``).
+
+    The Lobatto nodes include both endpoints (``0.0`` and ``1.0``) and have
+    local order $2p - 2$. Because 0 is included they suit VIE-2 and VIDE but
+    **not** VIE-1, which forbids a node at $t = 0$.
+
+    Parameters
+    ----------
+    p : int
+        Number of nodes, ``p >= 2``.
+
+    Returns
+    -------
+    ndarray of shape (p,)
+        Node positions in $[0, 1]$ (the first is ``0.0`` and the last ``1.0``),
+        sorted ascending.
+    """
+    p = _check_node_count(p, minimum=2, name="Lobatto")
+    if p == 2:
+        interior = np.array([])
+    else:
+        # The interior Lobatto nodes are the roots of P'_{p-1}.
+        c = np.zeros(p)
+        c[p - 1] = 1.0
+        interior = np.polynomial.legendre.legroots(
+            np.polynomial.legendre.legder(c))
+    x = np.concatenate(([-1.0], interior, [1.0]))
+    nodes = np.sort(0.5 * (x + 1.0))
+    nodes[0] = 0.0   # pin the endpoints exactly
+    nodes[-1] = 1.0
+    return nodes
+
+
 def _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints: np.ndarray,
                                               kernel_singularity,
                                               show_warnings: bool) -> None:
@@ -1567,21 +1739,150 @@ def _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints: np.ndarray,
 # VIE-1: g(t) = integral_0^t K(t-s) y(s) ds
 # ---------------------------------------------------------------------------
 
-# Same non-convergent settings as the array-based solver (empirical, grid-refinement).
-_VIE1_NONCONVERGENT = {(3, (1,)), (4, (1,)), (4, (1, 2))}
+# VIE-1 collocation convergence depends on the nodes (Brunner 2009, smooth-kernel
+# chapter, read in papers/). Two methods, two conditions:
+#
+# * Discontinuous S_{m-1}^{(-1)} (the default): the inter-subinterval error
+#   recurrence has amplification rho_m = prod_i (c_i - 1)/c_i, and the method
+#   converges IFF -1 <= rho_m <= 1, i.e. |rho_m| = prod_i (1 - c_i)/c_i <= 1
+#   (Thm 2.4.2/2.4.8; necessary and sufficient). Reproduces the empirical
+#   blocklist {(3,(1,)), (4,(1,)), (4,(1,2))} exactly. Any set with c_m = 1 has
+#   a zero factor, hence always converges.
+# * Continuous S_m^(0) (force_continuous): converges IFF c_m = 1 AND
+#   |rho_{m-1}| = prod_{i=1}^{m-1} (1 - c_i)/c_i <= 1 (Thm 2.4.5).
+#
+# Both require a smooth kernel with |K(t,t)| >= k0 > 0 (Thm 2.4.2(b)); for a
+# declared weakly-singular kernel the criteria do not apply and the check is
+# skipped (convergence is then the caller's responsibility).
+
+def _vie1_amplification(node_pos: np.ndarray) -> float:
+    """Return |rho_m| = prod_i (1 - c_i) / c_i for the discontinuous method."""
+    c = np.asarray(node_pos, dtype=float)
+    return float(np.prod((1.0 - c) / c))
 
 
-def _lagrange_at(coll_divs, coll_choices, x):
-    """Return the row vector [L_0(x), L_1(x), ..., L_{p-1}(x)] in normalized coords."""
-    basis = _lagrange_basis_coefs(coll_divs, coll_choices)
-    p = basis.shape[0]
-    return np.array([_eval_poly_at(basis[k], x) for k in range(p)], dtype=np.float64)
+def _vie1_convergent(node_pos: np.ndarray, tol: float = 1e-9) -> bool:
+    """True if the discontinuous VIE-1 method converges for these nodes.
+
+    The boundary |rho_m| == 1 is treated as (marginally) convergent.
+    """
+    return _vie1_amplification(node_pos) <= 1.0 + tol
+
+
+def _vie1_cont_amplification(node_pos: np.ndarray) -> float:
+    """Return |rho_{m-1}| = prod_{i=1}^{m-1} (1 - c_i)/c_i for the continuous
+    S_m^(0) method (Brunner Thm 2.4.5). Empty product (m == 1) is 0."""
+    c = np.asarray(node_pos, dtype=float)
+    if c.size <= 1:
+        return 0.0
+    return float(np.prod((1.0 - c[:-1]) / c[:-1]))
+
+
+def _vie1_cont_basis_coefs(node_pos: np.ndarray) -> np.ndarray:
+    """Augmented Lagrange basis for the continuous (S_m^(0)) VIE-1 method.
+
+    Returns a (p+1, p+1) coefficient array whose rows are the Lagrange basis
+    polynomials on the augmented node set {0} ∪ node_pos, ordered as
+    [Lt_1, ..., Lt_p, Lt_0]: the p value-node functions (1 at c_k) first, then
+    the boundary function (1 at 0) last. This matches the extended weight
+    tensor's column convention (value columns 0..p-1, boundary column p),
+    mirroring the VIDE _vide_basis_coefs layout.
+    """
+    aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
+    lag = _lagrange_basis_coefs(aug)            # row j is 1 at aug[j]
+    return np.vstack([lag[1:], lag[0:1]])
+
+
+def _vie1_cont_advance(node_pos: np.ndarray):
+    """Return (adv_U, adv_0): boundary-advance weights Lt_{k+1}(1) (k=0..p-1)
+    and Lt_0(1), so that y_{n+1} = y_n*adv_0 + sum_k U_{n,k}*adv_U[k]."""
+    aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
+    lag = _lagrange_basis_coefs(aug)
+    adv_0 = _eval_poly_at(lag[0], 1.0)
+    adv_U = np.array([_eval_poly_at(lag[j + 1], 1.0)
+                      for j in range(len(node_pos))], dtype=np.float64)
+    return adv_U, adv_0
+
+
+def _build_vie1_cont_polynomials_scalar(U, boundary, mesh_breakpoints, node_pos):
+    """Degree-m piecewise polynomials for the continuous VIE-1 solution.
+
+    On interval n: y(theta) = boundary[n]*Lt_0(theta) + sum_k U[n,k]*Lt_{k+1}(theta),
+    with Lt the augmented Lagrange basis on {0} ∪ node_pos.
+    """
+    p = len(node_pos)
+    M = len(mesh_breakpoints) - 1
+    aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
+    lag = _lagrange_basis_coefs(aug)            # rows: Lt_0, Lt_1, ..., Lt_p
+    polys = []
+    for n in range(M):
+        t_l = mesh_breakpoints[n]
+        t_r = mesh_breakpoints[n + 1]
+        norm_coef = boundary[n] * lag[0]
+        for k in range(p):
+            norm_coef = norm_coef + U[n, k] * lag[k + 1]
+        poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
+                                        window=(0.0, 1.0), symbol='t')
+        polys.append(poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim())
+    return polys
+
+
+def _build_vie1_cont_polynomials_vector(U, boundary, mesh_breakpoints, node_pos, d):
+    """Vector analogue of _build_vie1_cont_polynomials_scalar.
+
+    U has shape (M, p, d), boundary (M+1, d); returns a list of M (d,) object
+    arrays of Polynomials.
+    """
+    p = len(node_pos)
+    M = len(mesh_breakpoints) - 1
+    aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
+    lag = _lagrange_basis_coefs(aug)
+    polys = []
+    for n in range(M):
+        t_l = mesh_breakpoints[n]
+        t_r = mesh_breakpoints[n + 1]
+        comps = np.empty(d, dtype=object)
+        for r in range(d):
+            norm_coef = boundary[n, r] * lag[0]
+            for k in range(p):
+                norm_coef = norm_coef + U[n, k, r] * lag[k + 1]
+            poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
+                                            window=(0.0, 1.0), symbol='t')
+            comps[r] = poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim()
+        polys.append(comps)
+    return polys
+
+
+def _build_vie1_cont_polynomials_matrix(U, boundary, mesh_breakpoints, node_pos, d, m):
+    """Matrix analogue: U has shape (M, p, d, m), boundary (M+1, d, m); returns
+    a list of M (d, m) object arrays of Polynomials."""
+    p = len(node_pos)
+    M = len(mesh_breakpoints) - 1
+    aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
+    lag = _lagrange_basis_coefs(aug)
+    polys = []
+    for n in range(M):
+        t_l = mesh_breakpoints[n]
+        t_r = mesh_breakpoints[n + 1]
+        comps = np.empty((d, m), dtype=object)
+        for r in range(d):
+            for c in range(m):
+                norm_coef = boundary[n, r, c] * lag[0]
+                for k in range(p):
+                    norm_coef = norm_coef + U[n, k, r, c] * lag[k + 1]
+                poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
+                                                window=(0.0, 1.0), symbol='t')
+                comps[r, c] = poly.convert(domain=(t_l, t_r),
+                                           window=(t_l, t_r)).trim()
+        polys.append(comps)
+    return polys
 
 
 @_escalate_complex_warning
 def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                           mesh_breakpoints,
-                          coll_divs: int = 3, coll_choices: list[int] = [1, 2, 3],
+                          coll_divs: int = None, coll_choices: list[int] = None,
+                          coll_nodes=None,
                           kernel_singularity=None,
                           return_function: bool = False,
                           force_continuous: bool = False,
@@ -1610,17 +1911,53 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         must have shape $(d, m)$.
     mesh_breakpoints : array_like
         Strictly-increasing 1-D array starting at 0.
-    coll_divs, coll_choices : int, list of int
+    coll_divs, coll_choices : int, list of int, optional
         Collocation nodes lie at ``coll_choices[k] / coll_divs`` in (0, 1].
-        Zero is excluded from ``coll_choices``.
+        Zero is excluded from ``coll_choices``. Defaults to
+        ``coll_divs=3, coll_choices=[1, 2, 3]``. Mutually exclusive with
+        ``coll_nodes``.
+    coll_nodes : array_like, optional
+        Collocation node positions given directly as floats in $(0, 1]$ (zero
+        excluded); see ``function_solve_VIE_2``. Mutually exclusive with
+        ``coll_divs``/``coll_choices``. The convergence check (see Notes) is
+        applied to both the integer and the ``coll_nodes`` paths.
     force_continuous : bool, optional
-        If ``True``, replace one collocation equation per interval with a
-        continuity constraint on the piecewise polynomial solution. The first
-        interval uses ``soln_init_value`` as the starting condition; later
-        intervals match the previous interval's right endpoint. The default
-        discontinuous method is generally more accurate.
+        If ``True``, use the continuous collocation method (Brunner's
+        $S_m^{(0)}$): the solution is a globally $C^0$ piecewise polynomial of
+        degree $m = $ ``len(coll_choices)``, anchored at $y(0) = $
+        ``soln_init_value``. This requires the last node to be the right
+        endpoint, $c_m = 1$ (see Notes for the convergence condition). The
+        default discontinuous method ($S_{m-1}^{(-1)}$) imposes no such
+        restriction and is generally the better default.
     kernel_singularity, return_function, show_warnings :
         See ``function_solve_VIE_2``.
+
+    Notes
+    -----
+    Whether a given node set yields a convergent method depends on the nodes
+    (Brunner 2004, smooth-kernel chapter). For a smooth kernel with
+    $|K(t, t)| \ge k_0 > 0$, writing $c_1 < \dots < c_m$ for the nodes:
+
+    - Discontinuous (default): converges iff
+      $|\rho_m| := \prod_{i=1}^{m} (1 - c_i)/c_i \le 1$ (Thm 2.4.2), with global
+      order $m$ (reduced to $m - 1$ at $\rho_m = 1$).
+    - Continuous (``force_continuous``): requires $c_m = 1$ and converges iff
+      $|\rho_{m-1}| := \prod_{i=1}^{m-1} (1 - c_i)/c_i \le 1$ (Thm 2.4.5), with
+      global order $m + 1$ (reduced to $m$ at $\rho_{m-1} = 1$).
+
+    Node sets violating these are rejected with a ``ValueError``. The criteria
+    do not apply to weakly-singular kernels (where $|K(t, t)|$ is unbounded), so
+    the check is skipped when ``kernel_singularity`` is given and convergence is
+    then the caller's responsibility.
+
+    These theorems are proved for a *uniform* mesh. The amplification factors
+    $\rho$ depend only on the nodes, so the conditions carry over to
+    *quasi-uniform* meshes (all interval widths within fixed constant multiples
+    of each other). They are not guaranteed on *strongly graded* meshes -- e.g.
+    the geometric refinement of ``optimal_graded_mesh``, where the smallest
+    interval shrinks far faster than the largest -- but such meshes normally
+    accompany a declared ``kernel_singularity``, for which the check is already
+    skipped.
     """
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
@@ -1630,27 +1967,41 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     if mesh_breakpoints[0] != 0.0:
         raise ValueError("mesh_breakpoints[0] must be 0")
 
-    if coll_divs < 1:
-        raise ValueError("coll_divs must be a positive integer")
-    for c in coll_choices:
-        if isinstance(c, bool) or not isinstance(c, (int, np.integer)):
-            raise ValueError(
-                f"coll_choices must be a list of integers, got {type(c).__name__}")
-    coll_choices = sorted(int(c) for c in coll_choices)
-    if 0 in coll_choices:
-        raise ValueError(
-            "zero is not a valid VIE-1 collocation choice (both sides of the "
-            "equation vanish at t=0)")
-    if len(set(coll_choices)) != len(coll_choices):
-        raise ValueError("coll_choices entries must be distinct")
-    for c in coll_choices:
-        if not 1 <= c <= coll_divs:
-            raise ValueError(f"coll_choices must lie in [1, {coll_divs}]")
+    node_pos, _divs, _choices = _resolve_node_pos(
+        coll_nodes, coll_divs, coll_choices,
+        default_divs=3, default_choices=[1, 2, 3],
+        exclude_zero=True, fname="function_solve_VIE_1")
 
-    if (coll_divs, tuple(coll_choices)) in _VIE1_NONCONVERGENT:
-        raise ValueError(
-            f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
-            f"does not produce a convergent VIE-1 solver and is not supported.")
+    # Reject node sets for which the chosen VIE-1 method does not converge.
+    # The criteria assume a smooth kernel (Brunner Thm 2.4.2(b): |K(t,t)|>=k0>0),
+    # so they are skipped when a weakly-singular kernel is declared.
+    if kernel_singularity is None:
+        if force_continuous:
+            # Continuous S_m^(0): converges iff c_m = 1 and |rho_{m-1}| <= 1.
+            if abs(node_pos[-1] - 1.0) > 1e-12:
+                raise ValueError(
+                    "force_continuous (continuous S_m^(0) collocation) requires the "
+                    "last collocation node to be the right endpoint c_m = 1; got "
+                    f"c_m = {node_pos[-1]:.6g}. Append 1.0 to your nodes.")
+            rho = _vie1_cont_amplification(node_pos)
+            if rho > 1.0 + 1e-9:
+                raise ValueError(
+                    "Collocation nodes do not yield a convergent continuous (S_m^(0)) "
+                    f"VIE-1 solver: the leading-node amplification |rho_{{m-1}}| = "
+                    f"prod_(i<m) (1 - c_i)/c_i = {rho:.4g} exceeds 1 (Brunner Thm 2.4.5).")
+        elif not _vie1_convergent(node_pos):
+            # Discontinuous S_{m-1}^{(-1)}: converges iff |rho_m| <= 1.
+            rho = _vie1_amplification(node_pos)
+            if _choices is not None:
+                raise ValueError(
+                    f"Collocation setting (coll_divs={_divs}, coll_choices={_choices}) "
+                    f"does not produce a convergent VIE-1 solver and is not supported "
+                    f"(amplification |rho_m| = {rho:.4g} > 1).")
+            raise ValueError(
+                f"Collocation nodes {np.array2string(node_pos, precision=6)} do not "
+                f"produce a convergent VIE-1 solver: the amplification factor "
+                f"|rho_m| = prod (1 - c_i)/c_i = {rho:.4g} exceeds 1. Choose nodes "
+                f"with a smaller amplification (e.g. include c = 1, as Radau IIA does).")
 
     if not callable(kernel):
         raise TypeError("kernel must be callable")
@@ -1675,7 +2026,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             g=_block_wrap_g(g, d_orig),
             soln_init_value=init_wrapped,
             mesh_breakpoints=mesh_breakpoints,
-            coll_divs=coll_divs, coll_choices=coll_choices,
+            coll_nodes=node_pos,
             kernel_singularity=kernel_singularity,
             return_function=return_function,
             force_continuous=force_continuous,
@@ -1688,16 +2039,15 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         return _recombine_complex_y(result, d_orig)
 
     M = len(mesh_breakpoints) - 1
-    p = len(coll_choices)
+    p = len(node_pos)
     widths = np.diff(mesh_breakpoints)
-    node_pos = np.asarray(coll_choices, dtype=float) / coll_divs
 
     from . import _dlang as _dlang_module
     max_p = _dlang_module.function_solve_max_p_d()
     if p > max_p:
         raise ValueError(
-            f"len(coll_choices) = {p} exceeds the maximum compiled into the "
-            f"D extension ({max_p}).")
+            f"number of collocation nodes p = {p} exceeds the maximum compiled "
+            f"into the D extension ({max_p}).")
 
     sample_u = float(widths[0]) * 0.5
     is_vector, d = _detect_kernel_shape(kernel, sample_u)
@@ -1705,13 +2055,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     _maybe_warn_mesh_uniform_with_singularity(
         mesh_breakpoints, kernel_singularity, show_warnings)
 
-    # Continuity-constraint vectors (only used when force_continuous=True).
-    L_at_0 = _lagrange_at(coll_divs, coll_choices, 0.0)
-    L_at_1 = _lagrange_at(coll_divs, coll_choices, 1.0)
-
     if not is_vector:
-        W = _build_W_scalar(kernel, mesh_breakpoints, coll_divs, coll_choices,
-                            kernel_singularity, _smooth_gl_order)
         g_arr = np.zeros((M, p), dtype=np.float64)
         if g is not None:
             for n in range(M):
@@ -1719,11 +2063,28 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                 h_n = widths[n]
                 for i in range(p):
                     g_arr[n, i] = float(g(t_n + node_pos[i] * h_n))
-        init_scalar = float(soln_init_value) if force_continuous else 0.0
-        y = _dlang_module.function_solve_vie1_d(
-            W, g_arr, force_continuous, L_at_0, L_at_1, init_scalar)
+        if force_continuous:
+            # Brunner S_m^(0): degree-m polynomial on {0} ∪ node_pos, with the
+            # boundary value carried forward for continuity. Extended weight
+            # tensor against the augmented basis (value cols + boundary col).
+            cont_basis = _vie1_cont_basis_coefs(node_pos)
+            W = _build_W_with_basis_scalar(
+                kernel, mesh_breakpoints, node_pos,
+                kernel_singularity, _smooth_gl_order, cont_basis)
+            adv_U, adv_0 = _vie1_cont_advance(node_pos)
+            y, boundary = _dlang_module.function_solve_vie1_cont_d(
+                W, g_arr, adv_U, adv_0, float(soln_init_value))
+            if return_function:
+                polys = _build_vie1_cont_polynomials_scalar(
+                    y, boundary, mesh_breakpoints, node_pos)
+                return y, _SolutionFunction(polys, mesh_breakpoints, d=0)
+            return y
+
+        W = _build_W_scalar(kernel, mesh_breakpoints, node_pos,
+                            kernel_singularity, _smooth_gl_order)
+        y = _dlang_module.function_solve_vie1_d(W, g_arr)
         if return_function:
-            polys = _build_polynomials(y, mesh_breakpoints, coll_divs, coll_choices)
+            polys = _build_polynomials(y, mesh_breakpoints, node_pos)
             y_func = _SolutionFunction(polys, mesh_breakpoints, d=0)
             return y, y_func
         return y
@@ -1735,9 +2096,17 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             f"kernel dimension d = {d} exceeds the maximum compiled into the "
             f"D extension ({max_d}).")
 
-    # W depends only on the kernel; built once and shared across columns.
-    W = _build_W_vector(kernel, mesh_breakpoints, coll_divs, coll_choices,
-                        kernel_singularity, _smooth_gl_order, d)
+    # W depends only on the kernel; built once and shared across columns. The
+    # continuous (S_m^(0)) method uses the augmented value+boundary basis.
+    if force_continuous:
+        cont_basis = _vie1_cont_basis_coefs(node_pos)
+        W = _build_W_with_basis_vector(kernel, mesh_breakpoints, node_pos,
+                                       kernel_singularity, _smooth_gl_order, d,
+                                       cont_basis)
+        adv_U, adv_0 = _vie1_cont_advance(node_pos)
+    else:
+        W = _build_W_vector(kernel, mesh_breakpoints, node_pos,
+                            kernel_singularity, _smooth_gl_order, d)
 
     sample_t = float(mesh_breakpoints[0] + node_pos[0] * widths[0])
     m = _detect_g_matrix_cols(g, d, sample_t)
@@ -1751,27 +2120,41 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                     f"soln_init_value must have shape ({d}, {m}) for a "
                     f"matrix-valued problem with force_continuous=True; "
                     f"got shape {tuple(init_mat.shape)}")
-        else:
-            init_mat = np.zeros((d, m), dtype=np.float64)
 
         G = _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths,
                                      M, p, d, m)
 
+        if force_continuous:
+            def _col_solve(j):
+                g_arr_j = np.ascontiguousarray(G[:, :, :, j])
+                return _dlang_module.function_solve_vie1_cont_vec_d(
+                    W, g_arr_j, adv_U, adv_0,
+                    np.ascontiguousarray(init_mat[:, j]))
+            with ThreadPoolExecutor(max_workers=m) as ex:
+                results = list(ex.map(_col_solve, range(m)))
+            y = np.stack([r[0] for r in results], axis=3)        # (M, p, d, m)
+            if return_function:
+                boundary = np.stack([r[1] for r in results], axis=2)  # (M+1, d, m)
+                polys = _build_vie1_cont_polynomials_matrix(
+                    y, boundary, mesh_breakpoints, node_pos, d, m)
+                return y, _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
+            return y
+
         def _col_solve(j):
             g_arr_j = np.ascontiguousarray(G[:, :, :, j])
-            return _dlang_module.function_solve_vie1_vec_d(
-                W, g_arr_j, force_continuous, L_at_0, L_at_1,
-                np.ascontiguousarray(init_mat[:, j]))
+            return _dlang_module.function_solve_vie1_vec_d(W, g_arr_j)
 
         with ThreadPoolExecutor(max_workers=m) as ex:
             cols = list(ex.map(_col_solve, range(m)))
         y = np.stack(cols, axis=3)  # (M, p, d, m)
 
         if return_function:
-            polys = _build_polynomials_matrix(y, mesh_breakpoints, coll_divs,
-                                              coll_choices, d, m)
+            polys = _build_polynomials_matrix(y, mesh_breakpoints, node_pos,
+                                              d, m)
             return y, _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
         return y
+
+    g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
 
     if force_continuous:
         init_vec = np.asarray(soln_init_value, dtype=np.float64)
@@ -1779,15 +2162,18 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             raise ValueError(
                 f"soln_init_value must have shape ({d},) for vector kernel; "
                 f"got shape {tuple(init_vec.shape)}")
-    else:
-        init_vec = np.zeros(d, dtype=np.float64)
+        y, boundary = _dlang_module.function_solve_vie1_cont_vec_d(
+            W, g_arr, adv_U, adv_0, init_vec)
+        if return_function:
+            polys = _build_vie1_cont_polynomials_vector(
+                y, boundary, mesh_breakpoints, node_pos, d)
+            return y, _SolutionFunction(polys, mesh_breakpoints, d=d)
+        return y
 
-    g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
-    y = _dlang_module.function_solve_vie1_vec_d(
-        W, g_arr, force_continuous, L_at_0, L_at_1, init_vec)
+    y = _dlang_module.function_solve_vie1_vec_d(W, g_arr)
 
     if return_function:
-        polys = _build_polynomials_vector(y, mesh_breakpoints, coll_divs, coll_choices, d)
+        polys = _build_polynomials_vector(y, mesh_breakpoints, node_pos, d)
         y_func = _SolutionFunction(polys, mesh_breakpoints, d=d)
         return y, y_func
     return y

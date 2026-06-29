@@ -58,16 +58,28 @@ def _setup_argtypes() -> None:
 
     _lib.function_solve_vie1.restype = ctypes.c_int
     _lib.function_solve_vie1.argtypes = [
-        _dp, _dp, ctypes.c_int, ctypes.c_int, ctypes.c_int,  # W, g, M, p, force_continuous
-        _dp, _dp, ctypes.c_double,                            # L_at_0, L_at_1, soln_init
-        _dp,                                                   # out_y
+        _dp, _dp, ctypes.c_int, ctypes.c_int,  # W, g, M, p
+        _dp,                                    # out_y
     ]
 
     _lib.function_solve_vie1_vec.restype = ctypes.c_int
     _lib.function_solve_vie1_vec.argtypes = [
-        _dp, _dp, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,  # W, g, M, p, d, fc
-        _dp, _dp, _dp,                                                       # L_at_0, L_at_1, soln_init
-        _dp,                                                                  # out_y
+        _dp, _dp, ctypes.c_int, ctypes.c_int, ctypes.c_int,  # W, g, M, p, d
+        _dp,                                                  # out_y
+    ]
+
+    _lib.function_solve_vie1_cont.restype = ctypes.c_int
+    _lib.function_solve_vie1_cont.argtypes = [
+        _dp, _dp, ctypes.c_int, ctypes.c_int,   # W, g, M, p
+        _dp, ctypes.c_double, ctypes.c_double,  # adv_U, adv_0, soln_init
+        _dp, _dp,                               # out_U, out_boundary
+    ]
+
+    _lib.function_solve_vie1_cont_vec.restype = ctypes.c_int
+    _lib.function_solve_vie1_cont_vec.argtypes = [
+        _dp, _dp, ctypes.c_int, ctypes.c_int, ctypes.c_int,  # W, g, M, p, d
+        _dp, ctypes.c_double, _dp,                            # adv_U, adv_0, soln_init
+        _dp, _dp,                                             # out_U, out_boundary
     ]
 
     _lib.volterra_max_coll_params.restype = ctypes.c_int
@@ -636,11 +648,11 @@ def function_solve_vide_vec_d(W, g_arr, a_arr, alpha, w_vec, h_widths, soln_init
     return out_y_prime, out_y_boundary
 
 
-def function_solve_vie1_d(W, g_arr, force_continuous, L_at_0, L_at_1, soln_init):
-    """Call the D scalar VIE-1 solver.
+def function_solve_vie1_d(W, g_arr):
+    """Call the D scalar VIE-1 (discontinuous) solver.
 
-    Shapes: W (M, p, M, p), g_arr (M, p); L_at_0/L_at_1 (p,) (ignored when
-    force_continuous=False); soln_init is a float (ignored when fc=False).
+    Shapes: W (M, p, M, p), g_arr (M, p). Returns out_y (M, p).
+    The continuous (force_continuous) method is `function_solve_vie1_cont_d`.
     """
     W_c = np.ascontiguousarray(W, dtype=np.float64)
     g_c = np.ascontiguousarray(g_arr, dtype=np.float64)
@@ -648,28 +660,106 @@ def function_solve_vie1_d(W, g_arr, force_continuous, L_at_0, L_at_1, soln_init)
     if W_c.shape != (M, p, M, p):
         raise ValueError(
             f"W shape {W_c.shape} incompatible with g shape {g_c.shape}")
-    L0_c = np.ascontiguousarray(L_at_0, dtype=np.float64)
-    L1_c = np.ascontiguousarray(L_at_1, dtype=np.float64)
     out_y = np.zeros((M, p), dtype=np.float64)
     ret = _lib.function_solve_vie1(
         W_c.ctypes.data_as(_dp),
         g_c.ctypes.data_as(_dp),
         ctypes.c_int(M), ctypes.c_int(p),
-        ctypes.c_int(1 if force_continuous else 0),
-        L0_c.ctypes.data_as(_dp),
-        L1_c.ctypes.data_as(_dp),
-        ctypes.c_double(float(soln_init)),
         out_y.ctypes.data_as(_dp),
     )
     _check_return(ret, "function_solve_vie1")
     return out_y
 
 
-def function_solve_vie1_vec_d(W, g_arr, force_continuous, L_at_0, L_at_1, soln_init):
-    """Vector VIE-1.
+def function_solve_vie1_cont_d(W, g_arr, adv_U, adv_0, soln_init):
+    """Call the D scalar VIE-1 continuous (Brunner S_m^(0)) solver.
 
-    Shapes: W (M, p, M, p, d, d), g_arr (M, p, d); L_at_0/L_at_1 (p,);
-    soln_init (d,) (the latter three ignored when force_continuous=False).
+    Parameters
+    ----------
+    W : ndarray, shape (M, p, M, p+1)
+        Extended weight tensor (augmented Lagrange value basis + boundary basis).
+    g_arr : ndarray, shape (M, p)
+        g sampled at the collocation nodes.
+    adv_U : ndarray, shape (p,)
+        Boundary-advance weights Lt_{k+1}(1) for the value-node basis.
+    adv_0 : float
+        Boundary-advance weight Lt_0(1) for the carried boundary value.
+    soln_init : float
+        y(0).
+
+    Returns
+    -------
+    out_U : ndarray, shape (M, p)
+        y at the collocation nodes.
+    out_boundary : ndarray, shape (M+1,)
+        y at the mesh breakpoints, out_boundary[0] = soln_init.
+    """
+    W_c = np.ascontiguousarray(W, dtype=np.float64)
+    g_c = np.ascontiguousarray(g_arr, dtype=np.float64)
+    advU_c = np.ascontiguousarray(adv_U, dtype=np.float64)
+    M, p = g_c.shape
+    if W_c.shape != (M, p, M, p + 1):
+        raise ValueError(
+            f"W shape {W_c.shape} incompatible with (M, p, M, p+1) = "
+            f"({M}, {p}, {M}, {p + 1})")
+    if advU_c.shape != (p,):
+        raise ValueError(f"adv_U must have shape ({p},), got {advU_c.shape}")
+    out_U = np.zeros((M, p), dtype=np.float64)
+    out_boundary = np.zeros(M + 1, dtype=np.float64)
+    ret = _lib.function_solve_vie1_cont(
+        W_c.ctypes.data_as(_dp),
+        g_c.ctypes.data_as(_dp),
+        ctypes.c_int(M), ctypes.c_int(p),
+        advU_c.ctypes.data_as(_dp),
+        ctypes.c_double(float(adv_0)),
+        ctypes.c_double(float(soln_init)),
+        out_U.ctypes.data_as(_dp),
+        out_boundary.ctypes.data_as(_dp),
+    )
+    _check_return(ret, "function_solve_vie1_cont")
+    return out_U, out_boundary
+
+
+def function_solve_vie1_cont_vec_d(W, g_arr, adv_U, adv_0, soln_init):
+    """Vector VIE-1 continuous (Brunner S_m^(0)) solver.
+
+    Shapes: W (M, p, M, p+1, d, d), g_arr (M, p, d), adv_U (p,), soln_init (d,).
+    Returns (out_U, out_boundary) of shapes (M, p, d) and (M+1, d).
+    """
+    W_c = np.ascontiguousarray(W, dtype=np.float64)
+    g_c = np.ascontiguousarray(g_arr, dtype=np.float64)
+    advU_c = np.ascontiguousarray(adv_U, dtype=np.float64)
+    init_c = np.ascontiguousarray(soln_init, dtype=np.float64)
+    M, p, d = g_c.shape
+    if W_c.shape != (M, p, M, p + 1, d, d):
+        raise ValueError(
+            f"W shape {W_c.shape} incompatible with expected "
+            f"(M, p, M, p+1, d, d) = ({M}, {p}, {M}, {p+1}, {d}, {d})")
+    if advU_c.shape != (p,):
+        raise ValueError(f"adv_U must have shape ({p},), got {advU_c.shape}")
+    if init_c.shape != (d,):
+        raise ValueError(f"soln_init must have shape ({d},), got {init_c.shape}")
+    out_U = np.zeros((M, p, d), dtype=np.float64)
+    out_boundary = np.zeros((M + 1, d), dtype=np.float64)
+    ret = _lib.function_solve_vie1_cont_vec(
+        W_c.ctypes.data_as(_dp),
+        g_c.ctypes.data_as(_dp),
+        ctypes.c_int(M), ctypes.c_int(p), ctypes.c_int(d),
+        advU_c.ctypes.data_as(_dp),
+        ctypes.c_double(float(adv_0)),
+        init_c.ctypes.data_as(_dp),
+        out_U.ctypes.data_as(_dp),
+        out_boundary.ctypes.data_as(_dp),
+    )
+    _check_return(ret, "function_solve_vie1_cont_vec")
+    return out_U, out_boundary
+
+
+def function_solve_vie1_vec_d(W, g_arr):
+    """Vector VIE-1 (discontinuous).
+
+    Shapes: W (M, p, M, p, d, d), g_arr (M, p, d). Returns out_y (M, p, d).
+    The continuous (force_continuous) method is `function_solve_vie1_cont_vec_d`.
     """
     W_c = np.ascontiguousarray(W, dtype=np.float64)
     g_c = np.ascontiguousarray(g_arr, dtype=np.float64)
@@ -677,18 +767,11 @@ def function_solve_vie1_vec_d(W, g_arr, force_continuous, L_at_0, L_at_1, soln_i
     if W_c.shape != (M, p, M, p, d, d):
         raise ValueError(
             f"W shape {W_c.shape} incompatible with g shape {g_c.shape}")
-    L0_c = np.ascontiguousarray(L_at_0, dtype=np.float64)
-    L1_c = np.ascontiguousarray(L_at_1, dtype=np.float64)
-    init_c = np.ascontiguousarray(soln_init, dtype=np.float64)
     out_y = np.zeros((M, p, d), dtype=np.float64)
     ret = _lib.function_solve_vie1_vec(
         W_c.ctypes.data_as(_dp),
         g_c.ctypes.data_as(_dp),
         ctypes.c_int(M), ctypes.c_int(p), ctypes.c_int(d),
-        ctypes.c_int(1 if force_continuous else 0),
-        L0_c.ctypes.data_as(_dp),
-        L1_c.ctypes.data_as(_dp),
-        init_c.ctypes.data_as(_dp),
         out_y.ctypes.data_as(_dp),
     )
     _check_return(ret, "function_solve_vie1_vec")

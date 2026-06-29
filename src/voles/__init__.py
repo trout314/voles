@@ -2,6 +2,7 @@ from .solvers import solve_VIE_1, solve_VIE_2, solve_VIDE
 from ._callable_solvers import (
     function_solve_VIE_1, function_solve_VIE_2, function_solve_VIDE,
     optimal_graded_mesh,
+    gauss_legendre_nodes, radau_iia_nodes, lobatto_nodes,
 )
 from ._dlang import supported_coll_settings_d as _supported_coll_settings_d
 
@@ -21,6 +22,7 @@ __all__ = [
     "solve_VIE_1", "solve_VIE_2", "solve_VIDE",
     "function_solve_VIE_1", "function_solve_VIE_2", "function_solve_VIDE",
     "optimal_graded_mesh",
+    "gauss_legendre_nodes", "radau_iia_nodes", "lobatto_nodes",
     "fast_coll_settings_VIE_1", "fast_coll_settings_VIE_2", "fast_coll_settings_VIDE",
 ]
 from importlib.metadata import version
