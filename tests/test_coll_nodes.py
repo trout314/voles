@@ -345,6 +345,69 @@ def test_vie1_continuous_rejects_large_leading_amplification():
                              coll_nodes=[1 / 3, 1.0], force_continuous=True)
 
 
+# ---------------------------------------------------------------------------
+# Superconvergence — verifies the callable VIE-2 / VIDE methods reproduce
+# Brunner's predicted mesh-point orders, not just global order. K=1 makes the
+# weight tensor exact (no quadrature cap); manufactured y = e^{2t}.
+# ---------------------------------------------------------------------------
+
+def _vide_mesh_rates(nodes, meshes=(8, 16, 32)):
+    # VIDE, K=1, a=0, y=e^{2t} -> g=(3 e^{2t}+1)/2, y0=1; error at mesh points
+    # (y is continuous in S_m^(0), so y(t_n) is unambiguous).
+    em = []
+    for M in meshes:
+        mesh = np.linspace(0, 1, M + 1)
+        _, yf = function_solve_VIDE(kernel=lambda u: 1.0,
+                                    g=lambda t: (3 * np.exp(2 * t) + 1) / 2,
+                                    soln_init_value=1.0, mesh_breakpoints=mesh,
+                                    coll_nodes=nodes, return_function=True,
+                                    show_warnings=False)
+        tm = mesh[1:]
+        em.append(np.max(np.abs([float(yf(t)) for t in tm] - np.exp(2 * tm))))
+    return [np.log2(em[i] / em[i + 1]) for i in range(len(em) - 1)]
+
+
+def test_vide_gauss_mesh_superconvergence_2m():
+    # Gauss(2): mesh-point y superconverges at 2m = 4 (Cor 3.2.7).
+    assert min(_vide_mesh_rates(gauss_legendre_nodes(2))) > 3.6
+
+
+def test_vide_radau_mesh_superconvergence_2m_minus_1():
+    # Radau IIA(2): mesh-point y superconverges at 2m-1 = 3 (Cor 3.2.8).
+    assert min(_vide_mesh_rates(radau_iia_nodes(2))) > 2.6
+
+
+def _vie2_iterated_mesh_rates(nodes, meshes=(8, 16, 32)):
+    # VIE-2, K=1, y=e^{2t} -> g=(e^{2t}+1)/2. The raw discontinuous solution is
+    # only order m at mesh points; the iterated solution u^it(t_n) = g(t_n) +
+    # int_0^{t_n} u_h ds superconverges (Thm 2.2.6).
+    g2 = lambda t: (np.exp(2 * t) + 1) / 2
+    et = []
+    for M in meshes:
+        mesh = np.linspace(0, 1, M + 1)
+        _, yf = function_solve_VIE_2(kernel=lambda u: 1.0, g=g2,
+                                     mesh_breakpoints=mesh, coll_nodes=nodes,
+                                     return_function=True, show_warnings=False)
+        antis = [p.integ() for p in yf.polynomials]
+        cum = 0.0
+        e = 0.0
+        for n in range(M):
+            cum += float(antis[n](mesh[n + 1]) - antis[n](mesh[n]))
+            e = max(e, abs(g2(mesh[n + 1]) + cum - np.exp(2 * mesh[n + 1])))
+        et.append(e)
+    return [np.log2(et[i] / et[i + 1]) for i in range(len(et) - 1)]
+
+
+def test_vie2_iterated_gauss_superconvergence_2m():
+    # Gauss(2): the iterated collocation solution superconverges at 2m = 4.
+    assert min(_vie2_iterated_mesh_rates(gauss_legendre_nodes(2))) > 3.6
+
+
+def test_vie2_iterated_lobatto_superconvergence_2m_minus_2():
+    # Lobatto(3): iterated solution superconverges at 2m-2 = 4.
+    assert min(_vie2_iterated_mesh_rates(lobatto_nodes(3))) > 3.6
+
+
 def test_vie1_continuous_vector_order_m_plus_1():
     # d=2 diagonal kernel decouples into independent scalar VIE-1 (y=e^t per
     # component); the vector S_m^(0) path must also show O(h^{m+1}) = O(h^3).
