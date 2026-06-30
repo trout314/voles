@@ -1631,9 +1631,12 @@ def _check_node_count(p, *, minimum: int, name: str) -> int:
 def gauss_legendre_nodes(p: int) -> np.ndarray:
     r"""Return the ``p`` Gauss-Legendre collocation nodes on $[0, 1]$.
 
-    These interior nodes (none at 0 or 1) give the maximal collocation order:
-    local order $2p$, with global superconvergence of order $2p$ at the mesh
-    points for VIE-2 / VIDE. Suitable for all three callable solvers.
+    These interior nodes (none at 0 or 1) give the maximal collocation order.
+    For **VIE-2 / VIDE** the solution superconverges to order $2p$ at the mesh
+    points. For **VIE-1** (first kind) there is no mesh-point superconvergence:
+    every node family yields global order $p$, so Gauss confers no order
+    advantage there (though it remains a sound choice). Suitable for all three
+    callable solvers.
 
     Parameters
     ----------
@@ -1653,10 +1656,12 @@ def gauss_legendre_nodes(p: int) -> np.ndarray:
 def radau_iia_nodes(p: int) -> np.ndarray:
     r"""Return the ``p`` Radau IIA collocation nodes on $[0, 1]$.
 
-    The Radau IIA nodes include the right endpoint (``1.0``) and exclude 0,
-    with local order $2p - 1$. The right-endpoint node makes them a common
-    choice for stiff VIDEs, and -- because 0 is excluded -- they are valid for
-    VIE-1.
+    The Radau IIA nodes include the right endpoint (``1.0``) and exclude 0.
+    For **VIE-2 / VIDE** they give mesh-point superconvergence of order
+    $2p - 1$; the right-endpoint node also makes them a common choice for stiff
+    VIDEs. Because 0 is excluded they are valid for **VIE-1**, but first-kind
+    equations have no mesh-point superconvergence -- the method is global order
+    $p$ as for any node family, so Radau confers no order advantage on VIE-1.
 
     Parameters
     ----------
