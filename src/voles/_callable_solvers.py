@@ -1675,7 +1675,10 @@ def radau_iia_nodes(p: int) -> np.ndarray:
     c = np.zeros(p + 1)
     c[p - 1] += 1.0
     c[p] -= 1.0
-    x = np.polynomial.legendre.legroots(c)
+    # legroots may return a complex-dtype array (tiny imaginary parts from the
+    # companion-matrix eigensolver) on some numpy/LAPACK versions; these nodes
+    # are mathematically real, so take the real part.
+    x = np.polynomial.legendre.legroots(c).real
     nodes = np.sort(0.5 * (x + 1.0))
     nodes[-1] = 1.0  # pin the endpoint exactly
     return nodes
@@ -1706,8 +1709,10 @@ def lobatto_nodes(p: int) -> np.ndarray:
         # The interior Lobatto nodes are the roots of P'_{p-1}.
         c = np.zeros(p)
         c[p - 1] = 1.0
+        # .real: legroots may return complex dtype (see radau_iia_nodes); these
+        # interior nodes are mathematically real.
         interior = np.polynomial.legendre.legroots(
-            np.polynomial.legendre.legder(c))
+            np.polynomial.legendre.legder(c)).real
     x = np.concatenate(([-1.0], interior, [1.0]))
     nodes = np.sort(0.5 * (x + 1.0))
     nodes[0] = 0.0   # pin the endpoints exactly
