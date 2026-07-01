@@ -73,38 +73,52 @@ def test_vide_vec_analytic_2d():
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
-def test_vide_vec_coupled_a_matrix():
-    """2×2 VIDE with fully coupled a, K, and g; exact solution is polynomial.
-
-    Constructed via similarity transform P=[[1,1],[1,-1]] on a diagonal system
-    with a_diag=diag(1,2), K_diag=diag(1,2), y_diag=[t, t²], y(0)=[0,0]:
-
-      ã = K̃ = P diag(1,2) P⁻¹ = [[3/2,-1/2],[-1/2,3/2]]  (all entries non-zero)
-      z_exact = P [t, t²]ᵀ = [t+t², t-t²],  z(0) = [0, 0]
-      g̃₀ = 1 + t - 5t²/2 - 2t³/3
-      g̃₁ = 1 - 3t + 3t²/2 + 2t³/3
-    """
-    time_step = 0.1
-    coll_divs = 2
-    num_pts = 10 * coll_divs**2 + 1
-    times = np.arange(num_pts) * time_step
-
-    M = np.array([[1.5, -0.5], [-0.5, 1.5]])
-    a = np.zeros((num_pts, 2, 2));  a[:] = M
-    kernel = np.zeros((num_pts, 2, 2));  kernel[:] = M
-    g = np.zeros((num_pts, 2))
-    g[:, 0] = 1 + times - 2.5 * times**2 - (2/3) * times**3
-    g[:, 1] = 1 - 3 * times + 1.5 * times**2 + (2/3) * times**3
-    exact = np.zeros((num_pts, 2))
-    exact[:, 0] = times + times**2
-    exact[:, 1] = times - times**2
-
+@pytest.mark.parametrize("pair", [
+    ("poly_a", "poly_b"),   # -> [t+t^2, t-t^2], constant coupled a and kernel
+    ("smooth", "poly_a"),   # -> [sin t + t, sin t - t], non-constant coupled a and kernel
+])
+def test_vide_vec_coupled_generated_accuracy(coupled_vide, pair):
+    """Coupled 2x2 VIDE generated from pairs of scalar solutions via the Z = P Y
+    change of coordinates (P=[[1,1],[1,-1]]); both a and kernel are conjugated.
+    Replaces the former hand-written coupled test; the transform is validated by
+    test_make_coupled_vide_reproduces_handwritten."""
+    spec_a, spec_b = coupled_vide[pair[0]], coupled_vide[pair[1]]
+    d = coupled_vide["make"](
+        spec_a, spec_b, [[1, 1], [1, -1]],
+        time_step=0.02, coll_divs=3, coll_choices=[1, 2, 3],
+    )
     soln = solve_VIDE(
-        kernel_values=kernel, a_values=a, g_values=g,
-        soln_init_value=np.array([0.0, 0.0]),
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[0, 1, 2])
-    assert np.max(np.abs(soln - exact)) < TOLERANCE
+        kernel_values=d["kernel"],
+        a_values=d["a"],
+        g_values=d["g"],
+        soln_init_value=d["soln_init_value"],
+        time_step=d["time_step"],
+        coll_divs=d["coll_divs"],
+        coll_choices=d["coll_choices"],
+    )
+    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+
+
+def test_make_coupled_vide_reproduces_handwritten(coupled_vide):
+    """Hand-checked anchor for VIDE coupling: poly_a (a=1, K=1, y=t) and poly_b
+    (a=2, K=2, y=t^2) with P=[[1,1],[1,-1]] must reproduce, to machine precision,
+    the former hand-written arrays (a=K=[[1.5,-0.5],[-0.5,1.5]], z=[t+t^2, t-t^2],
+    z(0)=[0,0])."""
+    d = coupled_vide["make"](
+        coupled_vide["poly_a"], coupled_vide["poly_b"], [[1, 1], [1, -1]],
+        time_step=0.1, coll_divs=2, coll_choices=[0, 1, 2],
+    )
+    t = d["times"]
+    hand_M = np.zeros((len(t), 2, 2))
+    hand_M[:] = [[1.5, -0.5], [-0.5, 1.5]]
+    hand_g = np.column_stack([1 + t - 2.5 * t**2 - (2/3) * t**3,
+                              1 - 3 * t + 1.5 * t**2 + (2/3) * t**3])
+    hand_exact = np.column_stack([t + t**2, t - t**2])
+    assert np.max(np.abs(d["kernel"] - hand_M)) < 1e-14
+    assert np.max(np.abs(d["a"] - hand_M)) < 1e-14
+    assert np.max(np.abs(d["g"] - hand_g)) < 1e-14
+    assert np.max(np.abs(d["exact"] - hand_exact)) < 1e-14
+    assert np.max(np.abs(d["soln_init_value"])) < 1e-14
 
 
 def test_vide_accuracy(vide_data):

@@ -134,35 +134,46 @@ def test_vie1_vec_force_continuous():
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
-def test_vie1_vec_coupled_kernel():
-    """2×2 VIE-1 with off-diagonal (coupled) constant kernel; exact solution is polynomial.
-
-    Constructed via similarity transform P=[[1,1],[1,-1]] on a diagonal system
-    with K_diag=diag(1,2) and y_diag=[1+t, t]:
-
-      K̃ = P diag(1,2) P⁻¹ = [[3/2, -1/2], [-1/2, 3/2]]
-      z_exact = P [1+t, t]ᵀ = [1+2t, 1]
-      g_z     = P [t+t²/2, t²]ᵀ = [t+3t²/2, t-t²/2]
-    """
-    time_step = 0.1
-    coll_divs = 2
-    num_pts = 10 * coll_divs**2 + 1
-    times = np.arange(num_pts) * time_step
-
-    kernel = np.zeros((num_pts, 2, 2))
-    kernel[:] = [[1.5, -0.5], [-0.5, 1.5]]
-    g = np.zeros((num_pts, 2))
-    g[:, 0] = times + 1.5 * times**2
-    g[:, 1] = times - 0.5 * times**2
-    exact = np.zeros((num_pts, 2))
-    exact[:, 0] = 1 + 2 * times
-    exact[:, 1] = 1.0
-
+@pytest.mark.parametrize("pair", [
+    ("poly_a", "poly_b"),   # -> [1+2t, 1], constant coupled kernel
+    ("smooth", "poly_b"),   # -> [cos t - sin t + t, cos t - sin t - t]
+])
+def test_vie1_vec_coupled_generated_accuracy(coupled_vie1, pair):
+    """Coupled 2x2 VIE-1 generated from pairs of scalar solutions via the
+    Z = P Y change of coordinates (P=[[1,1],[1,-1]]). Replaces the former
+    hand-written coupled test; the transform is validated by
+    test_make_coupled_vie1_reproduces_handwritten."""
+    spec_a, spec_b = coupled_vie1[pair[0]], coupled_vie1[pair[1]]
+    d = coupled_vie1["make"](
+        spec_a, spec_b, [[1, 1], [1, -1]],
+        time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3],
+    )
     soln = solve_VIE_1(
-        kernel_values=kernel, g_values=g,
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[1, 2])
-    assert np.max(np.abs(soln - exact)) < TOLERANCE
+        kernel_values=d["kernel"],
+        g_values=d["g"],
+        time_step=d["time_step"],
+        coll_divs=d["coll_divs"],
+        coll_choices=d["coll_choices"],
+    )
+    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+
+
+def test_make_coupled_vie1_reproduces_handwritten(coupled_vie1):
+    """Hand-checked anchor for VIE-1 coupling: poly_a (K=1, y=1+t) and poly_b
+    (K=2, y=t) with P=[[1,1],[1,-1]] must reproduce, to machine precision, the
+    former hand-written arrays (z = [1+2t, 1])."""
+    d = coupled_vie1["make"](
+        coupled_vie1["poly_a"], coupled_vie1["poly_b"], [[1, 1], [1, -1]],
+        time_step=0.1, coll_divs=2, coll_choices=[1, 2],
+    )
+    t = d["times"]
+    hand_kernel = np.zeros((len(t), 2, 2))
+    hand_kernel[:] = [[1.5, -0.5], [-0.5, 1.5]]
+    hand_g = np.column_stack([t + 1.5 * t**2, t - 0.5 * t**2])
+    hand_exact = np.column_stack([1 + 2 * t, np.ones_like(t)])
+    assert np.max(np.abs(d["kernel"] - hand_kernel)) < 1e-14
+    assert np.max(np.abs(d["g"] - hand_g)) < 1e-14
+    assert np.max(np.abs(d["exact"] - hand_exact)) < 1e-14
 
 
 def test_vie1_accuracy(vie1_data):

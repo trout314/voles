@@ -297,21 +297,82 @@ def vide_stiff_data():
 
 
 # ---------------------------------------------------------------------------
-# Coupled vector fixtures, generated from pairs of scalar VIE-2 solutions.
+# Coupled vector fixtures, generated from pairs of scalar solutions.
 #
-# Stack two scalar VIE-2 solutions into a diagonal (decoupled) 2x2 system and
-# apply a constant change of coordinates Z = P Y. Because P is constant it
-# passes through the integral, so Z solves a *coupled* VIE-2:
-#     y_i = g_i + int_0^t K_i(t-s) y_i(s) ds        (i = 1, 2; diagonal)
-#   =>  Z  = P g + int_0^t (P diag(K1,K2) P^-1) Z ds  (coupled)
-# hence  kernel_Z(u) = P diag(K1(u), K2(u)) P^-1,  g_Z = P [g1, g2]^T,
-#        exact_Z     = P [y1, y2]^T.
-# Off-diagonal kernel entries appear only when K1 != K2 (distinct kernels).
+# Stack two scalar solutions into a diagonal (decoupled) 2x2 system and apply a
+# constant change of coordinates Z = P Y. Because P is constant it commutes with
+# the integral and the derivative, so Z solves the *coupled* system obtained by
+# conjugating every matrix coefficient:
+#     kernel_Z(u) = P diag(K1(u), K2(u)) P^-1
+#     a_Z(t)      = P diag(a1(t), a2(t)) P^-1        (VIDE only)
+#     g_Z(t)      = P [g1(t), g2(t)]^T
+#     exact_Z(t)  = P [y1(t), y2(t)]^T
+#     y_Z(0)      = P [y1(0), y2(0)]^T               (VIDE only)
+# Off-diagonal coupling appears only where the two scalar coefficients differ
+# (K1 != K2, resp. a1 != a2).
 # ---------------------------------------------------------------------------
 
-# Scalar VIE-2 solution specs: callable kernel(u), g(t), y_exact(t), each
-# satisfying y(t) = g(t) + int_0^t kernel(t-s) y(s) ds.
-VIE2_SPEC_SMOOTH = dict(     # K(u)=e^{-u}, y=sin t      (cf. vie2_data)
+
+def make_coupled_data(spec_a, spec_b, P, *, time_step, coll_divs, coll_choices,
+                      num_blocks=10):
+    """Build a coupled 2x2 fixture from two scalar solution specs via Z = P Y
+    (see section header). Works for all three solver types: each spec is a dict
+    with callables kernel(u), g(t), y_exact(t), plus a(t) for VIDE. Returns a
+    dict shaped like the array fixtures (kernel (N,2,2); g, exact (N,2)); when
+    the specs carry an 'a' term it also includes the coupled 'a' array and the
+    'soln_init_value' vector."""
+    P = np.asarray(P, dtype=float)
+    P_inv = np.linalg.inv(P)
+    num_pts = num_blocks * coll_divs**2 + 1
+    times = np.arange(num_pts) * time_step
+
+    def conjugate_diag(f_a, f_b):
+        """(N, 2, 2) array of  P diag(f_a(u), f_b(u)) P^-1  over ``times``."""
+        v_a = np.array([f_a(u) for u in times])
+        v_b = np.array([f_b(u) for u in times])
+        out = np.zeros((num_pts, 2, 2))
+        for n in range(num_pts):
+            out[n] = P @ np.diag([v_a[n], v_b[n]]) @ P_inv
+        return out
+
+    g_diag = np.array([[spec_a["g"](t), spec_b["g"](t)] for t in times])
+    y_diag = np.array([[spec_a["y_exact"](t), spec_b["y_exact"](t)] for t in times])
+    data = dict(
+        times=times,
+        kernel=conjugate_diag(spec_a["kernel"], spec_b["kernel"]),
+        g=g_diag @ P.T,          # each row is  P [g1, g2]^T
+        exact=y_diag @ P.T,      # each row is  P [y1, y2]^T
+        time_step=time_step,
+        coll_divs=coll_divs,
+        coll_choices=coll_choices,
+    )
+    if "a" in spec_a or "a" in spec_b:   # VIDE: reaction term + initial value
+        zero = lambda t: 0.0
+        data["a"] = conjugate_diag(spec_a.get("a", zero), spec_b.get("a", zero))
+        data["soln_init_value"] = P @ np.array(
+            [spec_a["y_exact"](0.0), spec_b["y_exact"](0.0)])
+    return data
+
+
+# Scalar VIE-1 solution specs: g(t) = int_0^t kernel(t-s) y(s) ds.
+VIE1_SPEC_POLY_A = dict(     # K=1, y=1+t  ->  g = t + t^2/2
+    kernel=lambda u: 1.0,
+    g=lambda t: t + 0.5 * t**2,
+    y_exact=lambda t: 1.0 + t,
+)
+VIE1_SPEC_POLY_B = dict(     # K=2, y=t    ->  g = t^2
+    kernel=lambda u: 2.0,
+    g=lambda t: t**2,
+    y_exact=lambda t: t,
+)
+VIE1_SPEC_SMOOTH = dict(     # K=e^{u}, y=cos t - sin t   (cf. vie1_data)
+    kernel=lambda u: np.exp(u),
+    g=lambda t: np.sin(t),
+    y_exact=lambda t: np.cos(t) - np.sin(t),
+)
+
+# Scalar VIE-2 solution specs: y(t) = g(t) + int_0^t kernel(t-s) y(s) ds.
+VIE2_SPEC_SMOOTH = dict(     # K(u)=e^{-u}, y=sin t       (cf. vie2_data)
     kernel=lambda u: np.exp(-u),
     g=lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t)),
     y_exact=lambda t: np.sin(t),
@@ -321,7 +382,7 @@ VIE2_SPEC_POLY = dict(       # K(u)=1, y=t
     g=lambda t: t - 0.5 * t**2,
     y_exact=lambda t: t,
 )
-VIE2_SPEC_RATIONAL = dict(   # K(u)=1, y=1/(1+t)         (cf. vie2_rational_data)
+VIE2_SPEC_RATIONAL = dict(   # K(u)=1, y=1/(1+t)          (cf. vie2_rational_data)
     kernel=lambda u: 1.0,
     g=lambda t: 1.0 / (1.0 + t) - np.log(1.0 + t),
     y_exact=lambda t: 1.0 / (1.0 + t),
@@ -332,45 +393,59 @@ VIE2_SPEC_POLY2 = dict(      # K(u)=2, y=t^2
     y_exact=lambda t: t**2,
 )
 
+# Scalar VIDE solution specs: y'(t) = a(t) y + g(t) + int_0^t kernel(t-s) y ds.
+VIDE_SPEC_POLY_A = dict(     # a=1, K=1, y=t    ->  g = 1 - t - t^2/2
+    kernel=lambda u: 1.0,
+    a=lambda t: 1.0,
+    g=lambda t: 1.0 - t - 0.5 * t**2,
+    y_exact=lambda t: t,
+)
+VIDE_SPEC_POLY_B = dict(     # a=2, K=2, y=t^2  ->  g = 2t - 2t^2 - 2t^3/3
+    kernel=lambda u: 2.0,
+    a=lambda t: 2.0,
+    g=lambda t: 2.0 * t - 2.0 * t**2 - (2.0 / 3.0) * t**3,
+    y_exact=lambda t: t**2,
+)
+VIDE_SPEC_SMOOTH = dict(     # a=1/(1+t^2), K=e^{-u}, y=sin t   (cf. vide_data)
+    kernel=lambda u: np.exp(-u),
+    a=lambda t: 1.0 / (1.0 + t**2),
+    g=lambda t: (np.cos(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
+                 - np.sin(t) / (1.0 + t**2)),
+    y_exact=lambda t: np.sin(t),
+)
 
-def make_coupled_vie2_data(spec_a, spec_b, P, *, time_step, coll_divs,
-                           coll_choices, num_blocks=10):
-    """Build a coupled 2x2 VIE-2 fixture from two scalar solution specs via the
-    change of coordinates Z = P Y (see section header). Returns the same dict
-    shape as the scalar array fixtures. Genuine (off-diagonal) kernel coupling
-    requires the two specs to have different kernels."""
-    P = np.asarray(P, dtype=float)
-    P_inv = np.linalg.inv(P)
-    num_pts = num_blocks * coll_divs**2 + 1
-    times = np.arange(num_pts) * time_step
-    k1 = np.array([spec_a["kernel"](u) for u in times])
-    k2 = np.array([spec_b["kernel"](u) for u in times])
-    g_diag = np.array([[spec_a["g"](t), spec_b["g"](t)] for t in times])
-    y_diag = np.array([[spec_a["y_exact"](t), spec_b["y_exact"](t)] for t in times])
-    kernel = np.zeros((num_pts, 2, 2))
-    for n in range(num_pts):
-        kernel[n] = P @ np.diag([k1[n], k2[n]]) @ P_inv   # P diag(K1,K2) P^-1
+
+@pytest.fixture
+def coupled_vie1():
+    """The coupled generator plus scalar VIE-1 specs it consumes."""
     return dict(
-        times=times,
-        kernel=kernel,
-        g=g_diag @ P.T,          # each row is  P [g1, g2]^T
-        exact=y_diag @ P.T,      # each row is  P [y1, y2]^T
-        time_step=time_step,
-        coll_divs=coll_divs,
-        coll_choices=coll_choices,
+        make=make_coupled_data,
+        poly_a=VIE1_SPEC_POLY_A,
+        poly_b=VIE1_SPEC_POLY_B,
+        smooth=VIE1_SPEC_SMOOTH,
     )
 
 
 @pytest.fixture
 def coupled_vie2():
-    """The coupled-VIE-2 generator plus the scalar specs it consumes, so tests
-    can build (and cross-check) coupled fixtures from scalar solutions."""
+    """The coupled generator plus scalar VIE-2 specs it consumes."""
     return dict(
-        make=make_coupled_vie2_data,
+        make=make_coupled_data,
         smooth=VIE2_SPEC_SMOOTH,
         poly=VIE2_SPEC_POLY,
         poly2=VIE2_SPEC_POLY2,
         rational=VIE2_SPEC_RATIONAL,
+    )
+
+
+@pytest.fixture
+def coupled_vide():
+    """The coupled generator plus scalar VIDE specs it consumes."""
+    return dict(
+        make=make_coupled_data,
+        poly_a=VIDE_SPEC_POLY_A,
+        poly_b=VIDE_SPEC_POLY_B,
+        smooth=VIDE_SPEC_SMOOTH,
     )
 
 
