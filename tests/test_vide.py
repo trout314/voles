@@ -135,6 +135,20 @@ def test_vide_ode_accuracy(vide_ode_data):
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
+def test_vide_log_accuracy(vide_log_data):
+    d = vide_log_data
+    soln = solve_VIDE(
+        kernel_values=d["kernel"],
+        a_values=d["a"],
+        g_values=d["g"],
+        soln_init_value=d["soln_init_value"],
+        time_step=d["time_step"],
+        coll_divs=d["coll_divs"],
+        coll_choices=d["coll_choices"],
+    )
+    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+
+
 def test_vide_return_polys(vide_data):
     d = vide_data
     result = solve_VIDE(

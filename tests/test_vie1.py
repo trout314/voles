@@ -177,6 +177,18 @@ def test_vie1_accuracy(vie1_data):
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
+def test_vie1_damped_accuracy(vie1_damped_data):
+    d = vie1_damped_data
+    soln = solve_VIE_1(
+        kernel_values=d["kernel"],
+        g_values=d["g"],
+        time_step=d["time_step"],
+        coll_divs=d["coll_divs"],
+        coll_choices=d["coll_choices"],
+    )
+    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+
+
 def test_vie1_return_polys(vie1_data):
     d = vie1_data
     result = solve_VIE_1(

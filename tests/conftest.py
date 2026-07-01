@@ -178,6 +178,90 @@ def vide_ode_data():
     )
 
 
+# Solution checked by direct integration:
+#   K(s) = exp(-s),  y(t) = exp(-t) sin(2t)
+#   int_0^t exp(-(t-s)) exp(-s) sin(2s) ds = exp(-t) int_0^t sin(2s) ds
+#                                          = exp(-t) (1 - cos 2t)/2 = g(t)
+@pytest.fixture
+def vie1_damped_data():
+    """VIE-1 damped-oscillation test: K(s)=e^{-s}, y=e^{-t} sin(2t),
+    g(t)=e^{-t}(1-cos 2t)/2. Adds a decaying, higher-frequency oscillation."""
+    time_step = 0.01
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1  # 91
+    times = np.array([i * time_step for i in range(num_pts)])
+    kernel = np.exp(-times)
+    g = np.exp(-times) * (1 - np.cos(2 * times)) / 2
+    exact = np.exp(-times) * np.sin(2 * times)
+    return dict(
+        times=times,
+        kernel=kernel,
+        g=g,
+        exact=exact,
+        time_step=time_step,
+        coll_divs=coll_divs,
+        coll_choices=[1, 2, 3],
+    )
+
+
+# Solution checked by direct integration:
+#   K(s) = 1,  y(t) = 1/(1+t)
+#   int_0^t 1/(1+s) ds = ln(1+t)
+#   y = g + int  =>  g(t) = 1/(1+t) - ln(1+t)
+@pytest.fixture
+def vie2_rational_data():
+    """VIE-2 rational test: K(s)=1, y=1/(1+t), g=1/(1+t)-ln(1+t).
+    Adds a non-oscillatory rational solution with a logarithmic forcing term."""
+    time_step = 0.02
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1  # 91
+    times = np.array([i * time_step for i in range(num_pts)])
+    kernel = np.ones_like(times)
+    g = 1.0 / (1.0 + times) - np.log(1.0 + times)
+    exact = 1.0 / (1.0 + times)
+    return dict(
+        times=times,
+        kernel=kernel,
+        g=g,
+        exact=exact,
+        time_step=time_step,
+        coll_divs=coll_divs,
+        coll_choices=[0, 1, 2, 3],
+    )
+
+
+# Solution checked by direct integration:
+#   K(s) = 1,  a(t) = 1,  y(t) = ln(1+t),  y(0)=0,  y'(t)=1/(1+t)
+#   int_0^t ln(1+s) ds = (1+t) ln(1+t) - t
+#   y' = a*y + g + int  =>
+#   g(t) = 1/(1+t) - ln(1+t) - [(1+t) ln(1+t) - t]
+@pytest.fixture
+def vide_log_data():
+    """VIDE logarithmic test: K(s)=1, a(t)=1, y=ln(1+t),
+    g=1/(1+t)-ln(1+t)-((1+t)ln(1+t)-t). Adds a logarithmic solution with a
+    constant reaction term."""
+    time_step = 0.01
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1  # 91
+    times = np.array([i * time_step for i in range(num_pts)])
+    kernel = np.ones_like(times)
+    a = np.ones_like(times)
+    g = (1.0 / (1.0 + times) - np.log(1.0 + times)
+         - ((1.0 + times) * np.log(1.0 + times) - times))
+    exact = np.log(1.0 + times)
+    return dict(
+        times=times,
+        kernel=kernel,
+        g=g,
+        a=a,
+        exact=exact,
+        time_step=time_step,
+        coll_divs=coll_divs,
+        coll_choices=[1, 2, 3],
+        soln_init_value=0.0,
+    )
+
+
 # Callable-input solver fixtures.
 # These return the kernel, g, and exact solution as callables (rather than
 # pre-sampled arrays), for use with function_solve_VIE_2 etc.
