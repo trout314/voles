@@ -262,6 +262,118 @@ def vide_log_data():
     )
 
 
+# Solution checked by direct integration (stiff regime):
+#   a(t) = -500,  K(s) = exp(-s),  y(t) = sin(t),  y(0)=0,  y'(t)=cos(t)
+#   conv = int_0^t exp(-(t-s)) sin(s) ds = (sin t - cos t + exp(-t))/2
+#   y' = a*y + g + conv  =>
+#   g(t) = cos t + 500 sin t - (sin t - cos t + exp(-t))/2
+@pytest.fixture
+def vide_stiff_data():
+    """Stiff VIDE test: a(t)=-500, K(s)=e^{-s}, y=sin(t). With dt=0.02 the
+    reaction term gives |a*dt|=10, well into the stiff regime; the implicit
+    collocation solver must still recover the smooth solution accurately (an
+    explicit scheme would be unstable here)."""
+    time_step = 0.02
+    coll_divs = 3
+    num_pts = 10 * coll_divs**2 + 1  # 91
+    times = np.array([i * time_step for i in range(num_pts)])
+    lam = 500.0
+    kernel = np.exp(-times)
+    a = -lam * np.ones_like(times)
+    conv = (np.sin(times) - np.cos(times) + np.exp(-times)) / 2
+    g = np.cos(times) + lam * np.sin(times) - conv
+    exact = np.sin(times)
+    return dict(
+        times=times,
+        kernel=kernel,
+        g=g,
+        a=a,
+        exact=exact,
+        time_step=time_step,
+        coll_divs=coll_divs,
+        coll_choices=[1, 2, 3],
+        soln_init_value=0.0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Coupled vector fixtures, generated from pairs of scalar VIE-2 solutions.
+#
+# Stack two scalar VIE-2 solutions into a diagonal (decoupled) 2x2 system and
+# apply a constant change of coordinates Z = P Y. Because P is constant it
+# passes through the integral, so Z solves a *coupled* VIE-2:
+#     y_i = g_i + int_0^t K_i(t-s) y_i(s) ds        (i = 1, 2; diagonal)
+#   =>  Z  = P g + int_0^t (P diag(K1,K2) P^-1) Z ds  (coupled)
+# hence  kernel_Z(u) = P diag(K1(u), K2(u)) P^-1,  g_Z = P [g1, g2]^T,
+#        exact_Z     = P [y1, y2]^T.
+# Off-diagonal kernel entries appear only when K1 != K2 (distinct kernels).
+# ---------------------------------------------------------------------------
+
+# Scalar VIE-2 solution specs: callable kernel(u), g(t), y_exact(t), each
+# satisfying y(t) = g(t) + int_0^t kernel(t-s) y(s) ds.
+VIE2_SPEC_SMOOTH = dict(     # K(u)=e^{-u}, y=sin t      (cf. vie2_data)
+    kernel=lambda u: np.exp(-u),
+    g=lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t)),
+    y_exact=lambda t: np.sin(t),
+)
+VIE2_SPEC_POLY = dict(       # K(u)=1, y=t
+    kernel=lambda u: 1.0,
+    g=lambda t: t - 0.5 * t**2,
+    y_exact=lambda t: t,
+)
+VIE2_SPEC_RATIONAL = dict(   # K(u)=1, y=1/(1+t)         (cf. vie2_rational_data)
+    kernel=lambda u: 1.0,
+    g=lambda t: 1.0 / (1.0 + t) - np.log(1.0 + t),
+    y_exact=lambda t: 1.0 / (1.0 + t),
+)
+VIE2_SPEC_POLY2 = dict(      # K(u)=2, y=t^2
+    kernel=lambda u: 2.0,
+    g=lambda t: t**2 - (2.0 / 3.0) * t**3,
+    y_exact=lambda t: t**2,
+)
+
+
+def make_coupled_vie2_data(spec_a, spec_b, P, *, time_step, coll_divs,
+                           coll_choices, num_blocks=10):
+    """Build a coupled 2x2 VIE-2 fixture from two scalar solution specs via the
+    change of coordinates Z = P Y (see section header). Returns the same dict
+    shape as the scalar array fixtures. Genuine (off-diagonal) kernel coupling
+    requires the two specs to have different kernels."""
+    P = np.asarray(P, dtype=float)
+    P_inv = np.linalg.inv(P)
+    num_pts = num_blocks * coll_divs**2 + 1
+    times = np.arange(num_pts) * time_step
+    k1 = np.array([spec_a["kernel"](u) for u in times])
+    k2 = np.array([spec_b["kernel"](u) for u in times])
+    g_diag = np.array([[spec_a["g"](t), spec_b["g"](t)] for t in times])
+    y_diag = np.array([[spec_a["y_exact"](t), spec_b["y_exact"](t)] for t in times])
+    kernel = np.zeros((num_pts, 2, 2))
+    for n in range(num_pts):
+        kernel[n] = P @ np.diag([k1[n], k2[n]]) @ P_inv   # P diag(K1,K2) P^-1
+    return dict(
+        times=times,
+        kernel=kernel,
+        g=g_diag @ P.T,          # each row is  P [g1, g2]^T
+        exact=y_diag @ P.T,      # each row is  P [y1, y2]^T
+        time_step=time_step,
+        coll_divs=coll_divs,
+        coll_choices=coll_choices,
+    )
+
+
+@pytest.fixture
+def coupled_vie2():
+    """The coupled-VIE-2 generator plus the scalar specs it consumes, so tests
+    can build (and cross-check) coupled fixtures from scalar solutions."""
+    return dict(
+        make=make_coupled_vie2_data,
+        smooth=VIE2_SPEC_SMOOTH,
+        poly=VIE2_SPEC_POLY,
+        poly2=VIE2_SPEC_POLY2,
+        rational=VIE2_SPEC_RATIONAL,
+    )
+
+
 # Callable-input solver fixtures.
 # These return the kernel, g, and exact solution as callables (rather than
 # pre-sampled arrays), for use with function_solve_VIE_2 etc.
