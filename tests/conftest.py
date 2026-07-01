@@ -8,8 +8,9 @@ TOLERANCE = 1e-3
 # Solution specs -- the single source of truth for each test problem.
 #
 # A spec expresses the *mathematical* problem as callables: kernel(u), g(t),
-# y_exact(t), plus a(t) and (optionally) y0 for VIDE, and
-# kernel_singularity/alpha for weakly-singular (Abel) kernels. The array-input
+# y_exact(t), plus a(t) for VIDE, and kernel_singularity/alpha for
+# weakly-singular (Abel) kernels. The initial value for VIDE is taken as
+# y_exact(0). The array-input
 # and callable-input fixtures are both derived from the same spec (see the
 # fixture builders below), so the kernel/g/exact math is written exactly once.
 # Specs are also the inputs to make_coupled_data for the coupled vector
@@ -31,6 +32,23 @@ VIE1_SPEC_SMOOTH = dict(     # K=e^{u}, y=cos t - sin t   (cf. vie1_data)
     kernel=lambda u: np.exp(u),
     g=lambda t: np.sin(t),
     y_exact=lambda t: np.cos(t) - np.sin(t),
+)
+VIE1_SPEC_POLY = dict(       # K=2+u, y=t  ->  g = t^2 + t^3/6   (cf. vie1_poly_data)
+    kernel=lambda u: 2.0 + u,
+    g=lambda t: t**2 + t**3 / 6.0,
+    y_exact=lambda t: t,
+)
+VIE1_SPEC_DAMPED = dict(     # K=e^{-u}, y=e^{-t} sin 2t   (cf. vie1_damped_data)
+    kernel=lambda u: np.exp(-u),
+    g=lambda t: np.exp(-t) * (1 - np.cos(2 * t)) / 2,
+    y_exact=lambda t: np.exp(-t) * np.sin(2 * t),
+)
+VIE1_SPEC_ABEL = dict(       # weakly-singular K(u)=1/sqrt(u), y=sqrt(t); callable-only
+    kernel=lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0,
+    g=lambda t: 0.5 * np.pi * t,
+    y_exact=np.sqrt,
+    kernel_singularity=0.0,
+    alpha=0.5,
 )
 
 # Scalar VIE-2 solution specs: y(t) = g(t) + int_0^t kernel(t-s) y(s) ds.
@@ -87,6 +105,34 @@ VIDE_SPEC_SMOOTH = dict(     # a=1/(1+t^2), K=e^{-u}, y=sin t   (cf. vide_data)
                  - np.sin(t) / (1.0 + t**2)),
     y_exact=lambda t: np.sin(t),
 )
+VIDE_SPEC_ODE = dict(        # K=0, a=-1, g=t, y=3e^{-t}+t-1, y(0)=2   (cf. vide_ode_data)
+    kernel=lambda u: 0.0,
+    a=lambda t: -1.0,
+    g=lambda t: t,
+    y_exact=lambda t: 3 * np.exp(-t) + t - 1,
+)
+VIDE_SPEC_LOG = dict(        # a=1, K=1, y=ln(1+t)   (cf. vide_log_data)
+    kernel=lambda u: 1.0,
+    a=lambda t: 1.0,
+    g=lambda t: (1.0 / (1.0 + t) - np.log(1.0 + t)
+                 - ((1.0 + t) * np.log(1.0 + t) - t)),
+    y_exact=lambda t: np.log(1.0 + t),
+)
+VIDE_SPEC_STIFF = dict(      # a=-500, K=e^{-u}, y=sin t (stiff)   (cf. vide_stiff_data)
+    kernel=lambda u: np.exp(-u),
+    a=lambda t: -500.0,
+    g=lambda t: (np.cos(t) + 500.0 * np.sin(t)
+                 - (np.sin(t) - np.cos(t) + np.exp(-t)) / 2),
+    y_exact=lambda t: np.sin(t),
+)
+VIDE_SPEC_ABEL = dict(       # weakly-singular K=1/sqrt(u), a=0, y=t^{3/2}; callable-only
+    kernel=lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0,
+    a=lambda t: 0.0,
+    g=lambda t: 1.5 * np.sqrt(t) - (3 * np.pi / 8.0) * t**2,
+    y_exact=lambda t: t**1.5,
+    kernel_singularity=0.0,
+    alpha=0.5,
+)
 
 
 # ===========================================================================
@@ -139,37 +185,18 @@ def as_callable(spec, *, coll_divs=None, coll_choices=None, coll_nodes=None):
             data[key] = val
     if "a" in spec:
         data["a"] = spec["a"]
-        data["soln_init_value"] = spec.get("y0", 0.0)
+        data["soln_init_value"] = spec["y_exact"](0.0)
     if spec.get("kernel_singularity") is not None:
         data["kernel_singularity"] = spec["kernel_singularity"]
         data["alpha"] = spec["alpha"]
     return data
 
 
-# Solution checked using Mathematica commands:
-#    g[t_] := Sin[t];
-#    K[s_] := Exp[s];
-#    DSolveValue[g[t] == Integrate[K[t - s] y[s], {s, 0, t}], y[t], t]
 @pytest.fixture
 def vie1_data():
-    """VIE-1 test data: g(t)=sin(t), K(x)=exp(x), exact=cos(t)-sin(t)."""
-    time_step = 0.01
-    coll_divs = 3
-    num_pts = 10 * coll_divs**2 + 1  # 91
-    times = np.array([i * time_step for i in range(num_pts)])
-    kernel = np.exp(times)
-    g = np.sin(times)
-    g[0] = 0.0
-    exact = np.cos(times) - np.sin(times)
-    return dict(
-        times=times,
-        kernel=kernel,
-        g=g,
-        exact=exact,
-        time_step=time_step,
-        coll_divs=coll_divs,
-        coll_choices=[1, 2, 3],
-    )
+    """VIE-1 array fixture: K(u)=e^{u}, y=cos t - sin t (from VIE1_SPEC_SMOOTH)."""
+    return as_array(VIE1_SPEC_SMOOTH, time_step=0.01, coll_divs=3,
+                    coll_choices=[1, 2, 3])
 
 @pytest.fixture
 def vie2_data():
@@ -177,69 +204,19 @@ def vie2_data():
     return as_array(VIE2_SPEC_SMOOTH, time_step=0.05, coll_divs=3,
                     coll_choices=[0, 1, 2, 3])
 
-# Solution checked using Mathematica commands:\
-# a[t_] := 1/(1 + t^2);
-# g[t_] := Cos[t] - (1/2) (Exp[-t] + Sin[t] - Cos[t]) - Sin[t]/(1 + t^2);
-# K[x_] := Exp[-x];
-# y[t_] := Sin[t]
-# rhs = a[t] y[t] + g[t] + Integrate[K[t - s] y[s], {s, 0, t}];
-# Simplify[rhs] == y'[t]
 @pytest.fixture
 def vide_data():
-    """VIDE test data: a(t)=1/(1+t²), K(x)=exp(-x), exact=sin(t)."""
-    time_step = 0.01
-    coll_divs = 3
-    num_pts = 10 * coll_divs**2 + 1  # 91
-    times = np.array([i * time_step for i in range(num_pts)])
-    kernel = np.exp(-times)
-    a = 1.0 / (1.0 + times**2)
-    g = (
-        np.cos(times)
-        - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
-        - np.sin(times) / (1.0 + times**2)
-    )
-    exact = np.sin(times)
-    return dict(
-        times=times,
-        kernel=kernel,
-        g=g,
-        a=a,
-        exact=exact,
-        time_step=time_step,
-        coll_divs=coll_divs,
-        coll_choices=[1, 2, 3],
-        soln_init_value=0.0,
-    )
+    """VIDE array fixture: a=1/(1+t^2), K(u)=e^{-u}, y=sin t (from VIDE_SPEC_SMOOTH)."""
+    return as_array(VIDE_SPEC_SMOOTH, time_step=0.01, coll_divs=3,
+                    coll_choices=[1, 2, 3])
 
 
-# Solution checked using Mathematica commands:
-# g[t_] := t^2 + (1/6) t^3;
-# K[s_] := 2 + s;
-# eqn := g[t] == Integrate[K[t - s] y[s], {s, 0, t}]
-# DSolveValue[eqn, y[t], t]
 @pytest.fixture
 def vie1_poly_data():
-    """VIE-1 polynomial test: K(s)=2+s, g(t)=t²+t³/6, exact=t.
-
-    Verification: ∫₀ᵗ (2+(t-s))·s ds = t² + t³/6. ✓
-    The solution is degree-1 polynomial, so collocation gives near-exact results.
-    """
-    time_step = 0.1
-    coll_divs = 3
-    num_pts = 10 * coll_divs**2 + 1  # 91
-    times = np.array([i * time_step for i in range(num_pts)])
-    kernel = 2 + times
-    g = times**2 + times**3 / 6
-    exact = times
-    return dict(
-        times=times,
-        kernel=kernel,
-        g=g,
-        exact=exact,
-        time_step=time_step,
-        coll_divs=coll_divs,
-        coll_choices=[1, 2, 3],
-    )
+    """VIE-1 array fixture: K(u)=2+u, y=t (from VIE1_SPEC_POLY). Degree-1
+    solution, so collocation recovers it to machine precision."""
+    return as_array(VIE1_SPEC_POLY, time_step=0.1, coll_divs=3,
+                    coll_choices=[1, 2, 3])
 
 @pytest.fixture
 def vie2_exp_data():
@@ -247,63 +224,20 @@ def vie2_exp_data():
     return as_array(VIE2_SPEC_EXP, time_step=0.02, coll_divs=3,
                     coll_choices=[0, 1, 2, 3])
 
-# a[t_] := -1
-# g[t_] := t
-# expected[t_] := 3 Exp[-t] + t - 1
-# expected'[t] == a[t] expected[t] + g[t]
 @pytest.fixture
 def vide_ode_data():
-    """VIDE pure-ODE test: K=0, a(t)=-1, g(t)=t, y(0)=2, exact=3exp(-t)+t-1.
-
-    With K=0 the integral term vanishes, leaving y'=-y+t, y(0)=2.
-    Verification: y'=−3e⁻ᵗ+1, −y+t=−(3e⁻ᵗ+t−1)+t=−3e⁻ᵗ+1. ✓
-    Tests the a(t)·y(t)+g(t) part of the solver independently of the kernel.
-    """
-    time_step = 0.01
-    coll_divs = 3
-    num_pts = 10 * coll_divs**2 + 1  # 91
-    times = np.array([i * time_step for i in range(num_pts)])
-    kernel = np.zeros_like(times)
-    a = -np.ones_like(times)
-    g = times
-    exact = 3 * np.exp(-times) + times - 1
-    return dict(
-        times=times,
-        kernel=kernel,
-        a=a,
-        g=g,
-        exact=exact,
-        time_step=time_step,
-        coll_divs=coll_divs,
-        coll_choices=[1, 2, 3],
-        soln_init_value=float(exact[0]),  # = 2.0
-    )
+    """VIDE pure-ODE array fixture: K=0, a=-1, g=t, y=3e^{-t}+t-1, y(0)=2 (from
+    VIDE_SPEC_ODE). With K=0 the integral vanishes, exercising the a*y+g part."""
+    return as_array(VIDE_SPEC_ODE, time_step=0.01, coll_divs=3,
+                    coll_choices=[1, 2, 3])
 
 
-# Solution checked by direct integration:
-#   K(s) = exp(-s),  y(t) = exp(-t) sin(2t)
-#   int_0^t exp(-(t-s)) exp(-s) sin(2s) ds = exp(-t) int_0^t sin(2s) ds
-#                                          = exp(-t) (1 - cos 2t)/2 = g(t)
 @pytest.fixture
 def vie1_damped_data():
-    """VIE-1 damped-oscillation test: K(s)=e^{-s}, y=e^{-t} sin(2t),
-    g(t)=e^{-t}(1-cos 2t)/2. Adds a decaying, higher-frequency oscillation."""
-    time_step = 0.01
-    coll_divs = 3
-    num_pts = 10 * coll_divs**2 + 1  # 91
-    times = np.array([i * time_step for i in range(num_pts)])
-    kernel = np.exp(-times)
-    g = np.exp(-times) * (1 - np.cos(2 * times)) / 2
-    exact = np.exp(-times) * np.sin(2 * times)
-    return dict(
-        times=times,
-        kernel=kernel,
-        g=g,
-        exact=exact,
-        time_step=time_step,
-        coll_divs=coll_divs,
-        coll_choices=[1, 2, 3],
-    )
+    """VIE-1 array fixture: K(u)=e^{-u}, y=e^{-t} sin 2t (from VIE1_SPEC_DAMPED).
+    A decaying, higher-frequency oscillation."""
+    return as_array(VIE1_SPEC_DAMPED, time_step=0.01, coll_divs=3,
+                    coll_choices=[1, 2, 3])
 
 
 @pytest.fixture
@@ -314,70 +248,22 @@ def vie2_rational_data():
                     coll_choices=[0, 1, 2, 3])
 
 
-# Solution checked by direct integration:
-#   K(s) = 1,  a(t) = 1,  y(t) = ln(1+t),  y(0)=0,  y'(t)=1/(1+t)
-#   int_0^t ln(1+s) ds = (1+t) ln(1+t) - t
-#   y' = a*y + g + int  =>
-#   g(t) = 1/(1+t) - ln(1+t) - [(1+t) ln(1+t) - t]
 @pytest.fixture
 def vide_log_data():
-    """VIDE logarithmic test: K(s)=1, a(t)=1, y=ln(1+t),
-    g=1/(1+t)-ln(1+t)-((1+t)ln(1+t)-t). Adds a logarithmic solution with a
-    constant reaction term."""
-    time_step = 0.01
-    coll_divs = 3
-    num_pts = 10 * coll_divs**2 + 1  # 91
-    times = np.array([i * time_step for i in range(num_pts)])
-    kernel = np.ones_like(times)
-    a = np.ones_like(times)
-    g = (1.0 / (1.0 + times) - np.log(1.0 + times)
-         - ((1.0 + times) * np.log(1.0 + times) - times))
-    exact = np.log(1.0 + times)
-    return dict(
-        times=times,
-        kernel=kernel,
-        g=g,
-        a=a,
-        exact=exact,
-        time_step=time_step,
-        coll_divs=coll_divs,
-        coll_choices=[1, 2, 3],
-        soln_init_value=0.0,
-    )
+    """VIDE array fixture: K=1, a=1, y=ln(1+t) (from VIDE_SPEC_LOG). A
+    logarithmic solution with a constant reaction term."""
+    return as_array(VIDE_SPEC_LOG, time_step=0.01, coll_divs=3,
+                    coll_choices=[1, 2, 3])
 
 
-# Solution checked by direct integration (stiff regime):
-#   a(t) = -500,  K(s) = exp(-s),  y(t) = sin(t),  y(0)=0,  y'(t)=cos(t)
-#   conv = int_0^t exp(-(t-s)) sin(s) ds = (sin t - cos t + exp(-t))/2
-#   y' = a*y + g + conv  =>
-#   g(t) = cos t + 500 sin t - (sin t - cos t + exp(-t))/2
 @pytest.fixture
 def vide_stiff_data():
-    """Stiff VIDE test: a(t)=-500, K(s)=e^{-s}, y=sin(t). With dt=0.02 the
-    reaction term gives |a*dt|=10, well into the stiff regime; the implicit
-    collocation solver must still recover the smooth solution accurately (an
-    explicit scheme would be unstable here)."""
-    time_step = 0.02
-    coll_divs = 3
-    num_pts = 10 * coll_divs**2 + 1  # 91
-    times = np.array([i * time_step for i in range(num_pts)])
-    lam = 500.0
-    kernel = np.exp(-times)
-    a = -lam * np.ones_like(times)
-    conv = (np.sin(times) - np.cos(times) + np.exp(-times)) / 2
-    g = np.cos(times) + lam * np.sin(times) - conv
-    exact = np.sin(times)
-    return dict(
-        times=times,
-        kernel=kernel,
-        g=g,
-        a=a,
-        exact=exact,
-        time_step=time_step,
-        coll_divs=coll_divs,
-        coll_choices=[1, 2, 3],
-        soln_init_value=0.0,
-    )
+    """Stiff VIDE array fixture: a=-500, K(u)=e^{-u}, y=sin t (from
+    VIDE_SPEC_STIFF). With dt=0.02 the reaction gives |a*dt|=10, well into the
+    stiff regime; the implicit collocation solver must still recover the smooth
+    solution (an explicit scheme would be unstable here)."""
+    return as_array(VIDE_SPEC_STIFF, time_step=0.02, coll_divs=3,
+                    coll_choices=[1, 2, 3])
 
 
 # ---------------------------------------------------------------------------
@@ -512,64 +398,30 @@ def vie2_callable_vec_diagonal():
     )
 
 
-# VIE-1 callable fixture: g(t)=sin(t), K(x)=exp(x), exact y=cos(t)-sin(t).
-# Same derivation as vie1_data.
 @pytest.fixture
 def vie1_callable_smooth():
-    return dict(
-        kernel=lambda u: np.exp(u),
-        g=np.sin,
-        y_exact=lambda t: np.cos(t) - np.sin(t),
-        coll_divs=3,
-        coll_choices=[1, 2, 3],
-    )
+    """VIE-1 callable fixture from VIE1_SPEC_SMOOTH (same problem as vie1_data)."""
+    return as_callable(VIE1_SPEC_SMOOTH, coll_divs=3, coll_choices=[1, 2, 3])
 
 
-# Abel-type VIE-1: K(u) = u^{-1/2}, exact y(t)=sqrt(t).
-# Derivation: integral_0^t (t-s)^{-1/2} sqrt(s) ds = pi*t/2, so g(t) = pi*t/2.
 @pytest.fixture
 def vie1_callable_abel():
-    return dict(
-        kernel=lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0,
-        g=lambda t: 0.5 * np.pi * t,
-        y_exact=np.sqrt,
-        coll_divs=3,
-        coll_choices=[1, 2, 3],
-        kernel_singularity=0.0,
-        alpha=0.5,
-    )
+    """VIE-1 weakly-singular callable fixture from VIE1_SPEC_ABEL (callable-only:
+    K(u)=1/sqrt(u), y=sqrt(t))."""
+    return as_callable(VIE1_SPEC_ABEL, coll_divs=3, coll_choices=[1, 2, 3])
 
 
-# Abel-type VIDE: K(u) = u^{-1/2}, a(t)=0, exact y(t)=t^{3/2}, y(0)=0.
-# Derivation: y'(t) = (3/2)*sqrt(t).
-#   integral_0^t (t-s)^{-1/2} s^{3/2} ds = t^2 * B(5/2, 1/2) = (3*pi/8) * t^2
-#   (Beta-function exponent is a+b+1 = -1/2 + 3/2 + 1 = 2.)
-# So g(t) = (3/2)*sqrt(t) - (3*pi/8)*t^2.
 @pytest.fixture
 def vide_callable_abel():
-    return dict(
-        kernel=lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0,
-        a=None,
-        g=lambda t: 1.5 * np.sqrt(t) - (3 * np.pi / 8.0) * t**2,
-        y_exact=lambda t: t**1.5,
-        soln_init_value=0.0,
-        coll_divs=2,
-        coll_choices=[0, 1, 2],
-        kernel_singularity=0.0,
-        alpha=0.5,
-    )
+    """VIDE weakly-singular callable fixture from VIDE_SPEC_ABEL (callable-only:
+    K(u)=1/sqrt(u), a=0, y=t^{3/2})."""
+    return as_callable(VIDE_SPEC_ABEL, coll_divs=2, coll_choices=[0, 1, 2])
 
 
-# Polynomial VIE-1 fixture: K(s)=2+s, g(t)=t^2 + t^3/6, exact y=t.
 @pytest.fixture
 def vie1_callable_poly():
-    return dict(
-        kernel=lambda u: 2.0 + u,
-        g=lambda t: t**2 + t**3 / 6.0,
-        y_exact=lambda t: t,
-        coll_divs=3,
-        coll_choices=[1, 2, 3],
-    )
+    """VIE-1 callable fixture from VIE1_SPEC_POLY (analogue of vie1_poly_data)."""
+    return as_callable(VIE1_SPEC_POLY, coll_divs=3, coll_choices=[1, 2, 3])
 
 
 # Diagonal 2x2 VIE-1, same scalar problem on each component.
@@ -587,34 +439,16 @@ def vie1_callable_vec_diagonal(vie1_callable_smooth):
     )
 
 
-# VIDE callable fixture: a(t)=1/(1+t^2), K(u)=exp(-u), exact y=sin(t).
-# Same Mathematica derivation as vide_data above. y(0) = 0.
 @pytest.fixture
 def vide_callable_smooth():
-    return dict(
-        kernel=lambda u: np.exp(-u),
-        a=lambda t: 1.0 / (1.0 + t**2),
-        g=lambda t: (np.cos(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
-                     - np.sin(t) / (1.0 + t**2)),
-        y_exact=np.sin,
-        soln_init_value=0.0,
-        coll_divs=2,
-        coll_choices=[0, 1, 2],
-    )
+    """VIDE callable fixture from VIDE_SPEC_SMOOTH (same problem as vide_data)."""
+    return as_callable(VIDE_SPEC_SMOOTH, coll_divs=2, coll_choices=[0, 1, 2])
 
 
-# Pure-ODE VIDE: K=0, a=-1, g=t, y(0)=2 -> exact y = 3 exp(-t) + t - 1.
 @pytest.fixture
 def vide_callable_ode():
-    return dict(
-        kernel=lambda u: 0.0,
-        a=lambda t: -1.0,
-        g=lambda t: t,
-        y_exact=lambda t: 3 * np.exp(-t) + t - 1,
-        soln_init_value=2.0,
-        coll_divs=2,
-        coll_choices=[0, 1, 2],
-    )
+    """VIDE pure-ODE callable fixture from VIDE_SPEC_ODE (y(0)=2)."""
+    return as_callable(VIDE_SPEC_ODE, coll_divs=2, coll_choices=[0, 1, 2])
 
 
 # Diagonal 2x2 VIDE: same scalar problem on each component.
