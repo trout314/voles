@@ -116,7 +116,9 @@ def test_make_coupled_vide_reproduces_handwritten(coupled_vide):
     hand_exact = np.column_stack([t + t**2, t - t**2])
     assert np.max(np.abs(d["kernel"] - hand_M)) < 1e-14
     assert np.max(np.abs(d["a"] - hand_M)) < 1e-14
-    assert np.max(np.abs(d["g"] - hand_g)) < 1e-14
+    # hand_g reaches magnitude ~77, where one float64 ULP is ~1.7e-14, so a
+    # 1e-14 bound is below rounding noise and flips with the numpy/BLAS version.
+    assert np.max(np.abs(d["g"] - hand_g)) < 1e-13
     assert np.max(np.abs(d["exact"] - hand_exact)) < 1e-14
     assert np.max(np.abs(d["soln_init_value"])) < 1e-14
 
