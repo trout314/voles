@@ -11,7 +11,7 @@ module toeplitz_history;
 // n - ell (the kernel is a convolution sampled on an equally spaced grid).
 // Direct accumulation costs O(Q^2) block mat-vecs over Q mesh intervals.
 //
-// ToeplitzHistory evaluates the same sums with the standard power-of-two
+// ToeplitzHistoryRT evaluates the same sums with the standard power-of-two
 // blocking: after solving interval n, let b = n + 1 and S = 2^{v2(b)} (the
 // largest power of two dividing b). The just-completed source block
 // [b - S, b) contributes to the target range [b, min(b + S, Q)) in one merge.
@@ -28,6 +28,11 @@ module toeplitz_history;
 // Total cost: O(Q log^2 Q) instead of O(Q^2). The result differs from the
 // sequential direct sum only by floating-point reordering (and the FFT's own
 // rounding), i.e. at rounding level -- not by method error.
+//
+// ToeplitzHistoryRT takes its dimensions at run time (used by the d >
+// max_d_compile LAPACK drivers); ToeplitzHistory!(tdim, sdim) is a thin
+// fixed-size wrapper over the same implementation for the compile-time
+// drivers.
 // ---------------------------------------------------------------------------
 
 import std.math : PI, cos, sin;
@@ -88,7 +93,7 @@ void fft_radix2(double[] re, double[] im, bool inverse)
     }
 }
 
-struct ToeplitzHistory(int tdim, int sdim)
+struct ToeplitzHistoryRT
 {
     // Merges smaller than this are done by direct block mat-vecs; at and
     // above it, by FFT convolution. Direct pair work below the cutoff totals
@@ -96,6 +101,8 @@ struct ToeplitzHistory(int tdim, int sdim)
     enum int FFT_CUTOFF = 32;
 
     int Q;
+    int tdim;
+    int sdim;
     double[] lagB;   // flat [lag][a][b], lag = 0 .. Q-1 (lag 0 unused).
                      // The caller fills lags 1 .. Q-1, scaling folded in.
     double[] Gacc;   // flat [n][a]: accumulated history, length Q * tdim
@@ -105,9 +112,11 @@ struct ToeplitzHistory(int tdim, int sdim)
     // scratch buffers, grown on demand and reused across merges
     double[] xre, xim, kre, kim, accre, accim;
 
-    void initialize(int Q_)
+    void initialize(int Q_, int tdim_, int sdim_)
     {
         Q = Q_;
+        tdim = tdim_;
+        sdim = sdim_;
         lagB.length = cast(size_t) Q * tdim * sdim;
         lagB[] = 0.0;
         Gacc.length = cast(size_t) Q * tdim;
@@ -118,19 +127,17 @@ struct ToeplitzHistory(int tdim, int sdim)
     }
 
     // Accumulated history for interval n; valid once intervals 0 .. n-1 have
-    // been pushed.
-    double[tdim] G(int n) const
+    // been pushed. Returns a borrowed slice of length tdim.
+    double[] G(int n)
     {
-        double[tdim] outv;
         immutable size_t base = cast(size_t) n * tdim;
-        foreach (a; 0 .. tdim)
-            outv[a] = Gacc[base + a];
-        return outv;
+        return Gacc[base .. base + tdim];
     }
 
-    // Record the solved source vector for interval nPushed and propagate its
-    // block's contribution forward when a power-of-two boundary completes.
-    void push(const double[sdim] s)
+    // Record the solved source vector (length sdim) for interval nPushed and
+    // propagate its block's contribution forward when a power-of-two boundary
+    // completes.
+    void push(const(double)[] s)
     {
         immutable int ell = nPushed;
         immutable size_t sbase = cast(size_t) ell * sdim;
@@ -236,5 +243,30 @@ struct ToeplitzHistory(int tdim, int sdim)
             foreach (w; 0 .. tEnd - bnd)
                 Gacc[cast(size_t)(bnd + w) * tdim + a] += Ar[S + w] * inv;
         }
+    }
+}
+
+// Fixed-size wrapper for the compile-time drivers: same implementation, with
+// value-typed push/G matching the stack-array style of the ct code.
+struct ToeplitzHistory(int tdim_, int sdim_)
+{
+    ToeplitzHistoryRT core;
+    alias core this;
+
+    void initialize(int Q_)
+    {
+        core.initialize(Q_, tdim_, sdim_);
+    }
+
+    double[tdim_] G(int n)
+    {
+        double[tdim_] outv;
+        outv[] = core.G(n)[];
+        return outv;
+    }
+
+    void push(const double[sdim_] s)
+    {
+        core.push(s[]);
     }
 }
