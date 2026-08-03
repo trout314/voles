@@ -20,3 +20,14 @@ drivers).
 - `plot_differences.png` — max |new − old| (absolute and
   scale-relative) for every test-suite problem spec plus extra
   batteries, old vs. new build.
+
+## The `reuse_adaptive_blocks` flag (branch `adaptive-block-reuse`)
+
+- `adaptive_reuse_notes.tex` / `.pdf` — what the opt-in flag does, why its
+  deviations exceed rounding level (QUADPACK's tolerance-limited, branchy
+  adaptivity), measurements over every test-suite problem spec, and the
+  argument for when the trade is (and is not) acceptable.
+- `plot_reuse_speedup.png` — build cost, flag off vs. on (Abel VIE-1).
+- `plot_reuse_differences.png` — on/off deviations across the spec battery
+  vs. the default path's own equal-block scatter, and deviation vs.
+  discretization error on the y = sqrt(t) model problem.
