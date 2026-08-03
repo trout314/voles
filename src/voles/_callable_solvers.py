@@ -323,7 +323,8 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                                 node_pos: np.ndarray,
                                 kernel_singularity,
                                 smooth_gl_order: int, basis: np.ndarray,
-                                smooth_check_tol: float = 1e-9) -> np.ndarray:
+                                smooth_check_tol: float = 1e-9,
+                                reuse_adaptive_blocks: bool = False) -> np.ndarray:
     """Build the weight tensor W[n, i, l, k] = integral of K(tau_{n,i} - s)
     times basis[k](s_norm) on interval l. Shape (M, p, M, n_basis).
 
@@ -331,6 +332,10 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
     normalized [0, 1] coordinates. VIE-2 uses the Lagrange basis (n_basis = p);
     VIDE uses the antiderivative basis plus a constant function (n_basis = p+1).
     `node_pos` holds the collocation node positions in [0, 1].
+
+    ``reuse_adaptive_blocks`` extends the uniform-mesh Toeplitz reuse to the
+    adaptive-quadrature blocks (see the public solvers' docstrings); it has
+    no effect off the Toeplitz fast path.
     """
     M = len(mesh_breakpoints) - 1
     node_pos = np.asarray(node_pos, dtype=float)
@@ -338,6 +343,16 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
     n_basis = basis.shape[0]
     widths = np.diff(mesh_breakpoints)
     singular_locs = _normalize_kernel_singularity(kernel_singularity)
+
+    # Uniform mesh + convolution kernel: W is Toeplitz in (n, l) (see
+    # _toeplitz_W_rows). With reuse_adaptive_blocks the adaptive entries of
+    # the one integrated row are reused everywhere, so they are computed at
+    # tightened tolerance: the reused value is then closer to the exact
+    # integral than the default-tolerance per-row values it replaces.
+    toeplitz = _toeplitz_W_rows(widths, kernel_singularity)
+    reuse_all = reuse_adaptive_blocks and toeplitz
+    quad_opts = ({'limit': 200, 'epsabs': 1e-12, 'epsrel': 1e-12}
+                 if reuse_all else {'limit': 100})
 
     # Detect once whether the kernel broadcasts over a numpy array of u values;
     # if so, the smooth-path GL quadrature can be done in a single numpy call.
@@ -439,7 +454,7 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
     def adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing):
         """Singular block: per-basis adaptive quadrature."""
         for k in range(n_basis):
-            kwargs = {'limit': 100}
+            kwargs = dict(quad_opts)
             if interior_sing:
                 kwargs['points'] = interior_sing
             val, _err = get_quad()(make_integrand(tau, t_l, h_l, k),
@@ -455,7 +470,7 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         ok = np.abs(v1 - v2) <= smooth_check_tol * np.maximum(1.0, np.abs(v2))
         for k in np.nonzero(~ok)[0]:
             val, _err = get_quad()(make_integrand(tau, t_l, h_l, int(k)),
-                                   a_int, b_int, limit=100)
+                                   a_int, b_int, **quad_opts)
             W[n, i, l, int(k)] = val
         return bool(ok.all())
 
@@ -470,7 +485,7 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         bad_i, bad_k = np.nonzero(~ok)
         for bi, bk in zip(bad_i.tolist(), bad_k.tolist()):
             val, _err = get_quad()(make_integrand(taus[bi], t_l, h_l, bk),
-                                   a_int, b_int, limit=100)
+                                   a_int, b_int, **quad_opts)
             W[n, smooth_is[bi], l, bk] = val
         return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
@@ -549,17 +564,19 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         return ok_off, ok_diag
 
     # Uniform mesh + convolution kernel: W is Toeplitz in (n, l). Integrate the
-    # last row (which contains every lag), copy it band-diagonally, then
-    # recompute the non-GL-clean entries of every other row exactly as the
-    # general path would (see _toeplitz_W_rows for the reuse policy).
-    if _toeplitz_W_rows(widths, kernel_singularity):
+    # last row (which contains every lag), copy it band-diagonally, then --
+    # unless reuse_adaptive_blocks -- recompute the non-GL-clean entries of
+    # every other row exactly as the general path would (see _toeplitz_W_rows
+    # for the reuse policy).
+    if toeplitz:
         ok_off, ok_diag = integrate_row(M - 1, record=True)
         if M >= 2:
             _fill_toeplitz_W(W, M)
-            skip_lag = ok_off.all(axis=0)
-            for n in range(M - 1):
-                integrate_row(n, skip_off=ok_off, skip_lag=skip_lag,
-                              skip_diag=ok_diag)
+            if not reuse_all:
+                skip_lag = ok_off.all(axis=0)
+                for n in range(M - 1):
+                    integrate_row(n, skip_off=ok_off, skip_lag=skip_lag,
+                                  skip_diag=ok_diag)
     else:
         for n in range(M):
             integrate_row(n)
@@ -576,19 +593,21 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
 
 def _build_W_scalar(kernel, mesh_breakpoints, node_pos,
                     kernel_singularity, smooth_gl_order,
-                    smooth_check_tol=1e-9):
+                    smooth_check_tol=1e-9, reuse_adaptive_blocks=False):
     """VIE-2 weight tensor: Lagrange basis, shape (M, p, M, p)."""
     basis = _lagrange_basis_coefs(node_pos)
     return _build_W_with_basis_scalar(kernel, mesh_breakpoints, node_pos,
                                        kernel_singularity,
-                                       smooth_gl_order, basis, smooth_check_tol)
+                                       smooth_gl_order, basis, smooth_check_tol,
+                                       reuse_adaptive_blocks)
 
 
 def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                                 node_pos: np.ndarray,
                                 kernel_singularity, smooth_gl_order: int,
                                 d: int, basis: np.ndarray,
-                                smooth_check_tol: float = 1e-9) -> np.ndarray:
+                                smooth_check_tol: float = 1e-9,
+                                reuse_adaptive_blocks: bool = False) -> np.ndarray:
     """Vector analogue of _build_W_with_basis_scalar. Returns (M, p, M, n_basis, d, d)."""
     M = len(mesh_breakpoints) - 1
     node_pos = np.asarray(node_pos, dtype=float)
@@ -596,6 +615,12 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
     n_basis = basis.shape[0]
     widths = np.diff(mesh_breakpoints)
     singular_locs = _normalize_kernel_singularity(kernel_singularity)
+
+    # Same Toeplitz / adaptive-reuse setup as the scalar builder.
+    toeplitz = _toeplitz_W_rows(widths, kernel_singularity)
+    reuse_all = reuse_adaptive_blocks and toeplitz
+    quad_opts = ({'limit': 200, 'epsabs': 1e-12, 'epsrel': 1e-12}
+                 if reuse_all else {'limit': 100})
 
     sample_u = float(widths[0]) * 0.5
     kernel_vec = _detect_kernel_vectorized(kernel, sample_u, is_vector=True, d=d)
@@ -699,7 +724,7 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
     def adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing):
         """Singular block: per-basis adaptive quadrature."""
         for k in range(n_basis):
-            kwargs = {'limit': 100}
+            kwargs = dict(quad_opts)
             if interior_sing:
                 kwargs['points'] = interior_sing
             val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, k),
@@ -718,7 +743,7 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         ok = err <= smooth_check_tol * ref
         for k in np.nonzero(~ok)[0]:
             val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, int(k)),
-                                       a_int, b_int, limit=100)
+                                       a_int, b_int, **quad_opts)
             W[n, i, l, int(k), :, :] = val
         return bool(ok.all())
 
@@ -734,7 +759,7 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         bad_i, bad_k = np.nonzero(~(err <= smooth_check_tol * ref))
         for bi, bk in zip(bad_i.tolist(), bad_k.tolist()):
             val, _err = get_quad_vec()(make_integrand(taus[bi], t_l, h_l, bk),
-                                       a_int, b_int, limit=100)
+                                       a_int, b_int, **quad_opts)
             W[n, smooth_is[bi], l, bk, :, :] = val
         return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
@@ -805,16 +830,17 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 ok_diag[i] = True
         return ok_off, ok_diag
 
-    # Uniform mesh + convolution kernel: same Toeplitz reuse policy as the
-    # scalar builder (see _toeplitz_W_rows).
-    if _toeplitz_W_rows(widths, kernel_singularity):
+    # Uniform mesh + convolution kernel: same Toeplitz / adaptive-reuse
+    # policy as the scalar builder (see _toeplitz_W_rows).
+    if toeplitz:
         ok_off, ok_diag = integrate_row(M - 1, record=True)
         if M >= 2:
             _fill_toeplitz_W(W, M)
-            skip_lag = ok_off.all(axis=0)
-            for n in range(M - 1):
-                integrate_row(n, skip_off=ok_off, skip_lag=skip_lag,
-                              skip_diag=ok_diag)
+            if not reuse_all:
+                skip_lag = ok_off.all(axis=0)
+                for n in range(M - 1):
+                    integrate_row(n, skip_off=ok_off, skip_lag=skip_lag,
+                                  skip_diag=ok_diag)
     else:
         for n in range(M):
             integrate_row(n)
@@ -831,12 +857,13 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
 
 def _build_W_vector(kernel, mesh_breakpoints, node_pos,
                     kernel_singularity, smooth_gl_order, d,
-                    smooth_check_tol=1e-9):
+                    smooth_check_tol=1e-9, reuse_adaptive_blocks=False):
     """VIE-2 vector weight tensor: Lagrange basis, shape (M, p, M, p, d, d)."""
     basis = _lagrange_basis_coefs(node_pos)
     return _build_W_with_basis_vector(kernel, mesh_breakpoints, node_pos,
                                        kernel_singularity,
-                                       smooth_gl_order, d, basis, smooth_check_tol)
+                                       smooth_gl_order, d, basis, smooth_check_tol,
+                                       reuse_adaptive_blocks)
 
 
 # ---------------------------------------------------------------------------
@@ -1166,6 +1193,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
                           coll_nodes=None,
                           kernel_singularity=None,
                           return_function: bool = False,
+                          reuse_adaptive_blocks: bool = False,
                           show_warnings: bool = True,
                           _smooth_gl_order: int = 6):
     r"""Solve the scalar Volterra integral equation of the second kind
@@ -1213,6 +1241,21 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
           $K(s, t)$.
     return_function : bool, optional
         If True, also return a callable solution wrapper.
+    reuse_adaptive_blocks : bool, optional
+        On a uniform mesh with a convolution kernel the weight tensor is
+        Toeplitz and is assembled from one integrated row. By default only
+        blocks evaluated by deterministic fixed-order quadrature are reused
+        across rows; blocks touching a declared singularity (adaptive
+        quadrature) are re-evaluated per row, which reproduces the general
+        assembly to rounding level but keeps an $O(M)$ adaptive-quadrature
+        cost. Set True to reuse the adaptive blocks too: the singular-kernel
+        build cost drops by roughly another order of magnitude, and results
+        may differ from the default path by up to the adaptive quadrature's
+        own tolerance ($\sim10^{-8}$, typically $\sim10^{-9}$) -- far below
+        discretization error in practice. Reused adaptive blocks are computed
+        at tightened tolerance, so they are at least as accurate as the
+        per-row values they replace. No effect on non-uniform meshes or
+        smooth kernels.
     show_warnings : bool, optional
         Currently unused; reserved for the graded-mesh / mesh-uniformity hint.
 
@@ -1266,6 +1309,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
             coll_nodes=node_pos,
             kernel_singularity=kernel_singularity,
             return_function=return_function, show_warnings=show_warnings,
+            reuse_adaptive_blocks=reuse_adaptive_blocks,
             _smooth_gl_order=_smooth_gl_order)
         if return_function:
             y_real, y_func_real = result
@@ -1293,7 +1337,8 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
 
     if not is_vector:
         W = _build_W_scalar(kernel, mesh_breakpoints, node_pos,
-                            kernel_singularity, _smooth_gl_order)
+                            kernel_singularity, _smooth_gl_order,
+                            reuse_adaptive_blocks=reuse_adaptive_blocks)
         g_arr = np.zeros((M, p), dtype=np.float64)
         if g is not None:
             for n in range(M):
@@ -1319,7 +1364,8 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     # The weight tensor depends only on the kernel, so it is built once and
     # shared across all right-hand sides in the matrix case.
     W = _build_W_vector(kernel, mesh_breakpoints, node_pos,
-                        kernel_singularity, _smooth_gl_order, d)
+                        kernel_singularity, _smooth_gl_order, d,
+                        reuse_adaptive_blocks=reuse_adaptive_blocks)
 
     sample_t = float(mesh_breakpoints[0] + node_pos[0] * widths[0])
     m = _detect_g_matrix_cols(g, d, sample_t)
@@ -1390,6 +1436,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
                          coll_nodes=None,
                          kernel_singularity=None,
                          return_function: bool = False,
+                         reuse_adaptive_blocks: bool = False,
                          show_warnings: bool = True,
                          _smooth_gl_order: int = 6):
     r"""Solve the scalar Volterra integro-differential equation
@@ -1428,6 +1475,9 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         Declare integrable singularities; see ``function_solve_VIE_2``.
     return_function : bool, optional
         If True, also return a callable solution wrapper.
+    reuse_adaptive_blocks : bool, optional
+        Reuse the adaptive-quadrature weight blocks across the uniform-mesh
+        Toeplitz assembly; see ``function_solve_VIE_2``.
 
     Returns
     -------
@@ -1476,6 +1526,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
             coll_nodes=node_pos,
             kernel_singularity=kernel_singularity,
             return_function=return_function, show_warnings=show_warnings,
+            reuse_adaptive_blocks=reuse_adaptive_blocks,
             _smooth_gl_order=_smooth_gl_order)
         if return_function:
             y_real, y_func_real = result
@@ -1526,7 +1577,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         vide_basis = _vide_basis_coefs(node_pos)
         W = _build_W_with_basis_scalar(
             kernel, mesh_breakpoints, node_pos,
-            kernel_singularity, _smooth_gl_order, vide_basis)
+            kernel_singularity, _smooth_gl_order, vide_basis,
+            reuse_adaptive_blocks=reuse_adaptive_blocks)
         g_arr = _sample_callable_scalar(g)
         a_arr = _sample_callable_scalar(a)
         y_prime, y_boundary = _dlang_module.function_solve_vide_d(
@@ -1556,7 +1608,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     vide_basis = _vide_basis_coefs(node_pos)
     W = _build_W_with_basis_vector(
         kernel, mesh_breakpoints, node_pos,
-        kernel_singularity, _smooth_gl_order, d, vide_basis)
+        kernel_singularity, _smooth_gl_order, d, vide_basis,
+        reuse_adaptive_blocks=reuse_adaptive_blocks)
     a_arr = _sample_a_at_coll(a, mesh_breakpoints, node_pos, widths, M, p, d)
 
     # Matrix-valued problem is signalled by a 2-D (d, m) initial value.
@@ -2030,6 +2083,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                           kernel_singularity=None,
                           return_function: bool = False,
                           force_continuous: bool = False,
+                          reuse_adaptive_blocks: bool = False,
                           show_warnings: bool = True,
                           _smooth_gl_order: int = 6):
     r"""Solve the Volterra integral equation of the first kind
@@ -2073,7 +2127,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         endpoint, $c_m = 1$ (see Notes for the convergence condition). The
         default discontinuous method ($S_{m-1}^{(-1)}$) imposes no such
         restriction and is generally the better default.
-    kernel_singularity, return_function, show_warnings :
+    kernel_singularity, return_function, reuse_adaptive_blocks, show_warnings :
         See ``function_solve_VIE_2``.
 
     Notes
@@ -2175,6 +2229,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             return_function=return_function,
             force_continuous=force_continuous,
             show_warnings=show_warnings,
+            reuse_adaptive_blocks=reuse_adaptive_blocks,
             _smooth_gl_order=_smooth_gl_order)
         if return_function:
             y_real, y_func_real = result
@@ -2214,7 +2269,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             cont_basis = _vie1_cont_basis_coefs(node_pos)
             W = _build_W_with_basis_scalar(
                 kernel, mesh_breakpoints, node_pos,
-                kernel_singularity, _smooth_gl_order, cont_basis)
+                kernel_singularity, _smooth_gl_order, cont_basis,
+                reuse_adaptive_blocks=reuse_adaptive_blocks)
             adv_U, adv_0 = _vie1_cont_advance(node_pos)
             y, boundary = _dlang_module.function_solve_vie1_cont_d(
                 W, g_arr, adv_U, adv_0, float(soln_init_value))
@@ -2225,7 +2281,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             return y
 
         W = _build_W_scalar(kernel, mesh_breakpoints, node_pos,
-                            kernel_singularity, _smooth_gl_order)
+                            kernel_singularity, _smooth_gl_order,
+                            reuse_adaptive_blocks=reuse_adaptive_blocks)
         y = _dlang_module.function_solve_vie1_d(W, g_arr)
         if return_function:
             polys = _build_polynomials(y, mesh_breakpoints, node_pos)
@@ -2246,11 +2303,13 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         cont_basis = _vie1_cont_basis_coefs(node_pos)
         W = _build_W_with_basis_vector(kernel, mesh_breakpoints, node_pos,
                                        kernel_singularity, _smooth_gl_order, d,
-                                       cont_basis)
+                                       cont_basis,
+                                       reuse_adaptive_blocks=reuse_adaptive_blocks)
         adv_U, adv_0 = _vie1_cont_advance(node_pos)
     else:
         W = _build_W_vector(kernel, mesh_breakpoints, node_pos,
-                            kernel_singularity, _smooth_gl_order, d)
+                            kernel_singularity, _smooth_gl_order, d,
+                            reuse_adaptive_blocks=reuse_adaptive_blocks)
 
     sample_t = float(mesh_breakpoints[0] + node_pos[0] * widths[0])
     m = _detect_g_matrix_cols(g, d, sample_t)

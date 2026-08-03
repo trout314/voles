@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+- **`reuse_adaptive_blocks` flag** on the callable-input solvers
+  (`function_solve_VIE_1/2`, `function_solve_VIDE`). On uniform meshes with
+  convolution kernels the weight tensor is assembled from one integrated row;
+  by default only deterministic fixed-order (Gauss-Legendre) blocks are
+  reused across rows, and adaptive-quadrature blocks (declared singularities
+  and two-order fallbacks) are re-evaluated per row, which reproduces the
+  general assembly to rounding level. With the flag, the adaptive blocks are
+  reused too -- computed once at tightened tolerance, so they are at least as
+  accurate as the per-row values they replace. The singular-kernel build cost
+  drops by roughly another order of magnitude (Abel VIE-1, p=3, M=320:
+  ~1 s -> ~0.02 s), at the price of deviations from the default path bounded
+  by the adaptive quadrature's own tolerance (~1e-8, typically ~1e-9) -- far
+  below discretization error in practice. Default `False`; strict no-op on
+  non-uniform meshes and for smooth kernels.
+
 ### Documentation
 - The install/dependency instructions are now single-sourced: the README
   install block is the canonical copy, and the docs site pulls it in via a
