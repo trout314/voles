@@ -21,6 +21,7 @@ scipy is required (optional extra `[callable]`); imported lazily.
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import warnings
 from concurrent.futures import ThreadPoolExecutor
@@ -92,6 +93,41 @@ def _import_scipy_quad_vec():
     except ImportError as e:
         raise ImportError(_SCIPY_IMPORT_ERR) from e
     return quad_vec
+
+
+# Quadrature options for the weight builders. Under reuse_adaptive_blocks the
+# tightened options apply ONLY to declared-singularity blocks: their one
+# computed value is reused for every row, so it is requested at a tighter
+# tolerance than the per-row defaults it replaces. Two-order-check fallback
+# quadratures always use the defaults and stay on the per-row repair path, so
+# the flag is a strict no-op for kernels with no declared singularity.
+_QUAD_OPTS_DEFAULT = {'limit': 100}
+# scipy.integrate.quad converges when err <= max(epsabs, epsrel*|result|) with
+# default epsabs=1.49e-8, so 1e-12/1e-12 is strictly tighter.
+_QUAD_OPTS_REUSE = {'limit': 200, 'epsabs': 1e-12, 'epsrel': 1e-12}
+# scipy.integrate.quad_vec defaults to epsabs=1e-200 (pure-relative 1e-8
+# convergence). Keep that epsabs so small-magnitude blocks are never computed
+# *less* accurately than the per-row defaults; tighten only epsrel.
+_QUAD_VEC_OPTS_REUSE = {'limit': 200, 'epsabs': 1e-200, 'epsrel': 1e-12}
+
+
+@contextlib.contextmanager
+def _reuse_quad_warnings_suppressed(active):
+    """Silence scipy's IntegrationWarning around a tightened reuse quadrature.
+
+    The 1e-12 reuse tolerances sit near QUADPACK's roundoff floor, so on
+    harder singular integrands quad/quad_vec may report non-convergence while
+    still returning its best-obtainable value -- which is exactly what the
+    reuse policy wants stored. The default-tolerance path never triggers
+    these, so with ``active`` False this is a no-op and any warning from a
+    default-tolerance quadrature propagates as before."""
+    if not active:
+        yield
+        return
+    from scipy.integrate import IntegrationWarning
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', IntegrationWarning)
+        yield
 
 
 # ---------------------------------------------------------------------------
@@ -345,14 +381,16 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
     singular_locs = _normalize_kernel_singularity(kernel_singularity)
 
     # Uniform mesh + convolution kernel: W is Toeplitz in (n, l) (see
-    # _toeplitz_W_rows). With reuse_adaptive_blocks the adaptive entries of
-    # the one integrated row are reused everywhere, so they are computed at
-    # tightened tolerance: the reused value is then closer to the exact
-    # integral than the default-tolerance per-row values it replaces.
+    # _toeplitz_W_rows). With reuse_adaptive_blocks the declared-singularity
+    # entries of the one integrated row are reused everywhere, so they are
+    # computed at tightened tolerance: the reused value is then closer to the
+    # exact integral than the default-tolerance per-row values it replaces.
+    # Two-order fallback quadratures always use the default options (see the
+    # module-level _QUAD_OPTS_* constants), keeping the flag a strict no-op
+    # for kernels with no declared singularity.
     toeplitz = _toeplitz_W_rows(widths, kernel_singularity)
-    reuse_all = reuse_adaptive_blocks and toeplitz
-    quad_opts = ({'limit': 200, 'epsabs': 1e-12, 'epsrel': 1e-12}
-                 if reuse_all else {'limit': 100})
+    reuse_sing = reuse_adaptive_blocks and toeplitz
+    sing_quad_opts = _QUAD_OPTS_REUSE if reuse_sing else _QUAD_OPTS_DEFAULT
 
     # Detect once whether the kernel broadcasts over a numpy array of u values;
     # if so, the smooth-path GL quadrature can be done in a single numpy call.
@@ -454,11 +492,12 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
     def adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing):
         """Singular block: per-basis adaptive quadrature."""
         for k in range(n_basis):
-            kwargs = dict(quad_opts)
+            kwargs = dict(sing_quad_opts)
             if interior_sing:
                 kwargs['points'] = interior_sing
-            val, _err = get_quad()(make_integrand(tau, t_l, h_l, k),
-                                   a_int, b_int, **kwargs)
+            with _reuse_quad_warnings_suppressed(reuse_sing):
+                val, _err = get_quad()(make_integrand(tau, t_l, h_l, k),
+                                       a_int, b_int, **kwargs)
             W[n, i, l, k] = val
 
     def store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2):
@@ -470,7 +509,7 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         ok = np.abs(v1 - v2) <= smooth_check_tol * np.maximum(1.0, np.abs(v2))
         for k in np.nonzero(~ok)[0]:
             val, _err = get_quad()(make_integrand(tau, t_l, h_l, int(k)),
-                                   a_int, b_int, **quad_opts)
+                                   a_int, b_int, **_QUAD_OPTS_DEFAULT)
             W[n, i, l, int(k)] = val
         return bool(ok.all())
 
@@ -485,7 +524,7 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         bad_i, bad_k = np.nonzero(~ok)
         for bi, bk in zip(bad_i.tolist(), bad_k.tolist()):
             val, _err = get_quad()(make_integrand(taus[bi], t_l, h_l, bk),
-                                   a_int, b_int, **quad_opts)
+                                   a_int, b_int, **_QUAD_OPTS_DEFAULT)
             W[n, smooth_is[bi], l, bk] = val
         return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
@@ -497,9 +536,12 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         GL-clean value for lag m = n - l (see _toeplitz_W_rows); skip_lag[m]
         is its all-nodes-clean summary, letting whole blocks be skipped
         cheaply. With record=True, return boolean masks marking which entries
-        of this row were computed purely by the fixed-order GL path."""
+        of this row were computed purely by the fixed-order GL path (ok_*)
+        and which by declared-singularity adaptive quadrature (sing_*)."""
         ok_off = np.zeros((p, M), dtype=bool) if record else None
         ok_diag = np.zeros(p, dtype=bool) if record else None
+        sing_off = np.zeros((p, M), dtype=bool) if record else None
+        sing_diag = np.zeros(p, dtype=bool) if record else None
         t_n = mesh_breakpoints[n]
         h_n = widths[n]
         tau_n = t_n + node_pos * h_n
@@ -529,6 +571,8 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                 interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
                 if use_adaptive:
                     adaptive_block(n, i, l, tau_n[i], t_l, h_l, a_int, b_int, interior_sing)
+                    if record:
+                        sing_off[i, lag] = True
                 else:
                     smooth_is.append(i)
 
@@ -556,27 +600,33 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
             if use_adaptive:
                 adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing)
+                if record:
+                    sing_diag[i] = True
                 continue
             v1, v2 = smooth_diag_vals(a_int, b_int, tau, i)
             clean = store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2)
             if record and clean:
                 ok_diag[i] = True
-        return ok_off, ok_diag
+        return ok_off, ok_diag, sing_off, sing_diag
 
     # Uniform mesh + convolution kernel: W is Toeplitz in (n, l). Integrate the
-    # last row (which contains every lag), copy it band-diagonally, then --
-    # unless reuse_adaptive_blocks -- recompute the non-GL-clean entries of
-    # every other row exactly as the general path would (see _toeplitz_W_rows
-    # for the reuse policy).
+    # last row (which contains every lag), copy it band-diagonally, then
+    # recompute the non-reusable entries of every other row exactly as the
+    # general path would (see _toeplitz_W_rows for the reuse policy). With
+    # reuse_adaptive_blocks the declared-singularity entries also keep their
+    # one tightened-tolerance value; two-order fallback entries are always
+    # repaired per row, so the flag cannot change results for kernels with no
+    # declared singularity.
     if toeplitz:
-        ok_off, ok_diag = integrate_row(M - 1, record=True)
+        ok_off, ok_diag, sing_off, sing_diag = integrate_row(M - 1, record=True)
         if M >= 2:
             _fill_toeplitz_W(W, M)
-            if not reuse_all:
-                skip_lag = ok_off.all(axis=0)
-                for n in range(M - 1):
-                    integrate_row(n, skip_off=ok_off, skip_lag=skip_lag,
-                                  skip_diag=ok_diag)
+            skip_off = ok_off | sing_off if reuse_sing else ok_off
+            skip_diag = ok_diag | sing_diag if reuse_sing else ok_diag
+            skip_lag = skip_off.all(axis=0)
+            for n in range(M - 1):
+                integrate_row(n, skip_off=skip_off, skip_lag=skip_lag,
+                              skip_diag=skip_diag)
     else:
         for n in range(M):
             integrate_row(n)
@@ -616,11 +666,12 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
     widths = np.diff(mesh_breakpoints)
     singular_locs = _normalize_kernel_singularity(kernel_singularity)
 
-    # Same Toeplitz / adaptive-reuse setup as the scalar builder.
+    # Same Toeplitz / adaptive-reuse setup as the scalar builder, except that
+    # the tightened options keep quad_vec's default epsabs (see the
+    # module-level _QUAD_VEC_OPTS_REUSE note).
     toeplitz = _toeplitz_W_rows(widths, kernel_singularity)
-    reuse_all = reuse_adaptive_blocks and toeplitz
-    quad_opts = ({'limit': 200, 'epsabs': 1e-12, 'epsrel': 1e-12}
-                 if reuse_all else {'limit': 100})
+    reuse_sing = reuse_adaptive_blocks and toeplitz
+    sing_quad_opts = _QUAD_VEC_OPTS_REUSE if reuse_sing else _QUAD_OPTS_DEFAULT
 
     sample_u = float(widths[0]) * 0.5
     kernel_vec = _detect_kernel_vectorized(kernel, sample_u, is_vector=True, d=d)
@@ -724,11 +775,12 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
     def adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing):
         """Singular block: per-basis adaptive quadrature."""
         for k in range(n_basis):
-            kwargs = dict(quad_opts)
+            kwargs = dict(sing_quad_opts)
             if interior_sing:
                 kwargs['points'] = interior_sing
-            val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, k),
-                                       a_int, b_int, **kwargs)
+            with _reuse_quad_warnings_suppressed(reuse_sing):
+                val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, k),
+                                           a_int, b_int, **kwargs)
             W[n, i, l, k, :, :] = val
 
     def store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2):
@@ -743,7 +795,7 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         ok = err <= smooth_check_tol * ref
         for k in np.nonzero(~ok)[0]:
             val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, int(k)),
-                                       a_int, b_int, **quad_opts)
+                                       a_int, b_int, **_QUAD_OPTS_DEFAULT)
             W[n, i, l, int(k), :, :] = val
         return bool(ok.all())
 
@@ -759,7 +811,7 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         bad_i, bad_k = np.nonzero(~(err <= smooth_check_tol * ref))
         for bi, bk in zip(bad_i.tolist(), bad_k.tolist()):
             val, _err = get_quad_vec()(make_integrand(taus[bi], t_l, h_l, bk),
-                                       a_int, b_int, **quad_opts)
+                                       a_int, b_int, **_QUAD_OPTS_DEFAULT)
             W[n, smooth_is[bi], l, bk, :, :] = val
         return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
@@ -769,6 +821,8 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         scalar builder's integrate_row for the skip/record contract."""
         ok_off = np.zeros((p, M), dtype=bool) if record else None
         ok_diag = np.zeros(p, dtype=bool) if record else None
+        sing_off = np.zeros((p, M), dtype=bool) if record else None
+        sing_diag = np.zeros(p, dtype=bool) if record else None
         t_n = mesh_breakpoints[n]
         h_n = widths[n]
         tau_n = t_n + node_pos * h_n
@@ -796,6 +850,8 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
                 if use_adaptive:
                     adaptive_block(n, i, l, tau_n[i], t_l, h_l, a_int, b_int, interior_sing)
+                    if record:
+                        sing_off[i, lag] = True
                 else:
                     smooth_is.append(i)
 
@@ -823,24 +879,28 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
             if use_adaptive:
                 adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing)
+                if record:
+                    sing_diag[i] = True
                 continue
             v1, v2 = smooth_diag_vals(a_int, b_int, tau, i)
             clean = store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2)
             if record and clean:
                 ok_diag[i] = True
-        return ok_off, ok_diag
+        return ok_off, ok_diag, sing_off, sing_diag
 
     # Uniform mesh + convolution kernel: same Toeplitz / adaptive-reuse
-    # policy as the scalar builder (see _toeplitz_W_rows).
+    # policy as the scalar builder (see _toeplitz_W_rows and the scalar
+    # orchestration comment).
     if toeplitz:
-        ok_off, ok_diag = integrate_row(M - 1, record=True)
+        ok_off, ok_diag, sing_off, sing_diag = integrate_row(M - 1, record=True)
         if M >= 2:
             _fill_toeplitz_W(W, M)
-            if not reuse_all:
-                skip_lag = ok_off.all(axis=0)
-                for n in range(M - 1):
-                    integrate_row(n, skip_off=ok_off, skip_lag=skip_lag,
-                                  skip_diag=ok_diag)
+            skip_off = ok_off | sing_off if reuse_sing else ok_off
+            skip_diag = ok_diag | sing_diag if reuse_sing else ok_diag
+            skip_lag = skip_off.all(axis=0)
+            for n in range(M - 1):
+                integrate_row(n, skip_off=skip_off, skip_lag=skip_lag,
+                              skip_diag=skip_diag)
     else:
         for n in range(M):
             integrate_row(n)
@@ -1248,14 +1308,17 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         across rows; blocks touching a declared singularity (adaptive
         quadrature) are re-evaluated per row, which reproduces the general
         assembly to rounding level but keeps an $O(M)$ adaptive-quadrature
-        cost. Set True to reuse the adaptive blocks too: the singular-kernel
-        build cost drops by roughly another order of magnitude, and results
-        may differ from the default path by up to the adaptive quadrature's
-        own tolerance ($\sim10^{-8}$, typically $\sim10^{-9}$) -- far below
-        discretization error in practice. Reused adaptive blocks are computed
-        at tightened tolerance, so they are at least as accurate as the
-        per-row values they replace. No effect on non-uniform meshes or
-        smooth kernels.
+        cost. Set True to reuse the declared-singularity adaptive blocks too:
+        the singular-kernel build cost drops by roughly another order of
+        magnitude, and results may differ from the default path by up to the
+        adaptive quadrature's own tolerance (scalar problems $\sim10^{-8}$,
+        typically $\sim10^{-9}$; vector/matrix and complex problems, which
+        integrate via ``scipy.integrate.quad_vec``, up to $\sim10^{-7}$) --
+        far below discretization error in practice. Reused adaptive blocks
+        are computed at tightened tolerance, so they are at least as accurate
+        as the per-row values they replace. Strictly no effect on non-uniform
+        meshes or on kernels with no declared ``kernel_singularity`` (only
+        declared-singularity blocks are ever reused).
     show_warnings : bool, optional
         Currently unused; reserved for the graded-mesh / mesh-uniformity hint.
 

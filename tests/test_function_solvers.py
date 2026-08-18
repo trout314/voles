@@ -2468,3 +2468,56 @@ def test_reuse_adaptive_blocks_noop_smooth_kernel():
     assert np.array_equal(
         function_solve_VIE_2(**kw),
         function_solve_VIE_2(**kw, reuse_adaptive_blocks=True))
+
+
+@pytest.mark.parametrize("kernel", [
+    lambda u: np.cos(200.0 * u),          # oscillatory: GL two-order check fails
+    lambda u: 1.0 / np.sqrt(u + 1e-6),    # near-singular but undeclared
+], ids=["oscillatory", "near-singular"])
+def test_reuse_adaptive_blocks_noop_undeclared_kernel_with_fallbacks(kernel):
+    """The no-declared-singularity no-op must hold even for kernels that trip
+    the two-order GL fallback: only declared-singularity blocks are ever
+    reused, so fallback entries stay on the per-row default-tolerance repair
+    path and the flag is bit-identical, not merely close."""
+    kw = dict(kernel=kernel, g=lambda t: 1.0 + np.sin(t),
+              mesh_breakpoints=_uniform_mesh(40), coll_divs=2,
+              coll_choices=[0, 1, 2], show_warnings=False)
+    assert np.array_equal(
+        function_solve_VIE_2(**kw),
+        function_solve_VIE_2(**kw, reuse_adaptive_blocks=True))
+
+
+def test_reuse_adaptive_blocks_emits_no_integration_warnings():
+    """The tightened 1e-12 reuse tolerance sits near QUADPACK's roundoff
+    floor and can make scipy report non-convergence even though the returned
+    best-obtainable value is exactly what reuse wants; those
+    IntegrationWarnings must not leak to the user."""
+    import warnings
+    from scipy.integrate import IntegrationWarning
+    p = as_callable(VIE1_SPEC_ABEL, coll_divs=3, coll_choices=[1, 2, 3])
+    kw = dict(kernel=p["kernel"], g=p["g"], mesh_breakpoints=_uniform_mesh(160),
+              coll_divs=3, coll_choices=[1, 2, 3],
+              kernel_singularity=p["kernel_singularity"], show_warnings=False)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        function_solve_VIE_1(**kw, reuse_adaptive_blocks=True)
+    assert not [w for w in caught if issubclass(w.category, IntegrationWarning)]
+
+
+def test_reuse_quad_opts_strictly_tighten_scipy_defaults():
+    """The reuse-tightened quadrature options must never be looser than the
+    per-row defaults they replace, in either tolerance, for either backend.
+    In particular quad_vec's default epsabs is 1e-200 (pure-relative
+    convergence): overriding it upward would make small-magnitude singular
+    blocks *less* accurate than the values they replace."""
+    import inspect
+    from scipy.integrate import quad, quad_vec
+    from voles._callable_solvers import _QUAD_OPTS_REUSE, _QUAD_VEC_OPTS_REUSE
+
+    def default_of(fn, name):
+        return inspect.signature(fn).parameters[name].default
+
+    assert _QUAD_OPTS_REUSE["epsabs"] <= default_of(quad, "epsabs")
+    assert _QUAD_OPTS_REUSE["epsrel"] <= default_of(quad, "epsrel")
+    assert _QUAD_VEC_OPTS_REUSE["epsabs"] <= default_of(quad_vec, "epsabs")
+    assert _QUAD_VEC_OPTS_REUSE["epsrel"] <= default_of(quad_vec, "epsrel")
