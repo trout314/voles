@@ -19,6 +19,12 @@ _ip = ctypes.POINTER(ctypes.c_int)
 
 
 def _setup_argtypes() -> None:
+    _lib.volterra_rt_init.restype = ctypes.c_int
+    _lib.volterra_rt_init.argtypes = []
+
+    _lib.volterra_gc_collect.restype = None
+    _lib.volterra_gc_collect.argtypes = []
+
     _lib.volterra_have_lapack.restype = ctypes.c_int
     _lib.volterra_have_lapack.argtypes = []
 
@@ -166,6 +172,14 @@ def _load() -> None:
             try:
                 _lib = ctypes.CDLL(path)
                 _setup_argtypes()
+                # Initialize druntime explicitly (refcounted no-op if the DSO
+                # constructor already did it at load). Required before any
+                # solver call so the GC and thread registry are live; also
+                # permanently attaches this (the main) thread.
+                if not _lib.volterra_rt_init():
+                    raise ImportError(
+                        f"Loaded {lib_name} at {path} but D runtime "
+                        "initialization (volterra_rt_init) failed.")
                 return
             except OSError as e:
                 raise ImportError(f"Found {lib_name} at {path} but could not load it: {e}") from e
@@ -810,6 +824,12 @@ def function_solve_vie2_vec_d(W, g_arr):
     )
     _check_return(ret, "function_solve_vie2_vec")
     return out_y
+
+
+def gc_collect_d() -> None:
+    """Force a D GC collection (thread-attached for the duration). Used by the
+    thread-safety stress test; harmless to call from any thread."""
+    _lib.volterra_gc_collect()
 
 
 def have_lapack_d() -> bool:

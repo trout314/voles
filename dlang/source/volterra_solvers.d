@@ -2448,6 +2448,131 @@ bool is_nonconvergent_vie1_setting(int coll_divs, int[] choices)
 }
 
 // ---------------------------------------------------------------------------
+// Foreign-thread GC registration
+//
+// The solvers below allocate from the D GC, and the Python layer calls them
+// from ThreadPoolExecutor worker threads (matrix columns run in parallel).
+// druntime's stop-the-world collector only suspends and stack-scans threads
+// registered with the runtime, so every foreign thread must be attached
+// before executing D code: an unattached thread's stack is never scanned for
+// roots (its live locals look dead to the GC), and it keeps mutating the
+// heap through a sibling thread's mark phase.
+//
+// Attachment is once-per-thread and persistent: every entry point calls
+// ensureThreadAttached(), and the thread is detached only when it dies, via
+// a TLS destructor registered the first time it attaches. Persistent
+// attachment matters twice over: (a) a thread left registered at death would
+// be a dangling entry the GC later tries to suspend, so detach-at-death is
+// required; and (b) a per-call attach/detach guard is not just wasteful but
+// unsafe -- empirically, high-frequency attach -> collect -> detach cycling
+// by a collecting thread segfaults druntime (macOS, LDC), while a
+// persistently attached collector survives millions of collections
+// concurrent with solves. See tests/test_thread_safety.py.
+// ---------------------------------------------------------------------------
+
+version (Windows)
+{
+    private extern (Windows) nothrow @nogc
+    {
+        alias FlsCallback = void function(void*);
+        uint FlsAlloc(FlsCallback);
+        int FlsSetValue(uint, void*);
+    }
+    private enum uint FLS_OUT_OF_INDEXES = 0xFFFF_FFFF;
+    private __gshared uint g_detachFlsIndex = FLS_OUT_OF_INDEXES;
+
+    private extern (Windows) void detachThisThread(void* threadObj)
+    {
+        // Detach by stored instance: druntime's own TLS may already be torn
+        // down when this destructor runs (destructor ordering across TLS
+        // implementations is unspecified), so Thread.getThis() is unusable
+        // here. thread_detachInstance tolerates already-removed threads.
+        import core.thread.threadbase : ThreadBase, thread_detachInstance;
+        if (threadObj !is null)
+            thread_detachInstance(cast(ThreadBase) threadObj);
+    }
+}
+else
+{
+    private import core.sys.posix.pthread :
+        pthread_key_t, pthread_key_create, pthread_setspecific;
+    private __gshared pthread_key_t g_detachKey;
+    private __gshared bool g_detachKeyCreated = false;
+
+    private extern (C) void detachThisThread(void* threadObj)
+    {
+        // See the Windows variant: detach by stored instance, because
+        // druntime's TLS (and so Thread.getThis) may already be gone when
+        // pthread key destructors run.
+        import core.thread.threadbase : ThreadBase, thread_detachInstance;
+        if (threadObj !is null)
+            thread_detachInstance(cast(ThreadBase) threadObj);
+    }
+}
+
+// Serializes thread attachment against explicit GC collections
+// (volterra_gc_collect). Created in volterra_rt_init; stored in __gshared so
+// the static-data scan roots it forever.
+private __gshared Object g_attachLock;
+
+// Create the attach lock and the thread-exit detach hook. Called once,
+// single-threaded, from volterra_rt_init before any solver call.
+private void initDetachHook()
+{
+    if (g_attachLock is null)
+        g_attachLock = new Object;
+    version (Windows)
+    {
+        if (g_detachFlsIndex == FLS_OUT_OF_INDEXES)
+            g_detachFlsIndex = FlsAlloc(&detachThisThread);
+    }
+    else
+    {
+        if (!g_detachKeyCreated)
+            g_detachKeyCreated =
+                pthread_key_create(&g_detachKey, &detachThisThread) == 0;
+    }
+}
+
+// Attach the calling thread to the D runtime if it is not already attached,
+// and arm the detach-at-thread-exit hook for it. No-op for attached threads
+// (including the loading thread, attached by rt_init). The TLS value only
+// needs to be non-null so the destructor fires at thread exit.
+private void ensureThreadAttached()
+{
+    import core.thread : Thread, thread_attachThis;
+    import core.memory : GC;
+    if (Thread.getThis() !is null)
+        return;
+    // thread_attachThis allocates the Thread object BEFORE registering the
+    // thread; until registration completes this thread's stack is invisible
+    // to the collector, so a concurrent collection frees the half-attached
+    // Thread object (empirically reproducible; see tests/test_thread_safety).
+    // Close the window: GC.disable blocks allocation-triggered collections
+    // for the duration, and the attach lock excludes volterra_gc_collect's
+    // explicit ones.
+    GC.disable();
+    scope(exit) GC.enable();
+    Thread t;
+    synchronized (g_attachLock)
+        t = thread_attachThis();
+    // Store the Thread object as the TLS value so the exit hook can detach
+    // by instance. While registered, the object is kept alive by druntime's
+    // global thread list (a scanned static root), so the pointer stays valid
+    // until the destructor uses it.
+    version (Windows)
+    {
+        if (g_detachFlsIndex != FLS_OUT_OF_INDEXES)
+            FlsSetValue(g_detachFlsIndex, cast(void*) t);
+    }
+    else
+    {
+        if (g_detachKeyCreated)
+            pthread_setspecific(g_detachKey, cast(void*) t);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // extern(C) entry points
 //
 // Return codes:
@@ -2458,6 +2583,35 @@ bool is_nonconvergent_vie1_setting(int coll_divs, int[] choices)
 // ---------------------------------------------------------------------------
 
 export extern(C):
+
+// Explicit druntime initialization, called once by the Python wrapper right
+// after loading the library. Runtime.initialize is refcounted, so this is a
+// no-op if LDC's DSO constructor already initialized the runtime at load; it
+// removes the platform dependence and permanently attaches the loading
+// (Python main) thread. Also creates the detach-at-thread-exit hook used by
+// ensureThreadAttached. Returns 1 on success.
+int volterra_rt_init()
+{
+    import core.runtime : Runtime;
+    if (!Runtime.initialize())
+        return 0;
+    initDetachHook();
+    return 1;
+}
+
+// Force a GC collection from the calling thread (attaching it persistently
+// if needed). Exposed for the thread-safety stress test: hammering this from
+// one Python thread while others run matrix solves exercises the
+// suspend/scan machinery that a collection triggered mid-solve would hit.
+void volterra_gc_collect()
+{
+    import core.memory : GC;
+    ensureThreadAttached();
+    // The attach lock excludes the explicit collection from the window in
+    // which another thread is mid-attach (see ensureThreadAttached).
+    synchronized (g_attachLock)
+        GC.collect();
+}
 
 // volterra_solve_vie1_vec: primary VIE-1 entry point, handles all d.
 // kernel_values: (n, d, d) C-contiguous flat array of length n*d*d
@@ -2470,6 +2624,7 @@ int volterra_solve_vie1_vec(
     int return_polys, int force_continuous,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
+    ensureThreadAttached();
     double[] gv      = g_values[0 .. n * d];
     double[] kv      = kernel_values[0 .. n * d * d];
     double[] init    = soln_init_values[0 .. d];
@@ -2539,6 +2694,7 @@ int volterra_solve_vie2(
     int* coll_choices, int num_choices, int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
+    ensureThreadAttached();
     double[] gv = g_values[0..n];
     double[] kv = kernel_values[0..n];
     int[] choices = coll_choices[0..num_choices];
@@ -2583,6 +2739,7 @@ int volterra_solve_vide(
     int coll_divs, int* coll_choices, int num_choices, int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
+    ensureThreadAttached();
     double[] gv = g_values[0..n];
     double[] kv = kernel_values[0..n];
     double[] av = a_values[0..n];
@@ -2634,6 +2791,7 @@ int volterra_solve_vie2_vec(
     int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
+    ensureThreadAttached();
     double[] gv      = g_values[0 .. n * d];
     double[] kv      = kernel_values[0 .. n * d * d];
     int[]    choices = coll_choices[0 .. num_choices];
@@ -2688,6 +2846,7 @@ int volterra_solve_vide_vec(
     int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
+    ensureThreadAttached();
     double[] gv   = g_values[0 .. n * d];
     double[] kv   = kernel_values[0 .. n * d * d];
     double[] av   = a_values[0 .. n * d * d];
