@@ -1375,6 +1375,23 @@ convention (differs from the array-based solvers). Defaults to
                   <code>False</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>reuse_adaptive_blocks</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Reuse the adaptive-quadrature weight blocks across the uniform-mesh
+Toeplitz assembly; see <code>function_solve_VIE_2</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -1422,53 +1439,7 @@ tracked boundary values).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1386</span>
-<span class="normal">1387</span>
-<span class="normal">1388</span>
-<span class="normal">1389</span>
-<span class="normal">1390</span>
-<span class="normal">1391</span>
-<span class="normal">1392</span>
-<span class="normal">1393</span>
-<span class="normal">1394</span>
-<span class="normal">1395</span>
-<span class="normal">1396</span>
-<span class="normal">1397</span>
-<span class="normal">1398</span>
-<span class="normal">1399</span>
-<span class="normal">1400</span>
-<span class="normal">1401</span>
-<span class="normal">1402</span>
-<span class="normal">1403</span>
-<span class="normal">1404</span>
-<span class="normal">1405</span>
-<span class="normal">1406</span>
-<span class="normal">1407</span>
-<span class="normal">1408</span>
-<span class="normal">1409</span>
-<span class="normal">1410</span>
-<span class="normal">1411</span>
-<span class="normal">1412</span>
-<span class="normal">1413</span>
-<span class="normal">1414</span>
-<span class="normal">1415</span>
-<span class="normal">1416</span>
-<span class="normal">1417</span>
-<span class="normal">1418</span>
-<span class="normal">1419</span>
-<span class="normal">1420</span>
-<span class="normal">1421</span>
-<span class="normal">1422</span>
-<span class="normal">1423</span>
-<span class="normal">1424</span>
-<span class="normal">1425</span>
-<span class="normal">1426</span>
-<span class="normal">1427</span>
-<span class="normal">1428</span>
-<span class="normal">1429</span>
-<span class="normal">1430</span>
-<span class="normal">1431</span>
-<span class="normal">1432</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1432</span>
 <span class="normal">1433</span>
 <span class="normal">1434</span>
 <span class="normal">1435</span>
@@ -1658,13 +1629,67 @@ tracked boundary values).</p>
 <span class="normal">1619</span>
 <span class="normal">1620</span>
 <span class="normal">1621</span>
-<span class="normal">1622</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">1622</span>
+<span class="normal">1623</span>
+<span class="normal">1624</span>
+<span class="normal">1625</span>
+<span class="normal">1626</span>
+<span class="normal">1627</span>
+<span class="normal">1628</span>
+<span class="normal">1629</span>
+<span class="normal">1630</span>
+<span class="normal">1631</span>
+<span class="normal">1632</span>
+<span class="normal">1633</span>
+<span class="normal">1634</span>
+<span class="normal">1635</span>
+<span class="normal">1636</span>
+<span class="normal">1637</span>
+<span class="normal">1638</span>
+<span class="normal">1639</span>
+<span class="normal">1640</span>
+<span class="normal">1641</span>
+<span class="normal">1642</span>
+<span class="normal">1643</span>
+<span class="normal">1644</span>
+<span class="normal">1645</span>
+<span class="normal">1646</span>
+<span class="normal">1647</span>
+<span class="normal">1648</span>
+<span class="normal">1649</span>
+<span class="normal">1650</span>
+<span class="normal">1651</span>
+<span class="normal">1652</span>
+<span class="normal">1653</span>
+<span class="normal">1654</span>
+<span class="normal">1655</span>
+<span class="normal">1656</span>
+<span class="normal">1657</span>
+<span class="normal">1658</span>
+<span class="normal">1659</span>
+<span class="normal">1660</span>
+<span class="normal">1661</span>
+<span class="normal">1662</span>
+<span class="normal">1663</span>
+<span class="normal">1664</span>
+<span class="normal">1665</span>
+<span class="normal">1666</span>
+<span class="normal">1667</span>
+<span class="normal">1668</span>
+<span class="normal">1669</span>
+<span class="normal">1670</span>
+<span class="normal">1671</span>
+<span class="normal">1672</span>
+<span class="normal">1673</span>
+<span class="normal">1674</span>
+<span class="normal">1675</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span>
                          <span class="n">mesh_breakpoints</span><span class="p">,</span>
                          <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                          <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                          <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                          <span class="n">return_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+                         <span class="n">reuse_adaptive_blocks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                          <span class="n">show_warnings</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
                          <span class="n">_smooth_gl_order</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Solve the scalar Volterra integro-differential equation</span>
@@ -1703,6 +1728,9 @@ tracked boundary values).</p>
 <span class="sd">        Declare integrable singularities; see ``function_solve_VIE_2``.</span>
 <span class="sd">    return_function : bool, optional</span>
 <span class="sd">        If True, also return a callable solution wrapper.</span>
+<span class="sd">    reuse_adaptive_blocks : bool, optional</span>
+<span class="sd">        Reuse the adaptive-quadrature weight blocks across the uniform-mesh</span>
+<span class="sd">        Toeplitz assembly; see ``function_solve_VIE_2``.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -1751,6 +1779,7 @@ tracked boundary values).</p>
             <span class="n">coll_nodes</span><span class="o">=</span><span class="n">node_pos</span><span class="p">,</span>
             <span class="n">kernel_singularity</span><span class="o">=</span><span class="n">kernel_singularity</span><span class="p">,</span>
             <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span><span class="p">,</span>
+            <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">,</span>
             <span class="n">_smooth_gl_order</span><span class="o">=</span><span class="n">_smooth_gl_order</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
             <span class="n">y_real</span><span class="p">,</span> <span class="n">y_func_real</span> <span class="o">=</span> <span class="n">result</span>
@@ -1801,7 +1830,8 @@ tracked boundary values).</p>
         <span class="n">vide_basis</span> <span class="o">=</span> <span class="n">_vide_basis_coefs</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
         <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_with_basis_scalar</span><span class="p">(</span>
             <span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
-            <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">vide_basis</span><span class="p">)</span>
+            <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">vide_basis</span><span class="p">,</span>
+            <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">)</span>
         <span class="n">g_arr</span> <span class="o">=</span> <span class="n">_sample_callable_scalar</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
         <span class="n">a_arr</span> <span class="o">=</span> <span class="n">_sample_callable_scalar</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
         <span class="n">y_prime</span><span class="p">,</span> <span class="n">y_boundary</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vide_d</span><span class="p">(</span>
@@ -1831,7 +1861,8 @@ tracked boundary values).</p>
     <span class="n">vide_basis</span> <span class="o">=</span> <span class="n">_vide_basis_coefs</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
     <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_with_basis_vector</span><span class="p">(</span>
         <span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
-        <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">vide_basis</span><span class="p">)</span>
+        <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">vide_basis</span><span class="p">,</span>
+        <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">)</span>
     <span class="n">a_arr</span> <span class="o">=</span> <span class="n">_sample_a_at_coll</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">widths</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
 
     <span class="c1"># Matrix-valued problem is signalled by a 2-D (d, m) initial value.</span>

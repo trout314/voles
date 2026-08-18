@@ -1384,6 +1384,21 @@ restriction and is generally the better default.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
+                <code>reuse_adaptive_blocks</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>See <code>function_solve_VIE_2</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
                 <code>show_warnings</code>
             </td>
             <td>
@@ -1430,60 +1445,7 @@ skipped.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2025</span>
-<span class="normal">2026</span>
-<span class="normal">2027</span>
-<span class="normal">2028</span>
-<span class="normal">2029</span>
-<span class="normal">2030</span>
-<span class="normal">2031</span>
-<span class="normal">2032</span>
-<span class="normal">2033</span>
-<span class="normal">2034</span>
-<span class="normal">2035</span>
-<span class="normal">2036</span>
-<span class="normal">2037</span>
-<span class="normal">2038</span>
-<span class="normal">2039</span>
-<span class="normal">2040</span>
-<span class="normal">2041</span>
-<span class="normal">2042</span>
-<span class="normal">2043</span>
-<span class="normal">2044</span>
-<span class="normal">2045</span>
-<span class="normal">2046</span>
-<span class="normal">2047</span>
-<span class="normal">2048</span>
-<span class="normal">2049</span>
-<span class="normal">2050</span>
-<span class="normal">2051</span>
-<span class="normal">2052</span>
-<span class="normal">2053</span>
-<span class="normal">2054</span>
-<span class="normal">2055</span>
-<span class="normal">2056</span>
-<span class="normal">2057</span>
-<span class="normal">2058</span>
-<span class="normal">2059</span>
-<span class="normal">2060</span>
-<span class="normal">2061</span>
-<span class="normal">2062</span>
-<span class="normal">2063</span>
-<span class="normal">2064</span>
-<span class="normal">2065</span>
-<span class="normal">2066</span>
-<span class="normal">2067</span>
-<span class="normal">2068</span>
-<span class="normal">2069</span>
-<span class="normal">2070</span>
-<span class="normal">2071</span>
-<span class="normal">2072</span>
-<span class="normal">2073</span>
-<span class="normal">2074</span>
-<span class="normal">2075</span>
-<span class="normal">2076</span>
-<span class="normal">2077</span>
-<span class="normal">2078</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2078</span>
 <span class="normal">2079</span>
 <span class="normal">2080</span>
 <span class="normal">2081</span>
@@ -1728,7 +1690,66 @@ skipped.</p>
 <span class="normal">2320</span>
 <span class="normal">2321</span>
 <span class="normal">2322</span>
-<span class="normal">2323</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">2323</span>
+<span class="normal">2324</span>
+<span class="normal">2325</span>
+<span class="normal">2326</span>
+<span class="normal">2327</span>
+<span class="normal">2328</span>
+<span class="normal">2329</span>
+<span class="normal">2330</span>
+<span class="normal">2331</span>
+<span class="normal">2332</span>
+<span class="normal">2333</span>
+<span class="normal">2334</span>
+<span class="normal">2335</span>
+<span class="normal">2336</span>
+<span class="normal">2337</span>
+<span class="normal">2338</span>
+<span class="normal">2339</span>
+<span class="normal">2340</span>
+<span class="normal">2341</span>
+<span class="normal">2342</span>
+<span class="normal">2343</span>
+<span class="normal">2344</span>
+<span class="normal">2345</span>
+<span class="normal">2346</span>
+<span class="normal">2347</span>
+<span class="normal">2348</span>
+<span class="normal">2349</span>
+<span class="normal">2350</span>
+<span class="normal">2351</span>
+<span class="normal">2352</span>
+<span class="normal">2353</span>
+<span class="normal">2354</span>
+<span class="normal">2355</span>
+<span class="normal">2356</span>
+<span class="normal">2357</span>
+<span class="normal">2358</span>
+<span class="normal">2359</span>
+<span class="normal">2360</span>
+<span class="normal">2361</span>
+<span class="normal">2362</span>
+<span class="normal">2363</span>
+<span class="normal">2364</span>
+<span class="normal">2365</span>
+<span class="normal">2366</span>
+<span class="normal">2367</span>
+<span class="normal">2368</span>
+<span class="normal">2369</span>
+<span class="normal">2370</span>
+<span class="normal">2371</span>
+<span class="normal">2372</span>
+<span class="normal">2373</span>
+<span class="normal">2374</span>
+<span class="normal">2375</span>
+<span class="normal">2376</span>
+<span class="normal">2377</span>
+<span class="normal">2378</span>
+<span class="normal">2379</span>
+<span class="normal">2380</span>
+<span class="normal">2381</span>
+<span class="normal">2382</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">mesh_breakpoints</span><span class="p">,</span>
                           <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1736,6 +1757,7 @@ skipped.</p>
                           <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">return_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                           <span class="n">force_continuous</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+                          <span class="n">reuse_adaptive_blocks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                           <span class="n">show_warnings</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
                           <span class="n">_smooth_gl_order</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Solve the Volterra integral equation of the first kind</span>
@@ -1779,7 +1801,7 @@ skipped.</p>
 <span class="sd">        endpoint, $c_m = 1$ (see Notes for the convergence condition). The</span>
 <span class="sd">        default discontinuous method ($S_{m-1}^{(-1)}$) imposes no such</span>
 <span class="sd">        restriction and is generally the better default.</span>
-<span class="sd">    kernel_singularity, return_function, show_warnings :</span>
+<span class="sd">    kernel_singularity, return_function, reuse_adaptive_blocks, show_warnings :</span>
 <span class="sd">        See ``function_solve_VIE_2``.</span>
 
 <span class="sd">    Notes</span>
@@ -1881,6 +1903,7 @@ skipped.</p>
             <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span>
             <span class="n">force_continuous</span><span class="o">=</span><span class="n">force_continuous</span><span class="p">,</span>
             <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span><span class="p">,</span>
+            <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">,</span>
             <span class="n">_smooth_gl_order</span><span class="o">=</span><span class="n">_smooth_gl_order</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
             <span class="n">y_real</span><span class="p">,</span> <span class="n">y_func_real</span> <span class="o">=</span> <span class="n">result</span>
@@ -1920,7 +1943,8 @@ skipped.</p>
             <span class="n">cont_basis</span> <span class="o">=</span> <span class="n">_vie1_cont_basis_coefs</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
             <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_with_basis_scalar</span><span class="p">(</span>
                 <span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
-                <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">cont_basis</span><span class="p">)</span>
+                <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">cont_basis</span><span class="p">,</span>
+                <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">)</span>
             <span class="n">adv_U</span><span class="p">,</span> <span class="n">adv_0</span> <span class="o">=</span> <span class="n">_vie1_cont_advance</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
             <span class="n">y</span><span class="p">,</span> <span class="n">boundary</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie1_cont_d</span><span class="p">(</span>
                 <span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">,</span> <span class="n">adv_U</span><span class="p">,</span> <span class="n">adv_0</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">))</span>
@@ -1931,7 +1955,8 @@ skipped.</p>
             <span class="k">return</span> <span class="n">y</span>
 
         <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_scalar</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
-                            <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">)</span>
+                            <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span>
+                            <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">)</span>
         <span class="n">y</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie1_d</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
             <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_polynomials</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">)</span>
@@ -1952,11 +1977,13 @@ skipped.</p>
         <span class="n">cont_basis</span> <span class="o">=</span> <span class="n">_vie1_cont_basis_coefs</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
         <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_with_basis_vector</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
                                        <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span>
-                                       <span class="n">cont_basis</span><span class="p">)</span>
+                                       <span class="n">cont_basis</span><span class="p">,</span>
+                                       <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">)</span>
         <span class="n">adv_U</span><span class="p">,</span> <span class="n">adv_0</span> <span class="o">=</span> <span class="n">_vie1_cont_advance</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_vector</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
-                            <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+                            <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span>
+                            <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">)</span>
 
     <span class="n">sample_t</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">node_pos</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">widths</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
     <span class="n">m</span> <span class="o">=</span> <span class="n">_detect_g_matrix_cols</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">sample_t</span><span class="p">)</span>

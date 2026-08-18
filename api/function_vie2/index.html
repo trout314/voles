@@ -1360,6 +1360,35 @@ the caller's responsibility.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
+                <code>reuse_adaptive_blocks</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>On a uniform mesh with a convolution kernel the weight tensor is
+Toeplitz and is assembled from one integrated row. By default only
+blocks evaluated by deterministic fixed-order quadrature are reused
+across rows; blocks touching a declared singularity (adaptive
+quadrature) are re-evaluated per row, which reproduces the general
+assembly to rounding level but keeps an <span class="arithmatex">\(O(M)\)</span> adaptive-quadrature
+cost. Set True to reuse the adaptive blocks too: the singular-kernel
+build cost drops by roughly another order of magnitude, and results
+may differ from the default path by up to the adaptive quadrature's
+own tolerance (<span class="arithmatex">\(\sim10^{-8}\)</span>, typically <span class="arithmatex">\(\sim10^{-9}\)</span>) -- far below
+discretization error in practice. Reused adaptive blocks are computed
+at tightened tolerance, so they are at least as accurate as the
+per-row values they replace. No effect on non-uniform meshes or
+smooth kernels.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
                 <code>show_warnings</code>
             </td>
             <td>
@@ -1427,34 +1456,7 @@ right-hand sides (it is built once), so they are substantially cheaper than
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1163</span>
-<span class="normal">1164</span>
-<span class="normal">1165</span>
-<span class="normal">1166</span>
-<span class="normal">1167</span>
-<span class="normal">1168</span>
-<span class="normal">1169</span>
-<span class="normal">1170</span>
-<span class="normal">1171</span>
-<span class="normal">1172</span>
-<span class="normal">1173</span>
-<span class="normal">1174</span>
-<span class="normal">1175</span>
-<span class="normal">1176</span>
-<span class="normal">1177</span>
-<span class="normal">1178</span>
-<span class="normal">1179</span>
-<span class="normal">1180</span>
-<span class="normal">1181</span>
-<span class="normal">1182</span>
-<span class="normal">1183</span>
-<span class="normal">1184</span>
-<span class="normal">1185</span>
-<span class="normal">1186</span>
-<span class="normal">1187</span>
-<span class="normal">1188</span>
-<span class="normal">1189</span>
-<span class="normal">1190</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1190</span>
 <span class="normal">1191</span>
 <span class="normal">1192</span>
 <span class="normal">1193</span>
@@ -1617,12 +1619,59 @@ right-hand sides (it is built once), so they are substantially cheaper than
 <span class="normal">1350</span>
 <span class="normal">1351</span>
 <span class="normal">1352</span>
-<span class="normal">1353</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">1353</span>
+<span class="normal">1354</span>
+<span class="normal">1355</span>
+<span class="normal">1356</span>
+<span class="normal">1357</span>
+<span class="normal">1358</span>
+<span class="normal">1359</span>
+<span class="normal">1360</span>
+<span class="normal">1361</span>
+<span class="normal">1362</span>
+<span class="normal">1363</span>
+<span class="normal">1364</span>
+<span class="normal">1365</span>
+<span class="normal">1366</span>
+<span class="normal">1367</span>
+<span class="normal">1368</span>
+<span class="normal">1369</span>
+<span class="normal">1370</span>
+<span class="normal">1371</span>
+<span class="normal">1372</span>
+<span class="normal">1373</span>
+<span class="normal">1374</span>
+<span class="normal">1375</span>
+<span class="normal">1376</span>
+<span class="normal">1377</span>
+<span class="normal">1378</span>
+<span class="normal">1379</span>
+<span class="normal">1380</span>
+<span class="normal">1381</span>
+<span class="normal">1382</span>
+<span class="normal">1383</span>
+<span class="normal">1384</span>
+<span class="normal">1385</span>
+<span class="normal">1386</span>
+<span class="normal">1387</span>
+<span class="normal">1388</span>
+<span class="normal">1389</span>
+<span class="normal">1390</span>
+<span class="normal">1391</span>
+<span class="normal">1392</span>
+<span class="normal">1393</span>
+<span class="normal">1394</span>
+<span class="normal">1395</span>
+<span class="normal">1396</span>
+<span class="normal">1397</span>
+<span class="normal">1398</span>
+<span class="normal">1399</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIE_2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span>
                           <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                           <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">return_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+                          <span class="n">reuse_adaptive_blocks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                           <span class="n">show_warnings</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
                           <span class="n">_smooth_gl_order</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Solve the scalar Volterra integral equation of the second kind</span>
@@ -1670,6 +1719,21 @@ right-hand sides (it is built once), so they are substantially cheaper than
 <span class="sd">          $K(s, t)$.</span>
 <span class="sd">    return_function : bool, optional</span>
 <span class="sd">        If True, also return a callable solution wrapper.</span>
+<span class="sd">    reuse_adaptive_blocks : bool, optional</span>
+<span class="sd">        On a uniform mesh with a convolution kernel the weight tensor is</span>
+<span class="sd">        Toeplitz and is assembled from one integrated row. By default only</span>
+<span class="sd">        blocks evaluated by deterministic fixed-order quadrature are reused</span>
+<span class="sd">        across rows; blocks touching a declared singularity (adaptive</span>
+<span class="sd">        quadrature) are re-evaluated per row, which reproduces the general</span>
+<span class="sd">        assembly to rounding level but keeps an $O(M)$ adaptive-quadrature</span>
+<span class="sd">        cost. Set True to reuse the adaptive blocks too: the singular-kernel</span>
+<span class="sd">        build cost drops by roughly another order of magnitude, and results</span>
+<span class="sd">        may differ from the default path by up to the adaptive quadrature's</span>
+<span class="sd">        own tolerance ($\sim10^{-8}$, typically $\sim10^{-9}$) -- far below</span>
+<span class="sd">        discretization error in practice. Reused adaptive blocks are computed</span>
+<span class="sd">        at tightened tolerance, so they are at least as accurate as the</span>
+<span class="sd">        per-row values they replace. No effect on non-uniform meshes or</span>
+<span class="sd">        smooth kernels.</span>
 <span class="sd">    show_warnings : bool, optional</span>
 <span class="sd">        Currently unused; reserved for the graded-mesh / mesh-uniformity hint.</span>
 
@@ -1723,6 +1787,7 @@ right-hand sides (it is built once), so they are substantially cheaper than
             <span class="n">coll_nodes</span><span class="o">=</span><span class="n">node_pos</span><span class="p">,</span>
             <span class="n">kernel_singularity</span><span class="o">=</span><span class="n">kernel_singularity</span><span class="p">,</span>
             <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span><span class="p">,</span>
+            <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">,</span>
             <span class="n">_smooth_gl_order</span><span class="o">=</span><span class="n">_smooth_gl_order</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
             <span class="n">y_real</span><span class="p">,</span> <span class="n">y_func_real</span> <span class="o">=</span> <span class="n">result</span>
@@ -1750,7 +1815,8 @@ right-hand sides (it is built once), so they are substantially cheaper than
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">is_vector</span><span class="p">:</span>
         <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_scalar</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
-                            <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">)</span>
+                            <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span>
+                            <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">)</span>
         <span class="n">g_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">g</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">M</span><span class="p">):</span>
@@ -1776,7 +1842,8 @@ right-hand sides (it is built once), so they are substantially cheaper than
     <span class="c1"># The weight tensor depends only on the kernel, so it is built once and</span>
     <span class="c1"># shared across all right-hand sides in the matrix case.</span>
     <span class="n">W</span> <span class="o">=</span> <span class="n">_build_W_vector</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
-                        <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+                        <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span>
+                        <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">)</span>
 
     <span class="n">sample_t</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">node_pos</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">widths</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
     <span class="n">m</span> <span class="o">=</span> <span class="n">_detect_g_matrix_cols</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">sample_t</span><span class="p">)</span>
