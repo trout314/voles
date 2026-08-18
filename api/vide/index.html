@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -29,7 +29,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -1713,12 +1713,12 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="normal">375</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">a_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
                <span class="n">coll_divs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">],</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">    </span><span class="sa">r</span><span class="sd">&#39;&#39;&#39;</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">'''</span>
 <span class="sd">    Solve a Volterra integro-differential equation.</span>
 
 <span class="sd">    Finds $y(t)$ satisfying</span>
 
-<span class="sd">    $$y&#39;(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds, \quad y(0) = y_0$$</span>
+<span class="sd">    $$y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds, \quad y(0) = y_0$$</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -1791,7 +1791,7 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="sd">    .. [1] Brunner, H. *Collocation Methods for Volterra Integral and Related</span>
 <span class="sd">       Functional Differential Equations.* Cambridge University Press, 2004.</span>
 <span class="sd">       Chapter 3, pp. 160–167.</span>
-<span class="sd">    &#39;&#39;&#39;</span>
+<span class="sd">    '''</span>
     <span class="n">return_function</span> <span class="o">=</span> <span class="n">_resolve_return_flag</span><span class="p">(</span><span class="n">return_function</span><span class="p">,</span> <span class="n">return_polys</span><span class="p">)</span>
     <span class="c1"># ------------------------------------------------------------------ complex dispatch</span>
     <span class="k">if</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">is_complex</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">,</span> <span class="n">a_values</span><span class="p">,</span> <span class="n">g_values</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">):</span>
@@ -1818,7 +1818,7 @@ used. For vector equations only the compiled settings are supported.</p>
 
     <span class="k">if</span> <span class="n">ndim</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="sa">f</span><span class="s2">"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
     <span class="n">N_orig</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">)</span>
     <span class="n">N</span><span class="p">,</span> <span class="n">kernel_values_</span> <span class="o">=</span> <span class="n">_truncate_N</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
@@ -1827,7 +1827,7 @@ used. For vector equations only the compiled settings are supported.</p>
     <span class="k">if</span> <span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
         <span class="n">_</span><span class="p">,</span> <span class="n">d1</span><span class="p">,</span> <span class="n">d2</span> <span class="o">=</span> <span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span>
         <span class="k">if</span> <span class="n">d1</span> <span class="o">!=</span> <span class="n">d2</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;kernel_values must have shape (N, d, d), got </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"kernel_values must have shape (N, d, d), got </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="n">d</span> <span class="o">=</span> <span class="n">d1</span>
 
         <span class="c1"># ---- matrix case: detect via soln_init_value shape (d, m_cols) ----</span>
@@ -1836,13 +1836,13 @@ used. For vector equations only the compiled settings are supported.</p>
             <span class="n">d_init</span><span class="p">,</span> <span class="n">m_cols</span> <span class="o">=</span> <span class="n">soln_init_values_</span><span class="o">.</span><span class="n">shape</span>
             <span class="k">if</span> <span class="n">d_init</span> <span class="o">!=</span> <span class="n">d</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;soln_init_value shape </span><span class="si">{</span><span class="n">soln_init_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with d=</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="sa">f</span><span class="s2">"soln_init_value shape </span><span class="si">{</span><span class="n">soln_init_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with d=</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">g_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">g_mat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">g_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">g_mat</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
                     <span class="k">if</span> <span class="n">g_mat</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">!=</span> <span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">m_cols</span><span class="p">):</span>
                         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                            <span class="sa">f</span><span class="s2">&quot;g_values shape </span><span class="si">{</span><span class="n">g_mat</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel/soln_init shapes&quot;</span><span class="p">)</span>
+                            <span class="sa">f</span><span class="s2">"g_values shape </span><span class="si">{</span><span class="n">g_mat</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel/soln_init shapes"</span><span class="p">)</span>
                     <span class="n">g_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">g_mat</span><span class="p">[:</span><span class="n">N</span><span class="p">,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m_cols</span><span class="p">)]</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">g_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">g_values</span><span class="p">]</span> <span class="o">*</span> <span class="n">m_cols</span>
@@ -1879,7 +1879,7 @@ used. For vector equations only the compiled settings are supported.</p>
             <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">g_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;g_values shape </span><span class="si">{</span><span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel_values shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="sa">f</span><span class="s2">"g_values shape </span><span class="si">{</span><span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel_values shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
             <span class="n">g_values_</span> <span class="o">=</span> <span class="n">g_values_</span><span class="p">[:</span><span class="n">N</span><span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
@@ -1888,7 +1888,7 @@ used. For vector equations only the compiled settings are supported.</p>
             <span class="n">a_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">a_values_</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;a_values shape </span><span class="si">{</span><span class="n">a_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel_values shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="sa">f</span><span class="s2">"a_values shape </span><span class="si">{</span><span class="n">a_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel_values shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
             <span class="n">a_values_</span> <span class="o">=</span> <span class="n">a_values_</span><span class="p">[:</span><span class="n">N</span><span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">a_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
@@ -1896,20 +1896,20 @@ used. For vector equations only the compiled settings are supported.</p>
         <span class="n">soln_init_values_</span> <span class="o">=</span> <span class="n">soln_init_values_</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">soln_init_values_</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">d</span><span class="p">,):</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;soln_init_value must be a scalar or length-</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2"> array for d=</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="sa">f</span><span class="s2">"soln_init_value must be a scalar or length-</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2"> array for d=</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
-        <span class="k">assert</span> <span class="n">coll_divs</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;coll_divs must be a positive integer&quot;</span>
-        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">),</span> <span class="s2">&quot;coll_choices must be a list of integers&quot;</span>
+        <span class="k">assert</span> <span class="n">coll_divs</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"coll_divs must be a positive integer"</span>
+        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">),</span> <span class="s2">"coll_choices must be a list of integers"</span>
         <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="n">coll_choices</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">),</span> \
-            <span class="s2">&quot;all integers in coll_choices must be distinct&quot;</span>
+            <span class="s2">"all integers in coll_choices must be distinct"</span>
         <span class="k">for</span> <span class="n">choice</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-            <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">choice</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="s2">&quot;coll_choices must contain only integers from 0 to coll_divs&quot;</span>
+            <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">choice</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="s2">"coll_choices must contain only integers from 0 to coll_divs"</span>
         <span class="n">coll_choices</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_fast_settings_VIDE</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;not supported by D extension.&quot;</span><span class="p">)</span>
+                <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) "</span>
+                <span class="sa">f</span><span class="s2">"not supported by D extension."</span><span class="p">)</span>
 
         <span class="n">k_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
         <span class="n">g_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">g_values_</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
@@ -1925,31 +1925,31 @@ used. For vector equations only the compiled settings are supported.</p>
         <span class="k">return</span> <span class="n">soln_vals</span>
 
     <span class="c1"># ------------------------------------------------------------------ scalar path</span>
-    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;kernel_values must be a 1-dim array&quot;</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">"kernel_values must be a 1-dim array"</span>
 
     <span class="k">if</span> <span class="n">g_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">g_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;g_values must be a 1-dim array&quot;</span>
-        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">g_values_</span><span class="p">)</span> <span class="o">==</span> <span class="n">N_orig</span><span class="p">,</span> <span class="s2">&quot;kernel_values and g_values must have the same length&quot;</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">"g_values must be a 1-dim array"</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">g_values_</span><span class="p">)</span> <span class="o">==</span> <span class="n">N_orig</span><span class="p">,</span> <span class="s2">"kernel_values and g_values must have the same length"</span>
         <span class="n">g_values_</span> <span class="o">=</span> <span class="n">g_values_</span><span class="p">[:</span><span class="n">N</span><span class="p">]</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">a_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">a_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">a_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;a_values must be a 1-dim array&quot;</span>
-        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">a_values_</span><span class="p">)</span> <span class="o">==</span> <span class="n">N_orig</span><span class="p">,</span> <span class="s2">&quot;kernel_values and a_values must have the same length&quot;</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">a_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">"a_values must be a 1-dim array"</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">a_values_</span><span class="p">)</span> <span class="o">==</span> <span class="n">N_orig</span><span class="p">,</span> <span class="s2">"kernel_values and a_values must have the same length"</span>
         <span class="n">a_values_</span> <span class="o">=</span> <span class="n">a_values_</span><span class="p">[:</span><span class="n">N</span><span class="p">]</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">a_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
 
-    <span class="k">assert</span> <span class="n">coll_divs</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;coll_divs must be a positive integer&quot;</span>
+    <span class="k">assert</span> <span class="n">coll_divs</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"coll_divs must be a positive integer"</span>
     <span class="k">assert</span> <span class="nb">all</span><span class="p">([</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">choice</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">for</span> <span class="n">choice</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">]),</span> \
-        <span class="s2">&quot;coll_choices must be a list of integers&quot;</span>
+        <span class="s2">"coll_choices must be a list of integers"</span>
     <span class="k">assert</span> <span class="nb">all</span><span class="p">([</span><span class="n">coll_choices</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">]),</span> \
-        <span class="s2">&quot;all integers in coll_choices must be distinct&quot;</span>
+        <span class="s2">"all integers in coll_choices must be distinct"</span>
     <span class="k">for</span> <span class="n">choice</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-        <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">choice</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="s2">&quot;coll_choices must contain only integers from 0 to coll_divs&quot;</span>
+        <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">choice</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="s2">"coll_choices must contain only integers from 0 to coll_divs"</span>
     <span class="n">coll_choices</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">)</span>
     <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_fast_settings_VIDE</span><span class="p">:</span>
         <span class="n">soln_vals</span><span class="p">,</span> <span class="n">poly_coefs</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vide_d</span><span class="p">(</span>
@@ -1957,21 +1957,21 @@ used. For vector equations only the compiled settings are supported.</p>
             <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="p">)</span>
     <span class="k">elif</span> <span class="n">_numba_available</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">show_warnings</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;warning: falling back to slower python/numba code&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">"warning: falling back to slower python/numba code"</span><span class="p">)</span>
         <span class="n">soln_vals</span><span class="p">,</span> <span class="n">poly_coefs</span> <span class="o">=</span> <span class="n">_numba_solvers</span><span class="o">.</span><span class="n">solve_VIDE_jit</span><span class="p">(</span>
             <span class="n">g_values_</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">a_values_</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span>
             <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) is not &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;supported by the D extension. Install numba to enable the fallback solver, or &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;use a supported setting (see fast_coll_settings_VIDE).&quot;</span>
+            <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) is not "</span>
+            <span class="sa">f</span><span class="s2">"supported by the D extension. Install numba to enable the fallback solver, or "</span>
+            <span class="sa">f</span><span class="s2">"use a supported setting (see fast_coll_settings_VIDE)."</span>
         <span class="p">)</span>
     <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
         <span class="n">polys</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">coefs</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">poly_coefs</span><span class="p">):</span>
             <span class="n">domain</span> <span class="o">=</span> <span class="p">(</span><span class="n">i</span> <span class="o">*</span> <span class="n">coll_divs</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">time_step</span><span class="p">,</span> <span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">coll_divs</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">time_step</span><span class="p">)</span>
-            <span class="n">poly</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polynomial</span><span class="o">.</span><span class="n">Polynomial</span><span class="p">(</span><span class="n">coefs</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">window</span><span class="o">=</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span> <span class="n">symbol</span><span class="o">=</span><span class="s1">&#39;t&#39;</span><span class="p">)</span>
+            <span class="n">poly</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polynomial</span><span class="o">.</span><span class="n">Polynomial</span><span class="p">(</span><span class="n">coefs</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">window</span><span class="o">=</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span> <span class="n">symbol</span><span class="o">=</span><span class="s1">'t'</span><span class="p">)</span>
             <span class="n">poly</span> <span class="o">=</span> <span class="n">poly</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">window</span><span class="o">=</span><span class="n">domain</span><span class="p">)</span>
             <span class="n">polys</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">poly</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">(</span><span class="n">soln_vals</span><span class="p">,</span> <span class="n">_wrap_polys</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
@@ -2034,7 +2034,7 @@ used. For vector equations only the compiled settings are supported.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../../javascripts/mathjax.js"></script>
       

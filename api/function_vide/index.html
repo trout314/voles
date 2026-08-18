@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -29,7 +29,7 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
       
 
@@ -1667,9 +1667,9 @@ tracked boundary values).</p>
                          <span class="n">return_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                          <span class="n">show_warnings</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
                          <span class="n">_smooth_gl_order</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">):</span>
-<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Solve the scalar Volterra integro-differential equation</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""Solve the scalar Volterra integro-differential equation</span>
 
-<span class="sd">    $$y&#39;(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds,\quad y(0) = y_0$$</span>
+<span class="sd">    $$y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds,\quad y(0) = y_0$$</span>
 
 <span class="sd">    with callable inputs on an arbitrary mesh.</span>
 
@@ -1714,29 +1714,29 @@ tracked boundary values).</p>
 
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
-<span class="sd">    Internally the unknowns are $y&#39;$ at the collocation nodes; the returned</span>
+<span class="sd">    Internally the unknowns are $y'$ at the collocation nodes; the returned</span>
 <span class="sd">    values are $y$ itself (reconstructed via the antiderivative basis and the</span>
 <span class="sd">    tracked boundary values).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">mesh_breakpoints</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">mesh_breakpoints</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;mesh_breakpoints must be 1-D with at least two entries&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"mesh_breakpoints must be 1-D with at least two entries"</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;mesh_breakpoints must be strictly increasing&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"mesh_breakpoints must be strictly increasing"</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">mesh_breakpoints</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;mesh_breakpoints[0] must be 0&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"mesh_breakpoints[0] must be 0"</span><span class="p">)</span>
 
     <span class="n">node_pos</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_resolve_node_pos</span><span class="p">(</span>
         <span class="n">coll_nodes</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
         <span class="n">default_divs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">default_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
-        <span class="n">exclude_zero</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">fname</span><span class="o">=</span><span class="s2">&quot;function_solve_VIDE&quot;</span><span class="p">)</span>
+        <span class="n">exclude_zero</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">fname</span><span class="o">=</span><span class="s2">"function_solve_VIDE"</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">kernel</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;kernel must be callable&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"kernel must be callable"</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">g</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">g</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;g must be callable or None&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"g must be callable or None"</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">a</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;a must be callable or None&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"a must be callable or None"</span><span class="p">)</span>
 
     <span class="c1"># Complex dispatch.</span>
     <span class="k">if</span> <span class="n">_samples_indicate_complex</span><span class="p">([</span><span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">a</span><span class="p">],</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">):</span>
@@ -1766,8 +1766,8 @@ tracked boundary values).</p>
     <span class="n">max_p</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_max_p_d</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">p</span> <span class="o">&gt;</span> <span class="n">max_p</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;number of collocation nodes p = </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> exceeds the maximum compiled &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;into the D extension (</span><span class="si">{</span><span class="n">max_p</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
+            <span class="sa">f</span><span class="s2">"number of collocation nodes p = </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> exceeds the maximum compiled "</span>
+            <span class="sa">f</span><span class="s2">"into the D extension (</span><span class="si">{</span><span class="n">max_p</span><span class="si">}</span><span class="s2">)."</span><span class="p">)</span>
 
     <span class="c1"># Detect scalar vs vector by sampling kernel at a non-singular point.</span>
     <span class="n">sample_u</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">widths</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">*</span> <span class="mf">0.5</span>
@@ -1807,7 +1807,7 @@ tracked boundary values).</p>
         <span class="n">y_prime</span><span class="p">,</span> <span class="n">y_boundary</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vide_d</span><span class="p">(</span>
             <span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">,</span> <span class="n">a_arr</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">w_vec</span><span class="p">,</span> <span class="n">widths</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">))</span>
 
-        <span class="c1"># Reconstruct y at collocation nodes: y_{n,i} = y_n + h_n * sum_k Y&#39;_{n,k} alpha[i,k]</span>
+        <span class="c1"># Reconstruct y at collocation nodes: y_{n,i} = y_n + h_n * sum_k Y'_{n,k} alpha[i,k]</span>
         <span class="n">y_at_coll</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">M</span><span class="p">):</span>
             <span class="n">y_at_coll</span><span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">y_boundary</span><span class="p">[</span><span class="n">n</span><span class="p">]</span> <span class="o">+</span> <span class="n">widths</span><span class="p">[</span><span class="n">n</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">alpha</span> <span class="o">@</span> <span class="n">y_prime</span><span class="p">[</span><span class="n">n</span><span class="p">])</span>
@@ -1823,8 +1823,8 @@ tracked boundary values).</p>
     <span class="n">max_d</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_max_d_d</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">d</span> <span class="o">&gt;</span> <span class="n">max_d</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;kernel dimension d = </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2"> exceeds the maximum compiled into the &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;D extension (</span><span class="si">{</span><span class="n">max_d</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
+            <span class="sa">f</span><span class="s2">"kernel dimension d = </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2"> exceeds the maximum compiled into the "</span>
+            <span class="sa">f</span><span class="s2">"D extension (</span><span class="si">{</span><span class="n">max_d</span><span class="si">}</span><span class="s2">)."</span><span class="p">)</span>
 
     <span class="c1"># W and a(t) depend only on the kernel and a, not on the right-hand side,</span>
     <span class="c1"># so both are built once and shared across all columns in the matrix case.</span>
@@ -1839,8 +1839,8 @@ tracked boundary values).</p>
     <span class="k">if</span> <span class="n">init_arr</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">init_arr</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">d</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;soln_init_value shape </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">init_arr</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2"> incompatible &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;with kernel dimension d = </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+                <span class="sa">f</span><span class="s2">"soln_init_value shape </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">init_arr</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2"> incompatible "</span>
+                <span class="sa">f</span><span class="s2">"with kernel dimension d = </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">."</span><span class="p">)</span>
         <span class="n">m</span> <span class="o">=</span> <span class="n">init_arr</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
         <span class="n">G</span> <span class="o">=</span> <span class="n">_sample_g_at_coll_matrix</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">widths</span><span class="p">,</span>
                                      <span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
@@ -1875,15 +1875,15 @@ tracked boundary values).</p>
     <span class="c1"># Vector path</span>
     <span class="k">if</span> <span class="n">init_arr</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">d</span><span class="p">,):</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;soln_init_value must have shape (</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">,) for vector kernel; &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;got shape </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">init_arr</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="sa">f</span><span class="s2">"soln_init_value must have shape (</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">,) for vector kernel; "</span>
+            <span class="sa">f</span><span class="s2">"got shape </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">init_arr</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
     <span class="n">g_arr</span> <span class="o">=</span> <span class="n">_sample_g_at_coll_vec</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">widths</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
 
     <span class="n">y_prime</span><span class="p">,</span> <span class="n">y_boundary</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vide_vec_d</span><span class="p">(</span>
         <span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">,</span> <span class="n">a_arr</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">w_vec</span><span class="p">,</span> <span class="n">widths</span><span class="p">,</span> <span class="n">init_arr</span><span class="p">)</span>
 
-    <span class="c1"># Reconstruct y at collocation: y[n,i] = y_n + h_n * sum_k alpha[i,k] Y&#39;_{n,k}</span>
+    <span class="c1"># Reconstruct y at collocation: y[n,i] = y_n + h_n * sum_k alpha[i,k] Y'_{n,k}</span>
     <span class="n">y_at_coll</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">M</span><span class="p">):</span>
         <span class="c1"># alpha (p,p) @ y_prime[n] (p,d) -&gt; (p,d)</span>
@@ -1952,7 +1952,7 @@ tracked boundary values).</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../../javascripts/mathjax.js"></script>
       
