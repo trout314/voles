@@ -283,45 +283,55 @@ def vide_stiff_data():
 # ---------------------------------------------------------------------------
 
 
-def make_coupled_data(spec_a, spec_b, P, *, time_step, coll_divs, coll_choices,
-                      num_blocks=10):
-    """Build a coupled 2x2 fixture from two scalar solution specs via Z = P Y
-    (see section header). Works for all three solver types: each spec is a dict
-    with callables kernel(u), g(t), y_exact(t), plus a(t) for VIDE. Returns a
-    dict shaped like the array fixtures (kernel (N,2,2); g, exact (N,2)); when
-    the specs carry an 'a' term it also includes the coupled 'a' array and the
+def make_coupled_data_nd(specs, P, *, time_step, coll_divs, coll_choices,
+                         num_blocks=10):
+    """Build a coupled d x d fixture from d scalar solution specs via Z = P Y
+    (see section header, which applies verbatim for any constant d x d P).
+    Works for all three solver types: each spec is a dict with callables
+    kernel(u), g(t), y_exact(t), plus a(t) for VIDE. Returns a dict shaped like
+    the array fixtures (kernel (N,d,d); g, exact (N,d)); when any spec carries
+    an 'a' term it also includes the coupled 'a' array and the
     'soln_init_value' vector."""
+    d = len(specs)
     P = np.asarray(P, dtype=float)
     P_inv = np.linalg.inv(P)
     num_pts = num_blocks * coll_divs**2 + 1
     times = np.arange(num_pts) * time_step
 
-    def conjugate_diag(f_a, f_b):
-        """(N, 2, 2) array of  P diag(f_a(u), f_b(u)) P^-1  over ``times``."""
-        v_a = np.array([f_a(u) for u in times])
-        v_b = np.array([f_b(u) for u in times])
-        out = np.zeros((num_pts, 2, 2))
+    def conjugate_diag(fns):
+        """(N, d, d) array of  P diag(f_1(u), ..., f_d(u)) P^-1  over ``times``."""
+        vals = np.array([[f(u) for f in fns] for u in times])
+        out = np.zeros((num_pts, d, d))
         for n in range(num_pts):
-            out[n] = P @ np.diag([v_a[n], v_b[n]]) @ P_inv
+            out[n] = P @ np.diag(vals[n]) @ P_inv
         return out
 
-    g_diag = np.array([[spec_a["g"](t), spec_b["g"](t)] for t in times])
-    y_diag = np.array([[spec_a["y_exact"](t), spec_b["y_exact"](t)] for t in times])
+    g_diag = np.array([[s["g"](t) for s in specs] for t in times])
+    y_diag = np.array([[s["y_exact"](t) for s in specs] for t in times])
     data = dict(
         times=times,
-        kernel=conjugate_diag(spec_a["kernel"], spec_b["kernel"]),
-        g=g_diag @ P.T,          # each row is  P [g1, g2]^T
-        exact=y_diag @ P.T,      # each row is  P [y1, y2]^T
+        kernel=conjugate_diag([s["kernel"] for s in specs]),
+        g=g_diag @ P.T,          # each row is  P [g1, ..., gd]^T
+        exact=y_diag @ P.T,      # each row is  P [y1, ..., yd]^T
         time_step=time_step,
         coll_divs=coll_divs,
         coll_choices=coll_choices,
     )
-    if "a" in spec_a or "a" in spec_b:   # VIDE: reaction term + initial value
+    if any("a" in s for s in specs):   # VIDE: reaction term + initial value
         zero = lambda t: 0.0
-        data["a"] = conjugate_diag(spec_a.get("a", zero), spec_b.get("a", zero))
+        data["a"] = conjugate_diag([s.get("a", zero) for s in specs])
         data["soln_init_value"] = P @ np.array(
-            [spec_a["y_exact"](0.0), spec_b["y_exact"](0.0)])
+            [s["y_exact"](0.0) for s in specs])
     return data
+
+
+def make_coupled_data(spec_a, spec_b, P, *, time_step, coll_divs, coll_choices,
+                      num_blocks=10):
+    """Build a coupled 2x2 fixture from two scalar solution specs via Z = P Y
+    (see section header). The two-spec form of make_coupled_data_nd."""
+    return make_coupled_data_nd([spec_a, spec_b], P, time_step=time_step,
+                                coll_divs=coll_divs, coll_choices=coll_choices,
+                                num_blocks=num_blocks)
 
 
 @pytest.fixture
