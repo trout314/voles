@@ -2364,3 +2364,107 @@ def test_vide_real_kernel_complex_a_matches_array_solver():
         kernel=kernel, a=a, g=g, soln_init_value=init, mesh_breakpoints=mesh,
         coll_divs=coll_divs, coll_choices=coll_choices, return_function=True)
     assert np.max(np.abs(y_func(times) - soln_arr)) < 1e-3
+
+
+# ---------------------------------------------------------------------------
+# reuse_adaptive_blocks: aggressive Toeplitz reuse of the adaptive-quadrature
+# weight blocks on uniform meshes. Deviations from the default path are
+# bounded by the adaptive-quadrature tolerance (~1e-8, typically ~1e-9); the
+# flag must be a strict no-op off the uniform-mesh convolution fast path.
+# ---------------------------------------------------------------------------
+
+from conftest import (TOLERANCE, as_callable,
+                      VIE1_SPEC_ABEL, VIE2_SPEC_ABEL, VIDE_SPEC_ABEL)
+
+
+def _uniform_mesh(M):
+    return np.linspace(0.0, 1.0, M + 1)
+
+
+def test_reuse_adaptive_blocks_vie1_close_and_accurate():
+    p = as_callable(VIE1_SPEC_ABEL, coll_divs=3, coll_choices=[1, 2, 3])
+    mesh = _uniform_mesh(25)
+    kw = dict(kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+              coll_divs=3, coll_choices=[1, 2, 3],
+              kernel_singularity=p["kernel_singularity"], show_warnings=False)
+    y0 = function_solve_VIE_1(**kw)
+    y1 = function_solve_VIE_1(**kw, reuse_adaptive_blocks=True)
+    assert np.max(np.abs(y1 - y0)) < 1e-6
+    # accuracy vs the exact solution is limited by the uniform-mesh
+    # discretization of the nonsmooth sqrt(t) solution, identically in both
+    # modes: the flag must not change it measurably.
+    e0 = _collect_node_values(y0, mesh, 3, [1, 2, 3], p["y_exact"])
+    e1 = _collect_node_values(y1, mesh, 3, [1, 2, 3], p["y_exact"])
+    assert abs(e1 - e0) < 1e-6
+
+
+def test_reuse_adaptive_blocks_vie2_close_and_accurate():
+    p = as_callable(VIE2_SPEC_ABEL, coll_divs=2, coll_choices=[0, 1, 2])
+    mesh = _uniform_mesh(25)
+    kw = dict(kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2],
+              kernel_singularity=p["kernel_singularity"], show_warnings=False)
+    y0 = function_solve_VIE_2(**kw)
+    y1 = function_solve_VIE_2(**kw, reuse_adaptive_blocks=True)
+    assert np.max(np.abs(y1 - y0)) < 1e-6
+    e0 = _collect_node_values(y0, mesh, 2, [0, 1, 2], p["y_exact"])
+    e1 = _collect_node_values(y1, mesh, 2, [0, 1, 2], p["y_exact"])
+    assert abs(e1 - e0) < 1e-6
+
+
+def test_reuse_adaptive_blocks_vide_close_and_accurate():
+    p = as_callable(VIDE_SPEC_ABEL, coll_divs=2, coll_choices=[0, 1, 2])
+    mesh = _uniform_mesh(25)
+    kw = dict(kernel=p["kernel"], a=p["a"], g=p["g"],
+              soln_init_value=p["soln_init_value"], mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2],
+              kernel_singularity=p["kernel_singularity"], show_warnings=False)
+    y0 = function_solve_VIDE(**kw)
+    y1 = function_solve_VIDE(**kw, reuse_adaptive_blocks=True)
+    assert np.max(np.abs(y1 - y0)) < 1e-6
+    e0 = _collect_node_values(y0, mesh, 2, [0, 1, 2], p["y_exact"])
+    e1 = _collect_node_values(y1, mesh, 2, [0, 1, 2], p["y_exact"])
+    assert abs(e1 - e0) < 1e-6
+
+
+def test_reuse_adaptive_blocks_vector_close():
+    eye = np.eye(2)
+
+    def kernel(u):
+        return (1.0 / np.sqrt(u) if u > 0 else 0.0) * eye
+
+    def g(t):
+        v = np.sqrt(t) - 0.5 * np.pi * t
+        return np.array([v, v])
+
+    kw = dict(kernel=kernel, g=g, mesh_breakpoints=_uniform_mesh(20),
+              coll_divs=2, coll_choices=[0, 1, 2], kernel_singularity=0.0,
+              show_warnings=False)
+    y0 = function_solve_VIE_2(**kw)
+    y1 = function_solve_VIE_2(**kw, reuse_adaptive_blocks=True)
+    # quad_vec (no extrapolation) has larger genuine error on the singular
+    # blocks than scalar quad, so the on/off gap is larger here.
+    assert np.max(np.abs(y1 - y0)) < 1e-6
+
+
+def test_reuse_adaptive_blocks_noop_on_graded_mesh():
+    """Off the uniform-mesh fast path the flag must change nothing at all."""
+    p = as_callable(VIE2_SPEC_ABEL, coll_divs=2, coll_choices=[0, 1, 2])
+    mesh = optimal_graded_mesh(alpha=p["alpha"], T=1.0, M=20, order=3)
+    kw = dict(kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2],
+              kernel_singularity=p["kernel_singularity"], show_warnings=False)
+    assert np.array_equal(
+        function_solve_VIE_2(**kw),
+        function_solve_VIE_2(**kw, reuse_adaptive_blocks=True))
+
+
+def test_reuse_adaptive_blocks_noop_smooth_kernel():
+    """With no adaptive blocks (smooth kernel) the flag is a strict no-op."""
+    kw = dict(kernel=lambda u: np.exp(-u),
+              g=lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t)),
+              mesh_breakpoints=_uniform_mesh(20), coll_divs=2,
+              coll_choices=[0, 1, 2], show_warnings=False)
+    assert np.array_equal(
+        function_solve_VIE_2(**kw),
+        function_solve_VIE_2(**kw, reuse_adaptive_blocks=True))
