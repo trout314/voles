@@ -20,6 +20,18 @@ ninja -C dlang/build
 cp dlang/build/volterra_dlang.so src/voles/  # .dylib on macOS, .dll on Windows
 ```
 
+LAPACK is optional (enables the `dgesv_` path for vector solvers with runtime
+degree; a pure-D LU fallback covers the same functionality without it). meson
+detects it only via pkg-config, and Homebrew's `lapack` is keg-only, so on macOS:
+
+```bash
+brew install lapack
+export PKG_CONFIG_PATH=/opt/homebrew/opt/lapack/lib/pkgconfig
+meson setup dlang/build dlang   # should report "dependency lapack found: YES"
+```
+
+Verify with `python -c "from voles._dlang import have_lapack_d; print(have_lapack_d())"`.
+
 ### Install in development mode
 ```bash
 pip install -e ".[dev]"
