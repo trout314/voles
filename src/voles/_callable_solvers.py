@@ -270,6 +270,55 @@ def _detect_kernel_vectorized(kernel, sample_u: float, is_vector: bool, d: int) 
     return arr.shape == expected
 
 
+def _toeplitz_W_rows(widths: np.ndarray, kernel_singularity) -> bool:
+    """Return True when the weight tensor is Toeplitz in (n, l), so blocks of
+    equal lag are the same integral.
+
+    On a uniform mesh the convolution kernel makes every block integral
+    shift-invariant: substituting sigma = s - t_l,
+
+        W[n, i, l, k] = integral_0^h K((n - l + x_i) h - sigma) L_k(sigma/h) dsigma
+
+    depends on (n, l) only through the lag n - l. A *callable*
+    ``kernel_singularity`` is reserved for non-convolution kernels and disables
+    the fast path.
+
+    Reuse policy: only blocks evaluated by the deterministic fixed-order GL
+    path (and accepted by the two-order check) are copied across rows -- the
+    copy reproduces a per-row evaluation to rounding level (~1e-15). Blocks
+    that involve adaptive quadrature (declared-singular blocks and two-order
+    fallbacks) are recomputed for every row with exactly the same calls as the
+    general path, because adaptive results are reproducible only to the
+    quadrature tolerance (~1e-8), not to rounding.
+
+    The uniformity test is deliberately strict (1e-12 relative): meshes from
+    ``np.linspace``/``optimal_graded_mesh(alpha=0)`` pass at ~1e-16, and a mesh
+    that is merely close to uniform must take the general path.
+    """
+    if len(widths) < 2 or callable(kernel_singularity):
+        return False
+    w_mean = float(widths.mean())
+    return float(widths.max() - widths.min()) <= 1e-12 * w_mean
+
+
+def _fill_toeplitz_W(W: np.ndarray, M: int) -> None:
+    """Provisionally fill rows 0..M-2 of a Toeplitz weight tensor from the
+    integrated row M-1: blocks of equal lag are equal, so
+
+        W[n, :, l, ...]  =  W[M-1, :, l + (M-1-n), ...]   (lag n - l, l < n)
+        W[n, :, n, ...]  =  W[M-1, :, M-1, ...]           (diagonal, lag 0)
+
+    Entries with l > n stay zero. One contiguous slice copy per row. Entries
+    whose row-(M-1) values involved adaptive quadrature are overwritten by an
+    exact per-row recomputation afterwards (see _toeplitz_W_rows).
+    """
+    top = W[M - 1]
+    for n in range(M - 1):
+        if n:
+            W[n, :, :n] = top[:, M - 1 - n:M - 1]
+        W[n, :, n] = top[:, M - 1]
+
+
 def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                                 node_pos: np.ndarray,
                                 kernel_singularity,
@@ -401,19 +450,21 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         """Store the order-(ord+2) estimate v2 for every basis function, then fall
         back to adaptive quadrature for any that fails the two-order check. Accept
         basis k iff |v1 - v2| <= tol * max(1, |v2|); the negation (which also
-        catches NaN) triggers the fallback."""
+        catches NaN) triggers the fallback. Returns True iff no fallback ran."""
         W[n, i, l, :] = v2
         ok = np.abs(v1 - v2) <= smooth_check_tol * np.maximum(1.0, np.abs(v2))
         for k in np.nonzero(~ok)[0]:
             val, _err = get_quad()(make_integrand(tau, t_l, h_l, int(k)),
                                    a_int, b_int, limit=100)
             W[n, i, l, int(k)] = val
+        return bool(ok.all())
 
     def store_smooth_offdiag(n, l, smooth_is, taus, t_l, h_l, a_int, b_int, v1, v2):
         """Vectorized store + two-order check for a full off-diagonal block across
         all its smooth collocation nodes at once. v1, v2: (n_i, n_basis). The
         accepted estimate is written for every (node, basis) in one indexed assign;
-        only the rare failing pairs fall back to per-node adaptive quadrature."""
+        only the rare failing pairs fall back to per-node adaptive quadrature.
+        Returns the set of nodes (entries of smooth_is) that needed a fallback."""
         W[n, np.asarray(smooth_is), l, :] = v2
         ok = np.abs(v1 - v2) <= smooth_check_tol * np.maximum(1.0, np.abs(v2))
         bad_i, bad_k = np.nonzero(~ok)
@@ -421,8 +472,19 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             val, _err = get_quad()(make_integrand(taus[bi], t_l, h_l, bk),
                                    a_int, b_int, limit=100)
             W[n, smooth_is[bi], l, bk] = val
+        return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
-    for n in range(M):
+    def integrate_row(n, skip_off=None, skip_lag=None, skip_diag=None,
+                      record=False):
+        """Integrate row n of W, exactly as the general path does.
+
+        skip_off[i, m] / skip_diag[i] mark entries already holding a reusable
+        GL-clean value for lag m = n - l (see _toeplitz_W_rows); skip_lag[m]
+        is its all-nodes-clean summary, letting whole blocks be skipped
+        cheaply. With record=True, return boolean masks marking which entries
+        of this row were computed purely by the fixed-order GL path."""
+        ok_off = np.zeros((p, M), dtype=bool) if record else None
+        ok_diag = np.zeros(p, dtype=bool) if record else None
         t_n = mesh_breakpoints[n]
         h_n = widths[n]
         tau_n = t_n + node_pos * h_n
@@ -432,7 +494,14 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         # collocation nodes; only tau_i differs. Sample the kernel once across the
         # smooth nodes and combine via a single einsum, peeling off any node whose
         # declared singularity falls in this block to the adaptive path.
-        for l in range(n):
+        if skip_lag is None:
+            l_iter = range(n)
+        else:
+            # Only blocks whose lag still needs work (block order is irrelevant:
+            # blocks are independent).
+            l_iter = (n - (np.nonzero(~skip_lag[1:n + 1])[0] + 1)).tolist()
+        for l in l_iter:
+            lag = n - l
             t_l = mesh_breakpoints[l]
             t_lp1 = mesh_breakpoints[l + 1]
             h_l = widths[l]
@@ -440,6 +509,8 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
 
             smooth_is = []
             for i in range(p):
+                if skip_off is not None and skip_off[i, lag]:
+                    continue
                 interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
                 if use_adaptive:
                     adaptive_block(n, i, l, tau_n[i], t_l, h_l, a_int, b_int, interior_sing)
@@ -449,8 +520,11 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             if smooth_is:
                 taus = tau_n[smooth_is]
                 v1, v2 = smooth_offdiag_vals(a_int, b_int, taus)
-                store_smooth_offdiag(n, l, smooth_is, taus, t_l, h_l,
-                                     a_int, b_int, v1, v2)
+                bad = store_smooth_offdiag(n, l, smooth_is, taus, t_l, h_l,
+                                           a_int, b_int, v1, v2)
+                if record:
+                    for i in smooth_is:
+                        ok_off[i, lag] = i not in bad
 
         # Diagonal block l == n: the upper limit is tau_i, so it stays per-node.
         l = n
@@ -458,6 +532,8 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         h_l = widths[l]
         a_int = t_l
         for i in range(p):
+            if skip_diag is not None and skip_diag[i]:
+                continue
             tau = tau_n[i]
             b_int = tau
             if b_int <= a_int:
@@ -467,7 +543,26 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                 adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing)
                 continue
             v1, v2 = smooth_diag_vals(a_int, b_int, tau, i)
-            store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2)
+            clean = store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2)
+            if record and clean:
+                ok_diag[i] = True
+        return ok_off, ok_diag
+
+    # Uniform mesh + convolution kernel: W is Toeplitz in (n, l). Integrate the
+    # last row (which contains every lag), copy it band-diagonally, then
+    # recompute the non-GL-clean entries of every other row exactly as the
+    # general path would (see _toeplitz_W_rows for the reuse policy).
+    if _toeplitz_W_rows(widths, kernel_singularity):
+        ok_off, ok_diag = integrate_row(M - 1, record=True)
+        if M >= 2:
+            _fill_toeplitz_W(W, M)
+            skip_lag = ok_off.all(axis=0)
+            for n in range(M - 1):
+                integrate_row(n, skip_off=ok_off, skip_lag=skip_lag,
+                              skip_diag=ok_diag)
+    else:
+        for n in range(M):
+            integrate_row(n)
 
     if not np.isfinite(W).all():
         raise ValueError(
@@ -615,20 +710,24 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         """Store the order-(ord+2) estimate v2 for every basis function, then
         fall back to adaptive quadrature for any that fails the two-order check.
         Accept basis k iff max|v1 - v2| <= tol * max(1, max|v2|) over the (d, d)
-        entries; the negation (which also catches NaN) triggers the fallback."""
+        entries; the negation (which also catches NaN) triggers the fallback.
+        Returns True iff no fallback ran."""
         W[n, i, l, :, :, :] = v2
         err = np.max(np.abs(v1 - v2), axis=(1, 2))  # (n_basis,)
         ref = np.maximum(1.0, np.max(np.abs(v2), axis=(1, 2)))
-        for k in np.nonzero(~(err <= smooth_check_tol * ref))[0]:
+        ok = err <= smooth_check_tol * ref
+        for k in np.nonzero(~ok)[0]:
             val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, int(k)),
                                        a_int, b_int, limit=100)
             W[n, i, l, int(k), :, :] = val
+        return bool(ok.all())
 
     def store_smooth_offdiag(n, l, smooth_is, taus, t_l, h_l, a_int, b_int, v1, v2):
         """Vectorized store + two-order check for a full off-diagonal block across
         all its smooth collocation nodes at once. v1, v2: (n_i, n_basis, d, d). The
         accepted estimate is written for every (node, basis) in one indexed assign;
-        only the rare failing pairs fall back to per-node adaptive quadrature."""
+        only the rare failing pairs fall back to per-node adaptive quadrature.
+        Returns the set of nodes (entries of smooth_is) that needed a fallback."""
         W[n, np.asarray(smooth_is), l, :, :, :] = v2
         err = np.max(np.abs(v1 - v2), axis=(2, 3))  # (n_i, n_basis)
         ref = np.maximum(1.0, np.max(np.abs(v2), axis=(2, 3)))
@@ -637,8 +736,14 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             val, _err = get_quad_vec()(make_integrand(taus[bi], t_l, h_l, bk),
                                        a_int, b_int, limit=100)
             W[n, smooth_is[bi], l, bk, :, :] = val
+        return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
-    for n in range(M):
+    def integrate_row(n, skip_off=None, skip_lag=None, skip_diag=None,
+                      record=False):
+        """Integrate row n of W, exactly as the general path does; see the
+        scalar builder's integrate_row for the skip/record contract."""
+        ok_off = np.zeros((p, M), dtype=bool) if record else None
+        ok_diag = np.zeros(p, dtype=bool) if record else None
         t_n = mesh_breakpoints[n]
         h_n = widths[n]
         tau_n = t_n + node_pos * h_n
@@ -648,7 +753,12 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         # collocation nodes; only tau_i differs. Sample the kernel once across the
         # smooth nodes and combine via a single einsum, peeling off any node whose
         # declared singularity falls in this block to the adaptive path.
-        for l in range(n):
+        if skip_lag is None:
+            l_iter = range(n)
+        else:
+            l_iter = (n - (np.nonzero(~skip_lag[1:n + 1])[0] + 1)).tolist()
+        for l in l_iter:
+            lag = n - l
             t_l = mesh_breakpoints[l]
             t_lp1 = mesh_breakpoints[l + 1]
             h_l = widths[l]
@@ -656,6 +766,8 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
 
             smooth_is = []
             for i in range(p):
+                if skip_off is not None and skip_off[i, lag]:
+                    continue
                 interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
                 if use_adaptive:
                     adaptive_block(n, i, l, tau_n[i], t_l, h_l, a_int, b_int, interior_sing)
@@ -665,8 +777,11 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             if smooth_is:
                 taus = tau_n[smooth_is]
                 v1, v2 = smooth_offdiag_vals(a_int, b_int, taus)
-                store_smooth_offdiag(n, l, smooth_is, taus, t_l, h_l,
-                                     a_int, b_int, v1, v2)
+                bad = store_smooth_offdiag(n, l, smooth_is, taus, t_l, h_l,
+                                           a_int, b_int, v1, v2)
+                if record:
+                    for i in smooth_is:
+                        ok_off[i, lag] = i not in bad
 
         # Diagonal block l == n: the upper limit is tau_i, so it stays per-node.
         l = n
@@ -674,6 +789,8 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         h_l = widths[l]
         a_int = t_l
         for i in range(p):
+            if skip_diag is not None and skip_diag[i]:
+                continue
             tau = tau_n[i]
             b_int = tau
             if b_int <= a_int:
@@ -683,7 +800,24 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing)
                 continue
             v1, v2 = smooth_diag_vals(a_int, b_int, tau, i)
-            store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2)
+            clean = store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2)
+            if record and clean:
+                ok_diag[i] = True
+        return ok_off, ok_diag
+
+    # Uniform mesh + convolution kernel: same Toeplitz reuse policy as the
+    # scalar builder (see _toeplitz_W_rows).
+    if _toeplitz_W_rows(widths, kernel_singularity):
+        ok_off, ok_diag = integrate_row(M - 1, record=True)
+        if M >= 2:
+            _fill_toeplitz_W(W, M)
+            skip_lag = ok_off.all(axis=0)
+            for n in range(M - 1):
+                integrate_row(n, skip_off=ok_off, skip_lag=skip_lag,
+                              skip_diag=ok_diag)
+    else:
+        for n in range(M):
+            integrate_row(n)
 
     if not np.isfinite(W).all():
         raise ValueError(

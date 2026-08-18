@@ -7,6 +7,7 @@ import std.range : array, iota, enumerate;
 import std.format : format;
 
 import utility : subsetsOfSize;
+import toeplitz_history : ToeplitzHistory, ToeplitzHistoryRT;
 
 // ---------------------------------------------------------------------------
 // Linear solver — runtime dim (used for d > max_d_compile)
@@ -1438,12 +1439,26 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
             foreach (j; 0 .. dm)
                 coef_matrix[i][j] *= dt;
 
+        // Fast history accumulation: on the uniform sample grid the BNL block
+        // depends on (n, ell) only through the lag (see toeplitz_history).
+        ToeplitzHistory!(dm, dm) hist;
+        hist.initialize(mesh_divs);
+        foreach (lag; 1 .. mesh_divs)
+        {
+            auto B = BNL_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
+            immutable size_t base = cast(size_t) lag * dm * dm;
+            foreach (i; 0 .. dm)
+                foreach (j; 0 .. dm)
+                    hist.lagB[base + i * dm + j] = dt * B[i][j];
+        }
+
         foreach (n; 0 .. mesh_divs)
         {
             auto rhs      = g_vec_ct!(coll_divs, coll_choices, d)(n, g_values);
-            auto G_vector = G_vec_ct!(coll_divs, coll_choices, d)(n, solution_U, kernel_values, dt);
+            auto G_vector = hist.G(n);
             rhs[] -= G_vector[];
             solution_U[n] = lin_solve!(dm)(coef_matrix, rhs);
+            hist.push(solution_U[n]);
         }
     }
     else
@@ -1468,10 +1483,22 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
 
         auto rho_m = rho_mat_ct!(coll_divs, coll_choices, d)(kernel_values);
 
+        // Same lag-block fast history as the discontinuous branch.
+        ToeplitzHistory!(dm, dm) hist;
+        hist.initialize(mesh_divs);
+        foreach (lag; 1 .. mesh_divs)
+        {
+            auto B = BNL_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
+            immutable size_t base = cast(size_t) lag * dm * dm;
+            foreach (i; 0 .. dm)
+                foreach (j; 0 .. dm)
+                    hist.lagB[base + i * dm + j] = dt * B[i][j];
+        }
+
         foreach (n; 0 .. mesh_divs)
         {
             auto g_vec_   = g_vec_ct!(coll_divs, coll_choices, d)(n, g_values);
-            auto G_vector = G_vec_ct!(coll_divs, coll_choices, d)(n, solution_U, kernel_values, dt);
+            auto G_vector = hist.G(n);
 
             double[dm] rhs;
             foreach (ri; 0 .. dm)
@@ -1482,6 +1509,7 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
             }
 
             solution_U[n] = lin_solve!(dm)(coef_matrix, rhs);
+            hist.push(solution_U[n]);
 
             // Propagate boundary value to next mesh point
             foreach (r; 0 .. d)
@@ -1588,18 +1616,30 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     foreach (i; 0 .. dm * dm)
         coef_orig[i] *= dt;
 
+    // Fast lag-block history accumulation (see toeplitz_history), runtime-d.
+    ToeplitzHistoryRT hist;
+    hist.initialize(mesh_divs, dm, dm);
+    foreach (lag; 1 .. mesh_divs)
+    {
+        BNL_vec_rt!coll_info(lag, 0, kernel_values, d, BNL_buf);
+        immutable size_t base = cast(size_t) lag * dm * dm;
+        foreach (i; 0 .. dm * dm)
+            hist.lagB[base + i] = dt * BNL_buf[i];
+    }
+
     if (!force_continuous)
     {
         foreach (n; 0 .. mesh_divs)
         {
             g_vec_rt!coll_info(n, g_values, d, rhs);
-            G_vec_rt!coll_info(n, solution_U_flat, kernel_values, d, dt, G_buf, BNL_buf);
+            auto G_hist = hist.G(n);
             foreach (i; 0 .. dm)
-                rhs[i] -= G_buf[i];
+                rhs[i] -= G_hist[i];
             coef_work[] = coef_orig[];
             if (!lin_solve_lapack(coef_work, rhs, dm, ipiv))
                 return false;
             solution_U_flat[n*dm .. (n+1)*dm] = rhs[];
+            hist.push(solution_U_flat[n*dm .. (n+1)*dm]);
         }
     }
     else
@@ -1619,10 +1659,10 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
         foreach (n; 0 .. mesh_divs)
         {
             g_vec_rt!coll_info(n, g_values, d, rhs);
-            G_vec_rt!coll_info(n, solution_U_flat, kernel_values, d, dt, G_buf, BNL_buf);
+            auto G_hist = hist.G(n);
             foreach (ri; 0 .. dm)
             {
-                rhs[ri] -= G_buf[ri];
+                rhs[ri] -= G_hist[ri];
                 foreach (s; 0 .. d)
                     rhs[ri] += dt * rho_buf[ri * d + s] * boundary_flat[n*d + s];
             }
@@ -1630,6 +1670,7 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
             if (!lin_solve_lapack(coef_work, rhs, dm, ipiv))
                 return false;
             solution_U_flat[n*dm .. (n+1)*dm] = rhs[];
+            hist.push(solution_U_flat[n*dm .. (n+1)*dm]);
 
             foreach (r; 0 .. d)
             {
@@ -1743,12 +1784,25 @@ void solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
             coef_matrix[i][j] -= dt * BN_m[i][j];
     }
 
+    // Fast lag-block history accumulation (see toeplitz_history).
+    ToeplitzHistory!(dm, dm) hist;
+    hist.initialize(mesh_divs);
+    foreach (lag; 1 .. mesh_divs)
+    {
+        auto B = BNL_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
+        immutable size_t base = cast(size_t) lag * dm * dm;
+        foreach (i; 0 .. dm)
+            foreach (j; 0 .. dm)
+                hist.lagB[base + i * dm + j] = dt * B[i][j];
+    }
+
     foreach (n; 0 .. mesh_divs)
     {
         auto rhs = g_vec_ct!(coll_divs, coll_choices, d)(n, g_values);
-        auto G_v = G_vec_ct!(coll_divs, coll_choices, d)(n, solution_U, kernel_values, dt);
+        auto G_v = hist.G(n);
         rhs[] += G_v[];
         solution_U[n] = lin_solve!(dm)(coef_matrix, rhs);
+        hist.push(solution_U[n]);
     }
 
     // Write poly_coefs: layout (mesh_divs, m+1, d)
@@ -1822,16 +1876,28 @@ bool solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     foreach (row; 0 .. dm)
         coef_orig[col * dm + row] = (row == col ? 1.0 : 0.0) - dt * BN_buf[col * dm + row];
 
+    // Fast lag-block history accumulation (see toeplitz_history), runtime-d.
+    ToeplitzHistoryRT hist;
+    hist.initialize(mesh_divs, dm, dm);
+    foreach (lag; 1 .. mesh_divs)
+    {
+        BNL_vec_rt!coll_info(lag, 0, kernel_values, d, BNL_buf);
+        immutable size_t base = cast(size_t) lag * dm * dm;
+        foreach (i; 0 .. dm * dm)
+            hist.lagB[base + i] = dt * BNL_buf[i];
+    }
+
     foreach (n; 0 .. mesh_divs)
     {
         g_vec_rt!coll_info(n, g_values, d, rhs);
-        G_vec_rt!coll_info(n, solution_U_flat, kernel_values, d, dt, G_buf, BNL_buf);
+        auto G_hist = hist.G(n);
         foreach (i; 0 .. dm)
-            rhs[i] += G_buf[i];
+            rhs[i] += G_hist[i];
         coef_work[] = coef_orig[];
         if (!lin_solve_lapack(coef_work, rhs, dm, ipiv))
             return false;
         solution_U_flat[n*dm .. (n+1)*dm] = rhs[];
+        hist.push(solution_U_flat[n*dm .. (n+1)*dm]);
     }
 
     out_soln[] = 0;
@@ -1913,13 +1979,31 @@ void solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
     // CN is constant across steps
     auto CN_m = CN_vec_ct!(coll_divs, coll_choices, d)(kernel_values);
 
+    // Fast history accumulation with an augmented source [Y_ell; boundary_ell]:
+    // G_VIDE[n] = sum_ell dt^2 * CNL(lag) * Y_ell + dt * kappa_nl(lag) * bv_ell,
+    // and both CNL and kappa_nl are lag-only on the uniform sample grid.
+    ToeplitzHistory!(dm, dm + d) hist;
+    hist.initialize(mesh_divs);
+    foreach (lag; 1 .. mesh_divs)
+    {
+        auto CNL_m   = CNL_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
+        auto kappa_m = kappa_nl_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
+        immutable size_t base = cast(size_t) lag * dm * (dm + d);
+        foreach (ri; 0 .. dm)
+        {
+            foreach (sj; 0 .. dm)
+                hist.lagB[base + ri * (dm + d) + sj] = dt * dt * CNL_m[ri][sj];
+            foreach (s; 0 .. d)
+                hist.lagB[base + ri * (dm + d) + dm + s] = dt * kappa_m[ri][s];
+        }
+    }
+
     foreach (n; 0 .. mesh_divs)
     {
         auto AN_m      = AN_vec_ct!(coll_divs, coll_choices, d)(n, a_values);
         auto kappa_n_m = kappa_n_vec_ct!(coll_divs, coll_choices, d)(
                              n, kernel_values, a_values, dt);
-        auto G_v       = G_VIDE_vec_ct!(coll_divs, coll_choices, d)(
-                             n, solution_Y, boundary_vals, kernel_values, dt);
+        auto G_v       = hist.G(n);
         auto g_v       = g_vec_ct!(coll_divs, coll_choices, d)(n, g_values);
 
         double[dm] rhs;
@@ -1947,6 +2031,13 @@ void solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
             foreach (j; 0 .. m)
                 boundary_vals[n+1][r] += dt * solution_Y[n][r*m + j] * w[j];
         }
+
+        double[dm + d] src;
+        foreach (sj; 0 .. dm)
+            src[sj] = solution_Y[n][sj];
+        foreach (r; 0 .. d)
+            src[dm + r] = boundary_vals[n][r];
+        hist.push(src);
     }
 
     // Write poly_coefs: layout (mesh_divs, m+1, d)
@@ -2030,6 +2121,27 @@ bool solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
 
     CN_vec_rt!coll_info(kernel_values, d, CN_buf);
 
+    // Fast history accumulation with an augmented source [Y_ell; boundary_ell]
+    // (see the compile-time VIDE driver), runtime-d.
+    ToeplitzHistoryRT hist;
+    hist.initialize(mesh_divs, dm, dm + d);
+    foreach (lag; 1 .. mesh_divs)
+    {
+        CNL_vec_rt!coll_info(lag, 0, kernel_values, d, CNL_buf);
+        kappa_nl_vec_rt!coll_info(lag, 0, kernel_values, d, kappa_nl_buf);
+        immutable size_t base = cast(size_t) lag * dm * (dm + d);
+        foreach (ri; 0 .. dm)
+        {
+            foreach (sj; 0 .. dm)
+                hist.lagB[base + cast(size_t) ri * (dm + d) + sj]
+                    = dt * dt * CNL_buf[ri * dm + sj];
+            foreach (s; 0 .. d)
+                hist.lagB[base + cast(size_t) ri * (dm + d) + dm + s]
+                    = dt * kappa_nl_buf[ri * d + s];
+        }
+    }
+    double[] src_aug = new double[dm + d];
+
     foreach (n; 0 .. mesh_divs)
     {
         AN_vec_rt!coll_info(n, a_values, d, AN_buf);
@@ -2040,12 +2152,11 @@ bool solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
                 - dt * dt * CN_buf[col * dm + row];
 
         g_vec_rt!coll_info(n, g_values, d, rhs);
-        G_VIDE_vec_rt!coll_info(n, solution_Y_flat, boundary_flat, kernel_values, d, dt,
-                                G_buf, kappa_nl_buf, CNL_buf);
+        auto G_hist = hist.G(n);
         kappa_n_vec_rt!coll_info(n, kernel_values, a_values, d, dt, kappa_n_buf);
         foreach (ri; 0 .. dm)
         {
-            rhs[ri] += G_buf[ri];
+            rhs[ri] += G_hist[ri];
             foreach (s; 0 .. d)
                 rhs[ri] += boundary_flat[n*d + s] * kappa_n_buf[ri * d + s];
         }
@@ -2061,6 +2172,10 @@ bool solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
                 boundary_flat[(n+1)*d + r] +=
                     dt * solution_Y_flat[n*dm + r*m + j] * w[j];
         }
+
+        src_aug[0 .. dm] = solution_Y_flat[n*dm .. (n+1)*dm];
+        src_aug[dm .. dm + d] = boundary_flat[n*d .. (n+1)*d];
+        hist.push(src_aug);
     }
 
     out_soln[] = 0;
@@ -2140,13 +2255,26 @@ void solve_VIE_2_impl(int coll_divs, int[] coll_choices)(
         }
     }
 
+    // Fast lag-block history accumulation (see toeplitz_history).
+    ToeplitzHistory!(num_c_params, num_c_params) hist;
+    hist.initialize(mesh_divs);
+    foreach (lag; 1 .. mesh_divs)
+    {
+        auto B = BNL!coll_info(lag, 0, kernel_values);
+        immutable size_t base = cast(size_t) lag * num_c_params * num_c_params;
+        foreach (i; 0 .. num_c_params)
+            foreach (j; 0 .. num_c_params)
+                hist.lagB[base + i * num_c_params + j] = dt * B[i][j];
+    }
+
     foreach (n; 0 .. mesh_divs)
     {
         double[num_c_params] rhs_vector;
         auto g_vector = g!coll_info(n, g_values);
-        auto G_vector = G!coll_info(n, solution_U, kernel_values, dt);
+        auto G_vector = hist.G(n);
         rhs_vector[] = g_vector[] + G_vector[];
         solution_U[n] = lin_solve(coef_matrix, rhs_vector);
+        hist.push(solution_U[n]);
     }
 
     out_soln[] = 0;
@@ -2202,11 +2330,28 @@ void solve_VIDE_impl(int coll_divs, int[] coll_choices)(
 
     auto CN_matrix = CN!coll_info(kernel_values);
 
+    // Fast history accumulation with an augmented source [Y_ell; boundary_ell]
+    // (see the vector VIDE driver above).
+    ToeplitzHistory!(num_c_params, num_c_params + 1) hist;
+    hist.initialize(mesh_divs);
+    foreach (lag; 1 .. mesh_divs)
+    {
+        auto CNL_m   = CNL!coll_info(lag, 0, kernel_values);
+        auto kappa_v = kappa_nl!coll_info(lag, 0, kernel_values);
+        immutable size_t base = cast(size_t) lag * num_c_params * (num_c_params + 1);
+        foreach (i; 0 .. num_c_params)
+        {
+            foreach (j; 0 .. num_c_params)
+                hist.lagB[base + i * (num_c_params + 1) + j] = dt * dt * CNL_m[i][j];
+            hist.lagB[base + i * (num_c_params + 1) + num_c_params] = dt * kappa_v[i];
+        }
+    }
+
     foreach (n; 0 .. mesh_divs)
     {
         auto An_matrix = An!coll_info(n, a_values);
         auto kappa_n_vector = kappa_n!coll_info(n, kernel_values, a_values, dt);
-        auto G_VIDE_vector = G_VIDE!coll_info(n, solution_Y, boundary_values, kernel_values, dt);
+        auto G_VIDE_vector = hist.G(n);
         auto g_vector = g!coll_info(n, g_values);
 
         double[num_c_params] rhs_vector;
@@ -2223,6 +2368,12 @@ void solve_VIDE_impl(int coll_divs, int[] coll_choices)(
         }
         solution_Y[n] = lin_solve(coef_matrix, rhs_vector);
         boundary_values[n + 1] = poly_piece_VIDE_f!coll_info(double(1.0), n, solution_Y, boundary_values[n], dt);
+
+        double[num_c_params + 1] src;
+        foreach (j; 0 .. num_c_params)
+            src[j] = solution_Y[n][j];
+        src[num_c_params] = boundary_values[n];
+        hist.push(src);
     }
 
     out_soln[] = 0;
