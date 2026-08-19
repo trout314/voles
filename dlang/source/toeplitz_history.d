@@ -134,6 +134,26 @@ struct ToeplitzHistoryRT
         return Gacc[base .. base + tdim];
     }
 
+    // Borrowed (tdim*sdim)-length slice of the lag-`lag` block, laid out
+    // row-major [a][b]. Drivers fill the lag table through this or lagRow
+    // instead of hand-computing flat offsets into lagB, so the layout the
+    // struct's own G()/push()/merge code assumes is defined in one place
+    // and a wrong index bounds-errors on the block instead of silently
+    // landing in a neighboring lag.
+    double[] lagBlock(int lag)
+    {
+        immutable size_t bs = cast(size_t) tdim * sdim;
+        immutable size_t base = cast(size_t) lag * bs;
+        return lagB[base .. base + bs];
+    }
+
+    // Borrowed sdim-length row `a` of the lag-`lag` block.
+    double[] lagRow(int lag, int a)
+    {
+        immutable size_t base = (cast(size_t) lag * tdim + a) * sdim;
+        return lagB[base .. base + sdim];
+    }
+
     // Record the solved source vector (length sdim) for interval nPushed and
     // propagate its block's contribution forward when a power-of-two boundary
     // completes.

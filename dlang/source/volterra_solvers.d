@@ -561,28 +561,6 @@ auto kappa_nl(int coll_divs, int[] coll_choices)(
     return returned_vector;
 }
 
-auto G_VIDE(int coll_divs, int[] coll_choices)(
-    int mesh_index_n,
-    double[coll_choices.length][] current_solution,
-    double[] boundary_values,
-    double[] kernel_data,
-    double dt)
-{
-    enum int num_c_params = coll_choices.length;
-    alias coll_info = AliasSeq!(coll_divs, coll_choices);
-
-    double[num_c_params] returned_vector = 0;
-    foreach (ell; 0 .. mesh_index_n)
-    {
-        auto CNL_matrix = CNL!coll_info(mesh_index_n, ell, kernel_data);
-        auto kappa_nl_vector = kappa_nl!coll_info(mesh_index_n, ell, kernel_data);
-        auto temp = matrix_vec_multiply(CNL_matrix, current_solution[ell]);
-        returned_vector[] += dt * boundary_values[ell] * kappa_nl_vector[];
-        returned_vector[] += dt^^2 * temp[];
-    }
-    return returned_vector;
-}
-
 // ---------------------------------------------------------------------------
 // VIE-2 collocation helpers (shared with old scalar VIE-1 path; kept for VIE-2)
 // ---------------------------------------------------------------------------
@@ -654,29 +632,6 @@ auto BN(int coll_divs, int[] coll_choices)(
         }
     }
     return returned_matrix;
-}
-
-auto G(int coll_divs, int[] coll_choices)(
-    int mesh_index_n,
-    double[coll_choices.length][] current_solution,
-    double[] kernel_data,
-    double dt)
-{
-    enum int num_c_params = coll_choices.length;
-    alias coll_info = AliasSeq!(coll_divs, coll_choices);
-
-    double[num_c_params][num_c_params] BNL_matrix;
-    double[num_c_params] returned_vector = 0;
-
-    double[num_c_params] curr_soln;
-
-    foreach (ell; 0 .. mesh_index_n)
-    {
-        curr_soln = current_solution[ell];
-        BNL_matrix = BNL!coll_info(mesh_index_n, ell, kernel_data);
-        returned_vector[] += dt * matrix_vec_multiply(BNL_matrix, curr_soln)[];
-    }
-    return returned_vector;
 }
 
 auto g(int coll_divs, int[] coll_choices)(
@@ -866,26 +821,6 @@ auto BNL_vec_ct(int coll_divs, int[] coll_choices, int d)(
     return mat;
 }
 
-// G_vec_ct: accumulated history vector for mesh interval n, length dm.
-auto G_vec_ct(int coll_divs, int[] coll_choices, int d)(
-    int n,
-    double[d * coll_choices.length][] current_solution,
-    double[] kernel_data,
-    double dt)
-{
-    enum int m  = coll_choices.length;
-    enum int dm = d * m;
-
-    double[dm] vec = 0;
-    foreach (ell; 0 .. n)
-    {
-        auto BNL_mat  = BNL_vec_ct!(coll_divs, coll_choices, d)(n, ell, kernel_data);
-        double[dm] cs = current_solution[ell];
-        vec[] += dt * matrix_vec_multiply(BNL_mat, cs)[];
-    }
-    return vec;
-}
-
 // g_vec_ct: RHS vector sampled at collocation points, length dm.
 auto g_vec_ct(int coll_divs, int[] coll_choices, int d)(
     int mesh_index, double[] g_data)
@@ -1004,27 +939,6 @@ void BNL_vec_rt(int coll_divs, int[] coll_choices)(
         int col = s*m + j;
         out_rowmaj[row * dm + col] =
             weights[j] * kernel_data[(mesh_pt_idx + sub_idx) * d*d + r*d + s];
-    }
-}
-
-// G_vec_rt: accumulated history vector, written into out_G.
-// solution_U_flat: flat array, interval ell occupies [ell*dm .. (ell+1)*dm].
-// BNL_buf: scratch row-major buffer of length dm*dm.
-void G_vec_rt(int coll_divs, int[] coll_choices)(
-    int n, double[] solution_U_flat, double[] kernel_data,
-    int d, double dt, double[] out_G, double[] BNL_buf)
-{
-    enum int m = coll_choices.length;
-    alias coll_info = AliasSeq!(coll_divs, coll_choices);
-    int dm = d * m;
-    out_G[] = 0;
-
-    foreach (ell; 0 .. n)
-    {
-        BNL_vec_rt!coll_info(n, ell, kernel_data, d, BNL_buf);
-        foreach (i; 0 .. dm)
-            foreach (j; 0 .. dm)
-                out_G[i] += dt * BNL_buf[i * dm + j] * solution_U_flat[ell * dm + j];
     }
 }
 
@@ -1213,34 +1127,6 @@ auto CNL_vec_ct(int coll_divs, int[] coll_choices, int d)(
     return mat;
 }
 
-// G_VIDE_vec_ct: accumulated history for VIDE, length dm.
-auto G_VIDE_vec_ct(int coll_divs, int[] coll_choices, int d)(
-    int n,
-    double[d * coll_choices.length][] solution_Y,
-    double[d][] boundary_vals,
-    double[] kernel_data,
-    double dt)
-{
-    enum int m  = coll_choices.length;
-    enum int dm = d * m;
-
-    double[dm] vec = 0;
-    foreach (ell; 0 .. n)
-    {
-        auto kappa_nl_m = kappa_nl_vec_ct!(coll_divs, coll_choices, d)(n, ell, kernel_data);
-        auto CNL_m      = CNL_vec_ct!(coll_divs, coll_choices, d)(n, ell, kernel_data);
-        double[dm] ys   = solution_Y[ell];
-        foreach (ri; 0 .. dm)
-        {
-            foreach (s; 0 .. d)
-                vec[ri] += dt * boundary_vals[ell][s] * kappa_nl_m[ri][s];
-            foreach (sj; 0 .. dm)
-                vec[ri] += dt * dt * CNL_m[ri][sj] * ys[sj];
-        }
-    }
-    return vec;
-}
-
 // ---------------------------------------------------------------------------
 // VIDE vector helpers — runtime d (LAPACK path)
 // All matrices stored flat. CN_vec_rt and AN_vec_rt use column-major (LAPACK).
@@ -1375,33 +1261,6 @@ void CNL_vec_rt(int coll_divs, int[] coll_choices)(
     }
 }
 
-// G_VIDE_vec_rt: accumulates VIDE history into out_G.
-// solution_Y_flat: interval ell occupies [ell*dm .. (ell+1)*dm].
-// boundary_flat:   interval ell occupies [ell*d  .. (ell+1)*d].
-// kappa_nl_buf: scratch row-major dm*d.  CNL_buf: scratch row-major dm*dm.
-void G_VIDE_vec_rt(int coll_divs, int[] coll_choices)(
-    int n, double[] solution_Y_flat, double[] boundary_flat,
-    double[] kernel_data, int d, double dt,
-    double[] out_G, double[] kappa_nl_buf, double[] CNL_buf)
-{
-    enum int m = coll_choices.length;
-    alias coll_info = AliasSeq!(coll_divs, coll_choices);
-    int dm = d * m;
-    out_G[] = 0;
-    foreach (ell; 0 .. n)
-    {
-        kappa_nl_vec_rt!coll_info(n, ell, kernel_data, d, kappa_nl_buf);
-        CNL_vec_rt!coll_info(n, ell, kernel_data, d, CNL_buf);
-        foreach (ri; 0 .. dm)
-        {
-            foreach (s; 0 .. d)
-                out_G[ri] += dt * boundary_flat[ell*d + s] * kappa_nl_buf[ri * d + s];
-            foreach (sj; 0 .. dm)
-                out_G[ri] += dt * dt * CNL_buf[ri * dm + sj] * solution_Y_flat[ell * dm + sj];
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // VIE-1 solver implementation — compile-time d
 // ---------------------------------------------------------------------------
@@ -1432,25 +1291,28 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
     // Declared here so it's in scope for poly/evaluation code below.
     double[d][] boundary_vals;
 
+    // Fast history accumulation: on the uniform sample grid the BNL block
+    // depends on (n, ell) only through the lag (see toeplitz_history). The
+    // same lag table serves both branches below.
+    ToeplitzHistory!(dm, dm) hist;
+    hist.initialize(mesh_divs);
+    foreach (lag; 1 .. mesh_divs)
+    {
+        auto B = BNL_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
+        foreach (i; 0 .. dm)
+        {
+            auto row = hist.lagRow(lag, i);
+            foreach (j; 0 .. dm)
+                row[j] = dt * B[i][j];
+        }
+    }
+
     if (!force_continuous)
     {
         auto coef_matrix = BN_vec_ct!(coll_divs, coll_choices, d, false)(kernel_values);
         foreach (i; 0 .. dm)
             foreach (j; 0 .. dm)
                 coef_matrix[i][j] *= dt;
-
-        // Fast history accumulation: on the uniform sample grid the BNL block
-        // depends on (n, ell) only through the lag (see toeplitz_history).
-        ToeplitzHistory!(dm, dm) hist;
-        hist.initialize(mesh_divs);
-        foreach (lag; 1 .. mesh_divs)
-        {
-            auto B = BNL_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
-            immutable size_t base = cast(size_t) lag * dm * dm;
-            foreach (i; 0 .. dm)
-                foreach (j; 0 .. dm)
-                    hist.lagB[base + i * dm + j] = dt * B[i][j];
-        }
 
         foreach (n; 0 .. mesh_divs)
         {
@@ -1482,18 +1344,6 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
                 coef_matrix[i][j] *= dt;
 
         auto rho_m = rho_mat_ct!(coll_divs, coll_choices, d)(kernel_values);
-
-        // Same lag-block fast history as the discontinuous branch.
-        ToeplitzHistory!(dm, dm) hist;
-        hist.initialize(mesh_divs);
-        foreach (lag; 1 .. mesh_divs)
-        {
-            auto B = BNL_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
-            immutable size_t base = cast(size_t) lag * dm * dm;
-            foreach (i; 0 .. dm)
-                foreach (j; 0 .. dm)
-                    hist.lagB[base + i * dm + j] = dt * B[i][j];
-        }
 
         foreach (n; 0 .. mesh_divs)
         {
@@ -1609,7 +1459,6 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     double[] coef_work = new double[dm * dm];
     double[] BNL_buf   = new double[dm * dm];
     double[] rhs       = new double[dm];
-    double[] G_buf     = new double[dm];
     int[]    ipiv      = new int[dm];
 
     BN_vec_rt!coll_info(kernel_values, d, force_continuous, coef_orig);
@@ -1622,9 +1471,9 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     foreach (lag; 1 .. mesh_divs)
     {
         BNL_vec_rt!coll_info(lag, 0, kernel_values, d, BNL_buf);
-        immutable size_t base = cast(size_t) lag * dm * dm;
+        auto blk = hist.lagBlock(lag);
         foreach (i; 0 .. dm * dm)
-            hist.lagB[base + i] = dt * BNL_buf[i];
+            blk[i] = dt * BNL_buf[i];
     }
 
     if (!force_continuous)
@@ -1750,7 +1599,7 @@ bool dispatch_VIE_1_vec(int coll_divs, int[] coll_choices)(
 
 // ---------------------------------------------------------------------------
 // VIE-2 vector solver — compile-time d
-// Reuses BN_vec_ct, BNL_vec_ct, G_vec_ct, g_vec_ct from VIE-1 helpers.
+// Reuses BN_vec_ct, BNL_vec_ct, g_vec_ct from VIE-1 helpers.
 // ---------------------------------------------------------------------------
 
 void solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
@@ -1790,10 +1639,12 @@ void solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
     foreach (lag; 1 .. mesh_divs)
     {
         auto B = BNL_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
-        immutable size_t base = cast(size_t) lag * dm * dm;
         foreach (i; 0 .. dm)
+        {
+            auto row = hist.lagRow(lag, i);
             foreach (j; 0 .. dm)
-                hist.lagB[base + i * dm + j] = dt * B[i][j];
+                row[j] = dt * B[i][j];
+        }
     }
 
     foreach (n; 0 .. mesh_divs)
@@ -1868,7 +1719,6 @@ bool solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     double[] coef_work = new double[dm * dm];
     double[] BNL_buf   = new double[dm * dm];
     double[] rhs       = new double[dm];
-    double[] G_buf     = new double[dm];
     int[]    ipiv      = new int[dm];
 
     BN_vec_rt!coll_info(kernel_values, d, false, BN_buf);
@@ -1882,9 +1732,9 @@ bool solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     foreach (lag; 1 .. mesh_divs)
     {
         BNL_vec_rt!coll_info(lag, 0, kernel_values, d, BNL_buf);
-        immutable size_t base = cast(size_t) lag * dm * dm;
+        auto blk = hist.lagBlock(lag);
         foreach (i; 0 .. dm * dm)
-            hist.lagB[base + i] = dt * BNL_buf[i];
+            blk[i] = dt * BNL_buf[i];
     }
 
     foreach (n; 0 .. mesh_divs)
@@ -1988,13 +1838,13 @@ void solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
     {
         auto CNL_m   = CNL_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
         auto kappa_m = kappa_nl_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
-        immutable size_t base = cast(size_t) lag * dm * (dm + d);
         foreach (ri; 0 .. dm)
         {
+            auto row = hist.lagRow(lag, ri);
             foreach (sj; 0 .. dm)
-                hist.lagB[base + ri * (dm + d) + sj] = dt * dt * CNL_m[ri][sj];
+                row[sj] = dt * dt * CNL_m[ri][sj];
             foreach (s; 0 .. d)
-                hist.lagB[base + ri * (dm + d) + dm + s] = dt * kappa_m[ri][s];
+                row[dm + s] = dt * kappa_m[ri][s];
         }
     }
 
@@ -2116,7 +1966,6 @@ bool solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     double[] kappa_nl_buf = new double[dm * d];
     double[] CNL_buf      = new double[dm * dm];
     double[] rhs          = new double[dm];
-    double[] G_buf        = new double[dm];
     int[]    ipiv         = new int[dm];
 
     CN_vec_rt!coll_info(kernel_values, d, CN_buf);
@@ -2129,15 +1978,13 @@ bool solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     {
         CNL_vec_rt!coll_info(lag, 0, kernel_values, d, CNL_buf);
         kappa_nl_vec_rt!coll_info(lag, 0, kernel_values, d, kappa_nl_buf);
-        immutable size_t base = cast(size_t) lag * dm * (dm + d);
         foreach (ri; 0 .. dm)
         {
+            auto row = hist.lagRow(lag, ri);
             foreach (sj; 0 .. dm)
-                hist.lagB[base + cast(size_t) ri * (dm + d) + sj]
-                    = dt * dt * CNL_buf[ri * dm + sj];
+                row[sj] = dt * dt * CNL_buf[ri * dm + sj];
             foreach (s; 0 .. d)
-                hist.lagB[base + cast(size_t) ri * (dm + d) + dm + s]
-                    = dt * kappa_nl_buf[ri * d + s];
+                row[dm + s] = dt * kappa_nl_buf[ri * d + s];
         }
     }
     double[] src_aug = new double[dm + d];
@@ -2261,10 +2108,12 @@ void solve_VIE_2_impl(int coll_divs, int[] coll_choices)(
     foreach (lag; 1 .. mesh_divs)
     {
         auto B = BNL!coll_info(lag, 0, kernel_values);
-        immutable size_t base = cast(size_t) lag * num_c_params * num_c_params;
         foreach (i; 0 .. num_c_params)
+        {
+            auto row = hist.lagRow(lag, i);
             foreach (j; 0 .. num_c_params)
-                hist.lagB[base + i * num_c_params + j] = dt * B[i][j];
+                row[j] = dt * B[i][j];
+        }
     }
 
     foreach (n; 0 .. mesh_divs)
@@ -2338,12 +2187,12 @@ void solve_VIDE_impl(int coll_divs, int[] coll_choices)(
     {
         auto CNL_m   = CNL!coll_info(lag, 0, kernel_values);
         auto kappa_v = kappa_nl!coll_info(lag, 0, kernel_values);
-        immutable size_t base = cast(size_t) lag * num_c_params * (num_c_params + 1);
         foreach (i; 0 .. num_c_params)
         {
+            auto row = hist.lagRow(lag, i);
             foreach (j; 0 .. num_c_params)
-                hist.lagB[base + i * (num_c_params + 1) + j] = dt * dt * CNL_m[i][j];
-            hist.lagB[base + i * (num_c_params + 1) + num_c_params] = dt * kappa_v[i];
+                row[j] = dt * dt * CNL_m[i][j];
+            row[num_c_params] = dt * kappa_v[i];
         }
     }
 
