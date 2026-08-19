@@ -19,7 +19,9 @@ module toeplitz_history;
 // covering boundary is the unique multiple of a power of two lying in
 // (ell, n] whose block reaches back to ell and forward to n.
 //
-// Small merges (S < FFT_CUTOFF) are done directly; large ones as circular
+// Small merges (S < FFT_CUTOFF), and end-of-mesh merges whose clamped
+// target range keeps fewer than FFT_CUTOFF live outputs, are done directly;
+// large ones as circular
 // convolutions of length 2S via a radix-2 FFT. Outputs are read from
 // positions S .. 2S-1 of the length-2S circular convolution, which are free
 // of wrap-around: the linear convolution has length 3S - 2, and its aliased
@@ -239,15 +241,26 @@ struct ToeplitzHistoryRT
         int tEnd = bnd + S;
         if (tEnd > Q)
             tEnd = Q;
-        // Both merge kinds read lags 1 .. min(2S-1, Q-1): mergeDirect via
-        // n - ell over its target/source ranges, mergeFFT via its kernel
-        // segment load (which uses that bound even when tEnd is clamped).
-        immutable int lagTop = (2 * S - 1 < Q - 1) ? 2 * S - 1 : Q - 1;
-        ensureLags(lagTop);
-        if (S < FFT_CUTOFF)
+        immutable int outW = tEnd - bnd;  // live outputs (< S when clamped)
+        if (S < FFT_CUTOFF || outW < FFT_CUTOFF)
+        {
+            // Small merges, and end-of-mesh merges clamped to only a few
+            // live outputs, go direct: outW * S block mat-vecs beat the
+            // FFT's full length-2S machinery once outW is small, and the
+            // direct path only reads lags up to S + outW - 1 -- the FFT's
+            // kernel segment reads up to 2S - 1 even when clamped, which
+            // for a heavily clamped top-level merge would force the lazy
+            // fill to evaluate lag blocks no output ever uses.
+            immutable int lagTop = (S + outW - 1 < Q - 1) ? S + outW - 1 : Q - 1;
+            ensureLags(lagTop);
             mergeDirect(bnd, S, tEnd);
+        }
         else
+        {
+            immutable int lagTop = (2 * S - 1 < Q - 1) ? 2 * S - 1 : Q - 1;
+            ensureLags(lagTop);
             mergeFFT(bnd, S, tEnd);
+        }
     }
 
     private void mergeDirect(int bnd, int S, int tEnd)
