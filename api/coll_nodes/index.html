@@ -11,10 +11,10 @@
       
       
       
-        <link rel="prev" href="../function_vide/">
+        <link rel="prev" href="../optimal_graded_mesh/">
       
       
-        <link rel="next" href="../coll_nodes/">
+        <link rel="next" href="../../examples/vie1/">
       
       
         
@@ -25,7 +25,7 @@
     
     
       
-        <title>optimal_graded_mesh - voles</title>
+        <title>Collocation node helpers - voles</title>
       
     
     
@@ -68,7 +68,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#optimal_graded_mesh" class="md-skip">
+        <a href="#collocation-node-helpers" class="md-skip">
           Skip to content
         </a>
       
@@ -102,7 +102,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              optimal_graded_mesh
+              Collocation node helpers
             
           </span>
         </div>
@@ -740,6 +740,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../optimal_graded_mesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    optimal_graded_mesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -759,7 +787,7 @@
   <span class="md-ellipsis">
     
   
-    optimal_graded_mesh
+    Collocation node helpers
   
 
     
@@ -777,7 +805,7 @@
   <span class="md-ellipsis">
     
   
-    optimal_graded_mesh
+    Collocation node helpers
   
 
     
@@ -803,10 +831,43 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#voles.optimal_graded_mesh" class="md-nav__link">
+  <a href="#voles.gauss_legendre_nodes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        optimal_graded_mesh
+        gauss_legendre_nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#voles.radau_iia_nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        radau_iia_nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#voles.lobatto_nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lobatto_nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compiled-collocation-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compiled collocation settings
       
     </span>
   </a>
@@ -817,34 +878,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../coll_nodes/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Collocation node helpers
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -1174,10 +1207,43 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#voles.optimal_graded_mesh" class="md-nav__link">
+  <a href="#voles.gauss_legendre_nodes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        optimal_graded_mesh
+        gauss_legendre_nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#voles.radau_iia_nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        radau_iia_nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#voles.lobatto_nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lobatto_nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compiled-collocation-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compiled collocation settings
       
     </span>
   </a>
@@ -1204,24 +1270,28 @@
   
 
 
-<h1 id="optimal_graded_mesh">optimal_graded_mesh</h1>
+<h1 id="collocation-node-helpers">Collocation node helpers</h1>
+<p>Node sets for the <code>coll_nodes</code> parameter of the callable-input solvers.
+Positions are floats in <span class="arithmatex">\([0, 1]\)</span>; the helpers below build the classical
+families. <code>coll_nodes</code> is mutually exclusive with <code>coll_divs</code>/<code>coll_choices</code>.</p>
 
 
 <div class="doc doc-object doc-function">
 
 
 
-<a id="voles.optimal_graded_mesh"></a>
+<a id="voles.gauss_legendre_nodes"></a>
     <div class="doc doc-contents first">
 
-        <p>Return a graded mesh of M+1 breakpoints suitable for a weakly
-singular convolution kernel <span class="arithmatex">\(K(u) \sim u^{-\alpha}\)</span>, <span class="arithmatex">\(\alpha \in [0, 1)\)</span>.</p>
-<p>Grading: <span class="arithmatex">\(t_n = T \cdot (n/M)^r\)</span> with <span class="arithmatex">\(r = p / (1 - \alpha)\)</span>, where
-<span class="arithmatex">\(p =\)</span> <code>order</code> is the order of the collocation method (number of
-collocation nodes per interval). This recovers the optimal convergence
-order for Abel-type kernels (per Brunner ch. 6). At <code>alpha == 0</code> the
-kernel is non-singular and the solution smooth, so a uniform mesh
-(<span class="arithmatex">\(r = 1\)</span>) is returned instead.</p>
+        <p>Return the <code>p</code> Gauss-Legendre collocation nodes on <span class="arithmatex">\([0, 1]\)</span>.</p>
+<p>These interior nodes (none at 0 or 1) give the maximal collocation order.
+For <strong>VIE-2 / VIDE</strong> the solution superconverges to order <span class="arithmatex">\(2p\)</span> at the mesh
+points. For <strong>VIE-1</strong> (first kind) there is no mesh-point
+superconvergence, and Gauss nodes are the <em>borderline</em> case of the
+convergence criterion: being symmetric about <span class="arithmatex">\(1/2\)</span> they give
+amplification <span class="arithmatex">\(|\rho_p| = 1\)</span> exactly, which costs one global order
+(order <span class="arithmatex">\(p - 1\)</span> instead of <span class="arithmatex">\(p\)</span>; see <code>function_solve_VIE_1</code> Notes).
+Prefer <code>radau_iia_nodes</code> for VIE-1.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1237,63 +1307,14 @@ kernel is non-singular and the solution smooth, so a uniform mesh
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>alpha</code>
-            </td>
-            <td>
-                  <code><span title="float">float</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Singularity exponent, in <span class="arithmatex">\([0, 1)\)</span>.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>T</code>
-            </td>
-            <td>
-                  <code><span title="float">float</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Right endpoint of the mesh (positive).</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>M</code>
+                <code>p</code>
             </td>
             <td>
                   <code><span title="int">int</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Number of intervals (positive). The returned array has length M+1.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>order</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Order of the collocation method (positive). For a matched mesh,
-pass the same order you give the solver, i.e. <code>len(coll_choices)</code>.</p>
+                <p>Number of nodes (the order of the collocation method), <code>p &gt;= 1</code>.</p>
               </div>
             </td>
             <td>
@@ -1308,18 +1329,18 @@ pass the same order you give the solver, i.e. <code>len(coll_choices)</code>.</p
     <table>
       <thead>
         <tr>
-<th>Name</th>          <th>Type</th>
+          <th>Type</th>
           <th>Description</th>
         </tr>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-<td><code>mesh_breakpoints</code></td>            <td>
-                  <code>ndarray of shape (M+1,)</code>
+            <td>
+                  <code>ndarray of shape (p,)</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Strictly-increasing breakpoints with <code>[0] == 0</code> and <code>[-1] == T</code>.</p>
+                <p>Node positions in <span class="arithmatex">\((0, 1)\)</span>, sorted ascending.</p>
               </div>
             </td>
           </tr>
@@ -1327,7 +1348,112 @@ pass the same order you give the solver, i.e. <code>len(coll_choices)</code>.</p
     </table>
 
 
-<p><span class="doc-section-title">Raises:</span></p>
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2218</span>
+<span class="normal">2219</span>
+<span class="normal">2220</span>
+<span class="normal">2221</span>
+<span class="normal">2222</span>
+<span class="normal">2223</span>
+<span class="normal">2224</span>
+<span class="normal">2225</span>
+<span class="normal">2226</span>
+<span class="normal">2227</span>
+<span class="normal">2228</span>
+<span class="normal">2229</span>
+<span class="normal">2230</span>
+<span class="normal">2231</span>
+<span class="normal">2232</span>
+<span class="normal">2233</span>
+<span class="normal">2234</span>
+<span class="normal">2235</span>
+<span class="normal">2236</span>
+<span class="normal">2237</span>
+<span class="normal">2238</span>
+<span class="normal">2239</span>
+<span class="normal">2240</span>
+<span class="normal">2241</span>
+<span class="normal">2242</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">gauss_legendre_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""Return the ``p`` Gauss-Legendre collocation nodes on $[0, 1]$.</span>
+
+<span class="sd">    These interior nodes (none at 0 or 1) give the maximal collocation order.</span>
+<span class="sd">    For **VIE-2 / VIDE** the solution superconverges to order $2p$ at the mesh</span>
+<span class="sd">    points. For **VIE-1** (first kind) there is no mesh-point</span>
+<span class="sd">    superconvergence, and Gauss nodes are the *borderline* case of the</span>
+<span class="sd">    convergence criterion: being symmetric about $1/2$ they give</span>
+<span class="sd">    amplification $|\rho_p| = 1$ exactly, which costs one global order</span>
+<span class="sd">    (order $p - 1$ instead of $p$; see ``function_solve_VIE_1`` Notes).</span>
+<span class="sd">    Prefer ``radau_iia_nodes`` for VIE-1.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    p : int</span>
+<span class="sd">        Number of nodes (the order of the collocation method), ``p &gt;= 1``.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    ndarray of shape (p,)</span>
+<span class="sd">        Node positions in $(0, 1)$, sorted ascending.</span>
+<span class="sd">    """</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">_check_node_count</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">minimum</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"Gauss-Legendre"</span><span class="p">)</span>
+    <span class="n">x</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polynomial</span><span class="o">.</span><span class="n">legendre</span><span class="o">.</span><span class="n">leggauss</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="mf">1.0</span><span class="p">))</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+
+<a id="voles.radau_iia_nodes"></a>
+    <div class="doc doc-contents first">
+
+        <p>Return the <code>p</code> Radau IIA collocation nodes on <span class="arithmatex">\([0, 1]\)</span>.</p>
+<p>The Radau IIA nodes include the right endpoint (<code>1.0</code>) and exclude 0.
+For <strong>VIE-2 / VIDE</strong> they give mesh-point superconvergence of order
+<span class="arithmatex">\(2p - 1\)</span>; the right-endpoint node also makes them a common choice for stiff
+VIDEs. For <strong>VIE-1</strong> they are the recommended family: the endpoint node
+makes the amplification factor <span class="arithmatex">\(\rho_p = 0\)</span>, giving the full global order
+<span class="arithmatex">\(p\)</span> -- one order better than Gauss-Legendre nodes, whose <span class="arithmatex">\(|\rho_p| = 1\)</span>
+reduces VIE-1 to order <span class="arithmatex">\(p - 1\)</span> (see <code>function_solve_VIE_1</code> Notes).</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>p</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of nodes, <code>p &gt;= 1</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
     <table>
       <thead>
         <tr>
@@ -1338,12 +1464,12 @@ pass the same order you give the solver, i.e. <code>len(coll_choices)</code>.</p
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="ValueError">ValueError</span></code>
+                  <code>ndarray of shape (p,)</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If <code>alpha</code> is outside <span class="arithmatex">\([0, 1)\)</span>, <code>T</code> is not positive, or <code>M</code> /
-<code>order</code> is not a positive integer.</p>
+                <p>Node positions in <span class="arithmatex">\((0, 1]\)</span> (the last is exactly <code>1.0</code>), sorted
+ascending.</p>
               </div>
             </td>
           </tr>
@@ -1351,150 +1477,235 @@ pass the same order you give the solver, i.e. <code>len(coll_choices)</code>.</p
     </table>
 
 
-<p><span class="doc-section-title">Examples:</span></p>
-    <p>Best practice is to grade for the same order as the solver's collocation
-method, i.e. <code>order=len(coll_choices)</code>::</p>
-<pre><code>coll_choices = [1, 2, 3]
-mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30,
-                           order=len(coll_choices))
-y = function_solve_VIE_2(kernel=..., g=..., mesh_breakpoints=mesh,
-                         coll_divs=3, coll_choices=coll_choices,
-                         kernel_singularity=0.0)
-</code></pre>
-
-
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2134</span>
-<span class="normal">2135</span>
-<span class="normal">2136</span>
-<span class="normal">2137</span>
-<span class="normal">2138</span>
-<span class="normal">2139</span>
-<span class="normal">2140</span>
-<span class="normal">2141</span>
-<span class="normal">2142</span>
-<span class="normal">2143</span>
-<span class="normal">2144</span>
-<span class="normal">2145</span>
-<span class="normal">2146</span>
-<span class="normal">2147</span>
-<span class="normal">2148</span>
-<span class="normal">2149</span>
-<span class="normal">2150</span>
-<span class="normal">2151</span>
-<span class="normal">2152</span>
-<span class="normal">2153</span>
-<span class="normal">2154</span>
-<span class="normal">2155</span>
-<span class="normal">2156</span>
-<span class="normal">2157</span>
-<span class="normal">2158</span>
-<span class="normal">2159</span>
-<span class="normal">2160</span>
-<span class="normal">2161</span>
-<span class="normal">2162</span>
-<span class="normal">2163</span>
-<span class="normal">2164</span>
-<span class="normal">2165</span>
-<span class="normal">2166</span>
-<span class="normal">2167</span>
-<span class="normal">2168</span>
-<span class="normal">2169</span>
-<span class="normal">2170</span>
-<span class="normal">2171</span>
-<span class="normal">2172</span>
-<span class="normal">2173</span>
-<span class="normal">2174</span>
-<span class="normal">2175</span>
-<span class="normal">2176</span>
-<span class="normal">2177</span>
-<span class="normal">2178</span>
-<span class="normal">2179</span>
-<span class="normal">2180</span>
-<span class="normal">2181</span>
-<span class="normal">2182</span>
-<span class="normal">2183</span>
-<span class="normal">2184</span>
-<span class="normal">2185</span>
-<span class="normal">2186</span>
-<span class="normal">2187</span>
-<span class="normal">2188</span>
-<span class="normal">2189</span>
-<span class="normal">2190</span>
-<span class="normal">2191</span>
-<span class="normal">2192</span>
-<span class="normal">2193</span>
-<span class="normal">2194</span>
-<span class="normal">2195</span>
-<span class="normal">2196</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">optimal_graded_mesh</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">T</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">M</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-                        <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<span class="w">    </span><span class="sa">r</span><span class="sd">"""Return a graded mesh of M+1 breakpoints suitable for a weakly</span>
-<span class="sd">    singular convolution kernel $K(u) \sim u^{-\alpha}$, $\alpha \in [0, 1)$.</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2245</span>
+<span class="normal">2246</span>
+<span class="normal">2247</span>
+<span class="normal">2248</span>
+<span class="normal">2249</span>
+<span class="normal">2250</span>
+<span class="normal">2251</span>
+<span class="normal">2252</span>
+<span class="normal">2253</span>
+<span class="normal">2254</span>
+<span class="normal">2255</span>
+<span class="normal">2256</span>
+<span class="normal">2257</span>
+<span class="normal">2258</span>
+<span class="normal">2259</span>
+<span class="normal">2260</span>
+<span class="normal">2261</span>
+<span class="normal">2262</span>
+<span class="normal">2263</span>
+<span class="normal">2264</span>
+<span class="normal">2265</span>
+<span class="normal">2266</span>
+<span class="normal">2267</span>
+<span class="normal">2268</span>
+<span class="normal">2269</span>
+<span class="normal">2270</span>
+<span class="normal">2271</span>
+<span class="normal">2272</span>
+<span class="normal">2273</span>
+<span class="normal">2274</span>
+<span class="normal">2275</span>
+<span class="normal">2276</span>
+<span class="normal">2277</span>
+<span class="normal">2278</span>
+<span class="normal">2279</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">radau_iia_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""Return the ``p`` Radau IIA collocation nodes on $[0, 1]$.</span>
 
-<span class="sd">    Grading: $t_n = T \cdot (n/M)^r$ with $r = p / (1 - \alpha)$, where</span>
-<span class="sd">    $p =$ ``order`` is the order of the collocation method (number of</span>
-<span class="sd">    collocation nodes per interval). This recovers the optimal convergence</span>
-<span class="sd">    order for Abel-type kernels (per Brunner ch. 6). At ``alpha == 0`` the</span>
-<span class="sd">    kernel is non-singular and the solution smooth, so a uniform mesh</span>
-<span class="sd">    ($r = 1$) is returned instead.</span>
+<span class="sd">    The Radau IIA nodes include the right endpoint (``1.0``) and exclude 0.</span>
+<span class="sd">    For **VIE-2 / VIDE** they give mesh-point superconvergence of order</span>
+<span class="sd">    $2p - 1$; the right-endpoint node also makes them a common choice for stiff</span>
+<span class="sd">    VIDEs. For **VIE-1** they are the recommended family: the endpoint node</span>
+<span class="sd">    makes the amplification factor $\rho_p = 0$, giving the full global order</span>
+<span class="sd">    $p$ -- one order better than Gauss-Legendre nodes, whose $|\rho_p| = 1$</span>
+<span class="sd">    reduces VIE-1 to order $p - 1$ (see ``function_solve_VIE_1`` Notes).</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    alpha : float</span>
-<span class="sd">        Singularity exponent, in $[0, 1)$.</span>
-<span class="sd">    T : float</span>
-<span class="sd">        Right endpoint of the mesh (positive).</span>
-<span class="sd">    M : int</span>
-<span class="sd">        Number of intervals (positive). The returned array has length M+1.</span>
-<span class="sd">    order : int</span>
-<span class="sd">        Order of the collocation method (positive). For a matched mesh,</span>
-<span class="sd">        pass the same order you give the solver, i.e. ``len(coll_choices)``.</span>
+<span class="sd">    p : int</span>
+<span class="sd">        Number of nodes, ``p &gt;= 1``.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
-<span class="sd">    mesh_breakpoints : ndarray of shape (M+1,)</span>
-<span class="sd">        Strictly-increasing breakpoints with ``[0] == 0`` and ``[-1] == T``.</span>
-
-<span class="sd">    Raises</span>
-<span class="sd">    ------</span>
-<span class="sd">    ValueError</span>
-<span class="sd">        If ``alpha`` is outside $[0, 1)$, ``T`` is not positive, or ``M`` /</span>
-<span class="sd">        ``order`` is not a positive integer.</span>
-
-<span class="sd">    Examples</span>
-<span class="sd">    --------</span>
-<span class="sd">    Best practice is to grade for the same order as the solver's collocation</span>
-<span class="sd">    method, i.e. ``order=len(coll_choices)``::</span>
-
-<span class="sd">        coll_choices = [1, 2, 3]</span>
-<span class="sd">        mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30,</span>
-<span class="sd">                                   order=len(coll_choices))</span>
-<span class="sd">        y = function_solve_VIE_2(kernel=..., g=..., mesh_breakpoints=mesh,</span>
-<span class="sd">                                 coll_divs=3, coll_choices=coll_choices,</span>
-<span class="sd">                                 kernel_singularity=0.0)</span>
+<span class="sd">    ndarray of shape (p,)</span>
+<span class="sd">        Node positions in $(0, 1]$ (the last is exactly ``1.0``), sorted</span>
+<span class="sd">        ascending.</span>
 <span class="sd">    """</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="mf">0.0</span> <span class="o">&lt;=</span> <span class="n">alpha</span> <span class="o">&lt;</span> <span class="mf">1.0</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"alpha must satisfy 0 &lt;= alpha &lt; 1, got </span><span class="si">{</span><span class="n">alpha</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">T</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"T must be positive, got </span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">M</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"M must be a positive integer, got </span><span class="si">{</span><span class="n">M</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">integer</span><span class="p">)):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"order must be a positive integer, got </span><span class="si">{</span><span class="n">order</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">order</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"order must be a positive integer, got </span><span class="si">{</span><span class="n">order</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-    <span class="n">p</span> <span class="o">=</span> <span class="n">order</span>
-    <span class="c1"># At alpha=0 the kernel is non-singular and the solution is smooth, so a</span>
-    <span class="c1"># uniform mesh (r=1) is optimal; grading would only waste resolution near 0.</span>
-    <span class="n">r</span> <span class="o">=</span> <span class="n">p</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">alpha</span><span class="p">)</span> <span class="k">if</span> <span class="n">alpha</span> <span class="o">&gt;</span> <span class="mf">0.0</span> <span class="k">else</span> <span class="mf">1.0</span>
-    <span class="n">n</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">M</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">T</span> <span class="o">*</span> <span class="p">(</span><span class="n">n</span> <span class="o">/</span> <span class="n">M</span><span class="p">)</span> <span class="o">**</span> <span class="n">r</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">_check_node_count</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">minimum</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"Radau IIA"</span><span class="p">)</span>
+    <span class="c1"># On [-1, 1] the Radau IIA nodes are the roots of P_{p-1}(x) - P_p(x); one</span>
+    <span class="c1"># of those roots is +1. Map the roots to [0, 1].</span>
+    <span class="n">c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">p</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">c</span><span class="p">[</span><span class="n">p</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">1.0</span>
+    <span class="n">c</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">-=</span> <span class="mf">1.0</span>
+    <span class="c1"># legroots may return a complex-dtype array (tiny imaginary parts from the</span>
+    <span class="c1"># companion-matrix eigensolver) on some numpy/LAPACK versions; these nodes</span>
+    <span class="c1"># are mathematically real, so take the real part.</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polynomial</span><span class="o">.</span><span class="n">legendre</span><span class="o">.</span><span class="n">legroots</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">.</span><span class="n">real</span>
+    <span class="n">nodes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="mf">1.0</span><span class="p">))</span>
+    <span class="n">nodes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>  <span class="c1"># pin the endpoint exactly</span>
+    <span class="k">return</span> <span class="n">nodes</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
 
 </div>
+
+<div class="doc doc-object doc-function">
+
+
+
+<a id="voles.lobatto_nodes"></a>
+    <div class="doc doc-contents first">
+
+        <p>Return the <code>p</code> Gauss-Lobatto collocation nodes on <span class="arithmatex">\([0, 1]\)</span> (<code>p &gt;= 2</code>).</p>
+<p>The Lobatto nodes include both endpoints (<code>0.0</code> and <code>1.0</code>) and have
+local order <span class="arithmatex">\(2p - 2\)</span>. Because 0 is included they suit VIE-2 and VIDE but
+<strong>not</strong> VIE-1, which forbids a node at <span class="arithmatex">\(t = 0\)</span>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>p</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of nodes, <code>p &gt;= 2</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code>ndarray of shape (p,)</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Node positions in <span class="arithmatex">\([0, 1]\)</span> (the first is <code>0.0</code> and the last <code>1.0</code>),
+sorted ascending.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2282</span>
+<span class="normal">2283</span>
+<span class="normal">2284</span>
+<span class="normal">2285</span>
+<span class="normal">2286</span>
+<span class="normal">2287</span>
+<span class="normal">2288</span>
+<span class="normal">2289</span>
+<span class="normal">2290</span>
+<span class="normal">2291</span>
+<span class="normal">2292</span>
+<span class="normal">2293</span>
+<span class="normal">2294</span>
+<span class="normal">2295</span>
+<span class="normal">2296</span>
+<span class="normal">2297</span>
+<span class="normal">2298</span>
+<span class="normal">2299</span>
+<span class="normal">2300</span>
+<span class="normal">2301</span>
+<span class="normal">2302</span>
+<span class="normal">2303</span>
+<span class="normal">2304</span>
+<span class="normal">2305</span>
+<span class="normal">2306</span>
+<span class="normal">2307</span>
+<span class="normal">2308</span>
+<span class="normal">2309</span>
+<span class="normal">2310</span>
+<span class="normal">2311</span>
+<span class="normal">2312</span>
+<span class="normal">2313</span>
+<span class="normal">2314</span>
+<span class="normal">2315</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">lobatto_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""Return the ``p`` Gauss-Lobatto collocation nodes on $[0, 1]$ (``p &gt;= 2``).</span>
+
+<span class="sd">    The Lobatto nodes include both endpoints (``0.0`` and ``1.0``) and have</span>
+<span class="sd">    local order $2p - 2$. Because 0 is included they suit VIE-2 and VIDE but</span>
+<span class="sd">    **not** VIE-1, which forbids a node at $t = 0$.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    p : int</span>
+<span class="sd">        Number of nodes, ``p &gt;= 2``.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    ndarray of shape (p,)</span>
+<span class="sd">        Node positions in $[0, 1]$ (the first is ``0.0`` and the last ``1.0``),</span>
+<span class="sd">        sorted ascending.</span>
+<span class="sd">    """</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">_check_node_count</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">minimum</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"Lobatto"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">p</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">interior</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># The interior Lobatto nodes are the roots of P'_{p-1}.</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+        <span class="n">c</span><span class="p">[</span><span class="n">p</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+        <span class="c1"># .real: legroots may return complex dtype (see radau_iia_nodes); these</span>
+        <span class="c1"># interior nodes are mathematically real.</span>
+        <span class="n">interior</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polynomial</span><span class="o">.</span><span class="n">legendre</span><span class="o">.</span><span class="n">legroots</span><span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">polynomial</span><span class="o">.</span><span class="n">legendre</span><span class="o">.</span><span class="n">legder</span><span class="p">(</span><span class="n">c</span><span class="p">))</span><span class="o">.</span><span class="n">real</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(([</span><span class="o">-</span><span class="mf">1.0</span><span class="p">],</span> <span class="n">interior</span><span class="p">,</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">]))</span>
+    <span class="n">nodes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="mf">1.0</span><span class="p">))</span>
+    <span class="n">nodes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>   <span class="c1"># pin the endpoints exactly</span>
+    <span class="n">nodes</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="k">return</span> <span class="n">nodes</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div><h2 id="compiled-collocation-settings">Compiled collocation settings</h2>
+<p>The array-based solvers dispatch to D-extension routines compiled for a fixed
+list of <code>(coll_divs, coll_choices)</code> settings; other settings need the optional
+<code>numba</code> dependency (scalar equations only) and otherwise raise
+<code>NotImplementedError</code>. The compiled lists are importable as
+<code>fast_coll_settings_VIE_1</code>, <code>fast_coll_settings_VIE_2</code>, and
+<code>fast_coll_settings_VIDE</code> — each a list of <code>(coll_divs, coll_choices)</code> pairs
+(the VIE-1 list excludes the known non-convergent settings).</p>
+<pre><code class="language-python">from voles import fast_coll_settings_VIE_2
+print(fast_coll_settings_VIE_2[:3])
+</code></pre>
 
 
 

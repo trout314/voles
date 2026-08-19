@@ -822,6 +822,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coll_nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collocation node helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1352,6 +1380,13 @@ the caller's responsibility.</p>
   for collocation point <span class="arithmatex">\(t\)</span>. Forward-compatible with non-convolution
   <span class="arithmatex">\(K(s, t)\)</span>.</li>
 </ul>
+<p>Locations may be Python floats/ints, NumPy scalars, or 0-d arrays;
+booleans are rejected with a <code>ValueError</code> (<code>True</code> would silently
+mean location 1.0). An empty list/tuple/dict declares nothing and
+behaves exactly like <code>None</code>. The kernel's return value exactly <em>at</em>
+a declared singular point is never used (it is masked out of the
+quadrature), so returning 0, <code>inf</code>, or a clamped value there are
+all equivalent.</p>
               </div>
             </td>
             <td>
@@ -1399,7 +1434,10 @@ far below discretization error in practice. Reused adaptive blocks
 are computed at tightened tolerance, so they are at least as accurate
 as the per-row values they replace. Strictly no effect on non-uniform
 meshes or on kernels with no declared <code>kernel_singularity</code> (only
-declared-singularity blocks are ever reused).</p>
+declared-singularity blocks are ever reused). scipy
+<code>IntegrationWarning</code>s raised by the deliberately tightened reuse
+quadratures are suppressed (the best-obtainable value is what reuse
+wants); default-tolerance quadratures still warn as usual.</p>
               </div>
             </td>
             <td>
@@ -1415,7 +1453,9 @@ declared-singularity blocks are ever reused).</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Currently unused; reserved for the graded-mesh / mesh-uniformity hint.</p>
+                <p>If True (default), print the near-uniform-mesh hint when a
+<code>kernel_singularity</code> is declared on a mesh that looks uniform
+(suggesting <code>optimal_graded_mesh</code>). Pass False to suppress it.</p>
               </div>
             </td>
             <td>
@@ -1442,9 +1482,10 @@ declared-singularity blocks are ever reused).</p>
             <td>
               <div class="doc-md-description">
                 <p>Solution values at collocation nodes, where M is the number of
-intervals and p = <code>len(coll_choices)</code>. Shape <code>(M, p)</code> for scalar
-equations, <code>(M, p, d)</code> for vector equations, and <code>(M, p, d, m)</code> for
-matrix-valued equations.</p>
+intervals and p is the number of collocation nodes per interval
+(<code>len(coll_choices)</code> or <code>len(coll_nodes)</code>). Shape <code>(M, p)</code> for
+scalar equations, <code>(M, p, d)</code> for vector equations, and
+<code>(M, p, d, m)</code> for matrix-valued equations.</p>
               </div>
             </td>
           </tr>
@@ -1464,54 +1505,76 @@ piecewise polynomial at any time t, returning a scalar / <code>(d,)</code> /
     </table>
 
 
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>For invalid meshes, collocation settings, <code>kernel_singularity</code>
+declarations (including bool locations and out-of-range <code>alpha</code>),
+non-finite weight-tensor entries, kernel dimension or node count
+past the compiled limits, or matrix input with zero columns.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="TypeError">TypeError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>kernel</code> or <code>g</code> is not callable.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="numpy.linalg.LinAlgError">LinAlgError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If a collocation system is singular or nearly singular (e.g. a zero
+kernel).</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ImportError">ImportError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If scipy is not installed.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
 <details class="note" open>
   <summary>Notes</summary>
   <p>See the module docstring for the mesh-convention difference from the
 array-based solvers.</p>
 <p>Matrix-valued problems share the kernel weight tensor across all <span class="arithmatex">\(m\)</span>
 right-hand sides (it is built once), so they are substantially cheaper than
-<span class="arithmatex">\(m\)</span> separate calls.</p>
+<span class="arithmatex">\(m\)</span> separate calls. The <span class="arithmatex">\(m\)</span> columns are solved in threads (capped at the
+CPU count).</p>
 </details>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1483</span>
-<span class="normal">1484</span>
-<span class="normal">1485</span>
-<span class="normal">1486</span>
-<span class="normal">1487</span>
-<span class="normal">1488</span>
-<span class="normal">1489</span>
-<span class="normal">1490</span>
-<span class="normal">1491</span>
-<span class="normal">1492</span>
-<span class="normal">1493</span>
-<span class="normal">1494</span>
-<span class="normal">1495</span>
-<span class="normal">1496</span>
-<span class="normal">1497</span>
-<span class="normal">1498</span>
-<span class="normal">1499</span>
-<span class="normal">1500</span>
-<span class="normal">1501</span>
-<span class="normal">1502</span>
-<span class="normal">1503</span>
-<span class="normal">1504</span>
-<span class="normal">1505</span>
-<span class="normal">1506</span>
-<span class="normal">1507</span>
-<span class="normal">1508</span>
-<span class="normal">1509</span>
-<span class="normal">1510</span>
-<span class="normal">1511</span>
-<span class="normal">1512</span>
-<span class="normal">1513</span>
-<span class="normal">1514</span>
-<span class="normal">1515</span>
-<span class="normal">1516</span>
-<span class="normal">1517</span>
-<span class="normal">1518</span>
-<span class="normal">1519</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1519</span>
 <span class="normal">1520</span>
 <span class="normal">1521</span>
 <span class="normal">1522</span>
@@ -1704,7 +1767,73 @@ right-hand sides (it is built once), so they are substantially cheaper than
 <span class="normal">1709</span>
 <span class="normal">1710</span>
 <span class="normal">1711</span>
-<span class="normal">1712</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">1712</span>
+<span class="normal">1713</span>
+<span class="normal">1714</span>
+<span class="normal">1715</span>
+<span class="normal">1716</span>
+<span class="normal">1717</span>
+<span class="normal">1718</span>
+<span class="normal">1719</span>
+<span class="normal">1720</span>
+<span class="normal">1721</span>
+<span class="normal">1722</span>
+<span class="normal">1723</span>
+<span class="normal">1724</span>
+<span class="normal">1725</span>
+<span class="normal">1726</span>
+<span class="normal">1727</span>
+<span class="normal">1728</span>
+<span class="normal">1729</span>
+<span class="normal">1730</span>
+<span class="normal">1731</span>
+<span class="normal">1732</span>
+<span class="normal">1733</span>
+<span class="normal">1734</span>
+<span class="normal">1735</span>
+<span class="normal">1736</span>
+<span class="normal">1737</span>
+<span class="normal">1738</span>
+<span class="normal">1739</span>
+<span class="normal">1740</span>
+<span class="normal">1741</span>
+<span class="normal">1742</span>
+<span class="normal">1743</span>
+<span class="normal">1744</span>
+<span class="normal">1745</span>
+<span class="normal">1746</span>
+<span class="normal">1747</span>
+<span class="normal">1748</span>
+<span class="normal">1749</span>
+<span class="normal">1750</span>
+<span class="normal">1751</span>
+<span class="normal">1752</span>
+<span class="normal">1753</span>
+<span class="normal">1754</span>
+<span class="normal">1755</span>
+<span class="normal">1756</span>
+<span class="normal">1757</span>
+<span class="normal">1758</span>
+<span class="normal">1759</span>
+<span class="normal">1760</span>
+<span class="normal">1761</span>
+<span class="normal">1762</span>
+<span class="normal">1763</span>
+<span class="normal">1764</span>
+<span class="normal">1765</span>
+<span class="normal">1766</span>
+<span class="normal">1767</span>
+<span class="normal">1768</span>
+<span class="normal">1769</span>
+<span class="normal">1770</span>
+<span class="normal">1771</span>
+<span class="normal">1772</span>
+<span class="normal">1773</span>
+<span class="normal">1774</span>
+<span class="normal">1775</span>
+<span class="normal">1776</span>
+<span class="normal">1777</span>
+<span class="normal">1778</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIE_2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span>
                           <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                           <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -1772,6 +1901,14 @@ right-hand sides (it is built once), so they are substantially cheaper than
 <span class="sd">        - callable ``f(t) -&gt; list[float]``: returns the singular $s$-locations</span>
 <span class="sd">          for collocation point $t$. Forward-compatible with non-convolution</span>
 <span class="sd">          $K(s, t)$.</span>
+
+<span class="sd">        Locations may be Python floats/ints, NumPy scalars, or 0-d arrays;</span>
+<span class="sd">        booleans are rejected with a ``ValueError`` (``True`` would silently</span>
+<span class="sd">        mean location 1.0). An empty list/tuple/dict declares nothing and</span>
+<span class="sd">        behaves exactly like ``None``. The kernel's return value exactly *at*</span>
+<span class="sd">        a declared singular point is never used (it is masked out of the</span>
+<span class="sd">        quadrature), so returning 0, ``inf``, or a clamped value there are</span>
+<span class="sd">        all equivalent.</span>
 <span class="sd">    return_function : bool, optional</span>
 <span class="sd">        If True, also return a callable solution wrapper.</span>
 <span class="sd">    reuse_adaptive_blocks : bool, optional</span>
@@ -1791,21 +1928,42 @@ right-hand sides (it is built once), so they are substantially cheaper than
 <span class="sd">        are computed at tightened tolerance, so they are at least as accurate</span>
 <span class="sd">        as the per-row values they replace. Strictly no effect on non-uniform</span>
 <span class="sd">        meshes or on kernels with no declared ``kernel_singularity`` (only</span>
-<span class="sd">        declared-singularity blocks are ever reused).</span>
+<span class="sd">        declared-singularity blocks are ever reused). scipy</span>
+<span class="sd">        ``IntegrationWarning``s raised by the deliberately tightened reuse</span>
+<span class="sd">        quadratures are suppressed (the best-obtainable value is what reuse</span>
+<span class="sd">        wants); default-tolerance quadratures still warn as usual.</span>
 <span class="sd">    show_warnings : bool, optional</span>
-<span class="sd">        Currently unused; reserved for the graded-mesh / mesh-uniformity hint.</span>
+<span class="sd">        If True (default), print the near-uniform-mesh hint when a</span>
+<span class="sd">        ``kernel_singularity`` is declared on a mesh that looks uniform</span>
+<span class="sd">        (suggesting ``optimal_graded_mesh``). Pass False to suppress it.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    soln_values : ndarray</span>
 <span class="sd">        Solution values at collocation nodes, where M is the number of</span>
-<span class="sd">        intervals and p = ``len(coll_choices)``. Shape ``(M, p)`` for scalar</span>
-<span class="sd">        equations, ``(M, p, d)`` for vector equations, and ``(M, p, d, m)`` for</span>
-<span class="sd">        matrix-valued equations.</span>
+<span class="sd">        intervals and p is the number of collocation nodes per interval</span>
+<span class="sd">        (``len(coll_choices)`` or ``len(coll_nodes)``). Shape ``(M, p)`` for</span>
+<span class="sd">        scalar equations, ``(M, p, d)`` for vector equations, and</span>
+<span class="sd">        ``(M, p, d, m)`` for matrix-valued equations.</span>
 <span class="sd">    (soln_values, y_callable) : tuple</span>
 <span class="sd">        When ``return_function=True``. ``y_callable(t)`` evaluates the</span>
 <span class="sd">        piecewise polynomial at any time t, returning a scalar / ``(d,)`` /</span>
 <span class="sd">        ``(d, m)`` value for scalar t (with a leading time axis for array t).</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    ValueError</span>
+<span class="sd">        For invalid meshes, collocation settings, ``kernel_singularity``</span>
+<span class="sd">        declarations (including bool locations and out-of-range ``alpha``),</span>
+<span class="sd">        non-finite weight-tensor entries, kernel dimension or node count</span>
+<span class="sd">        past the compiled limits, or matrix input with zero columns.</span>
+<span class="sd">    TypeError</span>
+<span class="sd">        If ``kernel`` or ``g`` is not callable.</span>
+<span class="sd">    numpy.linalg.LinAlgError</span>
+<span class="sd">        If a collocation system is singular or nearly singular (e.g. a zero</span>
+<span class="sd">        kernel).</span>
+<span class="sd">    ImportError</span>
+<span class="sd">        If scipy is not installed.</span>
 
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
@@ -1814,7 +1972,8 @@ right-hand sides (it is built once), so they are substantially cheaper than
 
 <span class="sd">    Matrix-valued problems share the kernel weight tensor across all $m$</span>
 <span class="sd">    right-hand sides (it is built once), so they are substantially cheaper than</span>
-<span class="sd">    $m$ separate calls.</span>
+<span class="sd">    $m$ separate calls. The $m$ columns are solved in threads (capped at the</span>
+<span class="sd">    CPU count).</span>
 <span class="sd">    """</span>
     <span class="n">kernel_singularity</span> <span class="o">=</span> <span class="n">_empty_singularity_to_none</span><span class="p">(</span><span class="n">kernel_singularity</span><span class="p">)</span>
     <span class="n">mesh_breakpoints</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
@@ -1916,7 +2075,7 @@ right-hand sides (it is built once), so they are substantially cheaper than
             <span class="n">g_arr_j</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">G</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">])</span>
             <span class="k">return</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie2_vec_d</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">g_arr_j</span><span class="p">)</span>
 
-        <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">m</span><span class="p">)</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">_column_workers</span><span class="p">(</span><span class="n">m</span><span class="p">))</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
             <span class="n">cols</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ex</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_col_solve</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">)))</span>
         <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>  <span class="c1"># (M, p, d, m)</span>
 

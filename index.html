@@ -838,6 +838,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/coll_nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collocation node helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1261,9 +1289,13 @@ meshes, and handles weakly singular kernels.</p>
 </tr>
 </tbody>
 </table>
-<p>The callable-input solvers also expose <code>optimal_graded_mesh(alpha, T, M,
-order)</code> for building a Brunner-graded mesh suitable for kernels
-with a <span class="arithmatex">\(u^{-\alpha}\)</span> singularity.</p>
+<p>The callable-input solvers also expose <code>optimal_graded_mesh(alpha=..., T=...,
+M=..., order=...)</code> for building a Brunner-graded mesh suitable for kernels
+with a <span class="arithmatex">\(u^{-\alpha}\)</span> singularity — and, when the exponent <span class="arithmatex">\(\alpha\)</span> is known,
+the dict form <code>kernel_singularity={0.0: alpha}</code> switches the singular blocks
+to fast deterministic Gauss–Jacobi quadrature. Collocation nodes can be given
+directly via <code>coll_nodes</code>, with <code>gauss_legendre_nodes</code>, <code>radau_iia_nodes</code>,
+and <code>lobatto_nodes</code> helpers for the classical families.</p>
 <h2 id="installation">Installation</h2>
 <!-- Single-sourced from README.md so the two never drift. -->
 

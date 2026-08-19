@@ -749,6 +749,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/coll_nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collocation node helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1100,8 +1128,8 @@
 
 
 <h1 id="example-complex-valued-equations">Example: Complex-Valued Equations</h1>
-<p>All three solvers accept complex-valued inputs. Pass complex NumPy arrays for
-the kernel, forcing function, and (for VIDE) initial value, and the solver
+<p>Both solver families accept complex-valued inputs. Pass complex NumPy arrays
+for the kernel, forcing function, and (for VIDE) initial value, and the solver
 returns a complex-valued solution. This works for scalar, vector, and matrix
 cases alike (and for the callable-input family too — pass callables that return
 complex values).</p>
@@ -1109,7 +1137,7 @@ complex values).</p>
 from voles import solve_VIE_2
 
 time_step = 0.05
-times = np.arange(0, 2.1, time_step)
+times = np.arange(0, 2.05, time_step)      # 41 points = 10×2² + 1
 kernel = np.exp(-1j * times)               # complex kernel
 g = np.ones_like(times, dtype=complex)
 

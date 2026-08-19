@@ -822,6 +822,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coll_nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collocation node helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1428,6 +1456,57 @@ equations), one polynomial per component.</p>
     </table>
 
 
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>For invalid shapes or collocation settings — including the known
+non-convergent VIE-1 settings <code>(coll_divs=3, [1])</code>,
+<code>(4, [1])</code>, and <code>(4, [1, 2])</code>, which are rejected outright —
+inputs too short to form one mesh interval, matrix input with zero
+columns, or inputs so large that a solver buffer would exceed
+<span class="arithmatex">\(2^{31}\)</span> elements.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="NotImplementedError">NotImplementedError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>For a collocation setting not compiled into the D extension, on the
+vector/matrix path (no fallback exists) or on the scalar path when
+<code>numba</code> is not installed.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="numpy.linalg.LinAlgError">LinAlgError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If a collocation system is singular or nearly singular (e.g. a zero
+kernel).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
 <details class="note" open>
   <summary>Notes</summary>
   <p>The length <span class="arithmatex">\(N\)</span> of the input arrays must satisfy
@@ -1442,7 +1521,9 @@ information about <span class="arithmatex">\(y(0)\)</span>.</p>
 the given collocation setting. For scalar equations, settings not compiled
 into the extension fall back to a Numba-JIT implementation (requires the
 <code>numba</code> optional dependency); a warning is printed when the fallback is
-used. For vector equations only the compiled settings are supported.</p>
+used. For vector equations only the compiled settings are supported. The
+supported settings (with the non-convergent ones excluded) are listed in
+<code>fast_coll_settings_VIE_1</code>.</p>
 </details>
 
 <details class="references" open>
@@ -1454,45 +1535,7 @@ used. For vector equations only the compiled settings are supported.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">379</span>
-<span class="normal">380</span>
-<span class="normal">381</span>
-<span class="normal">382</span>
-<span class="normal">383</span>
-<span class="normal">384</span>
-<span class="normal">385</span>
-<span class="normal">386</span>
-<span class="normal">387</span>
-<span class="normal">388</span>
-<span class="normal">389</span>
-<span class="normal">390</span>
-<span class="normal">391</span>
-<span class="normal">392</span>
-<span class="normal">393</span>
-<span class="normal">394</span>
-<span class="normal">395</span>
-<span class="normal">396</span>
-<span class="normal">397</span>
-<span class="normal">398</span>
-<span class="normal">399</span>
-<span class="normal">400</span>
-<span class="normal">401</span>
-<span class="normal">402</span>
-<span class="normal">403</span>
-<span class="normal">404</span>
-<span class="normal">405</span>
-<span class="normal">406</span>
-<span class="normal">407</span>
-<span class="normal">408</span>
-<span class="normal">409</span>
-<span class="normal">410</span>
-<span class="normal">411</span>
-<span class="normal">412</span>
-<span class="normal">413</span>
-<span class="normal">414</span>
-<span class="normal">415</span>
-<span class="normal">416</span>
-<span class="normal">417</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">417</span>
 <span class="normal">418</span>
 <span class="normal">419</span>
 <span class="normal">420</span>
@@ -1746,7 +1789,67 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="normal">668</span>
 <span class="normal">669</span>
 <span class="normal">670</span>
-<span class="normal">671</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="normal">671</span>
+<span class="normal">672</span>
+<span class="normal">673</span>
+<span class="normal">674</span>
+<span class="normal">675</span>
+<span class="normal">676</span>
+<span class="normal">677</span>
+<span class="normal">678</span>
+<span class="normal">679</span>
+<span class="normal">680</span>
+<span class="normal">681</span>
+<span class="normal">682</span>
+<span class="normal">683</span>
+<span class="normal">684</span>
+<span class="normal">685</span>
+<span class="normal">686</span>
+<span class="normal">687</span>
+<span class="normal">688</span>
+<span class="normal">689</span>
+<span class="normal">690</span>
+<span class="normal">691</span>
+<span class="normal">692</span>
+<span class="normal">693</span>
+<span class="normal">694</span>
+<span class="normal">695</span>
+<span class="normal">696</span>
+<span class="normal">697</span>
+<span class="normal">698</span>
+<span class="normal">699</span>
+<span class="normal">700</span>
+<span class="normal">701</span>
+<span class="normal">702</span>
+<span class="normal">703</span>
+<span class="normal">704</span>
+<span class="normal">705</span>
+<span class="normal">706</span>
+<span class="normal">707</span>
+<span class="normal">708</span>
+<span class="normal">709</span>
+<span class="normal">710</span>
+<span class="normal">711</span>
+<span class="normal">712</span>
+<span class="normal">713</span>
+<span class="normal">714</span>
+<span class="normal">715</span>
+<span class="normal">716</span>
+<span class="normal">717</span>
+<span class="normal">718</span>
+<span class="normal">719</span>
+<span class="normal">720</span>
+<span class="normal">721</span>
+<span class="normal">722</span>
+<span class="normal">723</span>
+<span class="normal">724</span>
+<span class="normal">725</span>
+<span class="normal">726</span>
+<span class="normal">727</span>
+<span class="normal">728</span>
+<span class="normal">729</span>
+<span class="normal">730</span>
+<span class="normal">731</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
                 <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                 <span class="n">force_continuous</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">'''</span>
@@ -1815,6 +1918,23 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="sd">        is an object array of shape ``(d,)`` (or ``(d, m)`` for matrix</span>
 <span class="sd">        equations), one polynomial per component.</span>
 
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    ValueError</span>
+<span class="sd">        For invalid shapes or collocation settings — including the known</span>
+<span class="sd">        non-convergent VIE-1 settings ``(coll_divs=3, [1])``,</span>
+<span class="sd">        ``(4, [1])``, and ``(4, [1, 2])``, which are rejected outright —</span>
+<span class="sd">        inputs too short to form one mesh interval, matrix input with zero</span>
+<span class="sd">        columns, or inputs so large that a solver buffer would exceed</span>
+<span class="sd">        $2^{31}$ elements.</span>
+<span class="sd">    NotImplementedError</span>
+<span class="sd">        For a collocation setting not compiled into the D extension, on the</span>
+<span class="sd">        vector/matrix path (no fallback exists) or on the scalar path when</span>
+<span class="sd">        ``numba`` is not installed.</span>
+<span class="sd">    numpy.linalg.LinAlgError</span>
+<span class="sd">        If a collocation system is singular or nearly singular (e.g. a zero</span>
+<span class="sd">        kernel).</span>
+
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
 <span class="sd">    The length $N$ of the input arrays must satisfy</span>
@@ -1831,7 +1951,9 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="sd">    the given collocation setting. For scalar equations, settings not compiled</span>
 <span class="sd">    into the extension fall back to a Numba-JIT implementation (requires the</span>
 <span class="sd">    ``numba`` optional dependency); a warning is printed when the fallback is</span>
-<span class="sd">    used. For vector equations only the compiled settings are supported.</span>
+<span class="sd">    used. For vector equations only the compiled settings are supported. The</span>
+<span class="sd">    supported settings (with the non-convergent ones excluded) are listed in</span>
+<span class="sd">    ``fast_coll_settings_VIE_1``.</span>
 
 <span class="sd">    References</span>
 <span class="sd">    ----------</span>
@@ -1902,7 +2024,7 @@ used. For vector equations only the compiled settings are supported.</p>
                                        <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span>
                                        <span class="n">force_continuous</span><span class="o">=</span><span class="n">force_continuous</span><span class="p">,</span>
                                        <span class="n">show_warnings</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-                <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">m_cols</span><span class="p">)</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
+                <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">_column_workers</span><span class="p">(</span><span class="n">m_cols</span><span class="p">))</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
                     <span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ex</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_col_vie1</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="n">m_cols</span><span class="p">)))</span>
                 <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
                     <span class="n">col_solns</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]</span>
@@ -1953,9 +2075,12 @@ used. For vector equations only the compiled settings are supported.</p>
                 <span class="sa">f</span><span class="s2">"does not produce a convergent VIE-1 solver and is not supported. "</span>
                 <span class="sa">f</span><span class="s2">"Use a setting from fast_coll_settings_VIE_1."</span><span class="p">)</span>
         <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_fast_settings_VIE_1</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+            <span class="c1"># NotImplementedError subclasses RuntimeError, so callers</span>
+            <span class="c1"># catching the historical RuntimeError still work; this matches</span>
+            <span class="c1"># the scalar path's error type for non-compiled settings.</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) "</span>
-                <span class="sa">f</span><span class="s2">"not supported by D extension."</span><span class="p">)</span>
+                <span class="sa">f</span><span class="s2">"not supported by D extension (no vector-path fallback)."</span><span class="p">)</span>
 
         <span class="c1"># kernel must be C-contiguous (N, d, d) and g (N, d)</span>
         <span class="n">k_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>

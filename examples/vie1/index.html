@@ -11,7 +11,7 @@
       
       
       
-        <link rel="prev" href="../../api/optimal_graded_mesh/">
+        <link rel="prev" href="../../api/coll_nodes/">
       
       
         <link rel="next" href="../vie2/">
@@ -749,6 +749,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/coll_nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collocation node helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1102,7 +1130,7 @@
 <h1 id="example-type-1-volterra-integral-equation">Example: Type-1 Volterra Integral Equation</h1>
 <p>Solve the VIE-1</p>
 <div class="arithmatex">\[g(t) = \int_0^t K(t-s)y(s)ds\]</div>
-<p>with <span class="arithmatex">\(K(s) = e^s\)</span>, <span class="arithmatex">\(g(t) = \sin(t)\)</span>, whose exact solution is <span class="arithmatex">\(y(t) = \cos(t) - \sin(t)\)</span>.</p>
+<p>with <span class="arithmatex">\(K(u) = e^u\)</span> (as a function of the lag <span class="arithmatex">\(u = t - s\)</span>), <span class="arithmatex">\(g(t) = \sin(t)\)</span>, whose exact solution is <span class="arithmatex">\(y(t) = \cos(t) - \sin(t)\)</span>.</p>
 <pre><code class="language-python">import numpy as np
 from voles import solve_VIE_1
 

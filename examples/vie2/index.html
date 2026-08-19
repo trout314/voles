@@ -749,6 +749,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/coll_nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collocation node helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1102,7 +1130,7 @@
 <h1 id="example-type-2-volterra-integral-equation">Example: Type-2 Volterra Integral Equation</h1>
 <p>Solve the VIE-2</p>
 <div class="arithmatex">\[y(t) = g(t) + \int_0^t K(t-s)y(s)ds\]</div>
-<p>with <span class="arithmatex">\(K(s) = e^{-s}\)</span> and <span class="arithmatex">\(g(t)\)</span> chosen so the exact solution is <span class="arithmatex">\(y(t) = \sin(t)\)</span>.</p>
+<p>with <span class="arithmatex">\(K(u) = e^{-u}\)</span> (as a function of the lag <span class="arithmatex">\(u = t - s\)</span>) and <span class="arithmatex">\(g(t)\)</span> chosen so the exact solution is <span class="arithmatex">\(y(t) = \sin(t)\)</span>.</p>
 <pre><code class="language-python">import numpy as np
 from voles import solve_VIE_2
 

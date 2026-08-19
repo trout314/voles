@@ -822,6 +822,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../coll_nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collocation node helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1248,8 +1276,8 @@ matrix. Defaults to zero.</p>
             <td>
               <div class="doc-md-description">
                 <p>Forcing term <span class="arithmatex">\(g(t)\)</span> sampled at the same times as <code>kernel_values</code>.
-For matrix-valued equations pass shape <code>(N, d, m)</code> to solve <span class="arithmatex">\(m\)</span>
-right-hand sides simultaneously. Defaults to zero.</p>
+Defaults to zero. In the matrix-valued case pass shape
+<code>(N, d, m)</code> (or a shared <code>(N, d)</code> forcing for all columns).</p>
               </div>
             </td>
             <td>
@@ -1265,7 +1293,10 @@ right-hand sides simultaneously. Defaults to zero.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Initial value <span class="arithmatex">\(y(0) = y_0\)</span>. Required.</p>
+                <p>Initial value <span class="arithmatex">\(y(0) = y_0\)</span>. Required. A <code>(d, m)</code> shape is what
+<em>selects</em> the matrix-valued case (<span class="arithmatex">\(m\)</span> right-hand sides solved
+simultaneously, in threads capped at the CPU count); <code>g_values</code>
+alone does not.</p>
               </div>
             </td>
             <td>
@@ -1422,6 +1453,53 @@ equations), one polynomial per component.</p>
     </table>
 
 
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>For invalid shapes or collocation settings, inputs too short to form
+one mesh interval, matrix input with zero columns, or inputs so large
+that a solver buffer would exceed <span class="arithmatex">\(2^{31}\)</span> elements.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="NotImplementedError">NotImplementedError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>For a collocation setting not compiled into the D extension, on the
+vector/matrix path (no fallback exists) or on the scalar path when
+<code>numba</code> is not installed.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="numpy.linalg.LinAlgError">LinAlgError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If a collocation system is singular or nearly singular.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
 <details class="note" open>
   <summary>Notes</summary>
   <p>The length <span class="arithmatex">\(N\)</span> of the input arrays must satisfy
@@ -1432,7 +1510,8 @@ is truncated to the largest conforming length and a warning is printed
 the given collocation setting. For scalar equations, settings not compiled
 into the extension fall back to a Numba-JIT implementation (requires the
 <code>numba</code> optional dependency); a warning is printed when the fallback is
-used. For vector equations only the compiled settings are supported.</p>
+used. For vector equations only the compiled settings are supported. The
+compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
 </details>
 
 <details class="references" open>
@@ -1444,23 +1523,7 @@ used. For vector equations only the compiled settings are supported.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">109</span>
-<span class="normal">110</span>
-<span class="normal">111</span>
-<span class="normal">112</span>
-<span class="normal">113</span>
-<span class="normal">114</span>
-<span class="normal">115</span>
-<span class="normal">116</span>
-<span class="normal">117</span>
-<span class="normal">118</span>
-<span class="normal">119</span>
-<span class="normal">120</span>
-<span class="normal">121</span>
-<span class="normal">122</span>
-<span class="normal">123</span>
-<span class="normal">124</span>
-<span class="normal">125</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">125</span>
 <span class="normal">126</span>
 <span class="normal">127</span>
 <span class="normal">128</span>
@@ -1710,7 +1773,45 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="normal">372</span>
 <span class="normal">373</span>
 <span class="normal">374</span>
-<span class="normal">375</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">a_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<span class="normal">375</span>
+<span class="normal">376</span>
+<span class="normal">377</span>
+<span class="normal">378</span>
+<span class="normal">379</span>
+<span class="normal">380</span>
+<span class="normal">381</span>
+<span class="normal">382</span>
+<span class="normal">383</span>
+<span class="normal">384</span>
+<span class="normal">385</span>
+<span class="normal">386</span>
+<span class="normal">387</span>
+<span class="normal">388</span>
+<span class="normal">389</span>
+<span class="normal">390</span>
+<span class="normal">391</span>
+<span class="normal">392</span>
+<span class="normal">393</span>
+<span class="normal">394</span>
+<span class="normal">395</span>
+<span class="normal">396</span>
+<span class="normal">397</span>
+<span class="normal">398</span>
+<span class="normal">399</span>
+<span class="normal">400</span>
+<span class="normal">401</span>
+<span class="normal">402</span>
+<span class="normal">403</span>
+<span class="normal">404</span>
+<span class="normal">405</span>
+<span class="normal">406</span>
+<span class="normal">407</span>
+<span class="normal">408</span>
+<span class="normal">409</span>
+<span class="normal">410</span>
+<span class="normal">411</span>
+<span class="normal">412</span>
+<span class="normal">413</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">a_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
                <span class="n">coll_divs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">],</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">'''</span>
@@ -1732,10 +1833,13 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="sd">        matrix. Defaults to zero.</span>
 <span class="sd">    g_values : array_like of shape (N,) or (N, d) or (N, d, m), optional</span>
 <span class="sd">        Forcing term $g(t)$ sampled at the same times as ``kernel_values``.</span>
-<span class="sd">        For matrix-valued equations pass shape ``(N, d, m)`` to solve $m$</span>
-<span class="sd">        right-hand sides simultaneously. Defaults to zero.</span>
+<span class="sd">        Defaults to zero. In the matrix-valued case pass shape</span>
+<span class="sd">        ``(N, d, m)`` (or a shared ``(N, d)`` forcing for all columns).</span>
 <span class="sd">    soln_init_value : float or array_like of shape (d,) or (d, m)</span>
-<span class="sd">        Initial value $y(0) = y_0$. Required.</span>
+<span class="sd">        Initial value $y(0) = y_0$. Required. A ``(d, m)`` shape is what</span>
+<span class="sd">        *selects* the matrix-valued case ($m$ right-hand sides solved</span>
+<span class="sd">        simultaneously, in threads capped at the CPU count); ``g_values``</span>
+<span class="sd">        alone does not.</span>
 <span class="sd">    time_step : float, optional</span>
 <span class="sd">        Spacing $h$ between consecutive sample times. Must be positive.</span>
 <span class="sd">        Default is 1.0.</span>
@@ -1773,6 +1877,19 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="sd">        is an object array of shape ``(d,)`` (or ``(d, m)`` for matrix</span>
 <span class="sd">        equations), one polynomial per component.</span>
 
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    ValueError</span>
+<span class="sd">        For invalid shapes or collocation settings, inputs too short to form</span>
+<span class="sd">        one mesh interval, matrix input with zero columns, or inputs so large</span>
+<span class="sd">        that a solver buffer would exceed $2^{31}$ elements.</span>
+<span class="sd">    NotImplementedError</span>
+<span class="sd">        For a collocation setting not compiled into the D extension, on the</span>
+<span class="sd">        vector/matrix path (no fallback exists) or on the scalar path when</span>
+<span class="sd">        ``numba`` is not installed.</span>
+<span class="sd">    numpy.linalg.LinAlgError</span>
+<span class="sd">        If a collocation system is singular or nearly singular.</span>
+
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
 <span class="sd">    The length $N$ of the input arrays must satisfy</span>
@@ -1784,7 +1901,8 @@ used. For vector equations only the compiled settings are supported.</p>
 <span class="sd">    the given collocation setting. For scalar equations, settings not compiled</span>
 <span class="sd">    into the extension fall back to a Numba-JIT implementation (requires the</span>
 <span class="sd">    ``numba`` optional dependency); a warning is printed when the fallback is</span>
-<span class="sd">    used. For vector equations only the compiled settings are supported.</span>
+<span class="sd">    used. For vector equations only the compiled settings are supported. The</span>
+<span class="sd">    compiled settings are listed in ``fast_coll_settings_VIDE``.</span>
 
 <span class="sd">    References</span>
 <span class="sd">    ----------</span>
@@ -1850,6 +1968,8 @@ used. For vector equations only the compiled settings are supported.</p>
                 <span class="n">g_cols</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="n">m_cols</span>
             <span class="n">a_trunc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)[:</span><span class="n">N</span><span class="p">]</span> <span class="k">if</span> <span class="n">a_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
             <span class="k">def</span><span class="w"> </span><span class="nf">_col_vide</span><span class="p">(</span><span class="n">j</span><span class="p">):</span>
+                <span class="c1"># column 0 carries any per-solve warnings; the others would</span>
+                <span class="c1"># only duplicate them m_cols times from interleaved threads</span>
                 <span class="k">return</span> <span class="n">solve_VIDE</span><span class="p">(</span><span class="n">kernel_values</span><span class="o">=</span><span class="n">kernel_values_</span><span class="p">,</span>
                                   <span class="n">a_values</span><span class="o">=</span><span class="n">a_trunc</span><span class="p">,</span>
                                   <span class="n">g_values</span><span class="o">=</span><span class="n">g_cols</span><span class="p">[</span><span class="n">j</span><span class="p">],</span>
@@ -1857,8 +1977,8 @@ used. For vector equations only the compiled settings are supported.</p>
                                   <span class="n">time_step</span><span class="o">=</span><span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="n">coll_divs</span><span class="p">,</span>
                                   <span class="n">coll_choices</span><span class="o">=</span><span class="n">coll_choices</span><span class="p">,</span>
                                   <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span>
-                                  <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span><span class="p">)</span>
-            <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">m_cols</span><span class="p">)</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
+                                  <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span> <span class="ow">and</span> <span class="n">j</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+            <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">_column_workers</span><span class="p">(</span><span class="n">m_cols</span><span class="p">))</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
                 <span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ex</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_col_vide</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="n">m_cols</span><span class="p">)))</span>
             <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
                 <span class="n">col_solns</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]</span>
@@ -1907,9 +2027,12 @@ used. For vector equations only the compiled settings are supported.</p>
         <span class="n">coll_choices</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_fast_settings_VIDE</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+            <span class="c1"># NotImplementedError subclasses RuntimeError, so callers</span>
+            <span class="c1"># catching the historical RuntimeError still work; this matches</span>
+            <span class="c1"># the scalar path's error type for non-compiled settings.</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) "</span>
-                <span class="sa">f</span><span class="s2">"not supported by D extension."</span><span class="p">)</span>
+                <span class="sa">f</span><span class="s2">"not supported by D extension (no vector-path fallback)."</span><span class="p">)</span>
 
         <span class="n">k_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
         <span class="n">g_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">g_values_</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
