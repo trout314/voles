@@ -112,6 +112,21 @@ struct ToeplitzHistoryRT
     // scratch buffers, grown on demand and reused across merges
     double[] xre, xim, kre, kim, accre, accim;
 
+    // Per-level cache of kernel-lag spectra. The kernel FFT in mergeFFT
+    // depends only on (S, a, c): the lag segment 1 .. min(2S-1, Q-1) is the
+    // same for every merge of level S, and lag blocks are write-once. Each
+    // level's spectra are built at its first merge (by which point the lazy
+    // fill has provided the needed lags) and reused for all ~Q/2S merges of
+    // that level, cutting the per-merge FFT count from tdim*sdim + sdim +
+    // tdim to sdim + tdim. Levels are cached smallest-first while
+    // kcacheBudget lasts (small levels merge most often and store least);
+    // levels over budget -- typically only the top one or two, which merge
+    // once or twice -- fall back to the on-the-fly path.
+    private double[][] kcacheRe;   // per level li (S = FFT_CUTOFF << li):
+    private double[][] kcacheIm;   //   [(a*sdim + c)*2S + t], null = uncached
+    private bool[] kcacheTried;
+    private size_t kcacheBudget;   // doubles remaining for cache arrays
+
     // Lazy lag-table fill: when set (see setLagFiller), push() extends the
     // table on demand to exactly the lags the pending merge reads, instead
     // of the driver evaluating all Q-1 blocks up front. Same total work on
@@ -134,6 +149,10 @@ struct ToeplitzHistoryRT
         nPushed = 0;
         fillLag = null;
         lagsFilled = Q;   // eager mode: caller pre-fills lags 1 .. Q-1
+        kcacheRe = null;
+        kcacheIm = null;
+        kcacheTried = null;
+        kcacheBudget = 2 * lagB.length;   // cap cache (re+im) at 2x lag table
     }
 
     // Register the per-lag fill callback and switch to lazy fill. The
@@ -269,22 +288,33 @@ struct ToeplitzHistoryRT
         accre[0 .. cast(size_t) tdim * sL] = 0.0;
         accim[0 .. cast(size_t) tdim * sL] = 0.0;
 
-        // per (a, c): FFT of the lag segment 1 .. 2S-1, multiply, accumulate
+        // Kernel spectra for this level: from the cache when available,
+        // otherwise computed per (a, c) into the shared scratch.
+        int li = 0;
+        for (int lvl = FFT_CUTOFF; lvl < S; lvl <<= 1)
+            ++li;
+        immutable bool cached = ensureKernelCache(li, S, sL);
+
+        // per (a, c): kernel spectrum times source spectrum, accumulate
         foreach (a; 0 .. tdim)
         {
             auto Ar = accre[a * sL .. (a + 1) * sL];
             auto Ai = accim[a * sL .. (a + 1) * sL];
             foreach (c; 0 .. sdim)
             {
-                auto kr = kre[0 .. sL];
-                auto ki = kim[0 .. sL];
-                kr[] = 0.0;
-                ki[] = 0.0;
-                immutable int lagTop = (2 * S - 1 < Q - 1) ? 2 * S - 1 : Q - 1;
-                foreach (v; 1 .. lagTop + 1)
-                    kr[v] = lagB[cast(size_t) v * tdim * sdim
-                                 + cast(size_t) a * sdim + c];
-                fft_radix2(kr, ki, false);
+                const(double)[] kr, ki;
+                if (cached)
+                {
+                    immutable size_t off = (cast(size_t) a * sdim + c) * sL;
+                    kr = kcacheRe[li][off .. off + sL];
+                    ki = kcacheIm[li][off .. off + sL];
+                }
+                else
+                {
+                    kernelSpectrum(S, a, c, kre[0 .. sL], kim[0 .. sL]);
+                    kr = kre[0 .. sL];
+                    ki = kim[0 .. sL];
+                }
                 auto Xr = xre[c * sL .. (c + 1) * sL];
                 auto Xi = xim[c * sL .. (c + 1) * sL];
                 foreach (t; 0 .. L)
@@ -298,6 +328,52 @@ struct ToeplitzHistoryRT
             foreach (w; 0 .. tEnd - bnd)
                 Gacc[cast(size_t)(bnd + w) * tdim + a] += Ar[S + w] * inv;
         }
+    }
+
+    // Fill kr/ki (length 2S, zero-padded) with the forward FFT of lagB's
+    // (a, c) lag segment 1 .. min(2S-1, Q-1) for level S. Shared by the
+    // cache build and the uncached fallback so both produce bit-identical
+    // spectra.
+    private void kernelSpectrum(int S, int a, int c, double[] kr, double[] ki)
+    {
+        kr[] = 0.0;
+        ki[] = 0.0;
+        immutable int lagTop = (2 * S - 1 < Q - 1) ? 2 * S - 1 : Q - 1;
+        foreach (v; 1 .. lagTop + 1)
+            kr[v] = lagB[cast(size_t) v * tdim * sdim
+                         + cast(size_t) a * sdim + c];
+        fft_radix2(kr, ki, false);
+    }
+
+    // Build the level-li spectra cache on the level's first merge, if the
+    // budget allows. Returns true iff the cache for this level is usable.
+    private bool ensureKernelCache(int li, int S, size_t sL)
+    {
+        if (li >= cast(int) kcacheTried.length)
+        {
+            kcacheRe.length = li + 1;
+            kcacheIm.length = li + 1;
+            kcacheTried.length = li + 1;
+        }
+        if (kcacheTried[li])
+            return kcacheRe[li] !is null;
+        kcacheTried[li] = true;
+        immutable size_t need = cast(size_t) tdim * sdim * sL;
+        if (2 * need > kcacheBudget)
+            return false;
+        kcacheBudget -= 2 * need;
+        auto re = new double[need];
+        auto im = new double[need];
+        foreach (a; 0 .. tdim)
+            foreach (c; 0 .. sdim)
+            {
+                immutable size_t off = (cast(size_t) a * sdim + c) * sL;
+                kernelSpectrum(S, a, c, re[off .. off + sL],
+                               im[off .. off + sL]);
+            }
+        kcacheRe[li] = re;
+        kcacheIm[li] = im;
+        return true;
     }
 }
 
