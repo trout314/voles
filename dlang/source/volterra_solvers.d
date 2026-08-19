@@ -2449,7 +2449,10 @@ version (Windows)
     private enum uint FLS_OUT_OF_INDEXES = 0xFFFF_FFFF;
     private __gshared uint g_detachFlsIndex = FLS_OUT_OF_INDEXES;
 
-    private extern (Windows) void detachThisThread(void* threadObj)
+    // nothrow @nogc: required to match FlsCallback (the alias inherits those
+    // attributes from its extern(Windows) declaration block), and valid --
+    // thread_detachInstance is itself nothrow @nogc.
+    private extern (Windows) void detachThisThread(void* threadObj) nothrow @nogc
     {
         // Detach by stored instance: druntime's own TLS may already be torn
         // down when this destructor runs (destructor ordering across TLS
@@ -2467,11 +2470,12 @@ else
     private __gshared pthread_key_t g_detachKey;
     private __gshared bool g_detachKeyCreated = false;
 
-    private extern (C) void detachThisThread(void* threadObj)
+    private extern (C) void detachThisThread(void* threadObj) nothrow @nogc
     {
         // See the Windows variant: detach by stored instance, because
         // druntime's TLS (and so Thread.getThis) may already be gone when
-        // pthread key destructors run.
+        // pthread key destructors run. nothrow @nogc for symmetry with the
+        // Windows hook (and thread_detachInstance is nothrow @nogc anyway).
         import core.thread.threadbase : ThreadBase, thread_detachInstance;
         if (threadObj !is null)
             thread_detachInstance(cast(ThreadBase) threadObj);
