@@ -15,7 +15,7 @@ Scientific Python package (`voles`) providing collocation-method solvers for Vol
 
 ### Building the D extension (required for tests to pass)
 ```bash
-meson setup dlang/build dlang
+meson setup dlang/build dlang --buildtype=release   # release: matches CI/wheels
 ninja -C dlang/build
 cp dlang/build/volterra_dlang.so src/voles/  # .dylib on macOS, .dll on Windows
 ```
@@ -27,7 +27,7 @@ detects it only via pkg-config, and Homebrew's `lapack` is keg-only, so on macOS
 ```bash
 brew install lapack
 export PKG_CONFIG_PATH=/opt/homebrew/opt/lapack/lib/pkgconfig
-meson setup dlang/build dlang   # should report "dependency lapack found: YES"
+meson setup dlang/build dlang --buildtype=release   # should report "dependency lapack found: YES"
 ```
 
 Verify with `python -c "from voles._dlang import have_lapack_d; print(have_lapack_d())"`.

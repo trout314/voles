@@ -52,7 +52,7 @@ jobs:
           cp build/volterra_dlang.so ../src/voles/
 
       - name: Install package and dependencies
-        run: pip install -e ".[dev,callable]"
+        run: pip install -e ".[dev]"
 
       - name: Run documentation examples
         run: pytest --markdown-docs docs/ README.md -v

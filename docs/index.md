@@ -17,9 +17,13 @@ meshes, and handles weakly singular kernels.
 | $y(t) = g(t) + \int_0^t K(t-s)y(s)ds$ | `solve_VIE_2` | `function_solve_VIE_2` |
 | $y'(t) = a(t)y(t) + g(t) + \int_0^t K(t-s)y(s)ds$ | `solve_VIDE` | `function_solve_VIDE` |
 
-The callable-input solvers also expose `optimal_graded_mesh(alpha, T, M,
-order)` for building a Brunner-graded mesh suitable for kernels
-with a $u^{-\alpha}$ singularity.
+The callable-input solvers also expose `optimal_graded_mesh(alpha=..., T=...,
+M=..., order=...)` for building a Brunner-graded mesh suitable for kernels
+with a $u^{-\alpha}$ singularity — and, when the exponent $\alpha$ is known,
+the dict form `kernel_singularity={0.0: alpha}` switches the singular blocks
+to fast deterministic Gauss–Jacobi quadrature. Collocation nodes can be given
+directly via `coll_nodes`, with `gauss_legendre_nodes`, `radau_iia_nodes`,
+and `lobatto_nodes` helpers for the classical families.
 
 ## Installation
 

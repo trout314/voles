@@ -2,7 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+- **Arbitrary collocation nodes** on the callable-input solvers via the
+  ``coll_nodes`` parameter (floats in $[0, 1]$, mutually exclusive with
+  ``coll_divs``/``coll_choices``), with helpers ``gauss_legendre_nodes``,
+  ``radau_iia_nodes``, and ``lobatto_nodes`` for the classical families, and
+  Brunner-faithful convergence checks for VIE-1 node sets (this entry was
+  missed when the feature landed).
+
 ### Fixed
+- **Callable-solver matrix (multi-RHS) column fan-out** now shares the
+  array-solver behavior: thread pool capped at the CPU count (was one
+  thread per column) and a clear ``ValueError`` for zero-column inputs.
+- The in-tree development fallback path for locating the compiled D library
+  pointed one directory too high, making the documented copy step silently
+  mandatory; ``<repo>/dlang/build`` now works directly, and the ImportError
+  message points at CONTRIBUTING.md instead of a nonexistent file.
 - **Adaptive quadrature could evaluate the kernel exactly at a declared
   singular point and let that value poison the weights.** `quad_vec` (the
   vector/matrix/complex backend) subdivides an endpoint-singular integrand
@@ -97,6 +112,27 @@
   default-tolerance quadratures still warn as before.
 
 ### Documentation
+- Full documentation consistency pass. Corrected statements that had drifted
+  from the code: the README complexity table now reflects the blocked-FFT
+  history scheme (array solvers are $O(N \log^2 N)$, not $O(N^2)$; the
+  callable family's $O(M^2)$ scaling is documented separately); the
+  callable-solver example no longer claims an undeclared singularity raises
+  an error (it silently loses convergence order — the docs now say so and
+  explain why declaring matters); ``show_warnings`` is no longer described
+  as unused; ``solve_VIDE``'s docstring now states that matrix mode is
+  selected by the ``soln_init_value`` shape (not ``g_values``); the
+  Gauss-Legendre/Radau node-helper docstrings now give the correct VIE-1
+  order statement (Gauss sits at the $|\rho_p| = 1$ boundary and loses one
+  order; Radau attains full order). Added ``Raises`` sections to all public
+  functions, a ``Returns`` section to ``function_solve_VIE_1``, README/
+  example/getting-started coverage for the ``kernel_singularity`` dict form,
+  ``reuse_adaptive_blocks``, and ``coll_nodes`` + node helpers (with a new
+  API reference page), and standardized the kernel-lag notation on $K(u)$.
+  Example snippets that emitted truncation warnings now use conforming
+  lengths. CONTRIBUTING now covers ``--buildtype=release``, LAPACK via
+  pkg-config, the ``[dev,full]`` dev install, docs previewing, the
+  changelog convention, and the compiled collocation-setting limits; test
+  CI installs ``[dev,full]`` so the numba fallback tests run.
 - The install/dependency instructions are now single-sourced: the README
   install block is the canonical copy, and the docs site pulls it in via a
   snippet, so the two can no longer drift. Fixed the stale docs that still

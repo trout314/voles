@@ -15,7 +15,7 @@ The Volterra Equation Solvers (VOLES) package is a collection of collocation-met
 
 > Brunner H. *Collocation Methods for Volterra Integral and Related Functional Differential Equations.* Cambridge University Press; 2004.
 
-The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code. All solvers support real-valued and complex-valued data, and scalar-, vector-, and matrix-valued equations. Currently, only convolution type kernels are supported, but this restriction is likely to be lifted in a future versions.
+The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code. All solvers support real-valued and complex-valued data, and scalar-, vector-, and matrix-valued equations. Currently, only convolution type kernels are supported, but this restriction is likely to be lifted in a future version.
 
 ## Solvers
 
@@ -23,7 +23,7 @@ Two solver families are provided.
 
 - The **array-input** family (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`) take the kernel and other input functions as arrays of values given on a uniform time grid. They do not support singular kernels.
 
-- The **callable-input** family (`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`) accept the kernel and other input functions as Python callables, and allow arbitrary collocation mesh intervals. These solvers support kernels with one or more integrable singularities, but the user must specify the location of the singular points. A helper function `optimal_graded_mesh` is provided for building an optimal set of mesh points in the case of a convolution kernel with a known power-law singularity at time zero.
+- The **callable-input** family (`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`) accept the kernel and other input functions as Python callables, and allow arbitrary collocation mesh intervals. These solvers support kernels with one or more integrable singularities, declared via the `kernel_singularity` parameter. Declaring just the singular *locations* (e.g. `kernel_singularity=0.0` for an Abel kernel) makes the solver integrate the affected blocks with adaptive quadrature; declaring the *power law* too, with the dict form `kernel_singularity={0.0: 0.5}` for $K(u) \sim u^{-1/2}$, switches those blocks to deterministic Gauss–Jacobi rules — typically an order of magnitude faster to build, with the same accuracy. A helper function `optimal_graded_mesh` builds the optimally graded mesh for a power-law singularity at time zero, and collocation nodes can be given directly via `coll_nodes` (with `gauss_legendre_nodes`, `radau_iia_nodes`, and `lobatto_nodes` helpers for the classical families).
 
 Note that the callable-input family of solvers require the package `scipy`, which is included by default.
 
@@ -62,7 +62,7 @@ $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
 ### Mesh helper: `optimal_graded_mesh`
 
-This function should be used when the kernel has a single weak singularity at time zero with a known singular exponent.  Returns the graded mesh points $t_n = T (n/M)^r$ for $n=0,1,\ldots, M$ where $M$ is the desired number of mesh intervals. The grading exponent is $r = p / (1 - \alpha)$ where $p$ is the method order set by the paramerer `order`, and $\alpha \in [0, 1)$ is the singular exponent for the kernel, set via the pararameter `alpha`. To get an optimal mesh for a given set of collocation parameters, one should set `order=len(coll_choices)`. These meshes are designed for convolution kernels with $K(u) \sim u^{-\alpha}$ near $u\sim 0$ for $\alpha \in [0, 1)$. (For $\alpha = 0$ it returns a uniform mesh). Feeding the result to a callable-input solver via `mesh_breakpoints` gives optimal convergence in such situations.
+This function should be used when the kernel has a single weak singularity at time zero with a known singular exponent.  Returns the graded mesh points $t_n = T (n/M)^r$ for $n=0,1,\ldots, M$ where $M$ is the desired number of mesh intervals. The grading exponent is $r = p / (1 - \alpha)$ where $p$ is the method order set by the parameter `order`, and $\alpha \in [0, 1)$ is the singular exponent for the kernel, set via the parameter `alpha`. To get an optimal mesh for a given set of collocation parameters, one should set `order=len(coll_choices)`. These meshes are designed for convolution kernels with $K(u) \sim u^{-\alpha}$ near $u\sim 0$ for $\alpha \in [0, 1)$. (For $\alpha = 0$ it returns a uniform mesh). Feeding the result to a callable-input solver via `mesh_breakpoints` gives optimal convergence in such situations.
 
 API reference: [api/optimal_graded_mesh/](https://trout314.github.io/voles/api/optimal_graded_mesh/)
 
@@ -127,7 +127,7 @@ See the worked examples: [vector- and matrix-valued equations](https://trout314.
 
 ## Complex-Valued Equations
 
-All three solvers accept complex-valued inputs. Pass complex NumPy arrays (or, for the callable family, callables returning complex values) for the kernel, forcing function, and (for VIDE) initial value, and the solver returns a complex-valued solution. This works for scalar, vector, and matrix cases alike. See the [complex-valued equations example](https://trout314.github.io/voles/examples/complex/).
+Both solver families accept complex-valued inputs. Pass complex NumPy arrays (or, for the callable family, callables returning complex values) for the kernel, forcing function, and (for VIDE) initial value, and the solver returns a complex-valued solution. This works for scalar, vector, and matrix cases alike. See the [complex-valued equations example](https://trout314.github.io/voles/examples/complex/).
 
 ## How the Collocation Method Works
 
@@ -147,16 +147,18 @@ Passing `return_function=True` to any solver returns a `(soln_values, solution)`
 
 ## Benchmarks
 
-All three solvers have the same expected asymptotic complexity in N, d, and m, where N is the number of input points, d is the number of rows in the solution, and m is the number of columns:
+**Array-input solvers.** On their uniform grid the history sums are accumulated with a blocked-FFT scheme (Hairer–Lubich–Schlichte), so the runtime is quasilinear — not quadratic — in the number of input points N; d is the number of rows in the solution and m the number of columns:
 
 | | Scalar | Vector (d×1) | Matrix (d×m)* |
 |---|---|---|---|
-| Time | O(N²) | O(N²d²) | O(N²d²m) |
-| Memory | O(N) | O(Nd²) | O(Nd²m) |
+| Time | O(N log² N) | O(N log² N · d²) | O(N log² N · d² m) |
+| Memory | O(N) | O(N d²) | O(N d² m) |
 
-\* The m columns of the solution are independent and the code runs them in parallel.
+\* The m columns of the solution are independent and run in parallel threads (capped at the CPU count).
 
-The quadratic time scaling arises because each new mesh step requires a history sum over all previous steps. The `coll_divs` and `coll_choices` parameters affect the constant factor but not the asymptotic scaling in N, d, and m.
+The `coll_divs` and `coll_choices` parameters affect the constant factor but not the asymptotic scaling in N, d, and m.
+
+**Callable-input solvers.** With M mesh intervals and p collocation nodes per interval, the precomputed weight tensor couples every interval pair, so time and memory scale as O(M² p² d²). On a *uniform* mesh with a convolution kernel the tensor is Toeplitz and is assembled from a single integrated row, reducing the number of numerical integrations — the dominant cost in practice — from O(M²) to O(M); declaring a power-law singularity with the dict form of `kernel_singularity` keeps this fast path for singular kernels too.
 
 **Measured timings** for both solver families (regenerated automatically on each push) live on the [benchmarks page of the documentation](https://trout314.github.io/voles/benchmarks/), alongside an [interactive history dashboard](https://trout314.github.io/voles/dev/bench/).
 

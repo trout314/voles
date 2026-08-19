@@ -4,7 +4,7 @@ Solve the VIE-1
 
 $$g(t) = \int_0^t K(t-s)y(s)ds$$
 
-with $K(s) = e^s$, $g(t) = \sin(t)$, whose exact solution is $y(t) = \cos(t) - \sin(t)$.
+with $K(u) = e^u$ (as a function of the lag $u = t - s$), $g(t) = \sin(t)$, whose exact solution is $y(t) = \cos(t) - \sin(t)$.
 
 ```python
 import numpy as np

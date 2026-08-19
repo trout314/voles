@@ -20,9 +20,9 @@ evaluates the solution and its derivative at a point not on the time grid:
 import numpy as np
 from voles import solve_VIDE
 
-# y(t) = sin(t) satisfies this VIDE with K(s) = exp(-s), a(t) = -1
+# y(t) = sin(t) satisfies this VIDE with K(u) = exp(-u), a(t) = -1
 time_step = 0.1
-times = np.arange(0, 9.1, time_step)   # 91 points
+times = np.arange(0, 8.9, time_step)   # 89 points = 22×2² + 1 (coll_divs=2)
 kernel = np.exp(-times)
 a = np.full(len(times), -1.0)
 g = 1.5*np.cos(times) + 0.5*np.sin(times) - 0.5*np.exp(-times)

@@ -144,10 +144,13 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         matrix. Defaults to zero.
     g_values : array_like of shape (N,) or (N, d) or (N, d, m), optional
         Forcing term $g(t)$ sampled at the same times as ``kernel_values``.
-        For matrix-valued equations pass shape ``(N, d, m)`` to solve $m$
-        right-hand sides simultaneously. Defaults to zero.
+        Defaults to zero. In the matrix-valued case pass shape
+        ``(N, d, m)`` (or a shared ``(N, d)`` forcing for all columns).
     soln_init_value : float or array_like of shape (d,) or (d, m)
-        Initial value $y(0) = y_0$. Required.
+        Initial value $y(0) = y_0$. Required. A ``(d, m)`` shape is what
+        *selects* the matrix-valued case ($m$ right-hand sides solved
+        simultaneously, in threads capped at the CPU count); ``g_values``
+        alone does not.
     time_step : float, optional
         Spacing $h$ between consecutive sample times. Must be positive.
         Default is 1.0.
@@ -185,6 +188,19 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         is an object array of shape ``(d,)`` (or ``(d, m)`` for matrix
         equations), one polynomial per component.
 
+    Raises
+    ------
+    ValueError
+        For invalid shapes or collocation settings, inputs too short to form
+        one mesh interval, matrix input with zero columns, or inputs so large
+        that a solver buffer would exceed $2^{31}$ elements.
+    NotImplementedError
+        For a collocation setting not compiled into the D extension, on the
+        vector/matrix path (no fallback exists) or on the scalar path when
+        ``numba`` is not installed.
+    numpy.linalg.LinAlgError
+        If a collocation system is singular or nearly singular.
+
     Notes
     -----
     The length $N$ of the input arrays must satisfy
@@ -196,7 +212,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     the given collocation setting. For scalar equations, settings not compiled
     into the extension fall back to a Numba-JIT implementation (requires the
     ``numba`` optional dependency); a warning is printed when the fallback is
-    used. For vector equations only the compiled settings are supported.
+    used. For vector equations only the compiled settings are supported. The
+    compiled settings are listed in ``fast_coll_settings_VIDE``.
 
     References
     ----------
@@ -466,6 +483,23 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         is an object array of shape ``(d,)`` (or ``(d, m)`` for matrix
         equations), one polynomial per component.
 
+    Raises
+    ------
+    ValueError
+        For invalid shapes or collocation settings — including the known
+        non-convergent VIE-1 settings ``(coll_divs=3, [1])``,
+        ``(4, [1])``, and ``(4, [1, 2])``, which are rejected outright —
+        inputs too short to form one mesh interval, matrix input with zero
+        columns, or inputs so large that a solver buffer would exceed
+        $2^{31}$ elements.
+    NotImplementedError
+        For a collocation setting not compiled into the D extension, on the
+        vector/matrix path (no fallback exists) or on the scalar path when
+        ``numba`` is not installed.
+    numpy.linalg.LinAlgError
+        If a collocation system is singular or nearly singular (e.g. a zero
+        kernel).
+
     Notes
     -----
     The length $N$ of the input arrays must satisfy
@@ -482,7 +516,9 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     the given collocation setting. For scalar equations, settings not compiled
     into the extension fall back to a Numba-JIT implementation (requires the
     ``numba`` optional dependency); a warning is printed when the fallback is
-    used. For vector equations only the compiled settings are supported.
+    used. For vector equations only the compiled settings are supported. The
+    supported settings (with the non-convergent ones excluded) are listed in
+    ``fast_coll_settings_VIE_1``.
 
     References
     ----------
@@ -751,6 +787,19 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         is an object array of shape ``(d,)`` (or ``(d, m)`` for matrix
         equations), one polynomial per component.
 
+    Raises
+    ------
+    ValueError
+        For invalid shapes or collocation settings, inputs too short to form
+        one mesh interval, matrix input with zero columns, or inputs so large
+        that a solver buffer would exceed $2^{31}$ elements.
+    NotImplementedError
+        For a collocation setting not compiled into the D extension, on the
+        vector/matrix path (no fallback exists) or on the scalar path when
+        ``numba`` is not installed.
+    numpy.linalg.LinAlgError
+        If a collocation system is singular or nearly singular.
+
     Notes
     -----
     The length $N$ of the input arrays must satisfy
@@ -762,7 +811,8 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     the given collocation setting. For scalar equations, settings not compiled
     into the extension fall back to a Numba-JIT implementation (requires the
     ``numba`` optional dependency); a warning is printed when the fallback is
-    used. For vector equations only the compiled settings are supported.
+    used. For vector equations only the compiled settings are supported. The
+    compiled settings are listed in ``fast_coll_settings_VIE_2``.
 
     References
     ----------

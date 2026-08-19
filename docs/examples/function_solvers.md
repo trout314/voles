@@ -74,10 +74,73 @@ for n in range(len(mesh) - 1):
 print(f"max error: {err:.2e}")
 ```
 
-If you forget to declare the singularity, the solver raises a `ValueError`
-with a clear pointer to the `kernel_singularity` parameter — the weight
-tensor's `np.isfinite` check fires before any garbage solution can be
-returned.
+Declaring the singularity matters: the quadrature nodes are all interior, so
+an undeclared endpoint singularity usually does **not** raise an error — the
+solver quietly loses convergence order (and spends longer in adaptive
+fallbacks) instead. If the kernel ever evaluates to `inf`/`nan` at a
+quadrature node, a `ValueError` from the weight tensor's `np.isfinite` check
+points you to `kernel_singularity`, but do not rely on that safety net:
+declare every integrable singularity you know about. (The solver also prints
+a hint if you declare a singularity on a near-uniform mesh, suggesting
+`optimal_graded_mesh`; silence it with `show_warnings=False`.)
+
+## Known power law? Declare it for a much faster build
+
+If you also know the singularity's *exponent*, use the dict form
+`kernel_singularity={location: alpha}` for $K(u) \sim |u - u_0|^{-\alpha}$.
+Blocks touching the singularity are then integrated by deterministic
+Gauss–Jacobi rules with the singular factor absorbed into the quadrature
+weight — on the Abel problem above this makes the weight-tensor build several
+times faster on a graded mesh, and an order of magnitude faster on a uniform
+mesh (where the deterministic rules can be reused across the Toeplitz
+assembly), with the same accuracy:
+
+```python
+import numpy as np
+from voles import function_solve_VIE_2, optimal_graded_mesh
+
+kernel = lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0
+g = lambda t: np.sqrt(t) - 0.5 * np.pi * t   # exact y = sqrt(t)
+mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30, order=3)
+
+y_arr = function_solve_VIE_2(
+    kernel=kernel, g=g,
+    mesh_breakpoints=mesh,
+    coll_divs=2, coll_choices=[0, 1, 2],
+    kernel_singularity={0.0: 0.5},   # K(u) ~ u^(-1/2) near u = 0
+)
+```
+
+A wrongly declared exponent is caught by a two-order acceptance check and
+falls back to the adaptive treatment automatically, so the dict form is never
+less accurate than the location-only form. Relatedly, on uniform meshes the
+`reuse_adaptive_blocks=True` flag speeds up the *location-only* (adaptive)
+path by reusing adaptive blocks across the Toeplitz assembly, at the price of
+deviations from the default path bounded by the quadrature tolerance
+(~1e-8); with a fully declared dict form it is unnecessary (a no-op).
+
+## Choosing collocation nodes directly
+
+Instead of the rational `coll_divs`/`coll_choices` grid, nodes can be given
+directly with `coll_nodes` — including the classical families via the
+`gauss_legendre_nodes`, `radau_iia_nodes`, and `lobatto_nodes` helpers:
+
+```python
+import numpy as np
+from voles import function_solve_VIE_2, gauss_legendre_nodes
+
+kernel = lambda u: np.exp(-u)
+g = lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t))  # exact y(t) = sin(t)
+
+y_arr = function_solve_VIE_2(
+    kernel=kernel, g=g, mesh_breakpoints=np.linspace(0, 1, 21),
+    coll_nodes=gauss_legendre_nodes(3),   # superconvergent for VIE-2/VIDE
+)
+```
+
+Gauss–Legendre nodes give mesh-point superconvergence for VIE-2 and VIDE;
+for VIE-1 prefer `radau_iia_nodes` (the right-endpoint node gives the full
+collocation order — see the `function_solve_VIE_1` API notes on convergence).
 
 ## Vector-valued kernel
 

@@ -2742,6 +2742,16 @@ def test_vie1_convergence_guard_active_with_empty_singularity():
             kernel_singularity=[], show_warnings=False)
 
 
+def test_matrix_zero_columns_raises_clean_error():
+    """A g returning shape (d, 0) must raise a clear ValueError, not the
+    thread-pool's confusing max_workers message."""
+    with pytest.raises(ValueError, match="zero columns"):
+        function_solve_VIE_2(kernel=lambda u: np.eye(2) * np.exp(-u),
+                             g=lambda t: np.zeros((2, 0)),
+                             mesh_breakpoints=_uniform_mesh(5),
+                             show_warnings=False)
+
+
 def test_jacobi_matrix_matches_per_column_vector():
     """Matrix (multi-RHS) path with the dict form: every column must match an
     independent vector solve using the same declaration."""

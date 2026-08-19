@@ -11,7 +11,7 @@ The two solver families take different input shapes — see the relevant section
 
 ### Array-based solvers (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`)
 
-The key input is `kernel_values`: an array of kernel values `K(s)` sampled from `s=0` in steps of `time_step`. Its length must satisfy `len(kernel_values) = (N × coll_divs²) + 1` for some positive integer N. If the length is larger than required (e.g. 92 when 91 was needed), the arrays are silently truncated to the nearest valid length and a warning is printed. If the length is smaller than `coll_divs² + 1` — too short to form a single mesh interval — a `ValueError` is raised.
+The key input is `kernel_values`: an array of kernel values `K(u)` sampled from `u=0` in steps of `time_step` (here `u = t - s` is the convolution lag appearing in `K(t-s)`). Its length must satisfy `len(kernel_values) = (N × coll_divs²) + 1` for some positive integer N. If the length is larger than required (e.g. 92 when 91 was needed), the arrays are truncated to the nearest valid length and a warning is printed (pass `show_warnings=False` to silence it). If the length is smaller than `coll_divs² + 1` — too short to form a single mesh interval — a `ValueError` is raised. The compiled `(coll_divs, coll_choices)` settings are listed in `fast_coll_settings_VIE_1` / `fast_coll_settings_VIE_2` / `fast_coll_settings_VIDE`; a setting outside those lists needs the optional `numba` dependency (scalar equations only) and otherwise raises `NotImplementedError`.
 
 ### Callable-input solvers (`function_solve_*`)
 
@@ -27,7 +27,7 @@ from voles import solve_VIE_1
 
 time_step = 0.1
 times = np.arange(0, 9.1, time_step)   # 91 points = 10×3² + 1
-kernel = np.exp(times)                  # K(s) = e^s
+kernel = np.exp(times)                  # K(u) = e^u
 g = np.sin(times)
 g[0] = 0.0                              # g(0) must be 0 for Type-1 VIEs
 
@@ -156,5 +156,7 @@ soln = function_solve_VIE_2(
     kernel_singularity=0.0,
 )
 ```
+
+If you also know the power law, declare it with the dict form — `kernel_singularity={0.0: 0.5}` for $K(u) \sim u^{-1/2}$ — and the singular blocks switch from adaptive quadrature to much faster deterministic Gauss–Jacobi rules (with an automatic fallback if the declared exponent turns out to be wrong). Collocation nodes can also be given directly via `coll_nodes`, e.g. `coll_nodes=gauss_legendre_nodes(3)`; see the [callable-solver examples](examples/function_solvers.md).
 
 See the [Callable Inputs and Arbitrary Mesh](examples/function_solvers.md) example for the full walkthrough including vector and matrix-valued cases.

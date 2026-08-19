@@ -5,8 +5,8 @@ runner (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost).
 Mean time is averaged over a variable number of calibrated rounds (from ~9 for
 large inputs up to ~6000 for small inputs).
 
-These tables are regenerated automatically by the benchmark CI job on each push
-to `main`. An interactive history of the same measurements is published at the
+These tables are regenerated automatically by the benchmark CI job on pushes
+to `main` that touch code (docs-only pushes are skipped). An interactive history of the same measurements is published at the
 [benchmark dashboard](https://trout314.github.io/voles/dev/bench/).
 
 For the asymptotic complexity (which is what stays fixed as the implementation

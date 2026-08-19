@@ -2,7 +2,7 @@
 """Generate Markdown benchmark tables from pytest-benchmark JSON and inject them
 into a file between marker comments.
 
-Usage: python benchmarks/make_table.py output.json README.md
+Usage: python benchmarks/make_table.py output.json docs/benchmarks.md
 
 Two regions are filled (markers kept):
 

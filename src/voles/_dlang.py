@@ -165,7 +165,8 @@ def _load() -> None:
 
     candidates = [
         os.path.join(here, lib_name),
-        os.path.normpath(os.path.join(here, "..", "..", "..", "dlang", "build", lib_name)),
+        # In-tree dev fallback: <repo>/src/voles -> <repo>/dlang/build
+        os.path.normpath(os.path.join(here, "..", "..", "dlang", "build", lib_name)),
     ]
     for path in candidates:
         if os.path.exists(path):
@@ -187,7 +188,7 @@ def _load() -> None:
         f"voles requires the compiled D extension ({lib_name}). "
         f"Searched: {candidates}. "
         "Install the package from a pre-built wheel or build the extension manually "
-        "(see dlang/README or the project documentation)."
+        "(see CONTRIBUTING.md in the project repository)."
     )
 
 

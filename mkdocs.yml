@@ -42,6 +42,7 @@ nav:
           - function_solve_VIE_2: api/function_vie2.md
           - function_solve_VIDE: api/function_vide.md
           - optimal_graded_mesh: api/optimal_graded_mesh.md
+          - Collocation node helpers: api/coll_nodes.md
   - Examples:
       - VIE Type 1: examples/vie1.md
       - VIE Type 2: examples/vie2.md

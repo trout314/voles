@@ -16,7 +16,8 @@ where `y` on interval `l` is expanded in the Lagrange basis on the collocation
 nodes. The D extension then runs the per-step linear-algebra hot loop on `W`
 with zero kernel callbacks.
 
-scipy is required (optional extra `[callable]`); imported lazily.
+scipy (a core dependency since 0.6.0) is imported lazily, so the array-based
+solvers work without it.
 """
 
 from __future__ import annotations
@@ -25,6 +26,8 @@ import contextlib
 import functools
 import warnings
 from concurrent.futures import ThreadPoolExecutor
+
+from .solvers import _column_workers
 
 import numpy as np
 from numpy.polynomial import polynomial as npp
@@ -1581,6 +1584,14 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         - callable ``f(t) -> list[float]``: returns the singular $s$-locations
           for collocation point $t$. Forward-compatible with non-convolution
           $K(s, t)$.
+
+        Locations may be Python floats/ints, NumPy scalars, or 0-d arrays;
+        booleans are rejected with a ``ValueError`` (``True`` would silently
+        mean location 1.0). An empty list/tuple/dict declares nothing and
+        behaves exactly like ``None``. The kernel's return value exactly *at*
+        a declared singular point is never used (it is masked out of the
+        quadrature), so returning 0, ``inf``, or a clamped value there are
+        all equivalent.
     return_function : bool, optional
         If True, also return a callable solution wrapper.
     reuse_adaptive_blocks : bool, optional
@@ -1600,21 +1611,42 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         are computed at tightened tolerance, so they are at least as accurate
         as the per-row values they replace. Strictly no effect on non-uniform
         meshes or on kernels with no declared ``kernel_singularity`` (only
-        declared-singularity blocks are ever reused).
+        declared-singularity blocks are ever reused). scipy
+        ``IntegrationWarning``s raised by the deliberately tightened reuse
+        quadratures are suppressed (the best-obtainable value is what reuse
+        wants); default-tolerance quadratures still warn as usual.
     show_warnings : bool, optional
-        Currently unused; reserved for the graded-mesh / mesh-uniformity hint.
+        If True (default), print the near-uniform-mesh hint when a
+        ``kernel_singularity`` is declared on a mesh that looks uniform
+        (suggesting ``optimal_graded_mesh``). Pass False to suppress it.
 
     Returns
     -------
     soln_values : ndarray
         Solution values at collocation nodes, where M is the number of
-        intervals and p = ``len(coll_choices)``. Shape ``(M, p)`` for scalar
-        equations, ``(M, p, d)`` for vector equations, and ``(M, p, d, m)`` for
-        matrix-valued equations.
+        intervals and p is the number of collocation nodes per interval
+        (``len(coll_choices)`` or ``len(coll_nodes)``). Shape ``(M, p)`` for
+        scalar equations, ``(M, p, d)`` for vector equations, and
+        ``(M, p, d, m)`` for matrix-valued equations.
     (soln_values, y_callable) : tuple
         When ``return_function=True``. ``y_callable(t)`` evaluates the
         piecewise polynomial at any time t, returning a scalar / ``(d,)`` /
         ``(d, m)`` value for scalar t (with a leading time axis for array t).
+
+    Raises
+    ------
+    ValueError
+        For invalid meshes, collocation settings, ``kernel_singularity``
+        declarations (including bool locations and out-of-range ``alpha``),
+        non-finite weight-tensor entries, kernel dimension or node count
+        past the compiled limits, or matrix input with zero columns.
+    TypeError
+        If ``kernel`` or ``g`` is not callable.
+    numpy.linalg.LinAlgError
+        If a collocation system is singular or nearly singular (e.g. a zero
+        kernel).
+    ImportError
+        If scipy is not installed.
 
     Notes
     -----
@@ -1623,7 +1655,8 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
 
     Matrix-valued problems share the kernel weight tensor across all $m$
     right-hand sides (it is built once), so they are substantially cheaper than
-    $m$ separate calls.
+    $m$ separate calls. The $m$ columns are solved in threads (capped at the
+    CPU count).
     """
     kernel_singularity = _empty_singularity_to_none(kernel_singularity)
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
@@ -1725,7 +1758,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
             g_arr_j = np.ascontiguousarray(G[:, :, :, j])
             return _dlang_module.function_solve_vie2_vec_d(W, g_arr_j)
 
-        with ThreadPoolExecutor(max_workers=m) as ex:
+        with ThreadPoolExecutor(max_workers=_column_workers(m)) as ex:
             cols = list(ex.map(_col_solve, range(m)))
         y = np.stack(cols, axis=3)  # (M, p, d, m)
 
@@ -1826,14 +1859,26 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     reuse_adaptive_blocks : bool, optional
         Reuse the adaptive-quadrature weight blocks across the uniform-mesh
         Toeplitz assembly; see ``function_solve_VIE_2``.
+    show_warnings : bool, optional
+        If True (default), print the near-uniform-mesh hint when a
+        ``kernel_singularity`` is declared on a mesh that looks uniform;
+        see ``function_solve_VIE_2``.
 
     Returns
     -------
     soln_values : ndarray
         $y$ values at collocation nodes. Shape ``(M, p)`` (scalar),
-        ``(M, p, d)`` (vector), or ``(M, p, d, m)`` (matrix-valued).
+        ``(M, p, d)`` (vector), or ``(M, p, d, m)`` (matrix-valued), with p
+        the number of collocation nodes per interval.
     (soln_values, y_callable) : tuple
         When ``return_function=True``.
+
+    Raises
+    ------
+    ValueError, TypeError, numpy.linalg.LinAlgError, ImportError
+        As for ``function_solve_VIE_2``; additionally ``TypeError`` when
+        ``soln_init_value`` is omitted and ``ValueError`` when its shape is
+        incompatible with the kernel dimension.
 
     Notes
     -----
@@ -1978,7 +2023,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
                 W, g_arr_j, a_arr, alpha, w_vec, widths,
                 np.ascontiguousarray(init_arr[:, j]))
 
-        with ThreadPoolExecutor(max_workers=m) as ex:
+        with ThreadPoolExecutor(max_workers=_column_workers(m)) as ex:
             results = list(ex.map(_col_solve, range(m)))
 
         # y_prime_j: (M, p, d); y_boundary_j: (M+1, d). Stack on a new last axis.
@@ -2092,7 +2137,7 @@ def optimal_graded_mesh(*, alpha: float, T: float, M: int,
     singular convolution kernel $K(u) \sim u^{-\alpha}$, $\alpha \in [0, 1)$.
 
     Grading: $t_n = T \cdot (n/M)^r$ with $r = p / (1 - \alpha)$, where
-    $p = $ ``order`` is the order of the collocation method (number of
+    $p =$ ``order`` is the order of the collocation method (number of
     collocation nodes per interval). This recovers the optimal convergence
     order for Abel-type kernels (per Brunner ch. 6). At ``alpha == 0`` the
     kernel is non-singular and the solution smooth, so a uniform mesh
@@ -2114,6 +2159,12 @@ def optimal_graded_mesh(*, alpha: float, T: float, M: int,
     -------
     mesh_breakpoints : ndarray of shape (M+1,)
         Strictly-increasing breakpoints with ``[0] == 0`` and ``[-1] == T``.
+
+    Raises
+    ------
+    ValueError
+        If ``alpha`` is outside $[0, 1)$, ``T`` is not positive, or ``M`` /
+        ``order`` is not a positive integer.
 
     Examples
     --------
@@ -2169,10 +2220,12 @@ def gauss_legendre_nodes(p: int) -> np.ndarray:
 
     These interior nodes (none at 0 or 1) give the maximal collocation order.
     For **VIE-2 / VIDE** the solution superconverges to order $2p$ at the mesh
-    points. For **VIE-1** (first kind) there is no mesh-point superconvergence:
-    every node family yields global order $p$, so Gauss confers no order
-    advantage there (though it remains a sound choice). Suitable for all three
-    callable solvers.
+    points. For **VIE-1** (first kind) there is no mesh-point
+    superconvergence, and Gauss nodes are the *borderline* case of the
+    convergence criterion: being symmetric about $1/2$ they give
+    amplification $|\rho_p| = 1$ exactly, which costs one global order
+    (order $p - 1$ instead of $p$; see ``function_solve_VIE_1`` Notes).
+    Prefer ``radau_iia_nodes`` for VIE-1.
 
     Parameters
     ----------
@@ -2195,9 +2248,10 @@ def radau_iia_nodes(p: int) -> np.ndarray:
     The Radau IIA nodes include the right endpoint (``1.0``) and exclude 0.
     For **VIE-2 / VIDE** they give mesh-point superconvergence of order
     $2p - 1$; the right-endpoint node also makes them a common choice for stiff
-    VIDEs. Because 0 is excluded they are valid for **VIE-1**, but first-kind
-    equations have no mesh-point superconvergence -- the method is global order
-    $p$ as for any node family, so Radau confers no order advantage on VIE-1.
+    VIDEs. For **VIE-1** they are the recommended family: the endpoint node
+    makes the amplification factor $\rho_p = 0$, giving the full global order
+    $p$ -- one order better than Gauss-Legendre nodes, whose $|\rho_p| = 1$
+    reduces VIE-1 to order $p - 1$ (see ``function_solve_VIE_1`` Notes).
 
     Parameters
     ----------
@@ -2470,14 +2524,42 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         applied to both the integer and the ``coll_nodes`` paths.
     force_continuous : bool, optional
         If ``True``, use the continuous collocation method (Brunner's
-        $S_m^{(0)}$): the solution is a globally $C^0$ piecewise polynomial of
-        degree $m = $ ``len(coll_choices)``, anchored at $y(0) = $
-        ``soln_init_value``. This requires the last node to be the right
-        endpoint, $c_m = 1$ (see Notes for the convergence condition). The
-        default discontinuous method ($S_{m-1}^{(-1)}$) imposes no such
-        restriction and is generally the better default.
-    kernel_singularity, return_function, reuse_adaptive_blocks, show_warnings :
+        $S_m^{(0)}$): the solution is a globally $C^0$ piecewise polynomial
+        whose degree $m$ is the number of collocation nodes, anchored at
+        $y(0) =$ ``soln_init_value``. This requires the last node to be the
+        right endpoint, $c_m = 1$ -- a structural property of the continuous
+        representation that is enforced regardless of ``kernel_singularity``
+        (see Notes for the separate convergence condition). The default
+        discontinuous method ($S_{m-1}^{(-1)}$) imposes no such restriction
+        and is generally the better default.
+    kernel_singularity : None, float, list of float, dict, or callable
         See ``function_solve_VIE_2``.
+    return_function : bool, optional
+        See ``function_solve_VIE_2``.
+    reuse_adaptive_blocks : bool, optional
+        See ``function_solve_VIE_2``.
+    show_warnings : bool, optional
+        See ``function_solve_VIE_2``; also gates the warning printed when
+        ``soln_init_value`` is passed without ``force_continuous``.
+
+    Returns
+    -------
+    soln_values : ndarray
+        Solution values at collocation nodes, with M the number of intervals
+        and p the number of nodes per interval. Shape ``(M, p)`` for scalar
+        equations, ``(M, p, d)`` for vector equations, and ``(M, p, d, m)``
+        for matrix-valued equations.
+    (soln_values, y_callable) : tuple
+        When ``return_function=True``; ``y_callable`` as in
+        ``function_solve_VIE_2``.
+
+    Raises
+    ------
+    ValueError, TypeError, numpy.linalg.LinAlgError, ImportError
+        As for ``function_solve_VIE_2``; additionally ``ValueError`` for
+        non-convergent node sets (see Notes), zero in ``coll_choices`` /
+        ``coll_nodes``, ``force_continuous`` without $c_m = 1$, or
+        ``force_continuous`` without ``soln_init_value``.
 
     Notes
     -----
@@ -2488,14 +2570,16 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     - Discontinuous (default): converges iff
       $|\rho_m| := \prod_{i=1}^{m} (1 - c_i)/c_i \le 1$ (Thm 2.4.2), with global
       order $m$ (reduced to $m - 1$ at $\rho_m = 1$).
-    - Continuous (``force_continuous``): requires $c_m = 1$ and converges iff
+    - Continuous (``force_continuous``): converges iff
       $|\rho_{m-1}| := \prod_{i=1}^{m-1} (1 - c_i)/c_i \le 1$ (Thm 2.4.5), with
       global order $m + 1$ (reduced to $m$ at $\rho_{m-1} = 1$).
 
-    Node sets violating these are rejected with a ``ValueError``. The criteria
-    do not apply to weakly-singular kernels (where $|K(t, t)|$ is unbounded), so
-    the check is skipped when ``kernel_singularity`` is given and convergence is
-    then the caller's responsibility.
+    Node sets violating these are rejected with a ``ValueError``. The
+    amplification criteria do not apply to weakly-singular kernels (where
+    $|K(t, t)|$ is unbounded), so they are skipped when ``kernel_singularity``
+    is given and convergence is then the caller's responsibility. The
+    $c_m = 1$ requirement of ``force_continuous`` is *not* part of these
+    criteria -- it is structural and always enforced.
 
     These theorems are proved for a *uniform* mesh. The amplification factors
     $\rho$ depend only on the nodes, so the conditions carry over to
@@ -2689,7 +2773,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                 return _dlang_module.function_solve_vie1_cont_vec_d(
                     W, g_arr_j, adv_U, adv_0,
                     np.ascontiguousarray(init_mat[:, j]))
-            with ThreadPoolExecutor(max_workers=m) as ex:
+            with ThreadPoolExecutor(max_workers=_column_workers(m)) as ex:
                 results = list(ex.map(_col_solve, range(m)))
             y = np.stack([r[0] for r in results], axis=3)        # (M, p, d, m)
             if return_function:
@@ -2703,7 +2787,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             g_arr_j = np.ascontiguousarray(G[:, :, :, j])
             return _dlang_module.function_solve_vie1_vec_d(W, g_arr_j)
 
-        with ThreadPoolExecutor(max_workers=m) as ex:
+        with ThreadPoolExecutor(max_workers=_column_workers(m)) as ex:
             cols = list(ex.map(_col_solve, range(m)))
         y = np.stack(cols, axis=3)  # (M, p, d, m)
 
