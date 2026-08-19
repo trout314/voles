@@ -3,6 +3,19 @@
 ## [Unreleased]
 
 ### Added
+- **Power-law singularity declaration (Gauss-Jacobi quadrature)** on the
+  callable-input solvers: `kernel_singularity` now also accepts a dict
+  `{location: alpha}` declaring $K(u) \sim |u-u_0|^{-\alpha}$
+  ($0 < \alpha < 1$; `None` keeps a location adaptive). Blocks touching a
+  declared power-law singularity are integrated by deterministic fixed-order
+  Gauss-Jacobi rules with the singular factor absorbed into the weight --
+  measured ~16x faster than the adaptive path on Abel builds, matching the
+  `reuse_adaptive_blocks` speed *on the default strict-reproducibility
+  policy* (the flag becomes a no-op for fully declared kernels, as sketched
+  in the adaptive-reuse notes' outlook). Each Jacobi block passes the same
+  two-order acceptance check as the smooth path; wrong exponents or extra
+  structure (e.g. log factors) fall back to the adaptive treatment
+  bit-identically. Float/list/callable forms are unchanged.
 - **`reuse_adaptive_blocks` flag** on the callable-input solvers
   (`function_solve_VIE_1/2`, `function_solve_VIDE`). On uniform meshes with
   convolution kernels the weight tensor is assembled from one integrated row;

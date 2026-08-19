@@ -2504,6 +2504,103 @@ def test_reuse_adaptive_blocks_emits_no_integration_warnings():
     assert not [w for w in caught if issubclass(w.category, IntegrationWarning)]
 
 
+def _abel_vie1_kw(sing, M=40):
+    p = as_callable(VIE1_SPEC_ABEL, coll_divs=3, coll_choices=[1, 2, 3])
+    return dict(kernel=p["kernel"], g=p["g"], mesh_breakpoints=_uniform_mesh(M),
+                coll_divs=3, coll_choices=[1, 2, 3],
+                kernel_singularity=sing, show_warnings=False), p["y_exact"]
+
+
+@pytest.mark.parametrize("spec,solver,choices", [
+    (VIE1_SPEC_ABEL, function_solve_VIE_1, [1, 2]),
+    (VIE2_SPEC_ABEL, function_solve_VIE_2, [0, 1, 2]),
+    (VIDE_SPEC_ABEL, function_solve_VIDE, [0, 1, 2]),
+], ids=["vie1", "vie2", "vide"])
+def test_jacobi_power_law_matches_adaptive(spec, solver, choices):
+    """Dict-form kernel_singularity with a declared power routes singular
+    blocks through deterministic Gauss-Jacobi rules; results must agree with
+    the adaptive (location-only) path to quadrature tolerance."""
+    p = as_callable(spec, coll_divs=2, coll_choices=choices)
+    kw = dict(kernel=p["kernel"], g=p["g"], mesh_breakpoints=_uniform_mesh(40),
+              coll_divs=2, coll_choices=choices, show_warnings=False)
+    if "a" in p:
+        kw.update(a=p["a"], soln_init_value=p["soln_init_value"])
+    y_adaptive = solver(**kw, kernel_singularity=p["kernel_singularity"])
+    y_jacobi = solver(**kw,
+                      kernel_singularity={p["kernel_singularity"]: p["alpha"]})
+    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-6
+
+
+def test_jacobi_makes_reuse_flag_a_bitwise_noop():
+    """With every singularity's power declared there are no adaptive blocks
+    left, so the singular build is deterministic and reusable under the
+    default strict policy -- reuse_adaptive_blocks must change nothing."""
+    kw, _ = _abel_vie1_kw({0.0: 0.5})
+    assert np.array_equal(
+        function_solve_VIE_1(**kw),
+        function_solve_VIE_1(**kw, reuse_adaptive_blocks=True))
+
+
+def test_jacobi_on_graded_mesh():
+    """The dict form works off the Toeplitz fast path too (Jacobi per row)."""
+    p = as_callable(VIE1_SPEC_ABEL, coll_divs=3, coll_choices=[1, 2, 3])
+    mesh = optimal_graded_mesh(alpha=p["alpha"], T=1.0, M=20, order=3)
+    kw = dict(kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+              coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
+    y_adaptive = function_solve_VIE_1(**kw, kernel_singularity=0.0)
+    y_jacobi = function_solve_VIE_1(**kw, kernel_singularity={0.0: 0.5})
+    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-6
+
+
+@pytest.mark.parametrize("sing", [{0.0: 0.9}, {0.0: 0.25}],
+                         ids=["alpha-0.9", "alpha-0.25"])
+def test_jacobi_wrong_alpha_falls_back_bitwise(sing):
+    """A wrong declared exponent must fail the two-order Jacobi check and
+    fall back to exactly the adaptive treatment -- bit-identical to the
+    location-only declaration, never silently degraded."""
+    kw, _ = _abel_vie1_kw(sing)
+    kw_ref, _ = _abel_vie1_kw(0.0)
+    assert np.array_equal(function_solve_VIE_1(**kw),
+                          function_solve_VIE_1(**kw_ref))
+
+
+def test_jacobi_log_factor_kernel_falls_back_bitwise():
+    """Extra non-power-law structure (a log factor) likewise falls back."""
+    kw = dict(kernel=lambda u: -np.log(u) / np.sqrt(u) if u > 0 else 0.0,
+              g=lambda t: np.sqrt(t), mesh_breakpoints=_uniform_mesh(20),
+              coll_divs=2, coll_choices=[1, 2], show_warnings=False)
+    assert np.array_equal(
+        function_solve_VIE_1(**kw, kernel_singularity={0.0: 0.5}),
+        function_solve_VIE_1(**kw, kernel_singularity=0.0))
+
+
+def test_jacobi_vector_diagonal_matches_scalar():
+    """Vector path: a diagonal 2x2 Abel system solved with the dict form
+    must reproduce the scalar solution in each component."""
+    p = as_callable(VIE2_SPEC_ABEL, coll_divs=2, coll_choices=[0, 1, 2])
+    mesh = _uniform_mesh(25)
+    y_scalar = function_solve_VIE_2(
+        kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
+        coll_divs=2, coll_choices=[0, 1, 2],
+        kernel_singularity={0.0: 0.5}, show_warnings=False)
+    kern = p["kernel"]
+    y_vec = function_solve_VIE_2(
+        kernel=lambda u: np.array([[kern(u), 0.0], [0.0, kern(u)]]),
+        g=lambda t: np.array([p["g"](t), p["g"](t)]),
+        mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2],
+        kernel_singularity={0.0: 0.5}, show_warnings=False)
+    for comp in range(2):
+        assert np.max(np.abs(y_vec[:, :, comp] - y_scalar)) < 1e-8
+
+
+def test_jacobi_alpha_validation():
+    """Exponents outside (0, 1) are rejected with a clear error."""
+    for bad in (1.5, 0.0, -0.5, 1.0):
+        kw, _ = _abel_vie1_kw({0.0: bad})
+        with pytest.raises(ValueError, match="0 < alpha < 1"):
+            function_solve_VIE_1(**kw)
+
+
 def test_reuse_quad_opts_strictly_tighten_scipy_defaults():
     """The reuse-tightened quadrature options must never be looser than the
     per-row defaults they replace, in either tolerance, for either backend.

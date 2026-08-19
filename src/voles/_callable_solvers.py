@@ -266,20 +266,42 @@ def _resolve_node_pos(coll_nodes, coll_divs, coll_choices, *,
 # ---------------------------------------------------------------------------
 
 def _normalize_kernel_singularity(kernel_singularity):
-    """Return a callable `t -> list[float]` giving singular s-locations.
+    """Return ``(locator, is_convolution)``.
 
-    Accepts None, float, list of float, or callable. The float/list form is
-    wrapped as convolution-style: `lambda t: [t - u for u in declared_us]`.
+    ``locator`` is a callable `t -> list[(s_location, alpha_or_None)]`.
+    Accepts None, float, list of float, dict, or callable. The
+    float/list/dict forms are convolution-style (`s = t - u` for each
+    declared u); the dict form additionally attaches a known power-law
+    exponent to each location: ``{u: alpha}`` declares
+    K(v) ~ |v - u|^{-alpha} near v = u, enabling deterministic Gauss-Jacobi
+    quadrature for the blocks that singularity touches, with ``alpha=None``
+    keeping the adaptive treatment for that location. A callable locator is
+    reserved for non-convolution kernels: ``is_convolution`` is False and
+    every location it yields is treated as power-unknown (adaptive).
     """
     if kernel_singularity is None:
-        return lambda t: []
+        return (lambda t: []), True
     if callable(kernel_singularity):
-        return kernel_singularity
-    if isinstance(kernel_singularity, (int, float)):
-        declared = [float(kernel_singularity)]
+        return (lambda t, _f=kernel_singularity: [(s, None) for s in _f(t)],
+                False)
+    if isinstance(kernel_singularity, dict):
+        declared = []
+        for u, alpha in kernel_singularity.items():
+            if alpha is not None:
+                alpha = float(alpha)
+                if not 0.0 < alpha < 1.0:
+                    raise ValueError(
+                        "kernel_singularity power-law exponents must satisfy "
+                        f"0 < alpha < 1 (got alpha={alpha} for location {u}); "
+                        "use None to keep adaptive quadrature for a location "
+                        "with unknown or non-power-law behavior.")
+            declared.append((float(u), alpha))
+    elif isinstance(kernel_singularity, (int, float)):
+        declared = [(float(kernel_singularity), None)]
     else:
-        declared = [float(u) for u in kernel_singularity]
-    return lambda t, _us=tuple(declared): [t - u for u in _us]
+        declared = [(float(u), None) for u in kernel_singularity]
+    return (lambda t, _us=tuple(declared): [(t - u, al) for u, al in _us],
+            True)
 
 
 @functools.lru_cache(maxsize=16)
@@ -289,6 +311,49 @@ def _gauss_legendre_nodes_weights(order: int) -> tuple[np.ndarray, np.ndarray]:
     nodes.setflags(write=False)
     weights.setflags(write=False)
     return nodes, weights
+
+
+@functools.lru_cache(maxsize=64)
+def _gauss_jacobi_nodes_weights(order: int, alpha: float, left: bool):
+    """Gauss-Jacobi nodes and weights on [-1, 1] for the weight
+    (1-x)^{-alpha} (singularity at the right endpoint) or (1+x)^{-alpha}
+    (``left=True``), cached per (order, alpha, side). Nodes are interior, so
+    integrands are never evaluated at the singular point."""
+    try:
+        from scipy.special import roots_jacobi
+    except ImportError as e:
+        raise ImportError(_SCIPY_IMPORT_ERR) from e
+    a, b = (0.0, -alpha) if left else (-alpha, 0.0)
+    nodes, weights = roots_jacobi(order, a, b)
+    nodes.setflags(write=False)
+    weights.setflags(write=False)
+    return nodes, weights
+
+
+def _classify_sing_block(sing, a_int, b_int):
+    """Classify block [a_int, b_int] against declared singular locations.
+
+    ``sing`` is a list of (s_location, alpha_or_None) pairs from the
+    normalized locator. Returns ``(interior, mode, jinfo)``: ``interior`` is
+    the raw interior s-locations (fed to quad's `points`); ``mode`` is
+    'smooth' (no singularity touches the block), 'jacobi' (exactly one
+    touching singularity, with a declared power -- deterministic fixed-order
+    rule), or 'adaptive'; ``jinfo`` is the (s0, alpha) pair when mode is
+    'jacobi', else None."""
+    tol = 1e-12 * max(1.0, abs(b_int - a_int))
+    touching = []
+    interior = []
+    for sp, alpha in sing:
+        if a_int + tol < sp < b_int - tol:
+            touching.append((sp, alpha))
+            interior.append(sp)
+        elif abs(sp - a_int) < tol or abs(sp - b_int) < tol:
+            touching.append((sp, alpha))
+    if not touching:
+        return interior, 'smooth', None
+    if len(touching) == 1 and touching[0][1] is not None:
+        return interior, 'jacobi', touching[0]
+    return interior, 'adaptive', None
 
 
 def _detect_kernel_vectorized(kernel, sample_u: float, is_vector: bool, d: int) -> bool:
@@ -306,7 +371,7 @@ def _detect_kernel_vectorized(kernel, sample_u: float, is_vector: bool, d: int) 
     return arr.shape == expected
 
 
-def _toeplitz_W_rows(widths: np.ndarray, kernel_singularity) -> bool:
+def _toeplitz_W_rows(widths: np.ndarray, is_convolution: bool) -> bool:
     """Return True when the weight tensor is Toeplitz in (n, l), so blocks of
     equal lag are the same integral.
 
@@ -315,23 +380,24 @@ def _toeplitz_W_rows(widths: np.ndarray, kernel_singularity) -> bool:
 
         W[n, i, l, k] = integral_0^h K((n - l + x_i) h - sigma) L_k(sigma/h) dsigma
 
-    depends on (n, l) only through the lag n - l. A *callable*
-    ``kernel_singularity`` is reserved for non-convolution kernels and disables
-    the fast path.
+    depends on (n, l) only through the lag n - l. ``is_convolution`` comes
+    from _normalize_kernel_singularity: a callable ``kernel_singularity`` is
+    reserved for non-convolution kernels and disables the fast path.
 
-    Reuse policy: only blocks evaluated by the deterministic fixed-order GL
-    path (and accepted by the two-order check) are copied across rows -- the
-    copy reproduces a per-row evaluation to rounding level (~1e-15). Blocks
-    that involve adaptive quadrature (declared-singular blocks and two-order
-    fallbacks) are recomputed for every row with exactly the same calls as the
-    general path, because adaptive results are reproducible only to the
+    Reuse policy: only blocks evaluated by a deterministic fixed-order rule
+    (Gauss-Legendre, or Gauss-Jacobi for declared power-law singularities)
+    and accepted by the two-order check are copied across rows -- the copy
+    reproduces a per-row evaluation to rounding level (~1e-15). Blocks that
+    involve adaptive quadrature (power-unknown singular blocks and two-order
+    fallbacks) are recomputed for every row with exactly the same calls as
+    the general path, because adaptive results are reproducible only to the
     quadrature tolerance (~1e-8), not to rounding.
 
     The uniformity test is deliberately strict (1e-12 relative): meshes from
     ``np.linspace``/``optimal_graded_mesh(alpha=0)`` pass at ~1e-16, and a mesh
     that is merely close to uniform must take the general path.
     """
-    if len(widths) < 2 or callable(kernel_singularity):
+    if len(widths) < 2 or not is_convolution:
         return False
     w_mean = float(widths.mean())
     return float(widths.max() - widths.min()) <= 1e-12 * w_mean
@@ -424,7 +490,7 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
     p = len(node_pos)
     n_basis = basis.shape[0]
     widths = np.diff(mesh_breakpoints)
-    singular_locs = _normalize_kernel_singularity(kernel_singularity)
+    singular_locs, is_convolution = _normalize_kernel_singularity(kernel_singularity)
 
     # Uniform mesh + convolution kernel: W is Toeplitz in (n, l) (see
     # _toeplitz_W_rows). With reuse_adaptive_blocks the declared-singularity
@@ -434,7 +500,7 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
     # Two-order fallback quadratures always use the default options (see the
     # module-level _QUAD_OPTS_* constants), keeping the flag a strict no-op
     # for kernels with no declared singularity.
-    toeplitz = _toeplitz_W_rows(widths, kernel_singularity)
+    toeplitz = _toeplitz_W_rows(widths, is_convolution)
     reuse_sing = reuse_adaptive_blocks and toeplitz
     sing_quad_opts = _QUAD_OPTS_REUSE if reuse_sing else _QUAD_OPTS_DEFAULT
 
@@ -527,14 +593,6 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             return kernel(_tau - s) * npp.polyval(x_norm, _L_k)
         return integrand
 
-    def classify_sing(sing, a_int, b_int):
-        """Split declared singular s-locations into interior points and an
-        endpoint flag for [a_int, b_int]; returns (interior, use_adaptive)."""
-        tol = 1e-12 * max(1.0, abs(b_int - a_int))
-        interior = [sp for sp in sing if a_int + tol < sp < b_int - tol]
-        endpoint = any(abs(sp - a_int) < tol or abs(sp - b_int) < tol for sp in sing)
-        return interior, (bool(interior) or endpoint)
-
     def adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing):
         """Singular block: per-basis adaptive quadrature."""
         for k in range(n_basis):
@@ -545,6 +603,59 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                 val, _err = get_quad()(make_integrand(tau, t_l, h_l, k),
                                        a_int, b_int, **kwargs)
             W[n, i, l, k] = val
+
+    def jacobi_vals(tau, t_l, h_l, a_int, b_int, s0, alpha):
+        """Two-order Gauss-Jacobi estimates for a block touched by one
+        declared power-law singularity: K(tau - s) ~ |s - s0|^{-alpha} times
+        a smooth factor near s = s0. An interior s0 splits the block into
+        two endpoint-singular halves. On each half the singular factor is
+        absorbed into the Jacobi weight and the smooth remainder
+        g_k(s) = K(tau - s) |s - s0|^alpha L_k(s_norm) is sampled at the
+        (interior) Jacobi nodes. Returns two length-n_basis arrays."""
+        tol = 1e-12 * max(1.0, abs(b_int - a_int))
+        if s0 <= a_int + tol:
+            segs = [(a_int, b_int, True)]
+        elif s0 >= b_int - tol:
+            segs = [(a_int, b_int, False)]
+        else:
+            segs = [(a_int, s0, False), (s0, b_int, True)]
+        est = [np.zeros(n_basis), np.zeros(n_basis)]
+        for aa, bb, left in segs:
+            half = 0.5 * (bb - aa)
+            mid = 0.5 * (aa + bb)
+            for oi, o in enumerate(orders):
+                nodes, jw = _gauss_jacobi_nodes_weights(o, alpha, left)
+                s_pts = mid + half * nodes
+                if kernel_vec:
+                    kv = np.asarray(kernel(tau - s_pts), dtype=np.float64)
+                else:
+                    kv = np.array([kernel(tau - s) for s in s_pts])
+                g = jw * kv * np.abs(s_pts - s0) ** alpha   # (o,)
+                x_norm = (s_pts - t_l) / h_l
+                scale = half ** (1.0 - alpha)
+                for k in range(n_basis):
+                    est[oi][k] += scale * float(
+                        np.dot(g, npp.polyval(x_norm, basis[k])))
+        return est[0], est[1]
+
+    def store_jacobi(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing,
+                     s0, alpha):
+        """Store the higher-order Gauss-Jacobi estimate for every basis
+        function, with the same two-order acceptance as the smooth path; any
+        failing basis function (wrong declared alpha, extra structure like a
+        log factor) falls back to adaptive quadrature at default tolerance
+        and stays on the per-row repair path. Returns True iff all passed."""
+        v1, v2 = jacobi_vals(tau, t_l, h_l, a_int, b_int, s0, alpha)
+        W[n, i, l, :] = v2
+        ok = np.abs(v1 - v2) <= smooth_check_tol * np.maximum(1.0, np.abs(v2))
+        for k in np.nonzero(~ok)[0]:
+            kwargs = dict(_QUAD_OPTS_DEFAULT)
+            if interior_sing:
+                kwargs['points'] = interior_sing
+            val, _err = get_quad()(make_integrand(tau, t_l, h_l, int(k)),
+                                   a_int, b_int, **kwargs)
+            W[n, i, l, int(k)] = val
+        return bool(ok.all())
 
     def store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2):
         """Store the order-(ord+2) estimate v2 for every basis function, then fall
@@ -613,11 +724,17 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             for i in range(p):
                 if skip_off is not None and skip_off[i, lag]:
                     continue
-                interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
-                if use_adaptive:
+                interior_sing, mode, jinfo = _classify_sing_block(
+                    sing_per_i[i], a_int, b_int)
+                if mode == 'adaptive':
                     adaptive_block(n, i, l, tau_n[i], t_l, h_l, a_int, b_int, interior_sing)
                     if record:
                         sing_off[i, lag] = True
+                elif mode == 'jacobi':
+                    clean = store_jacobi(n, i, l, tau_n[i], t_l, h_l, a_int,
+                                         b_int, interior_sing, *jinfo)
+                    if record:
+                        ok_off[i, lag] = clean
                 else:
                     smooth_is.append(i)
 
@@ -646,11 +763,18 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                 if record:
                     ok_diag[i] = True
                 continue
-            interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
-            if use_adaptive:
+            interior_sing, mode, jinfo = _classify_sing_block(
+                sing_per_i[i], a_int, b_int)
+            if mode == 'adaptive':
                 adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing)
                 if record:
                     sing_diag[i] = True
+                continue
+            if mode == 'jacobi':
+                clean = store_jacobi(n, i, l, tau, t_l, h_l, a_int, b_int,
+                                     interior_sing, *jinfo)
+                if record and clean:
+                    ok_diag[i] = True
                 continue
             v1, v2 = smooth_diag_vals(a_int, b_int, tau, i)
             clean = store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2)
@@ -695,12 +819,12 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
     p = len(node_pos)
     n_basis = basis.shape[0]
     widths = np.diff(mesh_breakpoints)
-    singular_locs = _normalize_kernel_singularity(kernel_singularity)
+    singular_locs, is_convolution = _normalize_kernel_singularity(kernel_singularity)
 
     # Same Toeplitz / adaptive-reuse setup as the scalar builder, except that
     # the tightened options keep quad_vec's default epsabs (see the
     # module-level _QUAD_VEC_OPTS_REUSE note).
-    toeplitz = _toeplitz_W_rows(widths, kernel_singularity)
+    toeplitz = _toeplitz_W_rows(widths, is_convolution)
     reuse_sing = reuse_adaptive_blocks and toeplitz
     sing_quad_opts = _QUAD_VEC_OPTS_REUSE if reuse_sing else _QUAD_OPTS_DEFAULT
 
@@ -795,14 +919,6 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 return K * _eval_poly_at(_L_k, x_norm)
         return integrand
 
-    def classify_sing(sing, a_int, b_int):
-        """Split declared singular s-locations into interior points and an
-        endpoint flag for [a_int, b_int]; returns (interior, use_adaptive)."""
-        tol = 1e-12 * max(1.0, abs(b_int - a_int))
-        interior = [sp for sp in sing if a_int + tol < sp < b_int - tol]
-        endpoint = any(abs(sp - a_int) < tol or abs(sp - b_int) < tol for sp in sing)
-        return interior, (bool(interior) or endpoint)
-
     def adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing):
         """Singular block: per-basis adaptive quadrature."""
         for k in range(n_basis):
@@ -813,6 +929,56 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, k),
                                            a_int, b_int, **kwargs)
             W[n, i, l, k, :, :] = val
+
+    def jacobi_vals(tau, t_l, h_l, a_int, b_int, s0, alpha):
+        """Vector analogue of the scalar builder's jacobi_vals: two-order
+        Gauss-Jacobi estimates for a block touched by one declared power-law
+        singularity. Returns two (n_basis, d, d) arrays."""
+        tol = 1e-12 * max(1.0, abs(b_int - a_int))
+        if s0 <= a_int + tol:
+            segs = [(a_int, b_int, True)]
+        elif s0 >= b_int - tol:
+            segs = [(a_int, b_int, False)]
+        else:
+            segs = [(a_int, s0, False), (s0, b_int, True)]
+        est = [np.zeros((n_basis, d, d)), np.zeros((n_basis, d, d))]
+        for aa, bb, left in segs:
+            half = 0.5 * (bb - aa)
+            mid = 0.5 * (aa + bb)
+            for oi, o in enumerate(orders):
+                nodes, jw = _gauss_jacobi_nodes_weights(o, alpha, left)
+                s_pts = mid + half * nodes
+                if kernel_vec:
+                    kv = np.asarray(kernel(tau - s_pts), dtype=np.float64)
+                else:
+                    kv = np.array([np.asarray(kernel(tau - s), dtype=np.float64)
+                                   for s in s_pts])                    # (o, d, d)
+                g = (jw * np.abs(s_pts - s0) ** alpha)[:, None, None] * kv
+                x_norm = (s_pts - t_l) / h_l
+                Bv = np.array([npp.polyval(x_norm, basis[k])
+                               for k in range(n_basis)])               # (n_basis, o)
+                scale = half ** (1.0 - alpha)
+                est[oi] += scale * np.einsum('kq,qde->kde', Bv, g)
+        return est[0], est[1]
+
+    def store_jacobi(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing,
+                     s0, alpha):
+        """Vector analogue of the scalar builder's store_jacobi: two-order
+        acceptance over the (d, d) entries, adaptive fallback at default
+        tolerance for failing basis functions. Returns True iff all passed."""
+        v1, v2 = jacobi_vals(tau, t_l, h_l, a_int, b_int, s0, alpha)
+        W[n, i, l, :, :, :] = v2
+        err = np.max(np.abs(v1 - v2), axis=(1, 2))
+        ref = np.maximum(1.0, np.max(np.abs(v2), axis=(1, 2)))
+        ok = err <= smooth_check_tol * ref
+        for k in np.nonzero(~ok)[0]:
+            kwargs = dict(_QUAD_OPTS_DEFAULT)
+            if interior_sing:
+                kwargs['points'] = interior_sing
+            val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, int(k)),
+                                       a_int, b_int, **kwargs)
+            W[n, i, l, int(k), :, :] = val
+        return bool(ok.all())
 
     def store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2):
         """Store the order-(ord+2) estimate v2 for every basis function, then
@@ -878,11 +1044,17 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             for i in range(p):
                 if skip_off is not None and skip_off[i, lag]:
                     continue
-                interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
-                if use_adaptive:
+                interior_sing, mode, jinfo = _classify_sing_block(
+                    sing_per_i[i], a_int, b_int)
+                if mode == 'adaptive':
                     adaptive_block(n, i, l, tau_n[i], t_l, h_l, a_int, b_int, interior_sing)
                     if record:
                         sing_off[i, lag] = True
+                elif mode == 'jacobi':
+                    clean = store_jacobi(n, i, l, tau_n[i], t_l, h_l, a_int,
+                                         b_int, interior_sing, *jinfo)
+                    if record:
+                        ok_off[i, lag] = clean
                 else:
                     smooth_is.append(i)
 
@@ -911,11 +1083,18 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 if record:
                     ok_diag[i] = True
                 continue
-            interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
-            if use_adaptive:
+            interior_sing, mode, jinfo = _classify_sing_block(
+                sing_per_i[i], a_int, b_int)
+            if mode == 'adaptive':
                 adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing)
                 if record:
                     sing_diag[i] = True
+                continue
+            if mode == 'jacobi':
+                clean = store_jacobi(n, i, l, tau, t_l, h_l, a_int, b_int,
+                                     interior_sing, *jinfo)
+                if record and clean:
+                    ok_diag[i] = True
                 continue
             v1, v2 = smooth_diag_vals(a_int, b_int, tau, i)
             clean = store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2)
@@ -1312,12 +1491,28 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         ``lobatto_nodes``). Mutually exclusive with
         ``coll_divs``/``coll_choices``. Convergence of the chosen node set is
         the caller's responsibility.
-    kernel_singularity : None, float, list of float, or callable
+    kernel_singularity : None, float, list of float, dict, or callable
         Declare the singularity structure of the kernel.
 
         - ``None``: kernel is smooth everywhere.
         - ``float`` or list of float: convolution-style singularity locations
-          (in $u = t - s$); e.g. ``0.0`` for $K(u) \sim u^{-\alpha}$.
+          (in $u = t - s$); e.g. ``0.0`` for $K(u) \sim u^{-\alpha}$. Blocks
+          touching a location are integrated adaptively.
+        - dict ``{location: alpha}``: like the list form, but a non-None
+          ``alpha`` additionally declares the power law
+          $K(u) \sim |u - u_0|^{-\alpha}$ (with $0 < \alpha < 1$; use
+          ``{0.0: 0.5}`` for an Abel kernel $u^{-1/2}$). Blocks touching such
+          a location are integrated by deterministic fixed-order Gauss-Jacobi
+          rules with the singular factor absorbed into the weight: typically
+          much faster and more accurate than adaptive quadrature, and -- being
+          deterministic -- reusable across the uniform-mesh Toeplitz assembly
+          under the default strict policy, so the singular build runs at
+          smooth-kernel speed with no ``reuse_adaptive_blocks`` flag needed.
+          Each Jacobi block passes the same two-order acceptance check as the
+          smooth path; a failing basis function (wrong declared ``alpha``, or
+          extra structure like a log factor) falls back to the adaptive
+          treatment automatically. ``alpha=None`` keeps a location fully
+          adaptive.
         - callable ``f(t) -> list[float]``: returns the singular $s$-locations
           for collocation point $t$. Forward-compatible with non-convolution
           $K(s, t)$.
@@ -1556,8 +1751,10 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         Collocation node positions given directly as floats in $[0, 1]$; see
         ``function_solve_VIE_2``. Mutually exclusive with
         ``coll_divs``/``coll_choices``.
-    kernel_singularity : None, float, list of float, or callable
-        Declare integrable singularities; see ``function_solve_VIE_2``.
+    kernel_singularity : None, float, list of float, dict, or callable
+        Declare integrable singularities, optionally with known power-law
+        exponents (dict form, enabling deterministic Gauss-Jacobi rules);
+        see ``function_solve_VIE_2``.
     return_function : bool, optional
         If True, also return a callable solution wrapper.
     reuse_adaptive_blocks : bool, optional
