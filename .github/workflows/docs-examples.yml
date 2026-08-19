@@ -26,6 +26,7 @@ on:
 jobs:
   run-doc-examples:
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -40,9 +41,9 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq ninja-build curl xz-utils
           pip install -q 'meson==1.5.2'
-          curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.36.0/ldc2-1.36.0-linux-x86_64.tar.xz \
+          curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.42.0/ldc2-1.42.0-linux-x86_64.tar.xz \
             | tar -xJ -C /tmp
-          echo "/tmp/ldc2-1.36.0-linux-x86_64/bin" >> $GITHUB_PATH
+          echo "/tmp/ldc2-1.42.0-linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: Build D extension
         run: |
