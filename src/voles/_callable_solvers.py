@@ -337,11 +337,14 @@ def _toeplitz_W_rows(widths: np.ndarray, kernel_singularity) -> bool:
     return float(widths.max() - widths.min()) <= 1e-12 * w_mean
 
 
-def _pending_lags(skip_lag: np.ndarray, n: int) -> list:
+def _pending_lags(dirty_lags: np.ndarray, n: int) -> list:
     """Off-diagonal blocks of row n that still need integration, as block
-    indices l: the lags m = n - l in 1..n with skip_lag[m] False. Block
-    order is irrelevant (blocks are independent)."""
-    return (n - (np.nonzero(~skip_lag[1:n + 1])[0] + 1)).tolist()
+    indices l = n - m for the pending lags m <= n. ``dirty_lags`` is the
+    sorted array of lags (>= 1) whose blocks are not fully reusable,
+    computed once per assembly rather than rescanned per row. Block order
+    is irrelevant (blocks are independent)."""
+    prefix = dirty_lags[:np.searchsorted(dirty_lags, n, side="right")]
+    return (n - prefix).tolist()
 
 
 def _assemble_W_rows(W, M, toeplitz, reuse_sing, integrate_row):
@@ -363,15 +366,21 @@ def _assemble_W_rows(W, M, toeplitz, reuse_sing, integrate_row):
         for n in range(M):
             integrate_row(n)
         return
+    # (_toeplitz_W_rows returns False for M < 2, so M >= 2 here.)
     ok_off, ok_diag, sing_off, sing_diag = integrate_row(M - 1, record=True)
-    if M >= 2:
-        _fill_toeplitz_W(W, M)
-        skip_off = ok_off | sing_off if reuse_sing else ok_off
-        skip_diag = ok_diag | sing_diag if reuse_sing else ok_diag
-        skip_lag = skip_off.all(axis=0)
-        for n in range(M - 1):
-            integrate_row(n, skip_off=skip_off, skip_lag=skip_lag,
-                          skip_diag=skip_diag)
+    _fill_toeplitz_W(W, M)
+    skip_off = ok_off | sing_off if reuse_sing else ok_off
+    skip_diag = ok_diag | sing_diag if reuse_sing else ok_diag
+    # Lags whose blocks are not fully reusable, computed once (lag 0 is the
+    # diagonal, handled separately). When no lag and no diagonal entry needs
+    # work, the repair loop would visit every row and find nothing -- skip
+    # its O(M) per-row scaffolding entirely; results are identical.
+    dirty_lags = np.nonzero(~skip_off.all(axis=0)[1:])[0] + 1
+    if dirty_lags.size == 0 and skip_diag.all():
+        return
+    for n in range(M - 1):
+        integrate_row(n, skip_off=skip_off, dirty_lags=dirty_lags,
+                      skip_diag=skip_diag)
 
 
 def _fill_toeplitz_W(W: np.ndarray, M: int) -> None:
@@ -565,14 +574,15 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             W[n, smooth_is[bi], l, bk] = val
         return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
-    def integrate_row(n, skip_off=None, skip_lag=None, skip_diag=None,
+    def integrate_row(n, skip_off=None, dirty_lags=None, skip_diag=None,
                       record=False):
         """Integrate row n of W, exactly as the general path does.
 
         skip_off[i, m] / skip_diag[i] mark entries already holding a reusable
-        GL-clean value for lag m = n - l (see _toeplitz_W_rows); skip_lag[m]
-        is its all-nodes-clean summary, letting whole blocks be skipped
-        cheaply. With record=True, return boolean masks marking which entries
+        GL-clean value for lag m = n - l (see _toeplitz_W_rows); dirty_lags
+        is the sorted array of lags not fully clean across nodes, letting
+        whole blocks be skipped without a per-row mask scan (_pending_lags).
+        With record=True, return boolean masks marking which entries
         of this row were computed purely by the fixed-order GL path (ok_*)
         and which by declared-singularity adaptive quadrature (sing_*)."""
         ok_off = np.zeros((p, M), dtype=bool) if record else None
@@ -588,10 +598,10 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         # collocation nodes; only tau_i differs. Sample the kernel once across the
         # smooth nodes and combine via a single einsum, peeling off any node whose
         # declared singularity falls in this block to the adaptive path.
-        if skip_lag is None:
+        if dirty_lags is None:
             l_iter = range(n)
         else:
-            l_iter = _pending_lags(skip_lag, n)
+            l_iter = _pending_lags(dirty_lags, n)
         for l in l_iter:
             lag = n - l
             t_l = mesh_breakpoints[l]
@@ -631,6 +641,10 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             tau = tau_n[i]
             b_int = tau
             if b_int <= a_int:
+                # Zero-width block (collocation node at the interval start):
+                # W stays 0 in every row, so the entry is vacuously reusable.
+                if record:
+                    ok_diag[i] = True
                 continue
             interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
             if use_adaptive:
@@ -832,7 +846,7 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             W[n, smooth_is[bi], l, bk, :, :] = val
         return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
-    def integrate_row(n, skip_off=None, skip_lag=None, skip_diag=None,
+    def integrate_row(n, skip_off=None, dirty_lags=None, skip_diag=None,
                       record=False):
         """Integrate row n of W, exactly as the general path does; see the
         scalar builder's integrate_row for the skip/record contract."""
@@ -849,10 +863,10 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         # collocation nodes; only tau_i differs. Sample the kernel once across the
         # smooth nodes and combine via a single einsum, peeling off any node whose
         # declared singularity falls in this block to the adaptive path.
-        if skip_lag is None:
+        if dirty_lags is None:
             l_iter = range(n)
         else:
-            l_iter = _pending_lags(skip_lag, n)
+            l_iter = _pending_lags(dirty_lags, n)
         for l in l_iter:
             lag = n - l
             t_l = mesh_breakpoints[l]
@@ -892,6 +906,10 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             tau = tau_n[i]
             b_int = tau
             if b_int <= a_int:
+                # Zero-width block (collocation node at the interval start):
+                # W stays 0 in every row, so the entry is vacuously reusable.
+                if record:
+                    ok_diag[i] = True
                 continue
             interior_sing, use_adaptive = classify_sing(sing_per_i[i], a_int, b_int)
             if use_adaptive:
