@@ -27,31 +27,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # LDC >= 1.42 (druntime with several foreign-thread/GC-signal fixes;
-      # 1.36's druntime deadlocks/segfaults our attached-thread matrix solves
-      # on Linux). The 1.42 release binaries are built on Ubuntu 22.04, so the
-      # build container is 22.04 too; the published wheels keep their own
-      # (stricter) glibc constraint in build-wheels.yml.
-      - name: Build D extension in Ubuntu 22.04 container
+      # EXPERIMENT: LDC 1.40.0 is the last release built on Ubuntu 20.04
+      # (glibc 2.31-compatible). If its druntime has the foreign-thread fix,
+      # the manylinux_2_31 wheel can keep its glibc floor by bumping only the
+      # compiler pin. This branch reproduces the exact wheel build
+      # environment: 20.04 container + <= 2.31 symbol check.
+      - name: Build D extension in Ubuntu 20.04 container
         run: |
-          docker run --rm -v "${{ github.workspace }}:/work" ubuntu:22.04 bash -c "
+          docker run --rm -v "${{ github.workspace }}:/work" ubuntu:20.04 bash -c "
             set -e
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
             apt-get install -y -qq curl xz-utils ninja-build python3-pip libxml2
             pip3 install -q 'meson==1.5.2'
-            curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.42.0/ldc2-1.42.0-linux-x86_64.tar.xz \
+            curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.40.0/ldc2-1.40.0-linux-x86_64.tar.xz \
               | tar -xJ -C /tmp
-            export PATH=/tmp/ldc2-1.42.0-linux-x86_64/bin:\$PATH
+            export PATH=/tmp/ldc2-1.40.0-linux-x86_64/bin:\$PATH
             cd /work/dlang
             meson setup build --wipe --buildtype=release
             ninja -C build
             cp build/volterra_dlang.so /work/src/voles/
           "
 
-      # Informational here (the test artifact only needs to run on the 22.04
-      # test hosts); the authoritative wheel-compatibility check (<= 2.31)
-      # lives in build-wheels.yml.
+      # Full wheel-compatibility check on this branch (the point of the
+      # experiment is validating the manylinux_2_31 environment).
       - name: Verify glibc requirement
         run: |
           max=$(objdump -T src/voles/volterra_dlang.so \
@@ -60,8 +59,8 @@ jobs:
           echo "Max glibc version required: $max"
           python3 -c "
           def ver(s): return tuple(int(x) for x in s.split('.'))
-          assert ver('$max') <= ver('2.35'), f'glibc {max!r} > 2.35'
-          print('glibc requirement OK for the 22.04 test hosts')
+          assert ver('$max') <= ver('2.31'), f'glibc {max!r} > 2.31'
+          print('glibc requirement OK for manylinux_2_31')
           "
 
       - uses: actions/upload-artifact@v4
@@ -117,9 +116,9 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq ninja-build liblapack-dev curl xz-utils
           pip install -q 'meson==1.5.2'
-          curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.42.0/ldc2-1.42.0-linux-x86_64.tar.xz \
+          curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.40.0/ldc2-1.40.0-linux-x86_64.tar.xz \
             | tar -xJ -C /tmp
-          echo "/tmp/ldc2-1.42.0-linux-x86_64/bin" >> $GITHUB_PATH
+          echo "/tmp/ldc2-1.40.0-linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: Build D extension with -Dwith-lapack=disabled
         run: |
