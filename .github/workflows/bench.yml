@@ -19,9 +19,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build D extension in Ubuntu 20.04 container
+      # ubuntu:22.04: the LDC 1.42 release binaries need glibc >= 2.34
+      # (matches tests-linux.yml; benchmarks run on the 22.04 host).
+      - name: Build D extension in Ubuntu 22.04 container
         run: |
-          docker run --rm -v "${{ github.workspace }}:/work" ubuntu:20.04 bash -c "
+          docker run --rm -v "${{ github.workspace }}:/work" ubuntu:22.04 bash -c "
             set -e
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
