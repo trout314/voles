@@ -222,3 +222,26 @@ class TestVIE1SolnInitValueWarning:
                      soln_init_value=np.ones((d, m)), force_continuous=False,
                      show_warnings=False)
         assert capsys.readouterr().out == ""
+
+
+class TestMatrixWarningsOnce:
+    """Matrix (multi-RHS) solves fan out one thread per column; per-solve
+    warnings must appear exactly once, not once per column."""
+
+    def test_vie2_matrix_truncation_warns_once(self, capsys):
+        n_pts, d, m = 90, 2, 3  # 90 is not (multiple of 9) + 1 -> truncation
+        kernel = np.zeros((n_pts, d, d))
+        kernel[:, 0, 0] = kernel[:, 1, 1] = 1.0
+        g = np.ones((n_pts, d, m))
+        solve_VIE_2(kernel_values=kernel, g_values=g, time_step=0.01,
+                    coll_divs=3, coll_choices=[0, 1, 2], show_warnings=True)
+        assert capsys.readouterr().out.lower().count("truncated") == 1
+
+    def test_vide_matrix_truncation_warns_once(self, capsys):
+        n_pts, d, m = 90, 2, 3
+        kernel = np.zeros((n_pts, d, d))
+        g = np.ones((n_pts, d, m))
+        solve_VIDE(kernel_values=kernel, g_values=g,
+                   soln_init_value=np.zeros((d, m)), time_step=0.01,
+                   coll_divs=3, coll_choices=[1, 2, 3], show_warnings=True)
+        assert capsys.readouterr().out.lower().count("truncated") == 1

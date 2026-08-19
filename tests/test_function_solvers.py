@@ -2742,6 +2742,81 @@ def test_vie1_convergence_guard_active_with_empty_singularity():
             kernel_singularity=[], show_warnings=False)
 
 
+def test_jacobi_matrix_matches_per_column_vector():
+    """Matrix (multi-RHS) path with the dict form: every column must match an
+    independent vector solve using the same declaration."""
+    d, m = 2, 2
+    eye = np.eye(d)
+
+    def kernel(u):
+        u = np.asarray(u)
+        if u.ndim == 0:
+            return (1.0 / np.sqrt(u)) * eye if u > 0 else np.zeros((d, d))
+        raise RuntimeError("kernel should be called scalar-wise near singularity")
+
+    g_vec = lambda t: np.full(d, np.sqrt(t) - 0.5 * np.pi * t)
+    shifts = np.array([[0.0, 0.3], [0.0, -0.2]])
+    g_mat = _matrix_g(g_vec, shifts)
+    mesh = _uniform_mesh(20)
+
+    y_mat = function_solve_VIE_2(kernel=kernel, g=g_mat, mesh_breakpoints=mesh,
+                                 coll_divs=2, coll_choices=[0, 1, 2],
+                                 kernel_singularity={0.0: 0.5},
+                                 show_warnings=False)
+    for j in range(m):
+        g_col = lambda t, j=j: g_vec(t) + shifts[:, j]
+        y_col = function_solve_VIE_2(kernel=kernel, g=g_col,
+                                     mesh_breakpoints=mesh,
+                                     coll_divs=2, coll_choices=[0, 1, 2],
+                                     kernel_singularity={0.0: 0.5},
+                                     show_warnings=False)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+
+
+def test_jacobi_complex_kernel_matches_adaptive():
+    """Complex problems route through the vector builder (real-block
+    embedding); the dict form must agree with the adaptive path there too."""
+    kw = dict(kernel=lambda u: (1.0 + 0.5j) / np.sqrt(np.maximum(u, 1e-300)),
+              g=lambda t: np.ones_like(np.asarray(t, dtype=complex)),
+              mesh_breakpoints=_uniform_mesh(15),
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+    y_adaptive = function_solve_VIE_2(**kw, kernel_singularity=0.0)
+    y_jacobi = function_solve_VIE_2(**kw, kernel_singularity={0.0: 0.5})
+    assert np.iscomplexobj(y_jacobi)
+    # Relative tolerance: |lambda|^2 = 1.25 gives a growing resolvent
+    # (|y| ~ 20 by t = 1), which amplifies the honest quadrature difference
+    # between the Jacobi rules and quad_vec's adaptive estimates.
+    scale = np.max(np.abs(y_adaptive))
+    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-6 * scale
+
+
+def _diag_abel_vec_kw(solver_spec, M=20):
+    p = as_callable(solver_spec, coll_divs=2, coll_choices=[1, 2])
+    kern = p["kernel"]
+    kw = dict(kernel=lambda u: np.array([[kern(u), 0.0], [0.0, kern(u)]]),
+              g=lambda t: np.array([p["g"](t), p["g"](t)]),
+              mesh_breakpoints=_uniform_mesh(M),
+              coll_divs=2, coll_choices=[1, 2],
+              kernel_singularity=p["kernel_singularity"], show_warnings=False)
+    return kw, p
+
+
+def test_reuse_adaptive_blocks_vie1_vector_close():
+    kw, _ = _diag_abel_vec_kw(VIE1_SPEC_ABEL)
+    y0 = function_solve_VIE_1(**kw)
+    y1 = function_solve_VIE_1(**kw, reuse_adaptive_blocks=True)
+    assert np.max(np.abs(y1 - y0)) < 1e-6
+
+
+def test_reuse_adaptive_blocks_vide_vector_close():
+    kw, p = _diag_abel_vec_kw(VIDE_SPEC_ABEL)
+    kw.update(a=lambda t: np.zeros((2, 2)),
+              soln_init_value=np.full(2, p["soln_init_value"]))
+    y0 = function_solve_VIDE(**kw)
+    y1 = function_solve_VIDE(**kw, reuse_adaptive_blocks=True)
+    assert np.max(np.abs(y1 - y0)) < 1e-6
+
+
 def test_vie1_zero_kernel_singular_system_raises_linalgerror():
     """A zero kernel makes VIE-1's diagonal weight blocks singular; the D
     solver must report this as LinAlgError (its compile-time lin_solve used

@@ -282,6 +282,48 @@ def test_vie1_singular_matrix_d2_raises_linalgerror():
                     coll_divs=3, coll_choices=[1, 2, 3])
 
 
+def _near_singular_kernel(d, N=10):
+    """Kernel whose row 1 equals row 0 times (1 + 2^-52): the collocation
+    matrix is nearly (not exactly) singular, with pivots ~eps * scale --
+    below the relative threshold, but invisible to a LU that only flags
+    exactly-zero pivots."""
+    t = np.linspace(0.0, 0.9, N)
+    K = np.zeros((N, d, d))
+    for i in range(d):
+        K[:, i, i] = np.exp(-t)
+    K[:, 1, :] = K[:, 0, :] * (1.0 + 2.0 ** -52)
+    return K
+
+
+@pytest.mark.parametrize("d", [2, 9], ids=["compile-time", "runtime"])
+def test_vie1_near_singular_matrix_raises_linalgerror(d):
+    """Near-singular (not exactly singular) systems must raise on both LU
+    backends: the pure-D path uses a relative pivot threshold, and the
+    LAPACK path applies the same threshold to dgesv_'s U diagonal (dgesv_
+    itself only reports exactly-zero pivots)."""
+    K = _near_singular_kernel(d)
+    with pytest.raises(np.linalg.LinAlgError):
+        solve_VIE_1(kernel_values=K, g_values=np.ones((len(K), d)),
+                    coll_divs=3, coll_choices=[1, 2, 3])
+
+
+# ---------------------------------------------------------------------------
+# Matrix (multi-RHS) input edges
+# ---------------------------------------------------------------------------
+
+def test_matrix_zero_columns_raises_clean_error():
+    N, d = 10, 2
+    kernel = np.zeros((N, d, d))
+    kernel[:, 0, 0] = kernel[:, 1, 1] = 1.0
+    with pytest.raises(ValueError, match="zero columns"):
+        solve_VIE_2(kernel_values=kernel, g_values=np.ones((N, d, 0)),
+                    coll_divs=3, coll_choices=[0, 1, 2])
+    with pytest.raises(ValueError, match="zero columns"):
+        solve_VIDE(kernel_values=kernel, g_values=np.ones((N, d, 0)),
+                   soln_init_value=np.ones((d, 0)),
+                   coll_divs=3, coll_choices=[1, 2, 3])
+
+
 # ---------------------------------------------------------------------------
 # Plain Python lists accepted for array inputs
 # ---------------------------------------------------------------------------

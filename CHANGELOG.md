@@ -3,6 +3,38 @@
 ## [Unreleased]
 
 ### Fixed
+- **Adaptive quadrature could evaluate the kernel exactly at a declared
+  singular point and let that value poison the weights.** `quad_vec` (the
+  vector/matrix/complex backend) subdivides an endpoint-singular integrand
+  down to ulp scale, where `tau - s` rounds exactly onto the declared
+  location; whatever the kernel returns there (0, `inf`, or a clamped huge
+  value) was multiplied into the weight tensor -- for kernels not returning
+  0 at the singular point this produced garbage weights and, previously, a
+  silently wrong solve. Integrand evaluations landing exactly on a declared
+  singular location (a measure-zero set) are now masked to zero in both
+  builders, making all conventions for the kernel's value at the
+  singularity equivalent.
+- **Near-singular systems now raise `LinAlgError` on LAPACK builds too**:
+  `dgesv_` only reports exactly-zero pivots, so a nearly singular
+  collocation matrix raised on no-LAPACK builds but silently amplified
+  noise on LAPACK builds. The LAPACK path now applies the pure-D backend's
+  relative pivot threshold to the returned U diagonal, unifying the
+  semantics.
+- **Oversized inputs are rejected up front** instead of overflowing the D
+  extension's 32-bit index arithmetic: inputs whose flat buffers would
+  reach 2^31 elements (>= 17 GB) now raise a clear `ValueError` (new return
+  code 3) rather than risking undefined behavior.
+
+### Changed
+- Matrix (multi-RHS) column fan-out now caps its thread pool at the CPU
+  count instead of one thread per column (each column carries its own
+  D-side lag table, so unbounded workers multiplied peak memory), raises a
+  clear `ValueError` for zero-column inputs, and prints per-solve warnings
+  once instead of once per column.
+- A vector/matrix solve with a collocation setting not compiled into the D
+  extension now raises `NotImplementedError` (matching the scalar path)
+  instead of `RuntimeError`; since `NotImplementedError` subclasses
+  `RuntimeError`, existing handlers keep working.
 - **`return_function=True` returned all-zero polynomials for `d >= 9`** (the
   runtime-dimension drivers never wrote the polynomial coefficients; the
   sampled solution values were unaffected). This also hit complex problems

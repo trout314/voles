@@ -48,7 +48,24 @@ bool lin_solve_lapack(double[] a_colmaj, double[] b, int dm, int[] ipiv)
         dgesv_(&dm, &nrhs, a_colmaj.ptr, &dm, ipiv.ptr, b.ptr, &dm, &info);
         // info > 0 → (1-indexed) row of an exactly-zero pivot;
         // info < 0 → bad argument (should never happen here since we control the call).
-        return info == 0;
+        if (info != 0)
+            return false;
+        // dgesv_ only reports *exactly* zero pivots. Apply lin_solve_rt's
+        // relative near-singularity threshold to the U diagonal it returns,
+        // so LAPACK and no-LAPACK builds agree on what counts as singular
+        // (a nearly singular system must become LinAlgError on both, not
+        // silently amplified noise on one).
+        enum double eps = double.epsilon;
+        double max_pivot_seen = 0.0;
+        foreach (k; 0 .. dm)
+        {
+            double u = a_colmaj[k + cast(size_t) k * dm];
+            if (u < 0) u = -u;
+            if (u > max_pivot_seen) max_pivot_seen = u;
+            if (u <= dm * eps * max_pivot_seen)
+                return false;
+        }
+        return true;
     }
     else
     {
@@ -2531,7 +2548,21 @@ private void ensureThreadAttached()
 //   1 = invalid / unsupported collocation setting
 //   2 = singular or nearly singular coefficient matrix (from lin_solve_lapack /
 //       lin_solve_rt); translated to numpy.linalg.LinAlgError on the Python side
+//   3 = input too large: flat-index arithmetic inside the solvers is 32-bit,
+//       so buffers with >= 2^31 elements (>= 17 GB) would overflow into
+//       undefined behavior; rejected up front instead (ValueError in Python)
 // ---------------------------------------------------------------------------
+
+// True when any flat buffer the solvers index would exceed int.max elements:
+// the (n, d, d) kernel, the (mesh_divs, m+1, d) poly output, or the largest
+// square block matrix (dm + d covers VIDE's augmented source dimension).
+private bool sizes_overflow_int(int n, int d, int mesh_divs, int num_choices)
+{
+    immutable long dml = cast(long) d * num_choices + d;
+    return cast(long) n * d * d > int.max
+        || cast(long) mesh_divs * (num_choices + 1) * d > int.max
+        || dml * dml > int.max;
+}
 
 export extern(C):
 
@@ -2576,6 +2607,8 @@ int volterra_solve_vie1_vec(
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
     ensureThreadAttached();
+    if (sizes_overflow_int(n, d, (n - 1) / (coll_divs * coll_divs), num_choices))
+        return 3;
     double[] gv      = g_values[0 .. n * d];
     double[] kv      = kernel_values[0 .. n * d * d];
     double[] init    = soln_init_values[0 .. d];
@@ -2646,6 +2679,8 @@ int volterra_solve_vie2(
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
     ensureThreadAttached();
+    if (sizes_overflow_int(n, 1, (n - 1) / (coll_divs * coll_divs), num_choices))
+        return 3;
     double[] gv = g_values[0..n];
     double[] kv = kernel_values[0..n];
     int[] choices = coll_choices[0..num_choices];
@@ -2693,6 +2728,8 @@ int volterra_solve_vide(
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
     ensureThreadAttached();
+    if (sizes_overflow_int(n, 1, (n - 1) / (coll_divs * coll_divs), num_choices))
+        return 3;
     double[] gv = g_values[0..n];
     double[] kv = kernel_values[0..n];
     double[] av = a_values[0..n];
@@ -2747,6 +2784,8 @@ int volterra_solve_vie2_vec(
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
     ensureThreadAttached();
+    if (sizes_overflow_int(n, d, (n - 1) / (coll_divs * coll_divs), num_choices))
+        return 3;
     double[] gv      = g_values[0 .. n * d];
     double[] kv      = kernel_values[0 .. n * d * d];
     int[]    choices = coll_choices[0 .. num_choices];
@@ -2802,6 +2841,8 @@ int volterra_solve_vide_vec(
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
     ensureThreadAttached();
+    if (sizes_overflow_int(n, d, (n - 1) / (coll_divs * coll_divs), num_choices))
+        return 3;
     double[] gv   = g_values[0 .. n * d];
     double[] kv   = kernel_values[0 .. n * d * d];
     double[] av   = a_values[0 .. n * d * d];

@@ -66,14 +66,17 @@ def test_numba_vide_accuracy():
 
 def test_vector_beyond_compiled_settings_raises():
     """The vector path has no Numba fallback: a non-compiled setting must
-    raise cleanly (RuntimeError) rather than compute anything."""
+    raise cleanly rather than compute anything. NotImplementedError matches
+    the scalar path's error type (and subclasses the historical
+    RuntimeError, so old except clauses still work)."""
     d = as_array(VIE2_SPEC_SMOOTH, time_step=0.002, coll_divs=5,
                  coll_choices=[0, 1, 2], num_blocks=8)
     N = len(d["kernel"])
     kernel = np.zeros((N, 2, 2))
     kernel[:, 0, 0] = kernel[:, 1, 1] = d["kernel"]
     g = np.stack([d["g"], d["g"]], axis=1)
-    with pytest.raises(RuntimeError, match="not supported"):
+    with pytest.raises(NotImplementedError, match="not supported"):
         solve_VIE_2(kernel_values=kernel, g_values=g,
                     time_step=d["time_step"], coll_divs=5,
                     coll_choices=[0, 1, 2], show_warnings=False)
+    assert issubclass(NotImplementedError, RuntimeError)

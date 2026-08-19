@@ -205,6 +205,12 @@ def _check_return(ret: int, func_name: str) -> None:
         raise np.linalg.LinAlgError(
             f"{func_name}: singular or nearly singular coefficient matrix"
         )
+    if ret == 3:
+        raise ValueError(
+            f"{func_name}: input too large -- a flat solver buffer would "
+            f"exceed 2^31 elements (>= 17 GB) and overflow the extension's "
+            f"32-bit index arithmetic; reduce N or d"
+        )
     raise RuntimeError(f"{func_name} returned error code {ret}")
 
 def solve_vie1_d(g_values, kernel_values, soln_init_value, time_step,

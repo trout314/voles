@@ -618,21 +618,30 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             quad = _import_scipy_quad()
         return quad
 
-    def make_integrand(tau, t_l, h_l, k):
+    def make_integrand(tau, t_l, h_l, k, sing_pts=()):
         L_k = basis[k]
-        def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k):
+        def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k, _sp=sing_pts):
+            # The integrand's value exactly AT a declared singular point is
+            # irrelevant (a measure-zero set), but adaptive subdivision can
+            # place an evaluation there to the last ulp -- and whatever the
+            # kernel returns for it (0, inf, or a huge clamped value) must
+            # not leak into the weights.
+            for spt in _sp:
+                if s == spt:
+                    return 0.0
             x_norm = (s - _t_l) / _h_l
             return kernel(_tau - s) * npp.polyval(x_norm, _L_k)
         return integrand
 
-    def adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing):
+    def adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing,
+                       sing_pts):
         """Singular block: per-basis adaptive quadrature."""
         for k in range(n_basis):
             kwargs = dict(sing_quad_opts)
             if interior_sing:
                 kwargs['points'] = interior_sing
             with _reuse_quad_warnings_suppressed(reuse_sing):
-                val, _err = get_quad()(make_integrand(tau, t_l, h_l, k),
+                val, _err = get_quad()(make_integrand(tau, t_l, h_l, k, sing_pts),
                                        a_int, b_int, **kwargs)
             W[n, i, l, k] = val
 
@@ -671,7 +680,7 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         return est[0], est[1]
 
     def store_jacobi(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing,
-                     s0, alpha):
+                     sing_pts, s0, alpha):
         """Store the higher-order Gauss-Jacobi estimate for every basis
         function, with the same two-order acceptance as the smooth path; any
         failing basis function (wrong declared alpha, extra structure like a
@@ -684,7 +693,7 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             kwargs = dict(_QUAD_OPTS_DEFAULT)
             if interior_sing:
                 kwargs['points'] = interior_sing
-            val, _err = get_quad()(make_integrand(tau, t_l, h_l, int(k)),
+            val, _err = get_quad()(make_integrand(tau, t_l, h_l, int(k), sing_pts),
                                    a_int, b_int, **kwargs)
             W[n, i, l, int(k)] = val
         return bool(ok.all())
@@ -758,13 +767,15 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                     continue
                 interior_sing, mode, jinfo = _classify_sing_block(
                     sing_per_i[i], a_int, b_int)
+                sing_pts = tuple(sp for sp, _ in sing_per_i[i])
                 if mode == 'adaptive':
-                    adaptive_block(n, i, l, tau_n[i], t_l, h_l, a_int, b_int, interior_sing)
+                    adaptive_block(n, i, l, tau_n[i], t_l, h_l, a_int, b_int,
+                                   interior_sing, sing_pts)
                     if record:
                         sing_off[i, lag] = True
                 elif mode == 'jacobi':
                     clean = store_jacobi(n, i, l, tau_n[i], t_l, h_l, a_int,
-                                         b_int, interior_sing, *jinfo)
+                                         b_int, interior_sing, sing_pts, *jinfo)
                     if record:
                         ok_off[i, lag] = clean
                 else:
@@ -797,14 +808,16 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                 continue
             interior_sing, mode, jinfo = _classify_sing_block(
                 sing_per_i[i], a_int, b_int)
+            sing_pts = tuple(sp for sp, _ in sing_per_i[i])
             if mode == 'adaptive':
-                adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing)
+                adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int,
+                               interior_sing, sing_pts)
                 if record:
                     sing_diag[i] = True
                 continue
             if mode == 'jacobi':
                 clean = store_jacobi(n, i, l, tau, t_l, h_l, a_int, b_int,
-                                     interior_sing, *jinfo)
+                                     interior_sing, sing_pts, *jinfo)
                 if record and clean:
                     ok_diag[i] = True
                 continue
@@ -935,30 +948,45 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             quad_vec = _import_scipy_quad_vec()
         return quad_vec
 
-    def make_integrand(tau, t_l, h_l, k):
+    def make_integrand(tau, t_l, h_l, k, sing_pts=()):
         L_k_coefs = basis[k]
+        # The masking of exact hits on declared singular points mirrors the
+        # scalar builder's make_integrand: quad_vec in particular subdivides
+        # all the way to ulp scale at an endpoint singularity, where
+        # tau - s rounds to the singular location exactly.
         if kernel_vec:
-            def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs):
+            def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs,
+                          _sp=sing_pts):
+                if np.ndim(s) == 0:
+                    for spt in _sp:
+                        if s == spt:
+                            return np.zeros((d, d))
                 x_norm = (s - _t_l) / _h_l
                 K = np.asarray(kernel(_tau - s), dtype=np.float64)
                 # poly is scalar/(n,); K is (d,d)/(n,d,d). Broadcast.
                 return K * npp.polyval(x_norm, _L_k)[..., None, None] \
                     if K.ndim == 3 else K * float(npp.polyval(x_norm, _L_k))
         else:
-            def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs):
+            def integrand(s, _tau=tau, _t_l=t_l, _h_l=h_l, _L_k=L_k_coefs,
+                          _sp=sing_pts):
+                for spt in _sp:
+                    if s == spt:
+                        return np.zeros((d, d))
                 x_norm = (s - _t_l) / _h_l
                 K = np.asarray(kernel(_tau - s), dtype=np.float64)
                 return K * _eval_poly_at(_L_k, x_norm)
         return integrand
 
-    def adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing):
+    def adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing,
+                       sing_pts):
         """Singular block: per-basis adaptive quadrature."""
         for k in range(n_basis):
             kwargs = dict(sing_quad_opts)
             if interior_sing:
                 kwargs['points'] = interior_sing
             with _reuse_quad_warnings_suppressed(reuse_sing):
-                val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, k),
+                val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, k,
+                                                          sing_pts),
                                            a_int, b_int, **kwargs)
             W[n, i, l, k, :, :] = val
 
@@ -994,7 +1022,7 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         return est[0], est[1]
 
     def store_jacobi(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing,
-                     s0, alpha):
+                     sing_pts, s0, alpha):
         """Vector analogue of the scalar builder's store_jacobi: two-order
         acceptance over the (d, d) entries, adaptive fallback at default
         tolerance for failing basis functions. Returns True iff all passed."""
@@ -1007,7 +1035,8 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             kwargs = dict(_QUAD_OPTS_DEFAULT)
             if interior_sing:
                 kwargs['points'] = interior_sing
-            val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, int(k)),
+            val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, int(k),
+                                                      sing_pts),
                                        a_int, b_int, **kwargs)
             W[n, i, l, int(k), :, :] = val
         return bool(ok.all())
@@ -1078,13 +1107,15 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                     continue
                 interior_sing, mode, jinfo = _classify_sing_block(
                     sing_per_i[i], a_int, b_int)
+                sing_pts = tuple(sp for sp, _ in sing_per_i[i])
                 if mode == 'adaptive':
-                    adaptive_block(n, i, l, tau_n[i], t_l, h_l, a_int, b_int, interior_sing)
+                    adaptive_block(n, i, l, tau_n[i], t_l, h_l, a_int, b_int,
+                                   interior_sing, sing_pts)
                     if record:
                         sing_off[i, lag] = True
                 elif mode == 'jacobi':
                     clean = store_jacobi(n, i, l, tau_n[i], t_l, h_l, a_int,
-                                         b_int, interior_sing, *jinfo)
+                                         b_int, interior_sing, sing_pts, *jinfo)
                     if record:
                         ok_off[i, lag] = clean
                 else:
@@ -1117,14 +1148,16 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 continue
             interior_sing, mode, jinfo = _classify_sing_block(
                 sing_per_i[i], a_int, b_int)
+            sing_pts = tuple(sp for sp, _ in sing_per_i[i])
             if mode == 'adaptive':
-                adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int, interior_sing)
+                adaptive_block(n, i, l, tau, t_l, h_l, a_int, b_int,
+                               interior_sing, sing_pts)
                 if record:
                     sing_diag[i] = True
                 continue
             if mode == 'jacobi':
                 clean = store_jacobi(n, i, l, tau, t_l, h_l, a_int, b_int,
-                                     interior_sing, *jinfo)
+                                     interior_sing, sing_pts, *jinfo)
                 if record and clean:
                     ok_diag[i] = True
                 continue

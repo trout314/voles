@@ -1,3 +1,4 @@
+import os
 import warnings
 
 import numpy as np
@@ -5,6 +6,21 @@ from concurrent.futures import ThreadPoolExecutor
 from . import _dlang as _dlang_module
 from . import _complex as _cplx
 from ._solution import _SolutionFunction, _ComplexSolutionFunction
+
+
+def _column_workers(m_cols):
+    """Thread count for the matrix-column fan-out.
+
+    Columns are independent solves, each with its own D-side lag table, so
+    one thread per column both oversubscribes the CPU and multiplies peak
+    memory when m_cols is large; cap at the core count. Zero columns is a
+    caller error (an executor would reject max_workers=0 with a confusing
+    message).
+    """
+    if m_cols == 0:
+        raise ValueError(
+            "matrix-valued input has zero columns (trailing axis of length 0)")
+    return min(m_cols, os.cpu_count() or 1)
 
 
 def _resolve_return_flag(return_function, return_polys):
@@ -246,6 +262,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
                 g_cols = [None] * m_cols
             a_trunc = np.asarray(a_values, dtype=float)[:N] if a_values is not None else None
             def _col_vide(j):
+                # column 0 carries any per-solve warnings; the others would
+                # only duplicate them m_cols times from interleaved threads
                 return solve_VIDE(kernel_values=kernel_values_,
                                   a_values=a_trunc,
                                   g_values=g_cols[j],
@@ -253,8 +271,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
                                   time_step=time_step, coll_divs=coll_divs,
                                   coll_choices=coll_choices,
                                   return_function=return_function,
-                                  show_warnings=show_warnings)
-            with ThreadPoolExecutor(max_workers=m_cols) as ex:
+                                  show_warnings=show_warnings and j == 0)
+            with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                 results = list(ex.map(_col_vide, range(m_cols)))
             if return_function:
                 col_solns = [r[0] for r in results]
@@ -303,9 +321,12 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         coll_choices = sorted(coll_choices)
 
         if (coll_divs, coll_choices) not in _fast_settings_VIDE:
-            raise RuntimeError(
+            # NotImplementedError subclasses RuntimeError, so callers
+            # catching the historical RuntimeError still work; this matches
+            # the scalar path's error type for non-compiled settings.
+            raise NotImplementedError(
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
-                f"not supported by D extension.")
+                f"not supported by D extension (no vector-path fallback).")
 
         k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
         g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
@@ -532,7 +553,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                                        return_function=return_function,
                                        force_continuous=force_continuous,
                                        show_warnings=False)
-                with ThreadPoolExecutor(max_workers=m_cols) as ex:
+                with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                     results = list(ex.map(_col_vie1, range(m_cols)))
                 if return_function:
                     col_solns = [r[0] for r in results]
@@ -583,9 +604,12 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                 f"does not produce a convergent VIE-1 solver and is not supported. "
                 f"Use a setting from fast_coll_settings_VIE_1.")
         if (coll_divs, coll_choices) not in _fast_settings_VIE_1:
-            raise RuntimeError(
+            # NotImplementedError subclasses RuntimeError, so callers
+            # catching the historical RuntimeError still work; this matches
+            # the scalar path's error type for non-compiled settings.
+            raise NotImplementedError(
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
-                f"not supported by D extension.")
+                f"not supported by D extension (no vector-path fallback).")
 
         # kernel must be C-contiguous (N, d, d) and g (N, d)
         k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
@@ -790,13 +814,15 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                         f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
                 g_cols = g_values_[:N]
                 def _col_vie2(j):
+                    # column 0 carries any per-solve warnings; the others
+                    # would only duplicate them from interleaved threads
                     return solve_VIE_2(kernel_values=kernel_values_,
                                        g_values=g_cols[:, :, j],
                                        time_step=time_step, coll_divs=coll_divs,
                                        coll_choices=coll_choices,
                                        return_function=return_function,
-                                       show_warnings=show_warnings)
-                with ThreadPoolExecutor(max_workers=m_cols) as ex:
+                                       show_warnings=show_warnings and j == 0)
+                with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                     results = list(ex.map(_col_vie2, range(m_cols)))
                 if return_function:
                     col_solns = [r[0] for r in results]
@@ -829,9 +855,12 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         coll_choices = sorted(coll_choices)
 
         if (coll_divs, coll_choices) not in _fast_settings_VIE_2:
-            raise RuntimeError(
+            # NotImplementedError subclasses RuntimeError, so callers
+            # catching the historical RuntimeError still work; this matches
+            # the scalar path's error type for non-compiled settings.
+            raise NotImplementedError(
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
-                f"not supported by D extension.")
+                f"not supported by D extension (no vector-path fallback).")
 
         k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
         g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
