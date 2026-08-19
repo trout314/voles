@@ -2618,3 +2618,149 @@ def test_reuse_quad_opts_strictly_tighten_scipy_defaults():
     assert _QUAD_OPTS_REUSE["epsrel"] <= default_of(quad, "epsrel")
     assert _QUAD_VEC_OPTS_REUSE["epsabs"] <= default_of(quad_vec, "epsabs")
     assert _QUAD_VEC_OPTS_REUSE["epsrel"] <= default_of(quad_vec, "epsrel")
+
+
+# ---------------------------------------------------------------------------
+# Gauss-Jacobi: non-zero singularity locations.
+#
+# With the canonical Abel declaration {0.0: alpha} the singular point
+# s0 = tau always sits at a block's right endpoint, so the interior
+# two-segment split and the left-endpoint Jacobi rule (roots_jacobi with the
+# weight on the *left*) are never reached. A non-zero declared location u
+# puts s0 = tau - u strictly inside blocks for most collocation rows,
+# exercising both.
+# ---------------------------------------------------------------------------
+
+def test_jacobi_interior_singularity_matches_adaptive():
+    kw = dict(kernel=lambda u: np.maximum(np.abs(u - 0.5), 1e-300) ** -0.4,
+              g=lambda t: np.ones_like(np.asarray(t, dtype=float)),
+              mesh_breakpoints=_uniform_mesh(25),
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+    y_adaptive = function_solve_VIE_2(**kw, kernel_singularity=0.5)
+    y_jacobi = function_solve_VIE_2(**kw, kernel_singularity={0.5: 0.4})
+    assert np.isfinite(y_jacobi).all()
+    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-6
+
+
+def test_jacobi_two_declared_locations_matches_adaptive():
+    """Each block touched by exactly one declared power gets a Jacobi rule;
+    the whole solve must still agree with the fully adaptive treatment."""
+    kw = dict(kernel=lambda u: np.maximum(np.abs(u), 1e-300) ** -0.5
+                               + np.maximum(np.abs(u - 0.5), 1e-300) ** -0.5,
+              g=lambda t: np.ones_like(np.asarray(t, dtype=float)),
+              mesh_breakpoints=_uniform_mesh(25),
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+    y_adaptive = function_solve_VIE_2(**kw, kernel_singularity=[0.0, 0.5])
+    y_jacobi = function_solve_VIE_2(**kw,
+                                    kernel_singularity={0.0: 0.5, 0.5: 0.5})
+    assert np.isfinite(y_jacobi).all()
+    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-6
+
+
+def test_jacobi_close_locations_sharing_a_block():
+    """Two declared singularities landing on one block force that block back
+    to adaptive quadrature (Jacobi handles exactly one touching power);
+    results must stay finite and agree with the location-only path."""
+    kw = dict(kernel=lambda u: np.maximum(np.abs(u), 1e-300) ** -0.5
+                               + np.maximum(np.abs(u - 0.02), 1e-300) ** -0.5,
+              g=lambda t: np.ones_like(np.asarray(t, dtype=float)),
+              mesh_breakpoints=_uniform_mesh(10),
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+    y_adaptive = function_solve_VIE_2(**kw, kernel_singularity=[0.0, 0.02])
+    y_jacobi = function_solve_VIE_2(**kw,
+                                    kernel_singularity={0.0: 0.5, 0.02: 0.5})
+    assert np.isfinite(y_jacobi).all()
+    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-6
+
+
+def test_jacobi_wrong_alpha_fine_mesh_still_falls_back_bitwise():
+    """The two-order acceptance check compares against max(1, |v2|), an
+    absolute floor, while singular weights shrink like h^(1-alpha) -- so the
+    check is weakest on fine meshes. Pin that a mis-declared exponent still
+    falls back bit-identically at M = 200."""
+    kw = dict(kernel=lambda u: 1.0 / np.sqrt(np.maximum(u, 1e-300)),
+              g=lambda t: np.ones_like(np.asarray(t, dtype=float)),
+              mesh_breakpoints=_uniform_mesh(200),
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+    assert np.array_equal(
+        function_solve_VIE_2(**kw, kernel_singularity={0.0: 0.4}),
+        function_solve_VIE_2(**kw, kernel_singularity=0.0))
+
+
+# ---------------------------------------------------------------------------
+# kernel_singularity input-form validation and canonicalization
+# ---------------------------------------------------------------------------
+
+def _smooth_vie2_kw(M=10):
+    return dict(kernel=lambda u: np.exp(-u),
+                g=lambda t: np.ones_like(np.asarray(t, dtype=float)),
+                mesh_breakpoints=_uniform_mesh(M),
+                coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+
+
+def test_singularity_bool_rejected():
+    """bool is an int subclass, so kernel_singularity=True used to silently
+    declare a singularity at location 1.0; it must be rejected instead."""
+    for bad in (True, False, [True], {True: 0.5}):
+        with pytest.raises(ValueError, match="bool"):
+            function_solve_VIE_2(**_smooth_vie2_kw(), kernel_singularity=bad)
+
+
+def test_singularity_numpy_scalar_forms_match_float():
+    """NumPy scalar and 0-d array locations must behave exactly like the
+    equivalent Python float (they used to raise a raw TypeError)."""
+    kw = dict(kernel=lambda u: 1.0 / np.sqrt(np.maximum(u, 1e-300)),
+              g=lambda t: np.ones_like(np.asarray(t, dtype=float)),
+              mesh_breakpoints=_uniform_mesh(10),
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+    y_ref = function_solve_VIE_2(**kw, kernel_singularity=0.0)
+    for form in (np.float32(0.0), np.float64(0.0), np.int64(0),
+                 np.array(0.0)):
+        assert np.array_equal(
+            y_ref, function_solve_VIE_2(**kw, kernel_singularity=form))
+
+
+def test_singularity_empty_forms_equal_none():
+    """An empty declaration declares nothing and must be indistinguishable
+    from kernel_singularity=None -- bitwise, and including the is-None
+    checks that gate warnings and the VIE-1 convergence guard."""
+    kw = _smooth_vie2_kw()
+    y_none = function_solve_VIE_2(**kw, kernel_singularity=None)
+    for empty in ([], (), {}):
+        assert np.array_equal(
+            y_none, function_solve_VIE_2(**kw, kernel_singularity=empty))
+
+
+def test_vie1_convergence_guard_active_with_empty_singularity():
+    """An empty kernel_singularity must not disable the VIE-1 convergence
+    guard the way a genuine singular declaration does."""
+    p = as_callable(VIE1_SPEC_ABEL, coll_divs=3, coll_choices=[1, 2, 3])
+    with pytest.raises(ValueError, match="convergent"):
+        function_solve_VIE_1(
+            kernel=lambda u: np.exp(-u), g=p["g"],
+            mesh_breakpoints=_uniform_mesh(8), coll_nodes=[0.25],
+            kernel_singularity=[], show_warnings=False)
+
+
+def test_vie1_zero_kernel_singular_system_raises_linalgerror():
+    """A zero kernel makes VIE-1's diagonal weight blocks singular; the D
+    solver must report this as LinAlgError (its compile-time lin_solve used
+    to abort the whole process via an assert escaping extern(C))."""
+    with pytest.raises(np.linalg.LinAlgError):
+        function_solve_VIE_1(
+            kernel=lambda u: 0.0, g=lambda t: float(np.asarray(t)),
+            mesh_breakpoints=_uniform_mesh(4),
+            coll_divs=2, coll_choices=[1, 2], show_warnings=False)
+
+
+def test_vie1_force_continuous_singular_kernel_requires_right_endpoint():
+    """force_continuous structurally requires c_m = 1 regardless of kernel
+    smoothness; a declared singularity relaxes only the amplification
+    criteria, not this (it used to bypass the check entirely)."""
+    p = as_callable(VIE1_SPEC_ABEL, coll_divs=3, coll_choices=[1, 2, 3])
+    with pytest.raises(ValueError, match="c_m = 1"):
+        function_solve_VIE_1(
+            kernel=p["kernel"], g=p["g"],
+            mesh_breakpoints=_uniform_mesh(10), coll_nodes=[0.3, 0.7],
+            force_continuous=True, soln_init_value=0.0,
+            kernel_singularity=p["kernel_singularity"], show_warnings=False)

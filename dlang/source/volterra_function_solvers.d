@@ -21,9 +21,13 @@ import volterra_solvers : lin_solve;
 // solved with the templated `lin_solve` (stack-allocated, fully unrolled).
 // ---------------------------------------------------------------------------
 
-void function_solve_vie2_impl(int p)(
+// All impls below return false if lin_solve detected a singular diagonal
+// block; the extern(C) entry points translate that to return code 2
+// (numpy.linalg.LinAlgError on the Python side).
+bool function_solve_vie2_impl(int p)(
     const double[] W, const double[] g, int M, double[] out_y)
 {
+    bool lin_ok = true;
     foreach (n; 0 .. M)
     {
         // Right-hand side: g at collocation points + history from l < n
@@ -50,10 +54,12 @@ void function_solve_vie2_impl(int p)(
                 A[i][j] = (i == j ? 1.0 : 0.0) - W[row_base + j];
         }
 
-        auto y_n = lin_solve!p(A, rhs);
+        auto y_n = lin_solve!p(A, rhs, lin_ok);
+        if (!lin_ok) return false;
         foreach (i; 0 .. p)
             out_y[n * p + i] = y_n[i];
     }
+    return true;
 }
 
 // Max number of collocation nodes per interval supported by the compiled extension.
@@ -74,10 +80,11 @@ enum int MAX_FUNCTION_D = 8;
 // matrix and solve with lin_solve.
 // ---------------------------------------------------------------------------
 
-void function_solve_vie2_vec_impl(int p, int d)(
+bool function_solve_vie2_vec_impl(int p, int d)(
     const double[] W, const double[] g, int M, double[] out_y)
 {
     enum int pd = p * d;
+    bool lin_ok = true;
 
     foreach (n; 0 .. M)
     {
@@ -125,11 +132,13 @@ void function_solve_vie2_vec_impl(int p, int d)(
             }
         }
 
-        auto Y_n = lin_solve!pd(A, rhs);
+        auto Y_n = lin_solve!pd(A, rhs, lin_ok);
+        if (!lin_ok) return false;
         foreach (i; 0 .. p)
             foreach (a; 0 .. d)
                 out_y[(n * p + i) * d + a] = Y_n[i * d + a];
     }
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -138,6 +147,8 @@ void function_solve_vie2_vec_impl(int p, int d)(
 // Return codes:
 //   0 = success
 //   1 = invalid input (M < 1 or p outside [1, MAX_FUNCTION_P])
+//   2 = singular or nearly singular diagonal block (from lin_solve);
+//       translated to numpy.linalg.LinAlgError on the Python side
 // ---------------------------------------------------------------------------
 
 export extern(C):
@@ -160,8 +171,7 @@ int function_solve_vie2(
         static foreach (pi; 1 .. MAX_FUNCTION_P + 1)
         {
             case pi:
-                function_solve_vie2_impl!pi(W_slice, g_slice, M, y_slice);
-                return 0;
+                return function_solve_vie2_impl!pi(W_slice, g_slice, M, y_slice) ? 0 : 2;
         }
         default:
             return 1;
@@ -178,12 +188,13 @@ int function_solve_vie2(
 // (The continuous S_m^(0) variant is function_solve_vie1_cont, below.)
 // ---------------------------------------------------------------------------
 
-void function_solve_vie1_impl(int p)(
+bool function_solve_vie1_impl(int p)(
     const double[] W,        // (M, p, M, p)
     const double[] g,        // (M, p)
     int M,
     double[] out_y)          // (M, p)
 {
+    bool lin_ok = true;
     foreach (n; 0 .. M)
     {
         double[p] rhs;
@@ -208,19 +219,22 @@ void function_solve_vie1_impl(int p)(
                 A[i][k] = W[row_base + k];
         }
 
-        auto y_n = lin_solve!p(A, rhs);
+        auto y_n = lin_solve!p(A, rhs, lin_ok);
+        if (!lin_ok) return false;
         foreach (i; 0 .. p)
             out_y[n * p + i] = y_n[i];
     }
+    return true;
 }
 
-void function_solve_vie1_vec_impl(int p, int d)(
+bool function_solve_vie1_vec_impl(int p, int d)(
     const double[] W,         // (M, p, M, p, d, d)
     const double[] g,         // (M, p, d)
     int M,
     double[] out_y)           // (M, p, d)
 {
     enum int pd = p * d;
+    bool lin_ok = true;
 
     foreach (n; 0 .. M)
     {
@@ -260,11 +274,13 @@ void function_solve_vie1_vec_impl(int p, int d)(
             }
         }
 
-        auto Y_n = lin_solve!pd(A, rhs);
+        auto Y_n = lin_solve!pd(A, rhs, lin_ok);
+        if (!lin_ok) return false;
         foreach (i; 0 .. p)
             foreach (aa; 0 .. d)
                 out_y[(n * p + i) * d + aa] = Y_n[i * d + aa];
     }
+    return true;
 }
 
 
@@ -286,7 +302,7 @@ void function_solve_vie1_vec_impl(int p, int d)(
 // Boundary advance: y_{n+1} = y_n*Lt_0(1) + sum_k U_{n,k}*Lt_{k+1}(1).
 // ---------------------------------------------------------------------------
 
-void function_solve_vie1_cont_impl(int p)(
+bool function_solve_vie1_cont_impl(int p)(
     const double[] W,         // (M, p, M, p+1)
     const double[] g,         // (M, p)
     int M,
@@ -297,6 +313,7 @@ void function_solve_vie1_cont_impl(int p)(
     double[] out_boundary)    // (M+1,)   -- y at the mesh breakpoints
 {
     enum int kext = p + 1;
+    bool lin_ok = true;
     out_boundary[0] = soln_init;
 
     foreach (n; 0 .. M)
@@ -330,7 +347,8 @@ void function_solve_vie1_cont_impl(int p)(
                 A[i][k] = W[base + k];
         }
 
-        auto U_n = lin_solve!p(A, rhs);
+        auto U_n = lin_solve!p(A, rhs, lin_ok);
+        if (!lin_ok) return false;
         foreach (i; 0 .. p)
             out_U[n * p + i] = U_n[i];
 
@@ -339,11 +357,12 @@ void function_solve_vie1_cont_impl(int p)(
             yb += U_n[k] * adv_U[k];
         out_boundary[n + 1] = yb;
     }
+    return true;
 }
 
 // Vector analogue: each U_{n,k} and y_n is a (d,)-vector; W[n,i,l,kext] are
 // (d, d) blocks. Same S_m^(0) system as the scalar impl, per (p*d) block.
-void function_solve_vie1_cont_vec_impl(int p, int d)(
+bool function_solve_vie1_cont_vec_impl(int p, int d)(
     const double[] W,          // (M, p, M, p+1, d, d)
     const double[] g,          // (M, p, d)
     int M,
@@ -355,6 +374,7 @@ void function_solve_vie1_cont_vec_impl(int p, int d)(
 {
     enum int pd = p * d;
     enum int kext = p + 1;
+    bool lin_ok = true;
     foreach (b; 0 .. d) out_boundary[b] = soln_init[b];
 
     foreach (n; 0 .. M)
@@ -415,7 +435,8 @@ void function_solve_vie1_cont_vec_impl(int p, int d)(
                         A[i * d + aa][k * d + bb] = W[Wnk + aa * d + bb];
             }
 
-        auto U_n = lin_solve!pd(A, rhs);
+        auto U_n = lin_solve!pd(A, rhs, lin_ok);
+        if (!lin_ok) return false;
         foreach (i; 0 .. p)
             foreach (aa; 0 .. d)
                 out_U[(n * p + i) * d + aa] = U_n[i * d + aa];
@@ -429,6 +450,7 @@ void function_solve_vie1_cont_vec_impl(int p, int d)(
             out_boundary[(n + 1) * d + aa] = yb;
         }
     }
+    return true;
 }
 
 
@@ -455,7 +477,7 @@ void function_solve_vie1_cont_vec_impl(int p, int d)(
 // where w_vec[k] = I_k(1).
 // ---------------------------------------------------------------------------
 
-void function_solve_vide_impl(int p)(
+bool function_solve_vide_impl(int p)(
     const double[] W,        // (M, p, M, p+1)
     const double[] g,        // (M, p)
     const double[] a_arr,    // (M, p)
@@ -467,6 +489,7 @@ void function_solve_vide_impl(int p)(
     double[] out_y_boundary) // (M+1,)
 {
     enum int kext_basis = p + 1;
+    bool lin_ok = true;
     out_y_boundary[0] = soln_init;
 
     foreach (n; 0 .. M)
@@ -512,7 +535,8 @@ void function_solve_vide_impl(int p)(
             }
         }
 
-        auto Y_n = lin_solve!p(A, rhs);
+        auto Y_n = lin_solve!p(A, rhs, lin_ok);
+        if (!lin_ok) return false;
         foreach (i; 0 .. p)
             out_y_prime[n * p + i] = Y_n[i];
 
@@ -522,6 +546,7 @@ void function_solve_vide_impl(int p)(
             dy += Y_n[k] * w_vec[k];
         out_y_boundary[n + 1] = y_n + h_n * dy;
     }
+    return true;
 }
 
 
@@ -538,7 +563,7 @@ int function_solve_max_d()
 // VIDE vector path: same equations as the scalar impl but each Y'_{n,k}
 // and y_n is a (d,)-vector and a(tau), W[n,i,l,k] are (d, d) matrices.
 // Per-step block system has dimension (p*d) x (p*d).
-void function_solve_vide_vec_impl(int p, int d)(
+bool function_solve_vide_vec_impl(int p, int d)(
     const double[] W,          // (M, p, M, p+1, d, d)
     const double[] g,          // (M, p, d)
     const double[] a_arr,      // (M, p, d, d)
@@ -552,6 +577,7 @@ void function_solve_vide_vec_impl(int p, int d)(
 {
     enum int pd = p * d;
     enum int kext_basis = p + 1;
+    bool lin_ok = true;
 
     foreach (b; 0 .. d) out_y_boundary[b] = soln_init[b];
 
@@ -633,7 +659,8 @@ void function_solve_vide_vec_impl(int p, int d)(
             }
         }
 
-        auto Yn = lin_solve!pd(A, rhs);
+        auto Yn = lin_solve!pd(A, rhs, lin_ok);
+        if (!lin_ok) return false;
         foreach (i; 0 .. p)
             foreach (aa; 0 .. d)
                 out_y_prime[(n * p + i) * d + aa] = Yn[i * d + aa];
@@ -647,6 +674,7 @@ void function_solve_vide_vec_impl(int p, int d)(
             out_y_boundary[(n + 1) * d + aa] = out_y_boundary[y_n_base + aa] + h_n * dy;
         }
     }
+    return true;
 }
 
 int function_solve_vie1(
@@ -667,8 +695,7 @@ int function_solve_vie1(
         static foreach (pi; 1 .. MAX_FUNCTION_P + 1)
         {
             case pi:
-                function_solve_vie1_impl!pi(W_slice, g_slice, M, y_slice);
-                return 0;
+                return function_solve_vie1_impl!pi(W_slice, g_slice, M, y_slice) ? 0 : 2;
         }
         default:
             return 1;
@@ -696,10 +723,9 @@ int function_solve_vie1_cont(
         static foreach (pi; 1 .. MAX_FUNCTION_P + 1)
         {
             case pi:
-                function_solve_vie1_cont_impl!pi(
+                return function_solve_vie1_cont_impl!pi(
                     W_slice, g_slice, M, advU_slice, adv_0, soln_init,
-                    U_slice, b_slice);
-                return 0;
+                    U_slice, b_slice) ? 0 : 2;
         }
         default:
             return 1;
@@ -733,10 +759,9 @@ int function_solve_vie1_cont_vec(
             static foreach (di; 1 .. MAX_FUNCTION_D + 1)
             {
                 case pi * 100 + di:
-                    function_solve_vie1_cont_vec_impl!(pi, di)(
+                    return function_solve_vie1_cont_vec_impl!(pi, di)(
                         W_slice, g_slice, M, advU_slice, adv_0, init_slice,
-                        U_slice, b_slice);
-                    return 0;
+                        U_slice, b_slice) ? 0 : 2;
             }
         }
         default:
@@ -767,9 +792,8 @@ int function_solve_vie1_vec(
             static foreach (di; 1 .. MAX_FUNCTION_D + 1)
             {
                 case pi * 100 + di:
-                    function_solve_vie1_vec_impl!(pi, di)(
-                        W_slice, g_slice, M, y_slice);
-                    return 0;
+                    return function_solve_vie1_vec_impl!(pi, di)(
+                        W_slice, g_slice, M, y_slice) ? 0 : 2;
             }
         }
         default:
@@ -803,10 +827,9 @@ int function_solve_vide(
         static foreach (pi; 1 .. MAX_FUNCTION_P + 1)
         {
             case pi:
-                function_solve_vide_impl!pi(
+                return function_solve_vide_impl!pi(
                     W_slice, g_slice, a_slice, alpha_slice, w_slice, h_slice,
-                    soln_init, M, y_prime_slice, y_boundary_slice);
-                return 0;
+                    soln_init, M, y_prime_slice, y_boundary_slice) ? 0 : 2;
         }
         default:
             return 1;
@@ -845,10 +868,9 @@ int function_solve_vide_vec(
             static foreach (di; 1 .. MAX_FUNCTION_D + 1)
             {
                 case pi * 100 + di:
-                    function_solve_vide_vec_impl!(pi, di)(
+                    return function_solve_vide_vec_impl!(pi, di)(
                         W_slice, g_slice, a_slice, alpha_slice, w_slice, h_slice,
-                        init_slice, M, y_prime_slice, y_boundary_slice);
-                    return 0;
+                        init_slice, M, y_prime_slice, y_boundary_slice) ? 0 : 2;
             }
         }
         default:
@@ -880,8 +902,8 @@ int function_solve_vie2_vec(
             static foreach (di; 1 .. MAX_FUNCTION_D + 1)
             {
                 case pi * 100 + di:
-                    function_solve_vie2_vec_impl!(pi, di)(W_slice, g_slice, M, y_slice);
-                    return 0;
+                    return function_solve_vie2_vec_impl!(pi, di)(
+                        W_slice, g_slice, M, y_slice) ? 0 : 2;
             }
         }
         default:

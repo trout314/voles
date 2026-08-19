@@ -508,3 +508,40 @@ def test_complex_matrix_valued_d49_workflow_smoke():
     assert soln.shape == (N, d, d)
     assert soln.dtype == np.complex128
     assert np.all(np.isfinite(soln))
+
+
+# ---------------------------------------------------------------------------
+# Complex vector crossing the runtime-dimension boundary.
+#
+# The real-block embedding doubles d, so complex d = 5 runs on the runtime
+# (d > 8) driver. A diagonal system decouples, so both the sampled solution
+# and the returned polynomials must match per-component scalar complex
+# solves (regression: the runtime drivers used to return all-zero
+# polynomial coefficients).
+# ---------------------------------------------------------------------------
+
+def test_complex_vector_d5_runtime_return_function_matches_scalar():
+    N, ts, d = 91, 0.01, 5
+    t = np.linspace(0.0, ts * (N - 1), N)
+    K = np.zeros((N, d, d), dtype=complex)
+    g = np.zeros((N, d), dtype=complex)
+    for i in range(d):
+        K[:, i, i] = (0.5 + 0.3j) * np.exp(-(1 + 0.1 * i) * t)
+        g[:, i] = np.sin(t + 0.1 * i) + 1j * np.cos(0.2 * i * t)
+
+    soln, f_vec = solve_VIE_2(
+        kernel_values=K, g_values=g, time_step=ts,
+        coll_divs=3, coll_choices=[0, 1, 2],
+        return_function=True, show_warnings=False)
+    assert soln.dtype == np.complex128
+
+    for i in range(d):
+        s_soln, f_s = solve_VIE_2(
+            kernel_values=K[:, i, i].copy(), g_values=g[:, i].copy(),
+            time_step=ts, coll_divs=3, coll_choices=[0, 1, 2],
+            return_function=True, show_warnings=False)
+        assert np.max(np.abs(soln[:, i] - s_soln)) < 1e-9
+        for tt in (0.13, 0.45, 0.77):
+            v_vec = np.asarray(f_vec(tt)).ravel()[i]
+            v_s = np.asarray(f_s(tt)).ravel()[0]
+            assert abs(v_vec - v_s) < 1e-9

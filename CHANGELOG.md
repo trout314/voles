@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Fixed
+- **`return_function=True` returned all-zero polynomials for `d >= 9`** (the
+  runtime-dimension drivers never wrote the polynomial coefficients; the
+  sampled solution values were unaffected). This also hit complex problems
+  with `d >= 5`, since the real-block embedding doubles the dimension. All
+  four runtime drivers (VIE-1 discontinuous/continuous, VIE-2, VIDE) now
+  write coefficients identical in layout to the compile-time path.
+- **A singular collocation matrix at `d <= 8` aborted the Python process**:
+  the compile-time `lin_solve` used a D `assert`, which escapes the
+  `extern(C)` boundary. It now reports failure with the same relative pivot
+  threshold as the runtime path, and all drivers -- including the
+  callable-input ones -- translate it to `numpy.linalg.LinAlgError`, matching
+  the `d >= 9` behavior. (In release builds the assert would have produced
+  silent garbage instead of aborting.)
+- **VIE-1 `force_continuous` with a declared `kernel_singularity` skipped the
+  `c_m = 1` structural check**: the requirement that the last collocation
+  node be the right endpoint is a property of the continuous S_m^(0)
+  representation itself, not of the smooth-kernel convergence criteria, and
+  is now enforced regardless of `kernel_singularity` (only the amplification
+  guards are relaxed for singular kernels).
+- **`kernel_singularity` input-form hardening**: `True`/`False` (bool is an
+  `int` subclass and silently declared a singularity at 1.0) are rejected
+  with a clear `ValueError`; NumPy scalars and 0-d arrays are accepted as
+  locations; empty list/tuple/dict declarations are canonicalized to `None`
+  so they no longer (silently) disable the VIE-1 convergence guard or
+  trigger the graded-mesh warning.
+
 ### Added
 - **Power-law singularity declaration (Gauss-Jacobi quadrature)** on the
   callable-input solvers: `kernel_singularity` now also accepts a dict

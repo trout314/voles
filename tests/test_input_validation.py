@@ -249,8 +249,10 @@ def test_nan_a_at_coll_point_vide():
 # Singular coefficient matrix raises numpy.linalg.LinAlgError.
 #
 # VIE-1's coefficient matrix is dt * BN_vec(kernel); a zero kernel makes it
-# the zero matrix, which is singular. d=9 forces the runtime LU path (compile-
-# time path is d <= max_d_compile = 8 and uses a non-recoverable assert).
+# the zero matrix, which is singular. d=9 exercises the runtime LU path;
+# d=1 (scalar) and d=2 exercise the compile-time path, whose lin_solve used
+# to abort the whole process via a D assert escaping extern(C) rather than
+# reporting failure (regression tests below).
 # ---------------------------------------------------------------------------
 
 def test_vie1_singular_matrix_raises_linalgerror():
@@ -262,6 +264,22 @@ def test_vie1_singular_matrix_raises_linalgerror():
     with pytest.raises(np.linalg.LinAlgError):
         solve_VIE_1(kernel_values=kernel, g_values=g,
                     coll_divs=coll_divs, coll_choices=[1, 2, 3])
+
+
+def test_vie1_singular_matrix_scalar_raises_linalgerror():
+    # Compile-time (d <= 8) path, scalar driver.
+    with pytest.raises(np.linalg.LinAlgError):
+        solve_VIE_1(kernel_values=np.zeros(10), g_values=np.ones(10),
+                    coll_divs=3, coll_choices=[1, 2, 3])
+
+
+def test_vie1_singular_matrix_d2_raises_linalgerror():
+    # Compile-time (d <= 8) path, vector driver.
+    N = 10
+    with pytest.raises(np.linalg.LinAlgError):
+        solve_VIE_1(kernel_values=np.zeros((N, 2, 2)),
+                    g_values=np.ones((N, 2)),
+                    coll_divs=3, coll_choices=[1, 2, 3])
 
 
 # ---------------------------------------------------------------------------

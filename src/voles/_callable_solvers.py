@@ -284,6 +284,21 @@ def _normalize_kernel_singularity(kernel_singularity):
     if callable(kernel_singularity):
         return (lambda t, _f=kernel_singularity: [(s, None) for s in _f(t)],
                 False)
+
+    def _location(u):
+        # bool is an int subclass: True would silently declare location 1.0.
+        if isinstance(u, bool):
+            raise ValueError(
+                "kernel_singularity locations must be real numbers, got a "
+                f"bool ({u}); pass the singular location in kernel "
+                "coordinates, e.g. kernel_singularity=0.0 for K(u) ~ u^-a.")
+        try:
+            return float(u)  # accepts numpy scalars and 0-d arrays too
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "kernel_singularity locations must be real numbers, got "
+                f"{u!r}") from exc
+
     if isinstance(kernel_singularity, dict):
         declared = []
         for u, alpha in kernel_singularity.items():
@@ -295,13 +310,30 @@ def _normalize_kernel_singularity(kernel_singularity):
                         f"0 < alpha < 1 (got alpha={alpha} for location {u}); "
                         "use None to keep adaptive quadrature for a location "
                         "with unknown or non-power-law behavior.")
-            declared.append((float(u), alpha))
-    elif isinstance(kernel_singularity, (int, float)):
-        declared = [(float(kernel_singularity), None)]
+            declared.append((_location(u), alpha))
+    elif np.ndim(kernel_singularity) == 0:
+        declared = [(_location(kernel_singularity), None)]
     else:
-        declared = [(float(u), None) for u in kernel_singularity]
+        declared = [(_location(u), None) for u in kernel_singularity]
     return (lambda t, _us=tuple(declared): [(t - u, al) for u, al in _us],
             True)
+
+
+def _empty_singularity_to_none(kernel_singularity):
+    """Canonicalize an empty list/tuple/dict/array declaration to None.
+
+    An empty container declares no singular locations, so it must behave
+    exactly like ``kernel_singularity=None`` everywhere — including the
+    ``is None`` checks that gate the VIE-1 convergence guard and the
+    uniform-mesh warning. Called once at each public entry point.
+    """
+    if kernel_singularity is None or callable(kernel_singularity):
+        return kernel_singularity
+    if isinstance(kernel_singularity, dict):
+        return kernel_singularity or None
+    if np.ndim(kernel_singularity) == 0:
+        return kernel_singularity
+    return kernel_singularity if len(kernel_singularity) > 0 else None
 
 
 @functools.lru_cache(maxsize=16)
@@ -1560,6 +1592,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     right-hand sides (it is built once), so they are substantially cheaper than
     $m$ separate calls.
     """
+    kernel_singularity = _empty_singularity_to_none(kernel_singularity)
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
         raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
@@ -1775,6 +1808,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     values are $y$ itself (reconstructed via the antiderivative basis and the
     tracked boundary values).
     """
+    kernel_singularity = _empty_singularity_to_none(kernel_singularity)
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
         raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
@@ -2439,6 +2473,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     accompany a declared ``kernel_singularity``, for which the check is already
     skipped.
     """
+    kernel_singularity = _empty_singularity_to_none(kernel_singularity)
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
         raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
@@ -2452,17 +2487,23 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         default_divs=3, default_choices=[1, 2, 3],
         exclude_zero=True, fname="function_solve_VIE_1")
 
+    # The continuous S_m^(0) representation extrapolates through the right
+    # endpoint, so c_m = 1 is a structural requirement of the method itself,
+    # independent of kernel smoothness — it must hold even when a singular
+    # kernel is declared (only the amplification criteria below assume
+    # smoothness).
+    if force_continuous and abs(node_pos[-1] - 1.0) > 1e-12:
+        raise ValueError(
+            "force_continuous (continuous S_m^(0) collocation) requires the "
+            "last collocation node to be the right endpoint c_m = 1; got "
+            f"c_m = {node_pos[-1]:.6g}. Append 1.0 to your nodes.")
+
     # Reject node sets for which the chosen VIE-1 method does not converge.
     # The criteria assume a smooth kernel (Brunner Thm 2.4.2(b): |K(t,t)|>=k0>0),
     # so they are skipped when a weakly-singular kernel is declared.
     if kernel_singularity is None:
         if force_continuous:
             # Continuous S_m^(0): converges iff c_m = 1 and |rho_{m-1}| <= 1.
-            if abs(node_pos[-1] - 1.0) > 1e-12:
-                raise ValueError(
-                    "force_continuous (continuous S_m^(0) collocation) requires the "
-                    "last collocation node to be the right endpoint c_m = 1; got "
-                    f"c_m = {node_pos[-1]:.6g}. Append 1.0 to your nodes.")
             rho = _vie1_cont_amplification(node_pos)
             if rho > 1.0 + 1e-9:
                 raise ValueError(

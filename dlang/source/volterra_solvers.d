@@ -131,10 +131,19 @@ bool lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv)
 // a and b are passed by value so the originals are not modified.
 // All loop bounds are compile-time constants (dim is a template parameter),
 // allowing the compiler to fully unroll and inline for each distinct dim.
+//
+// ok is set false (and the partial b returned) on a singular / nearly
+// singular matrix, using the same relative pivot threshold as lin_solve_rt;
+// callers must propagate this to the extern(C) boundary as return code 2.
+// An assert here would escape extern(C) and abort the host process.
 double[dim] lin_solve(int dim)(
     double[dim][dim] a,
-    double[dim] b)
+    double[dim] b,
+    ref bool ok)
 {
+    enum double eps = double.epsilon;
+    double max_pivot_seen = 0.0;
+    ok = true;
     foreach (k; 0 .. dim)
     {
         // find pivot row: max absolute value in column k at or below row k
@@ -150,7 +159,12 @@ double[dim] lin_solve(int dim)(
             double[dim] tmp = a[k]; a[k] = a[pivot]; a[pivot] = tmp;
             double tmp_b = b[k]; b[k] = b[pivot]; b[pivot] = tmp_b;
         }
-        assert(a[k][k] != 0.0, "error: solver got a non-invertible coefficient matrix");
+        if (max_val > max_pivot_seen) max_pivot_seen = max_val;
+        if (max_val <= dim * eps * max_pivot_seen)
+        {
+            ok = false;
+            return b;
+        }
         foreach (i; k + 1 .. dim)
         {
             a[i][k] /= a[k][k];
@@ -1265,12 +1279,14 @@ void CNL_vec_rt(int coll_divs, int[] coll_choices)(
 // VIE-1 solver implementation — compile-time d
 // ---------------------------------------------------------------------------
 
-void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
+// Returns false if lin_solve detected a singular coefficient matrix.
+bool solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
     double[] g_values, double[] kernel_values,
     double[] soln_init_values, double time_step,
     bool return_polys, bool force_continuous,
     double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
 {
+    bool lin_ok = true;
     enum int m  = coll_choices.length;
     enum int dm = d * m;
     alias coll_info = AliasSeq!(coll_divs, coll_choices);
@@ -1319,7 +1335,8 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
             auto rhs      = g_vec_ct!(coll_divs, coll_choices, d)(n, g_values);
             auto G_vector = hist.G(n);
             rhs[] -= G_vector[];
-            solution_U[n] = lin_solve!(dm)(coef_matrix, rhs);
+            solution_U[n] = lin_solve!(dm)(coef_matrix, rhs, lin_ok);
+            if (!lin_ok) return false;
             hist.push(solution_U[n]);
         }
     }
@@ -1358,7 +1375,8 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
                     rhs[ri] += dt * rho_m[ri][s] * boundary_vals[n][s];
             }
 
-            solution_U[n] = lin_solve!(dm)(coef_matrix, rhs);
+            solution_U[n] = lin_solve!(dm)(coef_matrix, rhs, lin_ok);
+            if (!lin_ok) return false;
             hist.push(solution_U[n]);
 
             // Propagate boundary value to next mesh point
@@ -1427,6 +1445,7 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
     foreach (p; 1 .. mesh_divs)
     foreach (r; 0 .. d)
         out_soln[p * coll_divs^^2 * d + r] *= 0.5;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1530,6 +1549,23 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
             }
         }
 
+        // Write poly_coefs: layout (mesh_divs, m+1, d), matching the
+        // compile-time driver (only the d loops are runtime here).
+        if (return_polys)
+        {
+            foreach (n; 0 .. mesh_divs)
+            foreach (r; 0 .. d)
+            {
+                double[m+1] coefs = boundary_flat[n*d + r]
+                                    * lagrange_coefs!(coll_divs, czero)(0)[];
+                foreach (j; 0 .. m)
+                    coefs[] += solution_U_flat[n*dm + r*m + j]
+                               * lagrange_coefs!(coll_divs, czero)(j + 1)[];
+                foreach (ci; 0 .. m+1)
+                    out_poly_coefs[(n*(m+1) + ci)*d + r] = coefs[ci];
+            }
+        }
+
         out_soln[] = 0;
         foreach (n; 0 .. mesh_divs)
         foreach (i; 0 .. coll_divs^^2 + 1)
@@ -1548,6 +1584,22 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
         foreach (r; 0 .. d)
             out_soln[p * coll_divs^^2 * d + r] *= 0.5;
         return true;
+    }
+
+    // Write poly_coefs (force_continuous=false): layout (mesh_divs, m+1, d),
+    // matching the compile-time driver.
+    if (return_polys)
+    {
+        foreach (n; 0 .. mesh_divs)
+        foreach (r; 0 .. d)
+        {
+            double[m] coefs = 0;
+            foreach (j; 0 .. m)
+                coefs[] += solution_U_flat[n*dm + r*m + j] * lagrange_coefs!coll_info(j)[];
+            foreach (ci; 0 .. m)
+                out_poly_coefs[(n*(m+1) + ci)*d + r] = coefs[ci];
+            // slot m stays 0
+        }
     }
 
     // Evaluate (force_continuous=false)
@@ -1585,10 +1637,9 @@ bool dispatch_VIE_1_vec(int coll_divs, int[] coll_choices)(
         static foreach (di; 1 .. max_d_compile + 1)
         {
             case di:
-                solve_VIE_1_vec_impl!(coll_divs, coll_choices, di)(
+                return solve_VIE_1_vec_impl!(coll_divs, coll_choices, di)(
                     gv, kv, soln_init_values, time_step, rp, fc,
                     out_soln_slice, poly_slice, md);
-                return true;
         }
         default:
             return solve_VIE_1_vec_runtime_impl!(coll_divs, coll_choices)(
@@ -1602,11 +1653,13 @@ bool dispatch_VIE_1_vec(int coll_divs, int[] coll_choices)(
 // Reuses BN_vec_ct, BNL_vec_ct, g_vec_ct from VIE-1 helpers.
 // ---------------------------------------------------------------------------
 
-void solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
+// Returns false if lin_solve detected a singular coefficient matrix.
+bool solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
     double[] g_values, double[] kernel_values,
     double time_step, bool return_polys,
     double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
 {
+    bool lin_ok = true;
     enum int m  = coll_choices.length;
     enum int dm = d * m;
     alias coll_info = AliasSeq!(coll_divs, coll_choices);
@@ -1652,7 +1705,8 @@ void solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
         auto rhs = g_vec_ct!(coll_divs, coll_choices, d)(n, g_values);
         auto G_v = hist.G(n);
         rhs[] += G_v[];
-        solution_U[n] = lin_solve!(dm)(coef_matrix, rhs);
+        solution_U[n] = lin_solve!(dm)(coef_matrix, rhs, lin_ok);
+        if (!lin_ok) return false;
         hist.push(solution_U[n]);
     }
 
@@ -1688,6 +1742,7 @@ void solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
     foreach (p; 1 .. mesh_divs)
     foreach (r; 0 .. d)
         out_soln[p * coll_divs^^2 * d + r] *= 0.5;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1697,8 +1752,8 @@ void solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
 // Returns false if any lin_solve_lapack call detected a singular matrix.
 bool solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     double[] g_values, double[] kernel_values,
-    int d, double time_step,
-    double[] out_soln, ref int out_mesh_divs)
+    int d, double time_step, bool return_polys,
+    double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
 {
     enum int m = coll_choices.length;
     alias coll_info = AliasSeq!(coll_divs, coll_choices);
@@ -1750,6 +1805,22 @@ bool solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
         hist.push(solution_U_flat[n*dm .. (n+1)*dm]);
     }
 
+    // Write poly_coefs: layout (mesh_divs, m+1, d), matching the
+    // compile-time driver (only the d loops are runtime here).
+    if (return_polys)
+    {
+        foreach (n; 0 .. mesh_divs)
+        foreach (r; 0 .. d)
+        {
+            double[m] coefs = 0;
+            foreach (j; 0 .. m)
+                coefs[] += solution_U_flat[n*dm + r*m + j] * lagrange_coefs!coll_info(j)[];
+            foreach (ci; 0 .. m)
+                out_poly_coefs[(n*(m+1) + ci)*d + r] = coefs[ci];
+            // slot m stays 0
+        }
+    }
+
     out_soln[] = 0;
     foreach (n; 0 .. mesh_divs)
     foreach (i; 0 .. coll_divs^^2 + 1)
@@ -1782,13 +1853,12 @@ bool dispatch_VIE_2_vec(int coll_divs, int[] coll_choices)(
         static foreach (di; 1 .. max_d_compile + 1)
         {
             case di:
-                solve_VIE_2_vec_impl!(coll_divs, coll_choices, di)(
+                return solve_VIE_2_vec_impl!(coll_divs, coll_choices, di)(
                     gv, kv, time_step, rp, out_soln_slice, poly_slice, md);
-                return true;
         }
         default:
             return solve_VIE_2_vec_runtime_impl!(coll_divs, coll_choices)(
-                gv, kv, d, time_step, out_soln_slice, md);
+                gv, kv, d, time_step, rp, out_soln_slice, poly_slice, md);
     }
 }
 
@@ -1796,12 +1866,14 @@ bool dispatch_VIE_2_vec(int coll_divs, int[] coll_choices)(
 // VIDE vector solver — compile-time d
 // ---------------------------------------------------------------------------
 
-void solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
+// Returns false if lin_solve detected a singular coefficient matrix.
+bool solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
     double[] g_values, double[] kernel_values, double[] a_values,
     double[] soln_init_values,      // length d
     double time_step, bool return_polys,
     double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
 {
+    bool lin_ok = true;
     enum int m  = coll_choices.length;
     enum int dm = d * m;
     alias coll_info = AliasSeq!(coll_divs, coll_choices);
@@ -1872,7 +1944,8 @@ void solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
                 coef_matrix[ri][sj] -= dt * AN_m[ri][sj] + dt * dt * CN_m[ri][sj];
         }
 
-        solution_Y[n] = lin_solve!(dm)(coef_matrix, rhs);
+        solution_Y[n] = lin_solve!(dm)(coef_matrix, rhs, lin_ok);
+        if (!lin_ok) return false;
 
         // Boundary propagation: y_r(t_{n+1}) = y_r(t_n) + dt * Σ_j Y_{r,j} * w_j
         foreach (r; 0 .. d)
@@ -1927,6 +2000,7 @@ void solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
     foreach (p; 1 .. mesh_divs)
     foreach (r; 0 .. d)
         out_soln[p * coll_divs^^2 * d + r] *= 0.5;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1937,8 +2011,8 @@ void solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
 bool solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     double[] g_values, double[] kernel_values, double[] a_values,
     int d, double[] soln_init_values,
-    double time_step,
-    double[] out_soln, ref int out_mesh_divs)
+    double time_step, bool return_polys,
+    double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
 {
     enum int m = coll_choices.length;
     alias coll_info = AliasSeq!(coll_divs, coll_choices);
@@ -2025,6 +2099,26 @@ bool solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
         hist.push(src_aug);
     }
 
+    // Write poly_coefs: layout (mesh_divs, m+1, d), matching the
+    // compile-time driver (only the d loops are runtime here).
+    if (return_polys)
+    {
+        foreach (n; 0 .. mesh_divs)
+        foreach (r; 0 .. d)
+        {
+            double[m+1] coefs = 0;
+            coefs[0] = boundary_flat[n*d + r];
+            foreach (j; 0 .. m)
+            {
+                auto integ_coefs = lagrange_integ_coefs!coll_info(j);
+                foreach (power; 0 .. m+1)
+                    coefs[power] += dt * solution_Y_flat[n*dm + r*m + j] * integ_coefs[power];
+            }
+            foreach (ci; 0 .. m+1)
+                out_poly_coefs[(n*(m+1) + ci)*d + r] = coefs[ci];
+        }
+    }
+
     out_soln[] = 0;
     foreach (n; 0 .. mesh_divs)
     foreach (i; 0 .. coll_divs^^2 + 1)
@@ -2059,13 +2153,13 @@ bool dispatch_VIDE_vec(int coll_divs, int[] coll_choices)(
         static foreach (di; 1 .. max_d_compile + 1)
         {
             case di:
-                solve_VIDE_vec_impl!(coll_divs, coll_choices, di)(
+                return solve_VIDE_vec_impl!(coll_divs, coll_choices, di)(
                     gv, kv, av, soln_init_values, time_step, rp, out_soln_slice, poly_slice, md);
-                return true;
         }
         default:
             return solve_VIDE_vec_runtime_impl!(coll_divs, coll_choices)(
-                gv, kv, av, d, soln_init_values, time_step, out_soln_slice, md);
+                gv, kv, av, d, soln_init_values, time_step, rp,
+                out_soln_slice, poly_slice, md);
     }
 }
 
@@ -2073,11 +2167,13 @@ bool dispatch_VIDE_vec(int coll_divs, int[] coll_choices)(
 // VIE-2 solver implementation
 // ---------------------------------------------------------------------------
 
-void solve_VIE_2_impl(int coll_divs, int[] coll_choices)(
+// Returns false if lin_solve detected a singular coefficient matrix.
+bool solve_VIE_2_impl(int coll_divs, int[] coll_choices)(
     double[] g_values, double[] kernel_values,
     double time_step, bool return_polys,
     double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
 {
+    bool lin_ok = true;
     enum int num_c_params = coll_choices.length;
     double dt = time_step * coll_divs^^2;
     alias coll_info = AliasSeq!(coll_divs, coll_choices);
@@ -2122,7 +2218,8 @@ void solve_VIE_2_impl(int coll_divs, int[] coll_choices)(
         auto g_vector = g!coll_info(n, g_values);
         auto G_vector = hist.G(n);
         rhs_vector[] = g_vector[] + G_vector[];
-        solution_U[n] = lin_solve(coef_matrix, rhs_vector);
+        solution_U[n] = lin_solve(coef_matrix, rhs_vector, lin_ok);
+        if (!lin_ok) return false;
         hist.push(solution_U[n]);
     }
 
@@ -2149,17 +2246,20 @@ void solve_VIE_2_impl(int coll_divs, int[] coll_choices)(
     {
         out_soln[m * coll_divs^^2] *= 0.5;
     }
+    return true;
 }
 
 // ---------------------------------------------------------------------------
 // VIDE solver implementation
 // ---------------------------------------------------------------------------
 
-void solve_VIDE_impl(int coll_divs, int[] coll_choices)(
+// Returns false if lin_solve detected a singular coefficient matrix.
+bool solve_VIDE_impl(int coll_divs, int[] coll_choices)(
     double[] g_values, double[] kernel_values, double[] a_values,
     double soln_init_value, double time_step, bool return_polys,
     double[] out_soln, double[] out_poly_coefs, ref int out_mesh_divs)
 {
+    bool lin_ok = true;
     enum int num_c_params = coll_choices.length;
     double dt = time_step * coll_divs^^2;
     alias coll_info = AliasSeq!(coll_divs, coll_choices);
@@ -2215,7 +2315,8 @@ void solve_VIDE_impl(int coll_divs, int[] coll_choices)(
                 coef_matrix[i][j] -= dt * (An_matrix[i][j] + dt * CN_matrix[i][j]);
             }
         }
-        solution_Y[n] = lin_solve(coef_matrix, rhs_vector);
+        solution_Y[n] = lin_solve(coef_matrix, rhs_vector, lin_ok);
+        if (!lin_ok) return false;
         boundary_values[n + 1] = poly_piece_VIDE_f!coll_info(double(1.0), n, solution_Y, boundary_values[n], dt);
 
         double[num_c_params + 1] src;
@@ -2247,6 +2348,7 @@ void solve_VIDE_impl(int coll_divs, int[] coll_choices)(
     {
         out_soln[n * coll_divs^^2] *= 0.5;
     }
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -2560,6 +2662,7 @@ int volterra_solve_vie2(
 
     bool rp = return_polys != 0;
     int md = 0;
+    bool ok = false;
 
     static immutable all_settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
 
@@ -2569,7 +2672,7 @@ int volterra_solve_vie2(
         {
             mixin(format(
                 "case %s:
-                    solve_VIE_2_impl!(settings[0], settings[1..$])(
+                    ok = solve_VIE_2_impl!(settings[0], settings[1..$])(
                         gv, kv, time_step, rp,
                         out_soln_slice, poly_slice, md);
                     break outer;", idx));
@@ -2578,6 +2681,7 @@ int volterra_solve_vie2(
             return 1;
     }
 
+    if (!ok) return 2;
     *out_mesh_divs = md;
     return 0;
 }
@@ -2606,6 +2710,7 @@ int volterra_solve_vide(
 
     bool rp = return_polys != 0;
     int md = 0;
+    bool ok = false;
 
     static immutable all_settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
 
@@ -2615,7 +2720,7 @@ int volterra_solve_vide(
         {
             mixin(format(
                 "case %s:
-                    solve_VIDE_impl!(settings[0], settings[1..$])(
+                    ok = solve_VIDE_impl!(settings[0], settings[1..$])(
                         gv, kv, av, soln_init_value, time_step, rp,
                         out_soln_slice, poly_slice, md);
                     break outer;", idx));
@@ -2624,6 +2729,7 @@ int volterra_solve_vide(
             return 1;
     }
 
+    if (!ok) return 2;
     *out_mesh_divs = md;
     return 0;
 }
