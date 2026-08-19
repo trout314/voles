@@ -337,6 +337,43 @@ def _toeplitz_W_rows(widths: np.ndarray, kernel_singularity) -> bool:
     return float(widths.max() - widths.min()) <= 1e-12 * w_mean
 
 
+def _pending_lags(skip_lag: np.ndarray, n: int) -> list:
+    """Off-diagonal blocks of row n that still need integration, as block
+    indices l: the lags m = n - l in 1..n with skip_lag[m] False. Block
+    order is irrelevant (blocks are independent)."""
+    return (n - (np.nonzero(~skip_lag[1:n + 1])[0] + 1)).tolist()
+
+
+def _assemble_W_rows(W, M, toeplitz, reuse_sing, integrate_row):
+    """Shared row-assembly policy for the scalar and vector W builders.
+
+    On the Toeplitz fast path: integrate the last row (which contains every
+    lag), band-copy it with _fill_toeplitz_W, then recompute the
+    non-reusable entries of every other row exactly as the general path
+    would (see _toeplitz_W_rows for the reuse policy). With ``reuse_sing``
+    the declared-singularity entries also keep their one tightened-tolerance
+    value; two-order fallback entries are always repaired per row, so the
+    reuse flag cannot change results for kernels with no declared
+    singularity. Off the fast path: integrate every row.
+
+    ``integrate_row`` is the builder's closure implementing the skip/record
+    contract documented on the scalar builder's integrate_row.
+    """
+    if not toeplitz:
+        for n in range(M):
+            integrate_row(n)
+        return
+    ok_off, ok_diag, sing_off, sing_diag = integrate_row(M - 1, record=True)
+    if M >= 2:
+        _fill_toeplitz_W(W, M)
+        skip_off = ok_off | sing_off if reuse_sing else ok_off
+        skip_diag = ok_diag | sing_diag if reuse_sing else ok_diag
+        skip_lag = skip_off.all(axis=0)
+        for n in range(M - 1):
+            integrate_row(n, skip_off=skip_off, skip_lag=skip_lag,
+                          skip_diag=skip_diag)
+
+
 def _fill_toeplitz_W(W: np.ndarray, M: int) -> None:
     """Provisionally fill rows 0..M-2 of a Toeplitz weight tensor from the
     integrated row M-1: blocks of equal lag are equal, so
@@ -554,9 +591,7 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         if skip_lag is None:
             l_iter = range(n)
         else:
-            # Only blocks whose lag still needs work (block order is irrelevant:
-            # blocks are independent).
-            l_iter = (n - (np.nonzero(~skip_lag[1:n + 1])[0] + 1)).tolist()
+            l_iter = _pending_lags(skip_lag, n)
         for l in l_iter:
             lag = n - l
             t_l = mesh_breakpoints[l]
@@ -609,27 +644,9 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                 ok_diag[i] = True
         return ok_off, ok_diag, sing_off, sing_diag
 
-    # Uniform mesh + convolution kernel: W is Toeplitz in (n, l). Integrate the
-    # last row (which contains every lag), copy it band-diagonally, then
-    # recompute the non-reusable entries of every other row exactly as the
-    # general path would (see _toeplitz_W_rows for the reuse policy). With
-    # reuse_adaptive_blocks the declared-singularity entries also keep their
-    # one tightened-tolerance value; two-order fallback entries are always
-    # repaired per row, so the flag cannot change results for kernels with no
-    # declared singularity.
-    if toeplitz:
-        ok_off, ok_diag, sing_off, sing_diag = integrate_row(M - 1, record=True)
-        if M >= 2:
-            _fill_toeplitz_W(W, M)
-            skip_off = ok_off | sing_off if reuse_sing else ok_off
-            skip_diag = ok_diag | sing_diag if reuse_sing else ok_diag
-            skip_lag = skip_off.all(axis=0)
-            for n in range(M - 1):
-                integrate_row(n, skip_off=skip_off, skip_lag=skip_lag,
-                              skip_diag=skip_diag)
-    else:
-        for n in range(M):
-            integrate_row(n)
+    # Uniform mesh + convolution kernel: W is Toeplitz in (n, l); see
+    # _assemble_W_rows for the shared reuse policy.
+    _assemble_W_rows(W, M, toeplitz, reuse_sing, integrate_row)
 
     if not np.isfinite(W).all():
         raise ValueError(
@@ -835,7 +852,7 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         if skip_lag is None:
             l_iter = range(n)
         else:
-            l_iter = (n - (np.nonzero(~skip_lag[1:n + 1])[0] + 1)).tolist()
+            l_iter = _pending_lags(skip_lag, n)
         for l in l_iter:
             lag = n - l
             t_l = mesh_breakpoints[l]
@@ -889,21 +906,8 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         return ok_off, ok_diag, sing_off, sing_diag
 
     # Uniform mesh + convolution kernel: same Toeplitz / adaptive-reuse
-    # policy as the scalar builder (see _toeplitz_W_rows and the scalar
-    # orchestration comment).
-    if toeplitz:
-        ok_off, ok_diag, sing_off, sing_diag = integrate_row(M - 1, record=True)
-        if M >= 2:
-            _fill_toeplitz_W(W, M)
-            skip_off = ok_off | sing_off if reuse_sing else ok_off
-            skip_diag = ok_diag | sing_diag if reuse_sing else ok_diag
-            skip_lag = skip_off.all(axis=0)
-            for n in range(M - 1):
-                integrate_row(n, skip_off=skip_off, skip_lag=skip_lag,
-                              skip_diag=skip_diag)
-    else:
-        for n in range(M):
-            integrate_row(n)
+    # policy as the scalar builder (see _assemble_W_rows).
+    _assemble_W_rows(W, M, toeplitz, reuse_sing, integrate_row)
 
     if not np.isfinite(W).all():
         raise ValueError(

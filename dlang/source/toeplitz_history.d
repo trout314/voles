@@ -112,6 +112,14 @@ struct ToeplitzHistoryRT
     // scratch buffers, grown on demand and reused across merges
     double[] xre, xim, kre, kim, accre, accim;
 
+    // Lazy lag-table fill: when set (see setLagFiller), push() extends the
+    // table on demand to exactly the lags the pending merge reads, instead
+    // of the driver evaluating all Q-1 blocks up front. Same total work on
+    // success; zero wasted block evaluations when a solve fails early, and
+    // the first solution values appear without waiting for the full table.
+    private void delegate(int lag, ref ToeplitzHistoryRT self) fillLag;
+    private int lagsFilled;   // lags 1 .. lagsFilled-1 hold valid blocks
+
     void initialize(int Q_, int tdim_, int sdim_)
     {
         Q = Q_;
@@ -124,6 +132,28 @@ struct ToeplitzHistoryRT
         srcs.length = cast(size_t) Q * sdim;
         srcs[] = 0.0;
         nPushed = 0;
+        fillLag = null;
+        lagsFilled = Q;   // eager mode: caller pre-fills lags 1 .. Q-1
+    }
+
+    // Register the per-lag fill callback and switch to lazy fill. The
+    // callback writes block `lag` through self.lagBlock/lagRow; it is
+    // invoked with lags in increasing order, each exactly once.
+    void setLagFiller(void delegate(int lag, ref ToeplitzHistoryRT self) filler)
+    {
+        fillLag = filler;
+        lagsFilled = 1;
+    }
+
+    private void ensureLags(int lagTop)
+    {
+        if (fillLag is null)
+            return;
+        while (lagsFilled <= lagTop)
+        {
+            fillLag(lagsFilled, this);
+            ++lagsFilled;
+        }
     }
 
     // Accumulated history for interval n; valid once intervals 0 .. n-1 have
@@ -172,6 +202,11 @@ struct ToeplitzHistoryRT
         int tEnd = bnd + S;
         if (tEnd > Q)
             tEnd = Q;
+        // Both merge kinds read lags 1 .. min(2S-1, Q-1): mergeDirect via
+        // n - ell over its target/source ranges, mergeFFT via its kernel
+        // segment load (which uses that bound even when tEnd is clamped).
+        immutable int lagTop = (2 * S - 1 < Q - 1) ? 2 * S - 1 : Q - 1;
+        ensureLags(lagTop);
         if (S < FFT_CUTOFF)
             mergeDirect(bnd, S, tEnd);
         else

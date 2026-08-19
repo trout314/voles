@@ -1296,16 +1296,16 @@ void solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
     // same lag table serves both branches below.
     ToeplitzHistory!(dm, dm) hist;
     hist.initialize(mesh_divs);
-    foreach (lag; 1 .. mesh_divs)
+    hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
     {
         auto B = BNL_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
         foreach (i; 0 .. dm)
         {
-            auto row = hist.lagRow(lag, i);
+            auto row = h.lagRow(lag, i);
             foreach (j; 0 .. dm)
                 row[j] = dt * B[i][j];
         }
-    }
+    });
 
     if (!force_continuous)
     {
@@ -1468,13 +1468,13 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     // Fast lag-block history accumulation (see toeplitz_history), runtime-d.
     ToeplitzHistoryRT hist;
     hist.initialize(mesh_divs, dm, dm);
-    foreach (lag; 1 .. mesh_divs)
+    hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
     {
         BNL_vec_rt!coll_info(lag, 0, kernel_values, d, BNL_buf);
-        auto blk = hist.lagBlock(lag);
+        auto blk = h.lagBlock(lag);
         foreach (i; 0 .. dm * dm)
             blk[i] = dt * BNL_buf[i];
-    }
+    });
 
     if (!force_continuous)
     {
@@ -1636,16 +1636,16 @@ void solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
     // Fast lag-block history accumulation (see toeplitz_history).
     ToeplitzHistory!(dm, dm) hist;
     hist.initialize(mesh_divs);
-    foreach (lag; 1 .. mesh_divs)
+    hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
     {
         auto B = BNL_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
         foreach (i; 0 .. dm)
         {
-            auto row = hist.lagRow(lag, i);
+            auto row = h.lagRow(lag, i);
             foreach (j; 0 .. dm)
                 row[j] = dt * B[i][j];
         }
-    }
+    });
 
     foreach (n; 0 .. mesh_divs)
     {
@@ -1729,13 +1729,13 @@ bool solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     // Fast lag-block history accumulation (see toeplitz_history), runtime-d.
     ToeplitzHistoryRT hist;
     hist.initialize(mesh_divs, dm, dm);
-    foreach (lag; 1 .. mesh_divs)
+    hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
     {
         BNL_vec_rt!coll_info(lag, 0, kernel_values, d, BNL_buf);
-        auto blk = hist.lagBlock(lag);
+        auto blk = h.lagBlock(lag);
         foreach (i; 0 .. dm * dm)
             blk[i] = dt * BNL_buf[i];
-    }
+    });
 
     foreach (n; 0 .. mesh_divs)
     {
@@ -1834,19 +1834,19 @@ void solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
     // and both CNL and kappa_nl are lag-only on the uniform sample grid.
     ToeplitzHistory!(dm, dm + d) hist;
     hist.initialize(mesh_divs);
-    foreach (lag; 1 .. mesh_divs)
+    hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
     {
         auto CNL_m   = CNL_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
         auto kappa_m = kappa_nl_vec_ct!(coll_divs, coll_choices, d)(lag, 0, kernel_values);
         foreach (ri; 0 .. dm)
         {
-            auto row = hist.lagRow(lag, ri);
+            auto row = h.lagRow(lag, ri);
             foreach (sj; 0 .. dm)
                 row[sj] = dt * dt * CNL_m[ri][sj];
             foreach (s; 0 .. d)
                 row[dm + s] = dt * kappa_m[ri][s];
         }
-    }
+    });
 
     foreach (n; 0 .. mesh_divs)
     {
@@ -1974,19 +1974,19 @@ bool solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     // (see the compile-time VIDE driver), runtime-d.
     ToeplitzHistoryRT hist;
     hist.initialize(mesh_divs, dm, dm + d);
-    foreach (lag; 1 .. mesh_divs)
+    hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
     {
         CNL_vec_rt!coll_info(lag, 0, kernel_values, d, CNL_buf);
         kappa_nl_vec_rt!coll_info(lag, 0, kernel_values, d, kappa_nl_buf);
         foreach (ri; 0 .. dm)
         {
-            auto row = hist.lagRow(lag, ri);
+            auto row = h.lagRow(lag, ri);
             foreach (sj; 0 .. dm)
                 row[sj] = dt * dt * CNL_buf[ri * dm + sj];
             foreach (s; 0 .. d)
                 row[dm + s] = dt * kappa_nl_buf[ri * d + s];
         }
-    }
+    });
     double[] src_aug = new double[dm + d];
 
     foreach (n; 0 .. mesh_divs)
@@ -2105,16 +2105,16 @@ void solve_VIE_2_impl(int coll_divs, int[] coll_choices)(
     // Fast lag-block history accumulation (see toeplitz_history).
     ToeplitzHistory!(num_c_params, num_c_params) hist;
     hist.initialize(mesh_divs);
-    foreach (lag; 1 .. mesh_divs)
+    hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
     {
         auto B = BNL!coll_info(lag, 0, kernel_values);
         foreach (i; 0 .. num_c_params)
         {
-            auto row = hist.lagRow(lag, i);
+            auto row = h.lagRow(lag, i);
             foreach (j; 0 .. num_c_params)
                 row[j] = dt * B[i][j];
         }
-    }
+    });
 
     foreach (n; 0 .. mesh_divs)
     {
@@ -2183,18 +2183,18 @@ void solve_VIDE_impl(int coll_divs, int[] coll_choices)(
     // (see the vector VIDE driver above).
     ToeplitzHistory!(num_c_params, num_c_params + 1) hist;
     hist.initialize(mesh_divs);
-    foreach (lag; 1 .. mesh_divs)
+    hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
     {
         auto CNL_m   = CNL!coll_info(lag, 0, kernel_values);
         auto kappa_v = kappa_nl!coll_info(lag, 0, kernel_values);
         foreach (i; 0 .. num_c_params)
         {
-            auto row = hist.lagRow(lag, i);
+            auto row = h.lagRow(lag, i);
             foreach (j; 0 .. num_c_params)
                 row[j] = dt * dt * CNL_m[i][j];
             row[num_c_params] = dt * kappa_v[i];
         }
-    }
+    });
 
     foreach (n; 0 .. mesh_divs)
     {
