@@ -20,14 +20,14 @@ Mean time in milliseconds for the **array-based** solvers, by input length $N$
 <!-- BENCHMARKS:START -->
 | Solver \ N | 500 | 1000 | 2000 | 4000 | 8000 |
 |---|---|---|---|---|---|
-| VIE-1 | 0.06 | 0.11 | 0.23 | 0.56 | 1.24 |
-| VIE-1 (continuous) | 0.06 | 0.12 | 0.26 | 0.59 | 1.33 |
-| VIE-2 | 0.11 | 0.24 | 0.54 | 1.22 | 2.77 |
-| VIDE | 0.59 | 1.20 | 2.46 | 5.08 | 10.5 |
-| VIE-1 (d=2) | 0.13 | 0.30 | 0.68 | 1.68 | 3.71 |
-| VIE-1 (d=2, continuous) | 0.14 | 0.31 | 0.70 | 1.69 | 3.79 |
-| VIE-2 (d=2) | 0.30 | 0.68 | 1.55 | 3.52 | 7.84 |
-| VIDE (d=2) | 0.72 | 1.56 | 3.35 | 7.18 | 15.6 |
+| VIE-1 | 0.07 | 0.12 | 0.26 | 0.57 | 1.23 |
+| VIE-1 (continuous) | 0.08 | 0.14 | 0.28 | 0.62 | 1.32 |
+| VIE-2 | 0.13 | 0.27 | 0.56 | 1.23 | 2.72 |
+| VIDE | 0.54 | 1.08 | 2.20 | 4.52 | 9.34 |
+| VIE-1 (d=2) | 0.15 | 0.33 | 0.72 | 1.64 | 3.57 |
+| VIE-1 (d=2, continuous) | 0.16 | 0.34 | 0.76 | 1.69 | 3.65 |
+| VIE-2 (d=2) | 0.32 | 0.70 | 1.53 | 3.40 | 7.37 |
+| VIDE (d=2) | 0.68 | 1.42 | 3.02 | 6.46 | 14.1 |
 <!-- BENCHMARKS:END -->
 
 ## Callable-input solvers
@@ -41,9 +41,9 @@ kernel $K(u) = u^{-1/2}$ on a graded mesh with the singularity declared:
 <!-- CALLABLE_BENCHMARKS:START -->
 | Solver \ M | 25 | 50 | 100 |
 |---|---|---|---|
-| function_solve_VIE_1 | 1.33 | 2.20 | 4.10 |
-| function_solve_VIE_2 | 1.35 | 2.39 | 4.43 |
-| function_solve_VIE_2 (vector, d=3) | 2.06 | 3.83 | 7.81 |
-| function_solve_VIDE | 1.66 | 2.81 | 5.16 |
-| function_solve_VIE_2 (weakly singular) | 122 | 281 | 705 |
+| function_solve_VIE_1 | 1.82 | 3.09 | 5.58 |
+| function_solve_VIE_2 | 1.88 | 3.28 | 5.90 |
+| function_solve_VIE_2 (vector, d=3) | 2.99 | 5.42 | 10.6 |
+| function_solve_VIDE | 2.33 | 3.86 | 6.97 |
+| function_solve_VIE_2 (weakly singular) | 166 | 383 | 970 |
 <!-- CALLABLE_BENCHMARKS:END -->
