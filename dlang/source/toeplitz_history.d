@@ -40,6 +40,14 @@ import std.math : PI, cos, sin;
 // In-place iterative radix-2 complex FFT on split re/im arrays.
 // n = re.length = im.length must be a power of two. No output scaling is
 // applied for the inverse transform (callers scale by 1/n).
+//
+// Twiddles come from the multiplicative recurrence, re-seeded from direct
+// cos/sin every 32 steps so the compounded drift is bounded by ~32 eps
+// independent of n (unseeded it grows linearly: ~1e-11 by n = 2^21).
+// A precomputed twiddle table was tried and rejected: with the project's
+// mandatory array bounds checking, the two checked strided loads per
+// butterfly cost ~10% end-to-end, for accuracy the re-seeding already
+// provides.
 void fft_radix2(double[] re, double[] im, bool inverse)
 {
     immutable size_t n = re.length;
@@ -67,6 +75,7 @@ void fft_radix2(double[] re, double[] im, bool inverse)
 
     for (size_t len = 2; len <= n; len <<= 1)
     {
+        immutable size_t half = len >> 1;
         immutable double ang = (inverse ? 2.0 : -2.0) * PI / cast(double) len;
         immutable double wr = cos(ang);
         immutable double wi = sin(ang);
@@ -74,7 +83,6 @@ void fft_radix2(double[] re, double[] im, bool inverse)
         {
             double cr = 1.0;
             double ci = 0.0;
-            immutable size_t half = len >> 1;
             foreach (k; 0 .. half)
             {
                 immutable size_t a = base + k;
@@ -85,9 +93,19 @@ void fft_radix2(double[] re, double[] im, bool inverse)
                 im[b] = im[a] - xi;
                 re[a] += xr;
                 im[a] += xi;
-                immutable double ncr = cr * wr - ci * wi;
-                ci = cr * wi + ci * wr;
-                cr = ncr;
+                if (((k + 1) & 31) == 0)
+                {
+                    // periodic re-seed: cap recurrence drift at ~32 eps
+                    immutable double a2 = ang * cast(double)(k + 1);
+                    cr = cos(a2);
+                    ci = sin(a2);
+                }
+                else
+                {
+                    immutable double ncr = cr * wr - ci * wi;
+                    ci = cr * wi + ci * wr;
+                    cr = ncr;
+                }
             }
         }
     }
@@ -273,6 +291,11 @@ struct ToeplitzHistoryRT
             accim.length = cast(size_t) tdim * sL;
         }
 
+        // Kernel spectra for this level: from the cache when available,
+        // otherwise computed per (a, c) into the shared scratch.
+        immutable int li = levelIndex(S);
+        immutable bool cached = ensureKernelCache(li, S, sL);
+
         // forward FFT of each source column (zero-padded to length L)
         foreach (c; 0 .. sdim)
         {
@@ -287,13 +310,6 @@ struct ToeplitzHistoryRT
 
         accre[0 .. cast(size_t) tdim * sL] = 0.0;
         accim[0 .. cast(size_t) tdim * sL] = 0.0;
-
-        // Kernel spectra for this level: from the cache when available,
-        // otherwise computed per (a, c) into the shared scratch.
-        int li = 0;
-        for (int lvl = FFT_CUTOFF; lvl < S; lvl <<= 1)
-            ++li;
-        immutable bool cached = ensureKernelCache(li, S, sL);
 
         // per (a, c): kernel spectrum times source spectrum, accumulate
         foreach (a; 0 .. tdim)
@@ -343,6 +359,15 @@ struct ToeplitzHistoryRT
             kr[v] = lagB[cast(size_t) v * tdim * sdim
                          + cast(size_t) a * sdim + c];
         fft_radix2(kr, ki, false);
+    }
+
+    // Level index of merge size S: S = FFT_CUTOFF << levelIndex(S).
+    private int levelIndex(int S)
+    {
+        int li = 0;
+        for (int lvl = FFT_CUTOFF; lvl < S; lvl <<= 1)
+            ++li;
+        return li;
     }
 
     // Build the level-li spectra cache on the level's first merge, if the
