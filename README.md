@@ -160,7 +160,7 @@ The `coll_divs` and `coll_choices` parameters affect the constant factor but not
 
 **Callable-input solvers.** With M mesh intervals and p collocation nodes per interval, the precomputed weight tensor couples every interval pair, so time and memory scale as O(M² p² d²). On a *uniform* mesh with a convolution kernel the tensor is Toeplitz and is assembled from a single integrated row, reducing the number of numerical integrations — the dominant cost in practice — from O(M²) to O(M); declaring a power-law singularity with the dict form of `kernel_singularity` keeps this fast path for singular kernels too.
 
-**Measured timings** for both solver families (regenerated automatically on each push) live on the [benchmarks page of the documentation](https://trout314.github.io/voles/benchmarks/), alongside an [interactive history dashboard](https://trout314.github.io/voles/dev/bench/).
+**Measured timings** for both solver families (regenerated automatically on each push) live on the [benchmarks page of the documentation](https://trout314.github.io/voles/benchmarks/).
 
 See the [Getting Started](https://trout314.github.io/voles/getting_started/) page for complete examples.
 

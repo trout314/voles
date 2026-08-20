@@ -429,3 +429,168 @@ def test_fn_vie2_vec_100(benchmark):
     k, g, mesh = _fn_vie2_smooth_vector(100)
     benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
               coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+
+
+# =====================================================================
+# Extended array-solver benchmarks: larger N, larger d, and the Numba
+# fallback. Registered programmatically to avoid unrolling ~30 near-
+# identical functions; the generated names follow the same
+# f"{prefix}_{size}" convention make_table.py keys on.
+# =====================================================================
+
+import importlib.util
+_HAVE_NUMBA = importlib.util.find_spec("numba") is not None
+
+def _register(name, func, *marks):
+    func.__name__ = name
+    for m in marks:
+        func = m(func)
+    globals()[name] = func
+
+# Larger N for the existing scalar and d=2 rows.
+# VIE-1 uses coll_divs=3 (pts = 9k+1), VIE-2/VIDE use coll_divs=2 (pts = 4k+1).
+for _size, _k9, _k4 in ((16000, 1777, 3999), (32000, 3555, 7999)):
+    def _t(benchmark, _k=_k9):
+        kernel, g, dt = _vie1_inputs(_k)
+        benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+    _register(f"test_vie1_{_size}", _t)
+
+    def _t(benchmark, _k=_k4):
+        kernel, g, dt = _vie2_inputs(_k)
+        benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    _register(f"test_vie2_{_size}", _t)
+
+    def _t(benchmark, _k=_k4):
+        kernel, g, a, dt = _vide_inputs(_k)
+        benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
+                  soln_init_value=0.0, time_step=dt)
+    _register(f"test_vide_{_size}", _t)
+
+    def _t(benchmark, _k=_k9):
+        kernel, g, dt = _vie1_vec_inputs(_k)
+        benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+    _register(f"test_vie1_vec_{_size}", _t)
+
+    def _t(benchmark, _k=_k4):
+        kernel, g, dt = _vie2_vec_inputs(_k)
+        benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    _register(f"test_vie2_vec_{_size}", _t)
+
+    def _t(benchmark, _k=_k4):
+        kernel, g, a, init, dt = _vide_vec_inputs(_k)
+        benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
+                  soln_init_value=init, time_step=dt)
+    _register(f"test_vide_vec_{_size}", _t)
+
+
+# --- Larger d (diagonal systems, same structure as the d=2 fixtures).
+# d=8 is the largest compile-time-specialized dimension; d=16 exercises
+# the runtime-dimension path (LAPACK dgesv_ or the pure-D LU fallback).
+
+def _vie2_bigd_inputs(n_intervals, d):
+    time_step = 0.05
+    num_pts = n_intervals * 4 + 1
+    times = np.arange(num_pts) * time_step
+    kernel = np.zeros((num_pts, d, d))
+    kernel[:, range(d), range(d)] = np.exp(-times)[:, None]
+    rhs = np.sin(times) - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
+    g = np.tile(rhs[:, None], (1, d))
+    return kernel, g, time_step
+
+def _vide_bigd_inputs(n_intervals, d):
+    time_step = 0.01
+    num_pts = n_intervals * 4 + 1
+    times = np.arange(num_pts) * time_step
+    kernel = np.zeros((num_pts, d, d))
+    a = np.zeros((num_pts, d, d))
+    kernel[:, range(d), range(d)] = np.exp(-times)[:, None]
+    a[:, range(d), range(d)] = (1.0 / (1.0 + times**2))[:, None]
+    rhs = (np.cos(times)
+           - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
+           - np.sin(times) / (1.0 + times**2))
+    g = np.tile(rhs[:, None], (1, d))
+    return kernel, g, a, np.zeros(d), time_step
+
+_HEAVY = pytest.mark.benchmark(min_rounds=3, warmup=False)
+
+for _size, _k4 in ((500, 124), (1000, 249), (2000, 499), (4000, 999), (8000, 1999)):
+    def _t(benchmark, _k=_k4):
+        kernel, g, dt = _vie2_bigd_inputs(_k, 8)
+        benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    _register(f"test_vie2_d8_{_size}", _t, _HEAVY)
+
+    def _t(benchmark, _k=_k4):
+        kernel, g, a, init, dt = _vide_bigd_inputs(_k, 8)
+        benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
+                  soln_init_value=init, time_step=dt)
+    _register(f"test_vide_d8_{_size}", _t, _HEAVY)
+
+    if _size <= 4000:
+        def _t(benchmark, _k=_k4):
+            kernel, g, dt = _vie2_bigd_inputs(_k, 16)
+            benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+        _register(f"test_vie2_d16_{_size}", _t, _HEAVY)
+
+
+# --- Numba JIT fallback (scalar only). All coll settings with
+# coll_divs <= 4 are compiled into the D extension, so coll_divs=5 with
+# c = {0, 3/5, 1} (a 3-node setting comparable to the default Simpson
+# rule) is the finest mesh that reaches the Numba path: its mesh width is
+# 25*time_step vs 4*time_step for the default, i.e. the fallback does
+# ~6x FEWER steps at equal N. The warmup round keeps the one-time JIT
+# compilation out of the reported statistics.
+
+_NUMBA_MARKS = (
+    pytest.mark.skipif(not _HAVE_NUMBA, reason="numba not installed"),
+    pytest.mark.benchmark(min_rounds=3, warmup=True, warmup_iterations=1),
+)
+
+def _vie2_numba_inputs(n_intervals):
+    time_step = 0.05
+    num_pts = n_intervals * 25 + 1
+    times = np.arange(num_pts) * time_step
+    kernel = np.exp(-times)
+    g = np.sin(times) - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
+    return kernel, g, time_step
+
+for _size, _k25 in ((500, 19), (1000, 39), (2000, 79), (4000, 159), (8000, 319)):
+    def _t(benchmark, _k=_k25):
+        kernel, g, dt = _vie2_numba_inputs(_k)
+        benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt,
+                  coll_divs=5, coll_choices=[0, 3, 5], show_warnings=False)
+    _register(f"test_vie2_numba_{_size}", _t, *_NUMBA_MARKS)
+
+
+# --- Callable-input solvers at M=200.
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie1_200(benchmark):
+    k, g, mesh = _fn_vie1_smooth(200)
+    benchmark(function_solve_VIE_1, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie2_200(benchmark):
+    k, g, mesh = _fn_vie2_smooth(200)
+    benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie2_vec_200(benchmark):
+    k, g, mesh = _fn_vie2_smooth_vector(200)
+    benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vide_200(benchmark):
+    k, a, g, mesh = _fn_vide_smooth(200)
+    benchmark(function_solve_VIDE, kernel=k, a=a, g=g, soln_init_value=0.0,
+              mesh_breakpoints=mesh, coll_divs=2, coll_choices=[0, 1, 2],
+              show_warnings=False)
+
+@pytest.mark.benchmark(min_rounds=3, warmup=False)
+def test_fn_vie2_sing_200(benchmark):
+    k, g, mesh = _fn_vie2_singular(200)
+    benchmark(function_solve_VIE_2, kernel=k, g=g, mesh_breakpoints=mesh,
+              coll_divs=2, coll_choices=[0, 1, 2], kernel_singularity=0.0,
+              show_warnings=False)

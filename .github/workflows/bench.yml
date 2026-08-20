@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write      # needed to push results to gh-pages and commit chart PNG
+  actions: write       # needed to re-dispatch the docs deploy after a table update
 
 jobs:
   build-dlang:
@@ -60,7 +61,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,full]"   # full: numba, for the fallback benchmarks
 
       - name: Run benchmarks
         run: |
@@ -81,6 +82,7 @@ jobs:
           auto-push: true
 
       - name: Update benchmark table in docs
+        id: table
         env:
           TABLE_FILE: docs/benchmarks.md
         run: |
@@ -102,12 +104,14 @@ jobs:
             fi
             if git diff --quiet -- "${TABLE_FILE}"; then
               echo "No benchmark-table changes to commit."
+              echo "pushed=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             git add "${TABLE_FILE}"
             git commit -m "Update benchmark table [skip ci]"
             if git push origin "HEAD:${GITHUB_REF_NAME}"; then
               echo "Pushed benchmark table update on attempt ${attempt}."
+              echo "pushed=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             echo "Push rejected (likely a concurrent run); retrying..."
@@ -115,3 +119,12 @@ jobs:
           done
           echo "::error::Failed to push benchmark table after 5 attempts." >&2
           exit 1
+
+      # The table commit above is made with GITHUB_TOKEN (and tagged [skip ci]),
+      # so it never triggers workflows on its own -- without this dispatch the
+      # published docs would always lag one benchmark cycle behind.
+      - name: Redeploy docs with the fresh benchmark table
+        if: steps.table.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docs.yml --ref "${GITHUB_REF_NAME}"
