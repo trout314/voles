@@ -23,16 +23,16 @@ Mean time in milliseconds for the **array-based** solvers, by input length $N$
 <!-- BENCHMARKS:START -->
 | Solver \ N | 500 | 1000 | 2000 | 4000 | 8000 | 16000 | 32000 |
 |---|---|---|---|---|---|---|---|
-| VIE-1 | 0.04 | 0.10 | 0.22 | 0.53 | 1.15 | — | — |
-| VIE-2 | 0.11 | 0.22 | 0.53 | 1.16 | 2.56 | — | — |
-| VIDE | 0.48 | 1.03 | 2.04 | 4.40 | 8.81 | — | — |
-| VIE-2 (Numba fallback) | — | — | — | — | — | — | — |
-| VIE-1 (d=2) | 0.09 | 0.27 | 0.66 | 1.53 | 3.49 | — | — |
-| VIE-2 (d=2) | 0.29 | 0.63 | 1.44 | 3.36 | 7.44 | — | — |
-| VIDE (d=2) | 0.66 | 1.42 | 3.08 | 6.99 | 14.8 | — | — |
-| VIE-2 (d=8) | — | — | — | — | — | — | — |
-| VIDE (d=8) | — | — | — | — | — | — | — |
-| VIE-2 (d=16) | — | — | — | — | — | — | — |
+| VIE-1 | 0.05 | 0.12 | 0.26 | 0.61 | 1.40 | 3.24 | 7.11 |
+| VIE-2 | 0.13 | 0.27 | 0.59 | 1.35 | 3.15 | 7.93 | 18.3 |
+| VIDE | 0.52 | 1.08 | 2.22 | 4.66 | 9.79 | 21.4 | 44.9 |
+| VIE-2 (Numba fallback) | 1.24 | 3.87 | 13.4 | 48.5 | 185 | — | — |
+| VIE-1 (d=2) | 0.11 | 0.33 | 0.76 | 1.87 | 4.08 | 9.00 | 20.6 |
+| VIE-2 (d=2) | 0.33 | 0.76 | 1.68 | 3.89 | 8.60 | 21.5 | 50.1 |
+| VIDE (d=2) | 0.73 | 1.58 | 3.41 | 7.50 | 16.4 | 36.6 | 81.6 |
+| VIE-2 (d=8) | 4.19 | 9.36 | 21.2 | 49.7 | 110 | — | — |
+| VIDE (d=8) | 7.58 | 16.4 | 34.7 | 78.9 | 172 | — | — |
+| VIE-2 (d=16) | 20.4 | 45.4 | 101 | 227 | — | — | — |
 <!-- BENCHMARKS:END -->
 
 Notes on the rows:
@@ -64,9 +64,9 @@ kernel $K(u) = u^{-1/2}$ on a graded mesh with the singularity declared:
 <!-- CALLABLE_BENCHMARKS:START -->
 | Solver \ M | 25 | 50 | 100 | 200 |
 |---|---|---|---|---|
-| function_solve_VIE_1 | 1.12 | 1.73 | 3.18 | — |
-| function_solve_VIE_2 | 1.07 | 1.85 | 3.50 | — |
-| function_solve_VIE_2 (vector, d=3) | 1.74 | 3.10 | 6.13 | — |
-| function_solve_VIDE | 1.34 | 2.27 | 4.06 | — |
-| function_solve_VIE_2 (weakly singular) | 120 | 254 | 663 | — |
+| function_solve_VIE_1 | 1.47 | 2.51 | 4.64 | 10.5 |
+| function_solve_VIE_2 | 1.54 | 2.68 | 4.99 | 11.5 |
+| function_solve_VIE_2 (vector, d=3) | 2.47 | 4.56 | 9.13 | 21.0 |
+| function_solve_VIDE | 1.95 | 3.26 | 5.94 | 13.4 |
+| function_solve_VIE_2 (weakly singular) | 156 | 360 | 905 | 2544 |
 <!-- CALLABLE_BENCHMARKS:END -->
