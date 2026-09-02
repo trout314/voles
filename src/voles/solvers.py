@@ -85,6 +85,36 @@ _fast_settings_VIE_2 = _all_fast
 _fast_settings_VIDE  = _all_fast
 del _all_fast
 
+
+def _continuous_vie1_rho(coll_divs, coll_choices):
+    r"""Brunner's $\rho_{m-1} = (-1)^m \prod_{i<m} (1 - c_i)/c_i$ for the
+    continuous ($S_m^{(0)}$) VIE-1 method with $c_m = 1$ (Brunner 2004,
+    Theorem 2.4.5): the constant-kernel amplification factor of the boundary
+    value carried across mesh points."""
+    c = [k / coll_divs for k in coll_choices]
+    rho = (-1.0) ** len(c)
+    for ci in c[:-1]:
+        rho *= (1.0 - ci) / ci
+    return rho
+
+
+def _check_continuous_vie1_setting(coll_divs, coll_choices):
+    """Reject collocation settings for which the continuous VIE-1 method is
+    not defined or does not converge. ``coll_choices`` must be sorted."""
+    if coll_choices[-1] != coll_divs:
+        raise ValueError(
+            f"force_continuous=True requires the last collocation node to be the right "
+            f"endpoint of the mesh interval (max(coll_choices) == coll_divs); got "
+            f"coll_divs={coll_divs}, coll_choices={coll_choices}. This is a structural "
+            f"requirement of the continuous S_m^(0) method (Brunner 2004, Section 2.4.3).")
+    rho = _continuous_vie1_rho(coll_divs, coll_choices)
+    if abs(rho) > 1.0 + 1e-12:
+        raise ValueError(
+            f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) does "
+            f"not produce a convergent continuous VIE-1 solver: |rho_(m-1)| = {abs(rho):.4g} "
+            f"> 1 (Brunner 2004, Theorem 2.4.5). Use nodes with |rho_(m-1)| <= 1, e.g. "
+            f"coll_choices=list(range(1, coll_divs + 1)).")
+
 try:
     from . import _numba_solvers
     _numba_available = True
@@ -457,11 +487,16 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         Deprecated alias for ``return_function``; passing it emits a
         ``DeprecationWarning``.
     force_continuous : bool, optional
-        If ``True``, enforce continuity of the piecewise polynomial solution
-        across mesh-interval boundaries, using ``soln_init_value`` as the
-        starting condition. The default discontinuous method is generally more
-        accurate for the same number of collocation nodes. Default is
-        ``False``.
+        If ``True``, use the continuous collocation method (Brunner's
+        $S_m^{(0)}$): on each mesh interval the solution is a polynomial of
+        degree $m$ (one more than the default) that is continuous across mesh
+        points, starting from ``soln_init_value`` at $t = 0$. Requires the last
+        collocation node to be the right endpoint of the mesh interval
+        (``max(coll_choices) == coll_divs``) and a node set with
+        $|\rho_{m-1}| \le 1$ (see Notes). Converges with order $m + 1$ when
+        $-1 \le \rho_{m-1} < 1$ and with order $m$ when $\rho_{m-1} = 1$,
+        versus order $m$ for the default discontinuous method with the same
+        nodes. Default is ``False``.
     show_warnings : bool, optional
         If ``True`` (default), print a warning when ``kernel_values`` is
         truncated, when ``soln_init_value`` has no effect, or when the Numba
@@ -488,7 +523,9 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     ValueError
         For invalid shapes or collocation settings — including the known
         non-convergent VIE-1 settings ``(coll_divs=3, [1])``,
-        ``(4, [1])``, and ``(4, [1, 2])``, which are rejected outright —
+        ``(4, [1])``, and ``(4, [1, 2])``, which are rejected outright, and,
+        with ``force_continuous=True``, node sets whose last node is not the
+        right endpoint or whose $|\rho_{m-1}|$ exceeds 1 (see Notes) —
         inputs too short to form one mesh interval, matrix input with zero
         columns, or inputs so large that a solver buffer would exceed
         $2^{31}$ elements.
@@ -512,6 +549,23 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     the equation at $t = 0$ where both sides are zero by definition, giving no
     information about $y(0)$.
 
+    First-kind collocation converges only for some node sets. With
+    $c_i = k_i / \text{coll\_divs}$, the default discontinuous method
+    ($S_{m-1}^{(-1)}$) converges iff
+    $-1 \le \rho_m := (-1)^m \prod_{i=1}^{m} (1 - c_i)/c_i \le 1$, with order
+    $m$ for $\rho_m < 1$ (Brunner [1], Theorem 2.4.2); any set with
+    $c_m = 1$ has $\rho_m = 0$. The continuous method (``force_continuous``)
+    requires $c_m = 1$ and converges iff
+    $-1 \le \rho_{m-1} := (-1)^m \prod_{i=1}^{m-1} (1 - c_i)/c_i \le 1$, with
+    order $m + 1$ for $\rho_{m-1} < 1$ and order $m$ for $\rho_{m-1} = 1$
+    ([1], Theorem 2.4.5). The equispaced sets ``list(range(1, coll_divs+1))``
+    have $\rho_{m-1} = -1$ for odd $m$ and $+1$ for even $m$. All integrals
+    are evaluated with the interpolatory quadrature rule on the method's own
+    nodes, i.e. on $\{c_1, \ldots, c_m\}$ for the discontinuous method and on
+    $\{0, c_1, \ldots, c_m\}$ for the continuous one ([1], Section 2.4.5);
+    for ``coll_divs=1``, ``coll_choices=[1]`` the continuous method is the
+    product trapezoidal rule.
+
     The solver dispatches at runtime to a D-extension routine specialised for
     the given collocation setting. For scalar equations, settings not compiled
     into the extension fall back to a Numba-JIT implementation (requires the
@@ -524,7 +578,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     ----------
     .. [1] Brunner, H. *Collocation Methods for Volterra Integral and Related
        Functional Differential Equations.* Cambridge University Press, 2004.
-       Sections 2.4.1, 2.4.3, and 2.4.5.
+       Sections 2.4.1--2.4.3 and 2.4.5.
     '''
     return_function = _resolve_return_flag(return_function, return_polys)
     # ------------------------------------------------------------------ complex dispatch
@@ -639,6 +693,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
                 f"does not produce a convergent VIE-1 solver and is not supported. "
                 f"Use a setting from fast_coll_settings_VIE_1.")
+        if force_continuous:
+            _check_continuous_vie1_setting(coll_divs, coll_choices)
         if (coll_divs, coll_choices) not in _fast_settings_VIE_1:
             # NotImplementedError subclasses RuntimeError, so callers
             # catching the historical RuntimeError still work; this matches
@@ -702,6 +758,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
             f"does not produce a convergent VIE-1 solver and is not supported. "
             f"Use a setting from fast_coll_settings_VIE_1.")
+    if force_continuous:
+        _check_continuous_vie1_setting(coll_divs, coll_choices)
     if (coll_divs, coll_choices) in _fast_settings_VIE_1:
         soln_vals, poly_coefs = _dlang_module.solve_vie1_d(
             g_values_, kernel_values_, soln_init_value_, time_step,
