@@ -3039,3 +3039,133 @@ void volterra_get_supported_settings(int* out_data)
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Block drivers for precomputed lag blocks (product-integration quadrature;
+// the blocks are built in src/voles/_product.py).  Runtime block dimension.
+//
+//   lagB : flat (M, Db, Ds) row-major.  Lag 0 holds the diagonal block of the
+//          current interval, lag L >= 1 the block that multiplies the source
+//          vector of interval n - L.  All scaling is folded in.
+//   Per step n:   A U_n = g_n - sum_{L=1..n} lagB[L] s_{n-L}
+//   where s_l is the source vector of interval l: U_l for the discontinuous
+//   method (Ds = Db) and [U_l; y_l] for the continuous one (Ds = Db + d, the
+//   boundary value y_l carried by y_{l+1} = adv_0 y_l + sum_k adv_U[k] U_{l,k}).
+//
+// History accumulation goes through ToeplitzHistoryRT, so the cost is
+// O(M log^2 M) block operations.  Return codes as for volterra_solve_vie1_vec:
+// 0 ok, 1 invalid sizes, 2 singular diagonal block, 3 buffer overflow.
+// ---------------------------------------------------------------------------
+
+int volterra_solve_vie1_blocks(
+    double* lagB, double* g, int M, int Db, double* out_U)
+{
+    ensureThreadAttached();
+    if (M < 1 || Db < 1) return 1;
+    if (cast(long) M * Db * Db >= (cast(long) 1 << 31)) return 3;
+    immutable size_t Dsz = cast(size_t) Db;
+    double[] lag_s = lagB[0 .. cast(size_t) M * Dsz * Dsz];
+    double[] g_s   = g[0 .. cast(size_t) M * Dsz];
+    double[] U_s   = out_U[0 .. cast(size_t) M * Dsz];
+
+    ToeplitzHistoryRT hist;
+    hist.initialize(M, Db, Db);
+    hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
+    {
+        auto blk = h.lagBlock(lag);
+        blk[] = lag_s[cast(size_t) lag * Dsz * Dsz .. (cast(size_t) lag + 1) * Dsz * Dsz];
+    });
+
+    double[] a_col  = new double[Dsz * Dsz];
+    double[] a_work = new double[Dsz * Dsz];
+    double[] rhs    = new double[Dsz];
+    int[]    ipiv   = new int[Dsz];
+    foreach (i; 0 .. Db)
+        foreach (j; 0 .. Db)
+            a_col[i + j * Db] = lag_s[cast(size_t) i * Dsz + j];
+
+    foreach (n; 0 .. M)
+    {
+        immutable size_t nb = cast(size_t) n * Dsz;
+        rhs[] = g_s[nb .. nb + Dsz];
+        auto G_hist = hist.G(n);
+        rhs[] -= G_hist[];
+        a_work[] = a_col[];
+        if (!lin_solve_lapack(a_work, rhs, Db, ipiv))
+            return 2;
+        U_s[nb .. nb + Dsz] = rhs[];
+        hist.push(U_s[nb .. nb + Dsz]);
+    }
+    return 0;
+}
+
+int volterra_solve_vie1_cont_blocks(
+    double* lagB, double* g, double* adv_U, double adv_0, double* y0,
+    int M, int m, int d, double* out_U, double* out_y)
+{
+    ensureThreadAttached();
+    if (M < 1 || m < 1 || d < 1) return 1;
+    immutable int Db = m * d;
+    immutable int Ds = Db + d;
+    if (cast(long) M * Db * Ds >= (cast(long) 1 << 31)) return 3;
+    immutable size_t Dbz = cast(size_t) Db;
+    immutable size_t Dsz = cast(size_t) Ds;
+    immutable size_t dz  = cast(size_t) d;
+    double[] lag_s = lagB[0 .. cast(size_t) M * Dbz * Dsz];
+    double[] g_s   = g[0 .. cast(size_t) M * Dbz];
+    double[] adv   = adv_U[0 .. cast(size_t) m];
+    double[] U_s   = out_U[0 .. cast(size_t) M * Dbz];
+    double[] y_s   = out_y[0 .. (cast(size_t) M + 1) * dz];
+    y_s[0 .. dz] = y0[0 .. dz];
+
+    ToeplitzHistoryRT hist;
+    hist.initialize(M, Db, Ds);
+    hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
+    {
+        auto blk = h.lagBlock(lag);
+        blk[] = lag_s[cast(size_t) lag * Dbz * Dsz .. (cast(size_t) lag + 1) * Dbz * Dsz];
+    });
+
+    double[] a_col  = new double[Dbz * Dbz];   // value columns of the diagonal block, column-major
+    double[] a_work = new double[Dbz * Dbz];
+    double[] bnd    = new double[Dbz * dz];    // boundary columns of the diagonal block, row-major
+    double[] rhs    = new double[Dbz];
+    double[] source = new double[Dsz];
+    int[]    ipiv   = new int[Dbz];
+    foreach (i; 0 .. Db)
+    {
+        foreach (j; 0 .. Db)
+            a_col[i + j * Db] = lag_s[cast(size_t) i * Dsz + j];
+        foreach (s; 0 .. d)
+            bnd[cast(size_t) i * dz + s] = lag_s[cast(size_t) i * Dsz + Dbz + s];
+    }
+
+    foreach (n; 0 .. M)
+    {
+        immutable size_t nb = cast(size_t) n * Dbz;
+        immutable size_t ny = cast(size_t) n * dz;
+        rhs[] = g_s[nb .. nb + Dbz];
+        auto G_hist = hist.G(n);
+        foreach (i; 0 .. Db)
+        {
+            rhs[i] -= G_hist[i];
+            foreach (s; 0 .. d)
+                rhs[i] -= bnd[cast(size_t) i * dz + s] * y_s[ny + s];
+        }
+        a_work[] = a_col[];
+        if (!lin_solve_lapack(a_work, rhs, Db, ipiv))
+            return 2;
+        U_s[nb .. nb + Dbz] = rhs[];
+        source[0 .. Dbz] = rhs[];
+        source[Dbz .. Dsz] = y_s[ny .. ny + dz];
+        hist.push(source);
+        foreach (b; 0 .. d)
+        {
+            double v = adv_0 * y_s[ny + b];
+            foreach (k; 0 .. m)
+                v += adv[k] * rhs[cast(size_t) k * dz + b];
+            y_s[ny + dz + b] = v;
+        }
+    }
+    return 0;
+}
