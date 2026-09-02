@@ -85,6 +85,36 @@ _fast_settings_VIE_2 = _all_fast
 _fast_settings_VIDE  = _all_fast
 del _all_fast
 
+
+def _continuous_vie1_rho(coll_divs, coll_choices):
+    r"""Brunner's $\rho_{m-1} = (-1)^m \prod_{i<m} (1 - c_i)/c_i$ for the
+    continuous ($S_m^{(0)}$) VIE-1 method with $c_m = 1$ (Brunner 2004,
+    Theorem 2.4.5): the constant-kernel amplification factor of the boundary
+    value carried across mesh points."""
+    c = [k / coll_divs for k in coll_choices]
+    rho = (-1.0) ** len(c)
+    for ci in c[:-1]:
+        rho *= (1.0 - ci) / ci
+    return rho
+
+
+def _check_continuous_vie1_setting(coll_divs, coll_choices):
+    """Reject collocation settings for which the continuous VIE-1 method is
+    not defined or does not converge. ``coll_choices`` must be sorted."""
+    if coll_choices[-1] != coll_divs:
+        raise ValueError(
+            f"force_continuous=True requires the last collocation node to be the right "
+            f"endpoint of the mesh interval (max(coll_choices) == coll_divs); got "
+            f"coll_divs={coll_divs}, coll_choices={coll_choices}. This is a structural "
+            f"requirement of the continuous S_m^(0) method (Brunner 2004, Section 2.4.3).")
+    rho = _continuous_vie1_rho(coll_divs, coll_choices)
+    if abs(rho) > 1.0 + 1e-12:
+        raise ValueError(
+            f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) does "
+            f"not produce a convergent continuous VIE-1 solver: |rho_(m-1)| = {abs(rho):.4g} "
+            f"> 1 (Brunner 2004, Theorem 2.4.5). Use nodes with |rho_(m-1)| <= 1, e.g. "
+            f"coll_choices=list(range(1, coll_divs + 1)).")
+
 try:
     from . import _numba_solvers
     _numba_available = True
@@ -414,9 +444,162 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
 
 
 
+
+def _vie1_rho_m(coll_divs, coll_choices):
+    r"""Brunner's $\rho_m = (-1)^m \prod_{i=1}^{m} (1 - c_i)/c_i$ for the
+    discontinuous ($S_{m-1}^{(-1)}$) VIE-1 method (Brunner 2004, Theorem 2.4.2)."""
+    rho = (-1.0) ** len(coll_choices)
+    for k in coll_choices:
+        ci = k / coll_divs
+        rho *= (1.0 - ci) / ci
+    return rho
+
+
+def _validate_vie1_coll_setting(coll_divs, coll_choices):
+    """Structural checks shared by the VIE-1 paths; returns the sorted choices."""
+    if not (isinstance(coll_divs, (int, np.integer)) and coll_divs > 0):
+        raise ValueError("coll_divs must be a positive integer")
+    choices = list(coll_choices)
+    if not choices or not all(isinstance(c, (int, np.integer)) for c in choices):
+        raise ValueError("coll_choices must be a non-empty list of integers")
+    if 0 in choices:
+        raise ValueError("zero cannot be a collocation parameter")
+    if len(set(choices)) != len(choices):
+        raise ValueError("all integers in coll_choices must be distinct")
+    if any(c < 1 or c > coll_divs for c in choices):
+        raise ValueError("coll_choices must contain only integers from 1 to coll_divs")
+    return sorted(int(c) for c in choices)
+
+
+def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_step,
+                             coll_divs, coll_choices, return_function, force_continuous,
+                             show_warnings, mesh_samples, kernel_interp_degree):
+    """VIE-1 with product-integration quadrature (see ``_product``)."""
+    from . import _product
+
+    q = int(coll_divs)
+    coll_choices = _validate_vie1_coll_setting(q, coll_choices)
+    m = len(coll_choices)
+    Q = q if mesh_samples is None else int(mesh_samples)
+    if Q < 1 or Q % q != 0:
+        raise ValueError(
+            f"with quadrature='product', mesh_samples must be a positive multiple of "
+            f"coll_divs={q} so that every collocation point is a sample; got {mesh_samples}")
+    p = m if kernel_interp_degree is None else int(kernel_interp_degree)
+    if p < 1:
+        raise ValueError("kernel_interp_degree must be a positive integer")
+    if not time_step > 0.0:
+        raise ValueError("time_step must be positive")
+    if ((q, tuple(coll_choices)) in _VIE1_NONCONVERGENT
+            or abs(_vie1_rho_m(q, coll_choices)) > 1.0 + 1e-12):
+        raise ValueError(
+            f"Collocation setting (coll_divs={q}, coll_choices={coll_choices}) does not "
+            f"produce a convergent VIE-1 solver: |rho_m| = {abs(_vie1_rho_m(q, coll_choices)):.4g} "
+            f"> 1 (Brunner 2004, Theorem 2.4.2). Use nodes with |rho_m| <= 1, e.g. any set "
+            f"whose last node is the right endpoint (max(coll_choices) == coll_divs).")
+    if force_continuous:
+        _check_continuous_vie1_setting(q, coll_choices)
+
+    N_orig = len(kernel_values_)
+    N = (N_orig - 1) // Q * Q + 1
+    if N != N_orig and show_warnings:
+        print(
+            f"warning: the length of kernel_values ({N_orig}) is not of the form: "
+            f"(multiple of mesh_samples) + 1 where mesh_samples = {Q}. All input data "
+            f"lists will be truncated to the next smaller number of this form ({N}) "
+            f"which will also be the length of the returned list of solution values.")
+    if N < Q + 1:
+        raise ValueError(
+            f"kernel_values has length {N_orig} (truncated to {N}), which leaves zero mesh "
+            f"intervals for mesh_samples={Q}. Need at least {Q + 1} input points.")
+    if N < p + 1:
+        raise ValueError(
+            f"kernel interpolation of degree {p} needs at least {p + 1} samples, got {N}")
+    K = kernel_values_[:N]
+    d = 0 if K.ndim == 1 else K.shape[1]
+    if K.ndim == 3 and K.shape[1] != K.shape[2]:
+        raise ValueError(f"kernel_values must have shape (N, d, d), got {K.shape}")
+    M = (N - 1) // Q
+    breakpoints = np.arange(M + 1) * (Q * time_step)
+
+    # ---------------------------------------------------------------- right-hand side
+    if g_values is None:
+        g = np.zeros((N,) if d == 0 else (N, d))
+    else:
+        g = np.asarray(g_values, dtype=float)
+        if d and g.ndim == 3:
+            # matrix case: independent solves per column, threaded as in the
+            # collocation path
+            m_cols = g.shape[2]
+            if g.shape[0] != N_orig or g.shape[1] != d:
+                raise ValueError(
+                    f"g_values shape {g.shape} incompatible with kernel_values shape {K.shape}")
+            init_cols = None
+            if soln_init_value is not None:
+                init_cols = np.asarray(soln_init_value, dtype=float)
+                if init_cols.shape != (d, m_cols):
+                    raise ValueError(
+                        f"soln_init_value must have shape ({d}, {m_cols}) for matrix-valued g_values")
+                if (not force_continuous) and show_warnings:
+                    print("warning: setting soln_init_value has no effect when force_continuous=False.")
+            g_cols = g[:N]
+
+            def _col(j):
+                return solve_VIE_1(
+                    kernel_values=K, g_values=g_cols[:, :, j],
+                    soln_init_value=(init_cols[:, j] if init_cols is not None else None),
+                    time_step=time_step, coll_divs=q, coll_choices=coll_choices,
+                    return_function=return_function, force_continuous=force_continuous,
+                    show_warnings=False, quadrature="product", mesh_samples=Q,
+                    kernel_interp_degree=p)
+            with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
+                results = list(ex.map(_col, range(m_cols)))
+            if return_function:
+                soln = np.stack([r[0] for r in results], axis=2)
+                col_polys = [r[1] for r in results]
+                mat_polys = []
+                for n in range(M):
+                    arr = np.empty((d, m_cols), dtype=object)
+                    for j in range(m_cols):
+                        arr[:, j] = col_polys[j][n]
+                    mat_polys.append(arr)
+                return soln, _SolutionFunction(mat_polys, breakpoints, d=d, m=m_cols)
+            return np.stack(results, axis=2)
+        expected = (N_orig,) if d == 0 else (N_orig, d)
+        if g.shape != expected:
+            raise ValueError(
+                f"g_values shape {g.shape} incompatible with kernel_values shape "
+                f"{kernel_values_.shape}: expected {expected}")
+        g = g[:N]
+
+    # ---------------------------------------------------------------- initial value
+    if soln_init_value is None:
+        if force_continuous:
+            raise ValueError("must specify soln_init_value for continuous solutions")
+        init = 0.0 if d == 0 else np.zeros(d)
+    else:
+        if (not force_continuous) and show_warnings:
+            print("warning: setting soln_init_value has no effect, since "
+                  "force_continuous is set to false.")
+        init = np.asarray(soln_init_value, dtype=float)
+        if d == 0:
+            if init.shape != ():
+                raise ValueError("soln_init_value must be a scalar for a scalar equation")
+            init = float(init)
+        elif init.shape != (d,):
+            raise ValueError(f"soln_init_value must have shape ({d},) for d={d}")
+
+    values, polys = _product.solve_vie1_product(
+        K, g, time_step, q, coll_choices, Q, p, force_continuous, init, return_function)
+    if return_function:
+        return values, _SolutionFunction(polys, breakpoints, d=d, m=0)
+    return values
+
+
 def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step=1.0, coll_divs=3,
                 coll_choices=[1,2,3], return_function=False, return_polys=None,
-                force_continuous=False, show_warnings=True):
+                force_continuous=False, show_warnings=True,
+                quadrature="collocation", mesh_samples=None, kernel_interp_degree=None):
     r'''
     Solve a Volterra integral equation of the first kind.
 
@@ -457,15 +640,47 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         Deprecated alias for ``return_function``; passing it emits a
         ``DeprecationWarning``.
     force_continuous : bool, optional
-        If ``True``, enforce continuity of the piecewise polynomial solution
-        across mesh-interval boundaries, using ``soln_init_value`` as the
-        starting condition. The default discontinuous method is generally more
-        accurate for the same number of collocation nodes. Default is
-        ``False``.
+        If ``True``, use the continuous collocation method (Brunner's
+        $S_m^{(0)}$): on each mesh interval the solution is a polynomial of
+        degree $m$ (one more than the default) that is continuous across mesh
+        points, starting from ``soln_init_value`` at $t = 0$. Requires the last
+        collocation node to be the right endpoint of the mesh interval
+        (``max(coll_choices) == coll_divs``) and a node set with
+        $|\rho_{m-1}| \le 1$ (see Notes). Converges with order $m + 1$ when
+        $-1 \le \rho_{m-1} < 1$ and with order $m$ when $\rho_{m-1} = 1$,
+        versus order $m$ for the default discontinuous method with the same
+        nodes. Default is ``False``.
     show_warnings : bool, optional
         If ``True`` (default), print a warning when ``kernel_values`` is
         truncated, when ``soln_init_value`` has no effect, or when the Numba
         fallback is used.
+    quadrature : {"collocation", "product"}, optional
+        How the integrals of the collocation equations are evaluated from the
+        sampled kernel. ``"collocation"`` (default) applies the interpolatory
+        rule on the method's own nodes; this forces the mesh to be
+        ``coll_divs**2`` samples wide and reads only every ``coll_divs``-th
+        sample of the data in the history sums. ``"product"`` replaces the
+        kernel by a piecewise polynomial interpolant of degree
+        ``kernel_interp_degree`` on the data grid and integrates its products
+        with the collocation polynomial exactly (product integration). The
+        mesh can then be any multiple of ``coll_divs`` samples wide
+        (``mesh_samples``), every sample is used, and any valid
+        ``coll_divs``/``coll_choices`` setting is available without the Numba
+        fallback. See Notes.
+    mesh_samples : int, optional
+        Number of data samples per mesh interval; the mesh width is
+        ``mesh_samples * time_step``. With ``quadrature="collocation"`` the
+        only admissible value is ``coll_divs**2`` (the default). With
+        ``quadrature="product"`` any positive multiple of ``coll_divs`` is
+        admissible and the default is ``coll_divs``, the finest mesh that keeps
+        every collocation point on a sample; larger values trade resolution
+        for a milder amplification of errors in the data (see Notes).
+    kernel_interp_degree : int, optional
+        Degree of the kernel interpolant used by ``quadrature="product"``: on
+        each cell of the data grid the kernel is represented by the polynomial
+        through the ``kernel_interp_degree + 1`` nearest samples. Defaults to
+        the number of collocation nodes, ``len(coll_choices)``. Not accepted
+        with ``quadrature="collocation"``.
 
     Returns
     -------
@@ -488,10 +703,14 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     ValueError
         For invalid shapes or collocation settings — including the known
         non-convergent VIE-1 settings ``(coll_divs=3, [1])``,
-        ``(4, [1])``, and ``(4, [1, 2])``, which are rejected outright —
+        ``(4, [1])``, and ``(4, [1, 2])``, which are rejected outright, and,
+        with ``force_continuous=True``, node sets whose last node is not the
+        right endpoint or whose $|\rho_{m-1}|$ exceeds 1 (see Notes) —
         inputs too short to form one mesh interval, matrix input with zero
-        columns, or inputs so large that a solver buffer would exceed
-        $2^{31}$ elements.
+        columns, inputs so large that a solver buffer would exceed
+        $2^{31}$ elements, an unknown ``quadrature``, a ``mesh_samples`` that
+        is not admissible for the chosen quadrature, or
+        ``kernel_interp_degree`` given with ``quadrature="collocation"``.
     NotImplementedError
         For a collocation setting not compiled into the D extension, on the
         vector/matrix path (no fallback exists) or on the scalar path when
@@ -512,6 +731,40 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     the equation at $t = 0$ where both sides are zero by definition, giving no
     information about $y(0)$.
 
+    First-kind collocation converges only for some node sets. With
+    $c_i = k_i / \text{coll\_divs}$, the default discontinuous method
+    ($S_{m-1}^{(-1)}$) converges iff
+    $-1 \le \rho_m := (-1)^m \prod_{i=1}^{m} (1 - c_i)/c_i \le 1$, with order
+    $m$ for $\rho_m < 1$ (Brunner [1], Theorem 2.4.2); any set with
+    $c_m = 1$ has $\rho_m = 0$. The continuous method (``force_continuous``)
+    requires $c_m = 1$ and converges iff
+    $-1 \le \rho_{m-1} := (-1)^m \prod_{i=1}^{m-1} (1 - c_i)/c_i \le 1$, with
+    order $m + 1$ for $\rho_{m-1} < 1$ and order $m$ for $\rho_{m-1} = 1$
+    ([1], Theorem 2.4.5). The equispaced sets ``list(range(1, coll_divs+1))``
+    have $\rho_{m-1} = -1$ for odd $m$ and $+1$ for even $m$. All integrals
+    are evaluated with the interpolatory quadrature rule on the method's own
+    nodes, i.e. on $\{c_1, \ldots, c_m\}$ for the discontinuous method and on
+    $\{0, c_1, \ldots, c_m\}$ for the continuous one ([1], Section 2.4.5);
+    for ``coll_divs=1``, ``coll_choices=[1]`` the continuous method is the
+    product trapezoidal rule.
+
+    With ``quadrature="product"`` the scheme is exact collocation for the
+    interpolated kernel $K_h$, so its error is the collocation error plus a
+    kernel-perturbation term. For a first-kind equation that term enters
+    through the derivative of the interpolation error and is of order
+    $\delta^{p}$ for degree $p$ (Linz 1971 [2]; de Hoog and Weiss 1973 [3]);
+    the default $p = m$ keeps it below the collocation error. The mesh is
+    ``mesh_samples`` samples wide, the input length must satisfy
+    $N \equiv 1 \pmod{\text{mesh\_samples}}$ (longer inputs are truncated
+    with a warning), and the blocks depend on the mesh intervals only through
+    their lag, so the FFT-accelerated history of the D extension is used. The
+    convergence conditions on the node sets are unchanged (they are
+    properties of the collocation method, not of the quadrature); the
+    discontinuous method is admitted for any ``coll_divs`` provided
+    $-1 \le \rho_m \le 1$. Inverting a first-kind equation amplifies errors
+    in the data by roughly the inverse of the mesh width, so on noisy data a
+    finer mesh is not automatically better; ``mesh_samples`` is the knob.
+
     The solver dispatches at runtime to a D-extension routine specialised for
     the given collocation setting. For scalar equations, settings not compiled
     into the extension fall back to a Numba-JIT implementation (requires the
@@ -524,7 +777,11 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     ----------
     .. [1] Brunner, H. *Collocation Methods for Volterra Integral and Related
        Functional Differential Equations.* Cambridge University Press, 2004.
-       Sections 2.4.1, 2.4.3, and 2.4.5.
+       Sections 2.4.1--2.4.3 and 2.4.5.
+    .. [2] Linz, P. Product integration methods for Volterra integral
+       equations of the first kind. *BIT* 11 (1971) 413--421.
+    .. [3] de Hoog, F. and Weiss, R. High order methods for Volterra integral
+       equations of the first kind. *SIAM J. Numer. Anal.* 10 (1973) 647--664.
     '''
     return_function = _resolve_return_flag(return_function, return_polys)
     # ------------------------------------------------------------------ complex dispatch
@@ -539,7 +796,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             kernel_values=K_real, g_values=g_real, soln_init_value=init_real,
             time_step=time_step, coll_divs=coll_divs, coll_choices=coll_choices,
             return_function=return_function, force_continuous=force_continuous,
-            show_warnings=show_warnings)
+            show_warnings=show_warnings, quadrature=quadrature,
+            mesh_samples=mesh_samples, kernel_interp_degree=kernel_interp_degree)
         if return_function:
             soln_real, sf_real = result
             return (_cplx._recombine(soln_real, d_orig),
@@ -552,6 +810,23 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     if ndim not in (1, 3):
         raise ValueError(
             f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
+
+    if quadrature not in ("collocation", "product"):
+        raise ValueError(
+            f"quadrature must be 'collocation' or 'product', got {quadrature!r}")
+    if quadrature == "product":
+        return _solve_vie1_product_path(
+            kernel_values_, g_values, soln_init_value, time_step, coll_divs,
+            coll_choices, return_function, force_continuous, show_warnings,
+            mesh_samples, kernel_interp_degree)
+    if kernel_interp_degree is not None:
+        raise ValueError(
+            "kernel_interp_degree applies only to quadrature='product'")
+    if mesh_samples is not None and int(mesh_samples) != coll_divs ** 2:
+        raise ValueError(
+            f"with quadrature='collocation' the mesh is coll_divs**2 = {coll_divs ** 2} "
+            f"samples wide (got mesh_samples={mesh_samples}); pass quadrature='product' "
+            f"to choose the mesh width")
 
     N_orig = len(kernel_values_)
     N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
@@ -639,6 +914,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
                 f"does not produce a convergent VIE-1 solver and is not supported. "
                 f"Use a setting from fast_coll_settings_VIE_1.")
+        if force_continuous:
+            _check_continuous_vie1_setting(coll_divs, coll_choices)
         if (coll_divs, coll_choices) not in _fast_settings_VIE_1:
             # NotImplementedError subclasses RuntimeError, so callers
             # catching the historical RuntimeError still work; this matches
@@ -702,6 +979,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
             f"does not produce a convergent VIE-1 solver and is not supported. "
             f"Use a setting from fast_coll_settings_VIE_1.")
+    if force_continuous:
+        _check_continuous_vie1_setting(coll_divs, coll_choices)
     if (coll_divs, coll_choices) in _fast_settings_VIE_1:
         soln_vals, poly_coefs = _dlang_module.solve_vie1_d(
             g_values_, kernel_values_, soln_init_value_, time_step,
