@@ -3169,3 +3169,94 @@ int volterra_solve_vie1_cont_blocks(
     }
     return 0;
 }
+
+// VIDE block driver: y' = a y + g + int K y with the solution represented on
+// interval n as y_n + H sum_k Y_{n,k} beta_k(v) (beta_k = int_0^v ell_k), so
+// the lag blocks are rectangular (Db x (Db + d)) with the boundary column
+// last, and the source vector of interval l is [Y_l; y_l].  Per step
+//     (I - betaC (x) a_n - P_val) Y_n = g_n + history + (a_n + P_bnd) y_n
+//     y_{n+1} = y_n + sum_k beta1[k] Y_{n,k}
+// where a_coll holds a(t_{n,i}) as (M, m, d, d), betaC[i][k] = H beta_k(c_i),
+// beta1[k] = H beta_k(1), and P is lag block 0 (history is ADDED here).
+int volterra_solve_vide_blocks(
+    double* lagB, double* g, double* a_coll, double* betaC, double* beta1, double* y0,
+    int M, int m, int d, double* out_Y, double* out_y)
+{
+    ensureThreadAttached();
+    if (M < 1 || m < 1 || d < 1) return 1;
+    immutable int Db = m * d;
+    immutable int Ds = Db + d;
+    if (cast(long) M * Db * Ds >= (cast(long) 1 << 31)) return 3;
+    immutable size_t Dbz = cast(size_t) Db;
+    immutable size_t Dsz = cast(size_t) Ds;
+    immutable size_t dz  = cast(size_t) d;
+    immutable size_t mz  = cast(size_t) m;
+    double[] lag_s = lagB[0 .. cast(size_t) M * Dbz * Dsz];
+    double[] g_s   = g[0 .. cast(size_t) M * Dbz];
+    double[] a_s   = a_coll[0 .. cast(size_t) M * mz * dz * dz];
+    double[] bC    = betaC[0 .. mz * mz];
+    double[] b1    = beta1[0 .. mz];
+    double[] Y_s   = out_Y[0 .. cast(size_t) M * Dbz];
+    double[] y_s   = out_y[0 .. (cast(size_t) M + 1) * dz];
+    y_s[0 .. dz] = y0[0 .. dz];
+
+    ToeplitzHistoryRT hist;
+    hist.initialize(M, Db, Ds);
+    hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
+    {
+        auto blk = h.lagBlock(lag);
+        blk[] = lag_s[cast(size_t) lag * Dbz * Dsz .. (cast(size_t) lag + 1) * Dbz * Dsz];
+    });
+
+    double[] a_col  = new double[Dbz * Dbz];
+    double[] rhs    = new double[Dbz];
+    double[] source = new double[Dsz];
+    int[]    ipiv   = new int[Dbz];
+
+    foreach (n; 0 .. M)
+    {
+        immutable size_t nb = cast(size_t) n * Dbz;
+        immutable size_t ny = cast(size_t) n * dz;
+        auto G_hist = hist.G(n);
+        // right-hand side: g + history + (P_bnd + a_n) y_n
+        foreach (i; 0 .. m)
+        {
+            foreach (aa; 0 .. d)
+            {
+                immutable size_t row = cast(size_t) i * dz + aa;
+                double v = g_s[nb + row] + G_hist[row];
+                foreach (s; 0 .. d)
+                    v += (lag_s[row * Dsz + Dbz + s]
+                          + a_s[((cast(size_t) n * mz + i) * dz + aa) * dz + s]) * y_s[ny + s];
+                rhs[row] = v;
+            }
+        }
+        // local matrix (column-major): I - betaC[i][k] a(t_{n,i}) - P_val
+        foreach (i; 0 .. m)
+        foreach (aa; 0 .. d)
+        foreach (k; 0 .. m)
+        foreach (bb; 0 .. d)
+        {
+            immutable size_t row = cast(size_t) i * dz + aa;
+            immutable size_t col = cast(size_t) k * dz + bb;
+            double v = (row == col) ? 1.0 : 0.0;
+            v -= lag_s[row * Dsz + col];
+            v -= bC[cast(size_t) i * mz + k] * a_s[((cast(size_t) n * mz + i) * dz + aa) * dz + bb];
+            a_col[row + col * Dbz] = v;
+        }
+        if (!lin_solve_lapack(a_col, rhs, Db, ipiv))
+            return 2;
+        Y_s[nb .. nb + Dbz] = rhs[];
+        source[0 .. Dbz] = rhs[];
+        source[Dbz .. Dsz] = y_s[ny .. ny + dz];
+        hist.push(source);
+        foreach (bb; 0 .. d)
+        {
+            double v = y_s[ny + bb];
+            foreach (k; 0 .. m)
+                v += b1[k] * rhs[cast(size_t) k * dz + bb];
+            y_s[ny + dz + bb] = v;
+        }
+    }
+    return 0;
+}

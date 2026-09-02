@@ -1,6 +1,7 @@
-r"""Product-integration quadrature for the sampled-data VIE-1 solver.
+r"""Product-integration quadrature for the sampled-data solvers.
 
 The default ``quadrature="collocation"`` scheme of :func:`voles.solve_VIE_1`
+(and likewise of :func:`voles.solve_VIE_2` and :func:`voles.solve_VIDE`)
 evaluates every integral in the collocation equations with the interpolatory
 rule on the method's own nodes (Brunner 2004, Section 2.4.5).  On the partial
 interval $[t_n, t_{n,i}]$ that rule samples the kernel at the scaled nodes
@@ -43,6 +44,11 @@ function $k$, component $b$).
   moved to the right-hand side.
 
 All blocks are in absolute time units (they include the factor $\delta$).
+
+The same blocks serve the second-kind equation (local system
+$(I - A) U = g + \text{history}$, run through the first-kind driver on
+transformed blocks) and the VIDE (basis $\{H \beta_k, 1\}$ with $\beta_k$
+the integrated Lagrange basis; see :func:`solve_vide_product`).
 """
 from __future__ import annotations
 
@@ -359,4 +365,167 @@ def solve_vie1_product(kernel_values, g_values, time_step, coll_divs, coll_choic
     polys = None
     if return_function:
         polys = build_polynomials(U, y, basis_coefs, Q, M, d, force_continuous, delta)
+    return values, polys
+
+
+# ---------------------------------------------------------------------------
+# VIE-2: y = g + int K y.  Same blocks; the local system is (I - A) U = g + history,
+# which is the first-kind driver applied to the transformed blocks
+# [I - A, -lagB[1], -lagB[2], ...].
+# ---------------------------------------------------------------------------
+
+def solve_vie2_product(kernel_values, g_values, time_step, coll_divs, coll_choices,
+                       mesh_samples, kernel_interp_degree, return_function, *,
+                       use_extension=True):
+    """Solve the sampled-data VIE-2 with product-integration quadrature.
+
+    Same conventions as :func:`solve_vie1_product`; ``coll_choices`` may
+    contain 0 (a node at the left mesh point, whose partial interval is empty).
+    """
+    from . import _dlang as _dlang_module
+
+    K = np.asarray(kernel_values, dtype=float)
+    g = np.asarray(g_values, dtype=float)
+    N = K.shape[0]
+    d = 0 if K.ndim == 1 else K.shape[1]
+    dd = max(d, 1)
+    Q = int(mesh_samples)
+    q = int(coll_divs)
+    m = len(coll_choices)
+    M = (N - 1) // Q
+    delta = float(time_step)
+    p = int(kernel_interp_degree)
+
+    c = np.array([k / q for k in coll_choices], dtype=float)
+    kappa = [k * Q // q for k in coll_choices]
+    basis_coefs = _lagrange_coefs_on_nodes(c)
+
+    coef = interp_cell_coefs(K, p)
+    Lam = moment_tensor(basis_coefs, Q, p)
+    lagB = flatten_blocks(build_lag_blocks(coef, Lam, kappa, Q, M, delta), d)
+    Db = lagB.shape[1]
+    lagB2 = -lagB
+    lagB2[0] = np.eye(Db) - lagB[0]
+
+    idx = (np.arange(M)[:, None] * Q + np.asarray(kappa)[None, :]).ravel()
+    g_coll = g[idx].reshape(M, m * dd) if d else g[idx].reshape(M, m)
+
+    have_drivers = use_extension and getattr(_dlang_module, "have_block_drivers", lambda: False)()
+    if have_drivers:
+        U = _dlang_module.solve_vie1_blocks_d(lagB2, g_coll)
+    else:
+        U = step_blocks_numpy(lagB2, g_coll)
+
+    values = evaluate_on_grid(U, None, basis_coefs, Q, M, d, False, N)
+    polys = None
+    if return_function:
+        polys = build_polynomials(U, None, basis_coefs, Q, M, d, False, delta)
+    return values, polys
+
+
+# ---------------------------------------------------------------------------
+# VIDE: y' = a y + g + int K y, y(0) = y0.
+#
+# On interval n the solution is y_n + H sum_k Y_{n,k} beta_k(v) with
+# beta_k(v) = int_0^v ell_k (degree m) and Y the collocation values of y', so
+# the blocks are those of the basis [H beta_1, ..., H beta_m, 1]: rectangular
+# (Db x (Db + d)) with the boundary column last, exactly the continuous VIE-1
+# layout.  Per step:
+#     (I - diag(a_n) H beta(c) - P_val) Y_n = g_n + history + (a_n + P_bnd) y_n
+#     y_{n+1} = y_n + H sum_k beta_k(1) Y_{n,k}
+# where a_n holds a at the collocation points of interval n (a d x d matrix
+# each), beta(c)_{ik} = beta_k(c_i), and P is the partial-interval block.
+# ---------------------------------------------------------------------------
+
+def _integrated_basis_coefs(nodes):
+    """Coefficient rows of ``beta_k(v) = int_0^v ell_k``, shape ``(m, m+1)``."""
+    ell = _lagrange_coefs_on_nodes(nodes)
+    m = len(nodes)
+    beta = np.zeros((m, m + 1))
+    beta[:, 1:] = ell / np.arange(1, m + 1)[None, :]
+    return beta
+
+
+def step_vide_blocks_numpy(lagB, g, a_coll, betaC, beta1, y0, m, d):
+    """VIDE stepping with direct history sums (reference / fallback).
+
+    lagB : (M, Db, Db + d) with the history ADDED to the right-hand side;
+    g : (M, Db); a_coll : (M, m, d, d); betaC : (m, m) = H beta_k(c_i);
+    beta1 : (m,) = H beta_k(1); y0 : (d,).  Returns Y : (M, Db), y : (M+1, d).
+    """
+    M, Db = g.shape
+    Y = np.zeros((M, Db))
+    y = np.zeros((M + 1, d))
+    y[0] = y0
+    src = np.zeros((M, Db + d))
+    Pval = lagB[0, :, :Db]
+    Pbnd = lagB[0, :, Db:]
+    for n in range(M):
+        Aloc = np.eye(Db) - Pval
+        rhs = g[n] + Pbnd @ y[n]
+        for i in range(m):
+            rhs[i * d:(i + 1) * d] += a_coll[n, i] @ y[n]
+            for k in range(m):
+                Aloc[i * d:(i + 1) * d, k * d:(k + 1) * d] -= betaC[i, k] * a_coll[n, i]
+        if n > 0:
+            rhs += np.einsum('lab,lb->a', lagB[n:0:-1], src[:n])
+        Y[n] = np.linalg.solve(Aloc, rhs)
+        src[n, :Db] = Y[n]
+        src[n, Db:] = y[n]
+        y[n + 1] = y[n] + beta1 @ Y[n].reshape(m, d)
+    return Y, y
+
+
+def solve_vide_product(kernel_values, a_values, g_values, time_step, coll_divs, coll_choices,
+                       mesh_samples, kernel_interp_degree, soln_init_value, return_function, *,
+                       use_extension=True):
+    """Solve the sampled-data VIDE with product-integration quadrature.
+
+    ``a_values`` is ``(N,)`` or ``(N, d, d)`` (zeros allowed), ``soln_init_value``
+    a float or ``(d,)``.  Returns ``(values of y, polys)``.
+    """
+    from . import _dlang as _dlang_module
+
+    K = np.asarray(kernel_values, dtype=float)
+    g = np.asarray(g_values, dtype=float)
+    a = np.asarray(a_values, dtype=float)
+    N = K.shape[0]
+    d = 0 if K.ndim == 1 else K.shape[1]
+    dd = max(d, 1)
+    Q = int(mesh_samples)
+    q = int(coll_divs)
+    m = len(coll_choices)
+    M = (N - 1) // Q
+    delta = float(time_step)
+    H = Q * delta
+    p = int(kernel_interp_degree)
+
+    c = np.array([k / q for k in coll_choices], dtype=float)
+    kappa = [k * Q // q for k in coll_choices]
+    beta = _integrated_basis_coefs(c)                          # (m, m+1)
+    basis_coefs = np.zeros((m + 1, m + 1))
+    basis_coefs[:m] = H * beta
+    basis_coefs[m, 0] = 1.0                                     # boundary basis: constant 1
+    betaC = np.ascontiguousarray(H * npp.polyval(c, beta.T).T)  # (i, k) = H beta_k(c_i)
+    beta1 = np.ascontiguousarray(H * npp.polyval(1.0, beta.T))  # (k,) = H beta_k(1)
+
+    coef = interp_cell_coefs(K, p)
+    Lam = moment_tensor(basis_coefs, Q, p)
+    lagB = flatten_blocks(build_lag_blocks(coef, Lam, kappa, Q, M, delta), d)
+
+    idx = (np.arange(M)[:, None] * Q + np.asarray(kappa)[None, :]).ravel()
+    g_coll = g[idx].reshape(M, m * dd) if d else g[idx].reshape(M, m)
+    a_coll = a[idx].reshape(M, m, dd, dd)
+    y0 = np.ascontiguousarray(np.broadcast_to(np.asarray(soln_init_value, dtype=float), (dd,)))
+
+    have_drivers = use_extension and getattr(_dlang_module, "have_block_drivers", lambda: False)()
+    if have_drivers:
+        U, y = _dlang_module.solve_vide_blocks_d(lagB, g_coll, a_coll, betaC, beta1, y0, m, dd)
+    else:
+        U, y = step_vide_blocks_numpy(lagB, g_coll, a_coll, betaC, beta1, y0, m, dd)
+
+    values = evaluate_on_grid(U, y, basis_coefs, Q, M, d, True, N)
+    polys = None
+    if return_function:
+        polys = build_polynomials(U, y, basis_coefs, Q, M, d, True, delta)
     return values, polys
