@@ -3,6 +3,31 @@
 ## [Unreleased]
 
 ### Added
+- **Product-integration quadrature for the sampled-data solvers:**
+  ``solve_VIE_1`` / ``solve_VIE_2`` / ``solve_VIDE`` accept
+  ``quadrature="product"``, ``mesh_samples=...`` and ``kernel_interp_degree=...``.
+  The default (``quadrature="collocation"``) evaluates every integral with the
+  interpolatory rule on the collocation nodes, which forces the mesh to be
+  ``coll_divs**2`` samples wide and reads only every ``coll_divs``-th sample
+  of the data in the history sums; at a fixed data spacing the higher-order
+  methods therefore run on a much coarser mesh than the low-order ones. The
+  new mode replaces the kernel by its piecewise-polynomial interpolant on the
+  data grid (degree ``kernel_interp_degree``, default the number of nodes) and
+  integrates products with the collocation polynomial exactly (Linz 1971; de
+  Hoog and Weiss 1973). The mesh can then be any multiple of ``coll_divs``
+  samples wide (``mesh_samples``, default ``coll_divs``), every sample is
+  used, any convergent node set is available without the Numba fallback, and
+  the blocks keep the lag structure, so the FFT-accelerated Toeplitz history
+  is used through three new runtime-dimension D drivers that step
+  precomputed lag blocks (``volterra_solve_vie1_blocks``,
+  ``volterra_solve_vie1_cont_blocks``, ``volterra_solve_vide_blocks``; the
+  second-kind equation reuses the first-kind driver on transformed blocks).
+  Existing calls are unchanged. The scheme is exact collocation for the
+  interpolated kernel. For the first-kind equation the kernel-perturbation
+  error enters through the derivative of the interpolation error and is of
+  order ``time_step**kernel_interp_degree``, and a finer mesh amplifies
+  errors in the data correspondingly; the second-kind equation and the VIDE
+  are well posed, so there the finer mesh is pure accuracy gain.
 - **Arbitrary collocation nodes** on the callable-input solvers via the
   ``coll_nodes`` parameter (floats in $[0, 1]$, mutually exclusive with
   ``coll_divs``/``coll_choices``), with helpers ``gauss_legendre_nodes``,
@@ -11,6 +36,36 @@
   missed when the feature landed).
 
 ### Fixed
+- **`solve_VIE_1(force_continuous=True)` integrated its trial polynomials
+  with the wrong quadrature rule.** The continuous method (Brunner's
+  $S_m^{(0)}$) represents the solution on each mesh interval by a degree-$m$
+  polynomial on the nodes $\{0, c_1, \ldots, c_m\}$, but the array-input
+  solvers (D extension and Numba fallback) evaluated its integrals with the
+  $m$-point interpolatory rule on $\{c_1, \ldots, c_m\}$ inherited from the
+  discontinuous method, which is exact only to degree $m - 1$. Consequences:
+  the one-node method (`coll_divs=1, coll_choices=[1]`) was the right-endpoint
+  rectangle rule rather than the trapezoidal rule and ignored
+  `soln_init_value`; the extra order that continuity buys was lost (the mode
+  converged at order $m$, no better than the default); and the carried
+  boundary value was amplified by a factor $> 1$ per mesh interval for most
+  node sets (e.g. 3 for `(2, [1, 2])`, 335/111 for `(4, [1, 2, 3, 4])`),
+  so those settings diverged exponentially. The integrals are now evaluated
+  with the $(m+1)$-point rule on the method's own nodes $\{0, c_1, \ldots,
+  c_m\}$ (Brunner 2004, Section 2.4.5 and Example 2.4.5). The kernel is still
+  only needed at the sample points. With the fix the one-node method is the
+  product trapezoidal rule, polynomial solutions of degree $m$ are
+  reproduced exactly for a constant kernel, and the observed convergence
+  order is $m + 1$ for $-1 \le \rho_{m-1} < 1$ and $m$ for $\rho_{m-1} = 1$,
+  as Brunner's Theorem 2.4.5 predicts. The default discontinuous mode and
+  `solve_VIE_2` are unchanged (bitwise). The callable-input
+  `function_solve_VIE_1` already used the correct rule and is unaffected.
+- **`force_continuous=True` now validates the node set** the way the
+  callable-input solver does: the last collocation node must be the right
+  endpoint (`max(coll_choices) == coll_divs`), and node sets with
+  $|\rho_{m-1}| = \prod_{i<m} (1 - c_i)/c_i > 1$, which Theorem 2.4.5 shows
+  divergent (`(3, [1, 3])`, `(4, [1, 4])`, `(4, [1, 2, 4])`), raise
+  `ValueError`. Previously these ran and either diverged or, for
+  `(4, [1, 2, 4])`, converged by accident of the incorrect quadrature.
 - **Callable-solver matrix (multi-RHS) column fan-out** now shares the
   array-solver behavior: thread pool capped at the CPU count (was one
   thread per column) and a clear ``ValueError`` for zero-column inputs.
