@@ -1,5 +1,6 @@
 import os
 import warnings
+from fractions import Fraction
 
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
@@ -74,9 +75,73 @@ def _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step):
         polys.append(arr)
     return polys
 
+def _vie1_rho(coll_divs, coll_choices, continuous=False):
+    r"""Exact amplification factor of a VIE-1 collocation method on the nodes
+    $c_i$ = ``coll_choices[i] / coll_divs`` (``coll_choices`` sorted), as a
+    `fractions.Fraction`.
+
+    Discontinuous ($S_{m-1}^{(-1)}$) method: Brunner's
+    $\rho_m = (-1)^m \prod_{i=1}^{m} (1 - c_i)/c_i$ (Brunner 2004, Theorem
+    2.4.2). Continuous ($S_m^{(0)}$) method with $c_m = 1$:
+    $\rho_{m-1} = (-1)^m \prod_{i<m} (1 - c_i)/c_i$ (Theorem 2.4.5). Either
+    method converges iff $|\rho| \le 1$ (with one order lost at $\rho = 1$).
+
+    The nodes are rational, so the test ``abs(rho) > 1`` is exact: no
+    tolerance is needed at the boundary $|\rho| = 1$. This is the single
+    implementation of the criterion for ``coll_divs``/``coll_choices`` node
+    sets; `_callable_solvers` uses it too and keeps a floating-point version
+    only for arbitrary ``coll_nodes``."""
+    nodes = coll_choices[:-1] if continuous else coll_choices
+    rho = Fraction((-1) ** len(coll_choices))
+    for k in nodes:
+        rho *= Fraction(int(coll_divs) - int(k), int(k))
+    return rho
+
+
+def _check_vie1_setting(coll_divs, coll_choices, force_continuous):
+    """Reject collocation settings for which the requested VIE-1 method is not
+    defined or does not converge. ``coll_choices`` must be sorted and already
+    validated to hold distinct integers in ``1 .. coll_divs``."""
+    if len(coll_choices) == 0:
+        raise ValueError("coll_choices must contain at least one collocation node")
+    if force_continuous:
+        if coll_choices[-1] != coll_divs:
+            raise ValueError(
+                f"force_continuous=True requires the last collocation node to be the right "
+                f"endpoint of the mesh interval (max(coll_choices) == coll_divs); got "
+                f"coll_divs={coll_divs}, coll_choices={coll_choices}. This is a structural "
+                f"requirement of the continuous S_m^(0) method (Brunner 2004, Section 2.4.3).")
+        rho = _vie1_rho(coll_divs, coll_choices, continuous=True)
+        if abs(rho) > 1:
+            raise ValueError(
+                f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) does "
+                f"not produce a convergent continuous VIE-1 solver: |rho_(m-1)| = "
+                f"{float(abs(rho)):.4g} > 1 (Brunner 2004, Theorem 2.4.5). Use nodes with "
+                f"|rho_(m-1)| <= 1, e.g. coll_choices=list(range(1, coll_divs + 1)).")
+    else:
+        rho = _vie1_rho(coll_divs, coll_choices)
+        if abs(rho) > 1:
+            raise ValueError(
+                f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
+                f"does not produce a convergent VIE-1 solver and is not supported: "
+                f"|rho_m| = prod (1 - c_i)/c_i = {float(abs(rho)):.4g} > 1 (Brunner 2004, "
+                f"Theorem 2.4.2). Use nodes with |rho_m| <= 1; any node set containing the "
+                f"right endpoint (coll_divs in coll_choices) qualifies.")
+
+
+def _check_continuous_vie1_setting(coll_divs, coll_choices):
+    """Continuous-mode form of `_check_vie1_setting`, kept under its original
+    name for callers written against it."""
+    _check_vie1_setting(coll_divs, coll_choices, force_continuous=True)
+
 _all_fast = _dlang_module.supported_coll_settings_d()
-# Non-convergent VIE-1 settings excluded (verified by grid-refinement study).
-_VIE1_NONCONVERGENT = {(3, (1,)), (4, (1,)), (4, (1, 2))}
+# The compiled VIE-1 settings that fail the convergence criterion |rho_m| <= 1
+# (the rule _check_vie1_setting applies to every setting, compiled or not).
+# Kept as a named constant for reference; it is derived, not a blacklist.
+_VIE1_NONCONVERGENT = {
+    (d, tuple(c)) for d, c in _all_fast
+    if 0 not in c and abs(_vie1_rho(d, c)) > 1
+}
 _fast_settings_VIE_1 = [
     (d, c) for d, c in _all_fast
     if 0 not in c and (d, tuple(c)) not in _VIE1_NONCONVERGENT
@@ -84,36 +149,6 @@ _fast_settings_VIE_1 = [
 _fast_settings_VIE_2 = _all_fast
 _fast_settings_VIDE  = _all_fast
 del _all_fast
-
-
-def _continuous_vie1_rho(coll_divs, coll_choices):
-    r"""Brunner's $\rho_{m-1} = (-1)^m \prod_{i<m} (1 - c_i)/c_i$ for the
-    continuous ($S_m^{(0)}$) VIE-1 method with $c_m = 1$ (Brunner 2004,
-    Theorem 2.4.5): the constant-kernel amplification factor of the boundary
-    value carried across mesh points."""
-    c = [k / coll_divs for k in coll_choices]
-    rho = (-1.0) ** len(c)
-    for ci in c[:-1]:
-        rho *= (1.0 - ci) / ci
-    return rho
-
-
-def _check_continuous_vie1_setting(coll_divs, coll_choices):
-    """Reject collocation settings for which the continuous VIE-1 method is
-    not defined or does not converge. ``coll_choices`` must be sorted."""
-    if coll_choices[-1] != coll_divs:
-        raise ValueError(
-            f"force_continuous=True requires the last collocation node to be the right "
-            f"endpoint of the mesh interval (max(coll_choices) == coll_divs); got "
-            f"coll_divs={coll_divs}, coll_choices={coll_choices}. This is a structural "
-            f"requirement of the continuous S_m^(0) method (Brunner 2004, Section 2.4.3).")
-    rho = _continuous_vie1_rho(coll_divs, coll_choices)
-    if abs(rho) > 1.0 + 1e-12:
-        raise ValueError(
-            f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) does "
-            f"not produce a convergent continuous VIE-1 solver: |rho_(m-1)| = {abs(rho):.4g} "
-            f"> 1 (Brunner 2004, Theorem 2.4.5). Use nodes with |rho_(m-1)| <= 1, e.g. "
-            f"coll_choices=list(range(1, coll_divs + 1)).")
 
 try:
     from . import _numba_solvers
@@ -521,9 +556,10 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     Raises
     ------
     ValueError
-        For invalid shapes or collocation settings — including the known
-        non-convergent VIE-1 settings ``(coll_divs=3, [1])``,
-        ``(4, [1])``, and ``(4, [1, 2])``, which are rejected outright, and,
+        For invalid shapes or collocation settings — including an empty
+        ``coll_choices``, node sets with $|\rho_m| > 1$, for which the method
+        diverges (see Notes; e.g. ``(coll_divs=3, [1])``, ``(4, [1, 2])``,
+        ``(5, [1])``), ``force_continuous=True`` without ``soln_init_value``, and,
         with ``force_continuous=True``, node sets whose last node is not the
         right endpoint or whose $|\rho_{m-1}|$ exceeds 1 (see Notes) —
         inputs too short to form one mesh interval, matrix input with zero
@@ -581,6 +617,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
        Sections 2.4.1--2.4.3 and 2.4.5.
     '''
     return_function = _resolve_return_flag(return_function, return_polys)
+    if force_continuous and soln_init_value is None:
+        raise ValueError("must specify soln_init_value when force_continuous=True")
     # ------------------------------------------------------------------ complex dispatch
     if _cplx.is_complex(kernel_values, g_values, soln_init_value):
         K_arr = np.asarray(kernel_values)
@@ -677,7 +715,6 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                 raise ValueError(
                     f"soln_init_value must have shape ({d},) for d={d}")
         else:
-            assert not force_continuous, "must specify soln_init_value for continuous solutions"
             soln_init_value_ = np.zeros(d)
 
         assert 0 not in coll_choices, "zero cannot be a collocation parameter"
@@ -688,13 +725,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             assert 1 <= choice <= coll_divs, "coll_choices must contain only integers from 1 to coll_divs"
         coll_choices = sorted(coll_choices)
 
-        if (coll_divs, tuple(coll_choices)) in _VIE1_NONCONVERGENT:
-            raise ValueError(
-                f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
-                f"does not produce a convergent VIE-1 solver and is not supported. "
-                f"Use a setting from fast_coll_settings_VIE_1.")
-        if force_continuous:
-            _check_continuous_vie1_setting(coll_divs, coll_choices)
+        _check_vie1_setting(coll_divs, coll_choices, force_continuous)
         if (coll_divs, coll_choices) not in _fast_settings_VIE_1:
             # NotImplementedError subclasses RuntimeError, so callers
             # catching the historical RuntimeError still work; this matches
@@ -731,8 +762,6 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     assert time_step > 0.0, "time_step must be positive"
 
     if soln_init_value is None:
-        assert not force_continuous, \
-            "must specify an initial value for continuous solutions"
         # We still need a value to pass into the JIT version. It shouldn't be used!
         soln_init_value_ = 0.0
     else:
@@ -753,13 +782,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         assert 1 <= choice <= coll_divs, \
             "coll_choices must contain only integers from 1 to coll_divs"
     coll_choices = sorted(coll_choices)
-    if (coll_divs, tuple(coll_choices)) in _VIE1_NONCONVERGENT:
-        raise ValueError(
-            f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
-            f"does not produce a convergent VIE-1 solver and is not supported. "
-            f"Use a setting from fast_coll_settings_VIE_1.")
-    if force_continuous:
-        _check_continuous_vie1_setting(coll_divs, coll_choices)
+    _check_vie1_setting(coll_divs, coll_choices, force_continuous)
     if (coll_divs, coll_choices) in _fast_settings_VIE_1:
         soln_vals, poly_coefs = _dlang_module.solve_vie1_d(
             g_values_, kernel_values_, soln_init_value_, time_step,

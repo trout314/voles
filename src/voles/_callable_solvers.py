@@ -27,7 +27,7 @@ import functools
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 
-from .solvers import _column_workers
+from .solvers import _column_workers, _check_vie1_setting
 
 import numpy as np
 from numpy.polynomial import polynomial as npp
@@ -2371,10 +2371,9 @@ def _vie1_convergent(node_pos: np.ndarray, tol: float = 1e-9) -> bool:
 
 def _vie1_cont_amplification(node_pos: np.ndarray) -> float:
     """Return |rho_{m-1}| = prod_{i=1}^{m-1} (1 - c_i)/c_i for the continuous
-    S_m^(0) method (Brunner Thm 2.4.5). Empty product (m == 1) is 0."""
+    S_m^(0) method (Brunner Thm 2.4.5). For m == 1 the product is empty and
+    |rho_0| = 1 (the trapezoidal method), matching solvers._vie1_rho."""
     c = np.asarray(node_pos, dtype=float)
-    if c.size <= 1:
-        return 0.0
     return float(np.prod((1.0 - c[:-1]) / c[:-1]))
 
 
@@ -2619,7 +2618,11 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     # The criteria assume a smooth kernel (Brunner Thm 2.4.2(b): |K(t,t)|>=k0>0),
     # so they are skipped when a weakly-singular kernel is declared.
     if kernel_singularity is None:
-        if force_continuous:
+        if _choices is not None:
+            # Rational nodes k/coll_divs: the exact criterion shared with the
+            # array-input solve_VIE_1 (no tolerance needed at |rho| = 1).
+            _check_vie1_setting(_divs, _choices, force_continuous)
+        elif force_continuous:
             # Continuous S_m^(0): converges iff c_m = 1 and |rho_{m-1}| <= 1.
             rho = _vie1_cont_amplification(node_pos)
             if rho > 1.0 + 1e-9:
@@ -2630,11 +2633,6 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         elif not _vie1_convergent(node_pos):
             # Discontinuous S_{m-1}^{(-1)}: converges iff |rho_m| <= 1.
             rho = _vie1_amplification(node_pos)
-            if _choices is not None:
-                raise ValueError(
-                    f"Collocation setting (coll_divs={_divs}, coll_choices={_choices}) "
-                    f"does not produce a convergent VIE-1 solver and is not supported "
-                    f"(amplification |rho_m| = {rho:.4g} > 1).")
             raise ValueError(
                 f"Collocation nodes {np.array2string(node_pos, precision=6)} do not "
                 f"produce a convergent VIE-1 solver: the amplification factor "

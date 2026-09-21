@@ -248,34 +248,26 @@ def BN_cont(kernel_data, coll_info):
     return matrix
 
 @ncjit
-def BNL_cont(mesh_indx_n, mesh_indx_ell, kernel_data, coll_info):
-    """History block of the continuous method for the interval pair (n, ell),
-    shape (m, m+1), acting on V_ell = (y_ell, U_{ell,1..m})."""
-    assert mesh_indx_ell >= 0, "ell must be non-negative"
-    assert mesh_indx_ell < mesh_indx_n, "ell must be smaller than n"
+def G_cont(mesh_indx_n, current_solution, boundary_vals, kernel_data, coll_info, b_hat, dt):
+    """History term of the continuous method at mesh interval n:
+    sum over ell < n of dt * B_{n-ell} V_ell with V_ell = (y_ell, U_{ell,1..m})
+    and B_{n-ell}[i, j] = b_hat[j] * K((n - ell) H + (c_i - chat_j) H), where
+    chat = (0, c_1, ..., c_m) are the augmented nodes and ``b_hat`` their
+    interpolatory quadrature weights. ``b_hat`` does not depend on (n, ell);
+    the driver computes it once and passes it in."""
     coll_divs = coll_info.divs
     coll_choices = coll_info.choices
     num_coll_params = len(coll_choices)
-    b_hat = quad_weights(augmented_nodes(coll_info))
-    choices_hat = [0] + list(coll_choices)
-
-    matrix = np.zeros((num_coll_params, num_coll_params + 1))
-    mesh_point_indx = (mesh_indx_n - mesh_indx_ell) * coll_divs**2
-    for i in range(num_coll_params):
-        for j in range(num_coll_params + 1):
-            sub_indx = (coll_choices[i] - choices_hat[j]) * coll_divs
-            matrix[i,j] = b_hat[j] * kernel_data[mesh_point_indx + sub_indx]
-    return matrix
-
-@ncjit
-def G_cont(mesh_indx_n, current_solution, boundary_vals, kernel_data, coll_info, dt):
-    num_coll_params = len(coll_info.choices)
     vector = np.zeros((num_coll_params))
-    source = np.zeros((num_coll_params + 1))
     for ell in range(mesh_indx_n):
-        source[0] = boundary_vals[ell]
-        source[1:] = current_solution[ell,:]
-        vector += dt * BNL_cont(mesh_indx_n, ell, kernel_data, coll_info) @ source
+        mesh_point_indx = (mesh_indx_n - ell) * coll_divs**2
+        for i in range(num_coll_params):
+            base_indx = mesh_point_indx + coll_choices[i] * coll_divs
+            acc = b_hat[0] * kernel_data[base_indx] * boundary_vals[ell]
+            for j in range(num_coll_params):
+                acc += b_hat[j + 1] * kernel_data[base_indx - coll_choices[j] * coll_divs] \
+                       * current_solution[ell, j]
+            vector[i] += dt * acc
     return vector
 
 CollInfo = namedtuple('CollInfo', ['divs', 'choices', 'params', 'weights'])
@@ -424,15 +416,19 @@ def solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step, coll_di
         # Column 0 of the local matrix multiplies the carried boundary value
         # y_n and moves to the right-hand side; columns 1..m form the system
         # for the collocation unknowns.
+        assert coll_choices[-1] == coll_divs, "the continuous method requires c_m = 1"
         local_matrix = dt*BN_cont(kernel_values, coll_info)
+        b_hat = quad_weights(augmented_nodes(coll_info))
         coef_matrix = np.ascontiguousarray(local_matrix[:, 1:])
         boundary_column = np.ascontiguousarray(local_matrix[:, 0])
         for n in range(mesh_divs):
             rhs_vector = g(n, g_values, coll_info) \
-                - G_cont(n, solution_U, boundary_vals, kernel_values, coll_info, dt) \
+                - G_cont(n, solution_U, boundary_vals, kernel_values, coll_info, b_hat, dt) \
                 - boundary_column*boundary_vals[n]
             solution_U[n] = np.linalg.solve(coef_matrix, rhs_vector)
-            boundary_vals[n+1] = poly_piece_f_continuous(1.0, n, solution_U, coll_info, boundary_vals[n])
+            # c_m = 1, so the trial polynomial's value at the right endpoint is
+            # the last collocation unknown itself.
+            boundary_vals[n+1] = solution_U[n, -1]
 
     soln_values = np.zeros_like(g_values)
     poly_coefs = np.zeros((mesh_divs, num_coll_params + 1))

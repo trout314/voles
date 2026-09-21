@@ -866,31 +866,49 @@ auto g_vec_ct(int coll_divs, int[] coll_choices, int d)(
 //   index s*(m+1) + j  =  component s, j = 0 (boundary value) or 1..m (node j)
 // ---------------------------------------------------------------------------
 
-// BN_cont_vec_ct: local matrix of the continuous method, dm rows x d(m+1)
-// cols. Column block j = 0 multiplies the boundary value y_n (the driver moves
-// it to the right-hand side); column blocks j = 1..m form the dm x dm system
-// for the collocation unknowns U_n.
-auto BN_cont_vec_ct(int coll_divs, int[] coll_choices, int d)(
-    double[] kernel_data)
+// Compile-time tables shared by the four continuous-method builders. They
+// depend only on the collocation setting (not on d or the kernel), so they
+// are evaluated once, by CTFE, instead of on every builder call.
+template ContTables(int coll_divs, int[] coll_choices)
 {
-    enum int m   = coll_choices.length;
-    enum int dm  = d * m;
-    enum int dm1 = d * (m + 1);
+    enum int m = coll_choices.length;
     enum int[] czero = [0] ~ coll_choices;
+    static immutable int[m + 1] k_hat = czero;
     static immutable double[m + 1] c_hat
         = czero.map!(c => double(c)/coll_divs).array;
-    static immutable int[m + 1] k_hat = czero;
     static immutable double[m + 1] b_hat = quad_weights!(coll_divs, czero)();
 
     // poly_vals[j][i][k] = Lhat_j(c_i * chat_k) for collocation node i = 1..m
     // (stored at index i-1), basis index j = 0..m, quadrature node k = 0..m.
-    double[m + 1][m][m + 1] poly_vals;
-    foreach (j; 0 .. m + 1)
-    foreach (i; 0 .. m)
-    foreach (k; 0 .. m + 1)
-        poly_vals[j][i][k] = lagrange_f!(coll_divs, czero)(c_hat[i + 1] * c_hat[k], j);
+    static immutable double[m + 1][m][m + 1] poly_vals = make_poly_vals();
 
-    double[dm1][dm] mat = 0;
+    private double[m + 1][m][m + 1] make_poly_vals()
+    {
+        double[m + 1][m][m + 1] pv;
+        foreach (j; 0 .. m + 1)
+        foreach (i; 0 .. m)
+        foreach (k; 0 .. m + 1)
+            pv[j][i][k] = lagrange_f!(coll_divs, czero)(
+                (double(czero[i + 1])/coll_divs) * (double(czero[k])/coll_divs), j);
+        return pv;
+    }
+}
+
+// BN_cont_vec_ct: local matrix of the continuous method, written as the two
+// blocks the driver needs. ``coef`` (dm x dm) holds column blocks j = 1..m,
+// the system for the collocation unknowns U_n; ``bnd`` (dm x d) holds column
+// block j = 0, which multiplies the boundary value y_n and moves to the
+// right-hand side. Both are overwritten.
+void BN_cont_vec_ct(int coll_divs, int[] coll_choices, int d)(
+    double[] kernel_data,
+    ref double[d * coll_choices.length][d * coll_choices.length] coef,
+    ref double[d][d * coll_choices.length] bnd)
+{
+    alias T = ContTables!(coll_divs, coll_choices);
+    enum int m = T.m;
+
+    foreach (ref row; coef) row[] = 0;
+    foreach (ref row; bnd)  row[] = 0;
     foreach (r; 0 .. d)
     foreach (s; 0 .. d)
     foreach (i; 0 .. m)
@@ -898,37 +916,79 @@ auto BN_cont_vec_ct(int coll_divs, int[] coll_choices, int d)(
     foreach (k; 0 .. m + 1)
     {
         // kernel argument c_i (1 - chat_k) H = k_i (coll_divs - khat_k) time_step
-        auto kern_idx = k_hat[i + 1] * (coll_divs - k_hat[k]);
-        mat[r*m + i][s*(m + 1) + j] +=
-            c_hat[i + 1] * b_hat[k] * kernel_data[kern_idx * d*d + r*d + s] * poly_vals[j][i][k];
+        auto kern_idx = T.k_hat[i + 1] * (coll_divs - T.k_hat[k]);
+        double val = T.c_hat[i + 1] * T.b_hat[k]
+                     * kernel_data[kern_idx * d*d + r*d + s] * T.poly_vals[j][i][k];
+        if (j == 0)
+            bnd[r*m + i][s] += val;
+        else
+            coef[r*m + i][s*m + (j - 1)] += val;
     }
-    return mat;
 }
 
-// BNL_cont_vec_ct: history block of the continuous method for lag n - ell,
-// dm rows x d(m+1) cols, acting on the source vector V_ell.
+// Folded history blocks of the continuous method.
+//
+// The unfolded block for lag L = n - ell is dm x d(m+1): entry (i, j) is
+// bhat_j K(L H + (c_i - chat_j) H), acting on V_ell = (y_ell, U_{ell,1..m}).
+// Since c_m = 1, the boundary value is the previous interval's last unknown,
+// y_ell = U_{ell-1,m}, so the j = 0 column of lag L - 1 can be carried by the
+// j = m column of lag L acting on U_{ell-1}. For L >= 2 both columns sample
+// the kernel at the same point,
+//     L H + (c_i - 1) H  =  (L - 1) H + (c_i - 0) H,
+// so the folded column is simply (bhat_m + bhat_0) K(...). The history is
+// then a square dm x dm Toeplitz sum over the U_ell alone: (m+1)/m times less
+// work and storage than the rectangular form (2x for m = 1).
+//
+// Two pieces are not covered by that table and are handled by the driver:
+//   * lag 1 also carries the *local* boundary block (the partial-interval
+//     integral of BN_cont_vec, column j = 0), which the driver adds to the
+//     j = m column of the lag-1 block;
+//   * y_0 is the prescribed initial value, not an unknown; its contribution
+//     to interval n >= 1 is bhat_0 K(n H + c_i H) y_0 (BNL_cont_y0_*), and to
+//     interval 0 the local boundary block times y_0.
+
+// BNL_cont_vec_ct: folded history block for lag >= 1 (without the lag-1
+// local boundary term), dm x dm, acting on U_ell.
 auto BNL_cont_vec_ct(int coll_divs, int[] coll_choices, int d)(
     int lag, double[] kernel_data)
 {
-    enum int m   = coll_choices.length;
-    enum int dm  = d * m;
-    enum int dm1 = d * (m + 1);
-    enum int[] czero = [0] ~ coll_choices;
-    static immutable int[m + 1] k_hat = czero;
-    static immutable double[m + 1] b_hat = quad_weights!(coll_divs, czero)();
+    alias T = ContTables!(coll_divs, coll_choices);
+    enum int m  = T.m;
+    enum int dm = d * m;
 
-    double[dm1][dm] mat = 0;
+    double[dm][dm] mat = 0;
     immutable int mesh_pt_idx = lag * coll_divs^^2;
     foreach (r; 0 .. d)
     foreach (s; 0 .. d)
     foreach (i; 0 .. m)
-    foreach (j; 0 .. m + 1)
+    foreach (j; 1 .. m + 1)
     {
-        auto sub_idx = (k_hat[i + 1] - k_hat[j]) * coll_divs;
-        mat[r*m + i][s*(m + 1) + j] =
-            b_hat[j] * kernel_data[(mesh_pt_idx + sub_idx) * d*d + r*d + s];
+        auto sub_idx = (T.k_hat[i + 1] - T.k_hat[j]) * coll_divs;
+        double w = (j == m && lag >= 2) ? T.b_hat[m] + T.b_hat[0] : T.b_hat[j];
+        mat[r*m + i][s*m + (j - 1)] =
+            w * kernel_data[(mesh_pt_idx + sub_idx) * d*d + r*d + s];
     }
     return mat;
+}
+
+// BNL_cont_y0_rt: contribution of the initial value y_0 to the history of
+// interval n >= 1, out[r*m + i] = sum_s bhat_0 K_rs(n H + c_i H) y0_s.
+// Runtime d; used by both drivers.
+void BNL_cont_y0_rt(int coll_divs, int[] coll_choices)(
+    int n, double[] kernel_data, int d, const double[] y0, double[] out_vec)
+{
+    alias T = ContTables!(coll_divs, coll_choices);
+    enum int m = T.m;
+    immutable int mesh_pt_idx = n * coll_divs^^2;
+    foreach (r; 0 .. d)
+    foreach (i; 0 .. m)
+    {
+        double acc = 0;
+        auto kidx = (mesh_pt_idx + T.k_hat[i + 1] * coll_divs) * d*d + r*d;
+        foreach (s; 0 .. d)
+            acc += kernel_data[kidx + s] * y0[s];
+        out_vec[r*m + i] = T.b_hat[0] * acc;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1018,22 +1078,12 @@ void g_vec_rt(int coll_divs, int[] coll_choices)(
 void BN_cont_vec_rt(int coll_divs, int[] coll_choices)(
     double[] kernel_data, int d, double[] out_coef_colmaj, double[] out_bnd_rowmaj)
 {
-    enum int m = coll_choices.length;
-    enum int[] czero = [0] ~ coll_choices;
-    static immutable double[m + 1] c_hat
-        = czero.map!(c => double(c)/coll_divs).array;
-    static immutable int[m + 1] k_hat = czero;
-    static immutable double[m + 1] b_hat = quad_weights!(coll_divs, czero)();
+    alias T = ContTables!(coll_divs, coll_choices);
+    enum int m = T.m;
 
     int dm = d * m;
     out_coef_colmaj[] = 0;
     out_bnd_rowmaj[] = 0;
-
-    double[m + 1][m][m + 1] poly_vals;
-    foreach (j; 0 .. m + 1)
-    foreach (i; 0 .. m)
-    foreach (k; 0 .. m + 1)
-        poly_vals[j][i][k] = lagrange_f!(coll_divs, czero)(c_hat[i + 1] * c_hat[k], j);
 
     foreach (r; 0 .. d)
     foreach (s; 0 .. d)
@@ -1041,9 +1091,9 @@ void BN_cont_vec_rt(int coll_divs, int[] coll_choices)(
     foreach (j; 0 .. m + 1)
     foreach (k; 0 .. m + 1)
     {
-        auto kern_idx = k_hat[i + 1] * (coll_divs - k_hat[k]);
-        double val = c_hat[i + 1] * b_hat[k]
-                     * kernel_data[kern_idx * d*d + r*d + s] * poly_vals[j][i][k];
+        auto kern_idx = T.k_hat[i + 1] * (coll_divs - T.k_hat[k]);
+        double val = T.c_hat[i + 1] * T.b_hat[k]
+                     * kernel_data[kern_idx * d*d + r*d + s] * T.poly_vals[j][i][k];
         int row = r*m + i;
         if (j == 0)
             out_bnd_rowmaj[row * d + s] += val;
@@ -1052,28 +1102,28 @@ void BN_cont_vec_rt(int coll_divs, int[] coll_choices)(
     }
 }
 
-// BNL_cont_vec_rt: continuous-method history block for lag n - ell, row-major
-// flat, dm rows x d(m+1) cols (index [row*d(m+1) + col]).
+// BNL_cont_vec_rt: folded continuous-method history block for lag >= 1
+// (without the lag-1 local boundary term; see the "Folded history blocks"
+// comment above), row-major flat, dm x dm (index [row*dm + col]).
 void BNL_cont_vec_rt(int coll_divs, int[] coll_choices)(
     int lag, double[] kernel_data, int d, double[] out_rowmaj)
 {
-    enum int m = coll_choices.length;
-    enum int[] czero = [0] ~ coll_choices;
-    static immutable int[m + 1] k_hat = czero;
-    static immutable double[m + 1] b_hat = quad_weights!(coll_divs, czero)();
+    alias T = ContTables!(coll_divs, coll_choices);
+    enum int m = T.m;
 
-    int dm1 = d * (m + 1);
+    int dm = d * m;
     out_rowmaj[] = 0;
     immutable int mesh_pt_idx = lag * coll_divs^^2;
 
     foreach (r; 0 .. d)
     foreach (s; 0 .. d)
     foreach (i; 0 .. m)
-    foreach (j; 0 .. m + 1)
+    foreach (j; 1 .. m + 1)
     {
-        auto sub_idx = (k_hat[i + 1] - k_hat[j]) * coll_divs;
-        out_rowmaj[(r*m + i) * dm1 + s*(m + 1) + j] =
-            b_hat[j] * kernel_data[(mesh_pt_idx + sub_idx) * d*d + r*d + s];
+        auto sub_idx = (T.k_hat[i + 1] - T.k_hat[j]) * coll_divs;
+        double w = (j == m && lag >= 2) ? T.b_hat[m] + T.b_hat[0] : T.b_hat[j];
+        out_rowmaj[(r*m + i) * dm + s*m + (j - 1)] =
+            w * kernel_data[(mesh_pt_idx + sub_idx) * d*d + r*d + s];
     }
 }
 
@@ -1418,38 +1468,33 @@ bool solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
     }
     else
     {
-        // force_continuous (Brunner S_m^(0)): the boundary value at each mesh
-        // point is a d-vector carried from the previous interval, and the
-        // history source per interval is V_n = (y_n, U_n), stride m+1 per
-        // component (see the BN_cont_vec_ct comment).
-        enum int dm1 = d * (m + 1);
+        // force_continuous (Brunner S_m^(0)). The method needs c_m = 1; the
+        // entry point rejects other settings, so they are not instantiated.
+        static if (coll_choices[$ - 1] != coll_divs)
+            return false;
+        else
+        {
         boundary_vals.length = mesh_divs + 1;
         double[d] zeros_d = 0.0;
         boundary_vals[] = zeros_d;
         foreach (r; 0 .. d)
             boundary_vals[0][r] = soln_init_values[r];
 
-        // Precompute scalars for boundary propagation: p(1) = bv*L0ext(1) + sum_j U_j*(1/c_j)*L_j(1)
-        double L0ext_at_1 = lagrange_f!(coll_divs, czero)(1.0, 0);
-        double[m] Lj_scaled_at_1;
-        foreach (j; 0 .. m)
-            Lj_scaled_at_1[j] = lagrange_f!coll_info(1.0, j) / c_params[j];
-
-        // Split the local matrix into the dm x dm system for U_n and the
-        // dm x d block multiplying the boundary value y_n.
-        auto local_matrix = BN_cont_vec_ct!(coll_divs, coll_choices, d)(kernel_values);
+        // The dm x dm system for U_n and the dm x d block multiplying the
+        // boundary value y_n (see the BN_cont_vec_ct comment).
         double[dm][dm] coef_matrix = 0;
         double[d][dm] bnd_matrix = 0;   // bnd_matrix[row][s]
+        BN_cont_vec_ct!(coll_divs, coll_choices, d)(kernel_values, coef_matrix, bnd_matrix);
         foreach (row; 0 .. dm)
-        foreach (s; 0 .. d)
         {
-            bnd_matrix[row][s] = dt * local_matrix[row][s*(m + 1)];
-            foreach (j; 1 .. m + 1)
-                coef_matrix[row][s*m + (j - 1)] = dt * local_matrix[row][s*(m + 1) + j];
+            coef_matrix[row][] *= dt;
+            bnd_matrix[row][]  *= dt;
         }
 
-        // Rectangular lag blocks: dm rows, d(m+1) source columns.
-        ToeplitzHistory!(dm, dm1) hist;
+        // Square folded lag blocks acting on U_ell alone (see the "Folded
+        // history blocks" comment): lag 1 also carries the local boundary
+        // block in its j = m column.
+        ToeplitzHistory!(dm, dm) hist;
         hist.initialize(mesh_divs);
         hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
         {
@@ -1457,43 +1502,50 @@ bool solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
             foreach (i; 0 .. dm)
             {
                 auto row = h.lagRow(lag, i);
-                foreach (j; 0 .. dm1)
+                foreach (j; 0 .. dm)
                     row[j] = dt * B[i][j];
+                if (lag == 1)
+                    foreach (s; 0 .. d)
+                        row[s*m + (m - 1)] += bnd_matrix[i][s];
             }
         });
 
+        double[dm] y0_term = 0;
         foreach (n; 0 .. mesh_divs)
         {
             auto g_vec_   = g_vec_ct!(coll_divs, coll_choices, d)(n, g_values);
             auto G_vector = hist.G(n);
 
+            // Contribution of the prescribed initial value y_0, which is not
+            // one of the unknowns the folded history acts on.
+            if (n == 0)
+            {
+                foreach (ri; 0 .. dm)
+                {
+                    y0_term[ri] = 0;
+                    foreach (s; 0 .. d)
+                        y0_term[ri] += bnd_matrix[ri][s] * boundary_vals[0][s];
+                }
+            }
+            else
+            {
+                BNL_cont_y0_rt!coll_info(n, kernel_values, d, boundary_vals[0][], y0_term[]);
+                y0_term[] *= dt;
+            }
+
             double[dm] rhs;
             foreach (ri; 0 .. dm)
-            {
-                rhs[ri] = g_vec_[ri] - G_vector[ri];
-                foreach (s; 0 .. d)
-                    rhs[ri] -= bnd_matrix[ri][s] * boundary_vals[n][s];
-            }
+                rhs[ri] = g_vec_[ri] - G_vector[ri] - y0_term[ri];
 
             solution_U[n] = lin_solve!(dm)(coef_matrix, rhs, lin_ok);
             if (!lin_ok) return false;
+            hist.push(solution_U[n]);
 
-            double[dm1] source;
-            foreach (s; 0 .. d)
-            {
-                source[s*(m + 1)] = boundary_vals[n][s];
-                foreach (j; 0 .. m)
-                    source[s*(m + 1) + 1 + j] = solution_U[n][s*m + j];
-            }
-            hist.push(source);
-
-            // Propagate boundary value to next mesh point
+            // c_m = 1: the trial polynomial's value at the right endpoint is
+            // the last collocation unknown itself.
             foreach (r; 0 .. d)
-            {
-                boundary_vals[n+1][r] = boundary_vals[n][r] * L0ext_at_1;
-                foreach (j; 0 .. m)
-                    boundary_vals[n+1][r] += solution_U[n][r*m + j] * Lj_scaled_at_1[j];
-            }
+                boundary_vals[n+1][r] = solution_U[n][r*m + (m - 1)];
+        }
         }
     }
 
@@ -1620,9 +1672,14 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     }
     else
     {
-        // force_continuous (Brunner S_m^(0)); see solve_VIE_1_vec_impl and
-        // the BN_cont_vec_ct comment for the scheme and the source layout.
-        int dm1 = d * (m + 1);
+        // force_continuous (Brunner S_m^(0)); see solve_VIE_1_vec_impl, the
+        // BN_cont_vec_ct comment and the "Folded history blocks" comment for
+        // the scheme. The method needs c_m = 1; the entry point rejects other
+        // settings, so they are not instantiated.
+        static if (coll_choices[$ - 1] != coll_divs)
+            return false;
+        else
+        {
         double[] boundary_flat = new double[(mesh_divs + 1) * d];
         boundary_flat[] = 0;
         boundary_flat[0 .. d] = soln_init_values[0 .. d];
@@ -1634,54 +1691,58 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
         foreach (i; 0 .. dm * d)
             bnd_buf[i] *= dt;
 
-        // Rectangular lag blocks: dm rows, d(m+1) source columns.
-        double[] BNL_buf = new double[dm * dm1];
-        double[] source  = new double[dm1];
+        // Square folded lag blocks acting on U_ell alone; lag 1 also carries
+        // the local boundary block in its j = m column.
+        double[] BNL_buf = new double[dm * dm];
         ToeplitzHistoryRT hist;
-        hist.initialize(mesh_divs, dm, dm1);
+        hist.initialize(mesh_divs, dm, dm);
         hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
         {
             BNL_cont_vec_rt!coll_info(lag, kernel_values, d, BNL_buf);
             auto blk = h.lagBlock(lag);
-            foreach (i; 0 .. dm * dm1)
+            foreach (i; 0 .. dm * dm)
                 blk[i] = dt * BNL_buf[i];
+            if (lag == 1)
+                foreach (i; 0 .. dm)
+                foreach (s; 0 .. d)
+                    blk[i * dm + s*m + (m - 1)] += bnd_buf[i * d + s];
         });
 
-        double L0ext_at_1 = lagrange_f!(coll_divs, czero)(1.0, 0);
-        double[] Lj_scaled_at_1 = new double[m];
-        foreach (j; 0 .. m)
-            Lj_scaled_at_1[j] = lagrange_f!coll_info(1.0, j) / c_params[j];
-
+        double[] y0_term = new double[dm];
+        y0_term[] = 0;
         foreach (n; 0 .. mesh_divs)
         {
             g_vec_rt!coll_info(n, g_values, d, rhs);
             auto G_hist = hist.G(n);
-            foreach (ri; 0 .. dm)
+
+            // Contribution of the prescribed initial value y_0, which is not
+            // one of the unknowns the folded history acts on.
+            if (n == 0)
             {
-                rhs[ri] -= G_hist[ri];
-                foreach (s; 0 .. d)
-                    rhs[ri] -= bnd_buf[ri * d + s] * boundary_flat[n*d + s];
+                foreach (ri; 0 .. dm)
+                {
+                    y0_term[ri] = 0;
+                    foreach (s; 0 .. d)
+                        y0_term[ri] += bnd_buf[ri * d + s] * boundary_flat[s];
+                }
             }
+            else
+            {
+                BNL_cont_y0_rt!coll_info(n, kernel_values, d, boundary_flat[0 .. d], y0_term);
+                y0_term[] *= dt;
+            }
+            foreach (ri; 0 .. dm)
+                rhs[ri] -= G_hist[ri] + y0_term[ri];
+
             coef_work[] = coef_orig[];
             if (!lin_solve_lapack(coef_work, rhs, dm, ipiv))
                 return false;
             solution_U_flat[n*dm .. (n+1)*dm] = rhs[];
+            hist.push(solution_U_flat[n*dm .. (n+1)*dm]);
 
-            foreach (s; 0 .. d)
-            {
-                source[s*(m + 1)] = boundary_flat[n*d + s];
-                foreach (j; 0 .. m)
-                    source[s*(m + 1) + 1 + j] = solution_U_flat[n*dm + s*m + j];
-            }
-            hist.push(source);
-
+            // c_m = 1: the right-endpoint value is the last collocation unknown.
             foreach (r; 0 .. d)
-            {
-                boundary_flat[(n+1)*d + r] = boundary_flat[n*d + r] * L0ext_at_1;
-                foreach (j; 0 .. m)
-                    boundary_flat[(n+1)*d + r] +=
-                        solution_U_flat[n*dm + r*m + j] * Lj_scaled_at_1[j];
-            }
+                boundary_flat[(n+1)*d + r] = solution_U_flat[n*dm + r*m + (m - 1)];
         }
 
         // Write poly_coefs: layout (mesh_divs, m+1, d), matching the
@@ -1719,6 +1780,7 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
         foreach (r; 0 .. d)
             out_soln[p * coll_divs^^2 * d + r] *= 0.5;
         return true;
+        }
     }
 
     // Write poly_coefs (force_continuous=false): layout (mesh_divs, m+1, d),
@@ -2522,14 +2584,24 @@ int find_coll_info_id(int max_cd, int max_cp)(int coll_divs, int[] coll_choices)
     return -1;
 }
 
-// Returns true for VIE-1 collocation settings that are known to be
-// non-convergent (empirically verified via grid-refinement studies).
-bool is_nonconvergent_vie1_setting(int coll_divs, int[] choices)
+// Returns true for VIE-1 collocation settings for which the requested method
+// is not defined or does not converge (Brunner 2004, Theorems 2.4.2 and
+// 2.4.5). With c_i = k_i / coll_divs the criterion |rho| <= 1 is the exact
+// integer comparison prod (coll_divs - k_i) <= prod k_i, taken over all nodes
+// for the discontinuous method and over all but the last for the continuous
+// one, which additionally requires c_m = 1. ``choices`` must be sorted.
+bool is_nonconvergent_vie1_setting(int coll_divs, int[] choices, bool force_continuous)
 {
-    if (coll_divs == 3 && choices == [1])       return true;
-    if (coll_divs == 4 && choices == [1])       return true;
-    if (coll_divs == 4 && choices == [1, 2])    return true;
-    return false;
+    if (choices.length == 0) return true;
+    if (force_continuous && choices[$ - 1] != coll_divs) return true;
+    auto nodes = force_continuous ? choices[0 .. $ - 1] : choices;
+    long num = 1, den = 1;
+    foreach (k; nodes)
+    {
+        num *= coll_divs - k;
+        den *= k;
+    }
+    return num > den;
 }
 
 // ---------------------------------------------------------------------------
@@ -2735,7 +2807,7 @@ int volterra_solve_vie1_vec(
     double[] init    = soln_init_values[0 .. d];
     int[]    choices = coll_choices[0 .. num_choices];
 
-    if (is_nonconvergent_vie1_setting(coll_divs, choices))
+    if (is_nonconvergent_vie1_setting(coll_divs, choices, force_continuous != 0))
         return 1;
 
     auto id = find_coll_info_id!(max_coll_divs, max_coll_params)(coll_divs, choices);

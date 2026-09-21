@@ -168,8 +168,7 @@ def test_vie1_zero_choice():
 # ---------------------------------------------------------------------------
 
 def test_vie1_force_continuous_no_init():
-    with pytest.raises(AssertionError,
-                       match="must specify an initial value for continuous solutions"):
+    with pytest.raises(ValueError, match="must specify soln_init_value"):
         solve_VIE_1(kernel_values=_K, g_values=_G, coll_divs=2,
                     coll_choices=[1, 2], force_continuous=True)
 

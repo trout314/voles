@@ -41,6 +41,22 @@
   divergent (`(3, [1, 3])`, `(4, [1, 4])`, `(4, [1, 2, 4])`), raise
   `ValueError`. Previously these ran and either diverged or, for
   `(4, [1, 2, 4])`, converged by accident of the incorrect quadrature.
+- **`solve_VIE_1` now applies the convergence criterion $|\rho_m| \le 1$ to
+  the default discontinuous method for every node set**, not just to a
+  list of three compiled settings. Divergent settings outside that list
+  (e.g. `coll_divs=5, coll_choices=[1]`, $|\rho_m| = 4$) used to reach the
+  Numba fallback and diverge silently; they now raise `ValueError`. The test
+  is exact (rational arithmetic on `coll_choices`/`coll_divs`, no tolerance)
+  and is one implementation shared by `solve_VIE_1`, `function_solve_VIE_1`
+  with `coll_divs`/`coll_choices`, and the D extension's own guard. Settings
+  with $\rho = 1$ exactly remain admitted, with the documented loss of one
+  order.
+- `solve_VIE_1(force_continuous=True)` without `soln_init_value` raises
+  `ValueError` up front for scalar, vector and matrix input. Matrix input
+  used to fail with a bare `AssertionError` from a column worker thread, and
+  scalar/vector input with an `AssertionError`.
+- An empty `coll_choices` raises `ValueError` in `solve_VIE_1` (was an
+  `IndexError` with `force_continuous=True`).
 - **Callable-solver matrix (multi-RHS) column fan-out** now shares the
   array-solver behavior: thread pool capped at the CPU count (was one
   thread per column) and a clear ``ValueError`` for zero-column inputs.
@@ -71,6 +87,20 @@
   code 3) rather than risking undefined behavior.
 
 ### Changed
+- **`solve_VIE_1(force_continuous=True)` is faster.** Because $c_m = 1$, the
+  boundary value carried into a mesh interval is the previous interval's last
+  collocation unknown, so the boundary column of each history block is folded
+  into the last column of the next lag (for lags $\ge 2$ both sample the
+  kernel at the same point, so the fold is just the weight
+  $\hat b_m + \hat b_0$). The D extension's history is now a square
+  $dm \times dm$ Toeplitz sum instead of $dm \times d(m+1)$, with the
+  prescribed $y(0)$ handled by a separate $O(1)$-per-step term: 1.2x to 1.7x
+  faster end to end (largest for $m = 1$), results unchanged to roundoff
+  ($\sim 10^{-12}$ relative). The boundary value is propagated as
+  $y_{n+1} = U_{n,m}$ directly, and the builders share one set of
+  compile-time tables. The Numba fallback no longer recomputes the quadrature
+  weights and allocates a block for every $(n, \ell)$ pair of the history
+  sum (24 s to 0.1 s at $N = 27001$, `coll_divs=3`).
 - Matrix (multi-RHS) column fan-out now caps its thread pool at the CPU
   count instead of one thread per column (each column carries its own
   D-side lag table, so unbounded workers multiplied peak memory), raises a

@@ -169,13 +169,10 @@ def test_continuous_reproduces_polynomial_numba_fallback():
     dispatches to the Numba fallback."""
     coll_divs, coll_choices = 5, [1, 2, 3, 4, 5]
     t, kernel, g, exact = _polynomial_problem(coll_divs, 5, num_blocks=4)
-    try:
-        soln = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=0.1,
-                           coll_divs=coll_divs, coll_choices=coll_choices,
-                           force_continuous=True, soln_init_value=0.0,
-                           show_warnings=False)
-    except NotImplementedError:
-        pytest.skip("numba not available")
+    soln = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=0.1,
+                       coll_divs=coll_divs, coll_choices=coll_choices,
+                       force_continuous=True, soln_init_value=0.0,
+                       show_warnings=False)
     assert np.max(np.abs(soln - exact)) < 1e-6
 
 
@@ -274,3 +271,111 @@ def test_discontinuous_mode_unaffected_by_continuous_validation():
     soln = solve_VIE_1(kernel_values=np.ones(N), g_values=t**2 / 2, time_step=0.1,
                        coll_divs=3, coll_choices=[1, 3])
     assert soln.shape == (N,)
+
+
+# ---------------------------------------------------------------------------
+# Follow-ups to the continuous-quadrature fix
+# ---------------------------------------------------------------------------
+
+def test_continuous_nonzero_initial_value_long_history():
+    """A nonzero y(0) with enough mesh intervals to reach the FFT history
+    path: the initial value enters through its own term, separately from the
+    folded history blocks. With K = 1 a polynomial solution of degree <= m is
+    reproduced to roundoff; here y = 1 + t - t^2."""
+    coll_divs, coll_choices = 2, [1, 2]
+    N = 200 * coll_divs**2 + 1
+    h = 0.005
+    t = h * np.arange(N)
+    exact = 1 + t - t**2
+    soln = solve_VIE_1(kernel_values=np.ones(N), g_values=t + t**2 / 2 - t**3 / 3,
+                       time_step=h, coll_divs=coll_divs, coll_choices=coll_choices,
+                       force_continuous=True, soln_init_value=1.0)
+    assert np.max(np.abs(soln - exact)) < 1e-9
+
+
+@pytest.mark.parametrize("d", [2, 9])   # compile-time and runtime-dimension drivers
+def test_continuous_vector_nonzero_initial_value(d):
+    """Coupled system with a non-diagonal constant kernel M and y(0) != 0:
+    g(t) = M int_0^t y with y_r(t) = (r + 1)(1 - t^2) + t^3, degree m = 3, so
+    the solution is reproduced to roundoff. 60 intervals reaches the FFT
+    history path."""
+    coll_divs, coll_choices = 3, [1, 2, 3]
+    N = 60 * coll_divs**2 + 1
+    h = 0.01
+    t = h * np.arange(N)[:, None]
+    M = np.eye(d) + 0.1 * np.arange(d * d).reshape(d, d) / (d * d)
+    amp = np.arange(1, d + 1, dtype=float)
+    exact = amp * (1 - t**2) + t**3
+    integ = amp * (t - t**3 / 3) + t**4 / 4
+    soln = solve_VIE_1(kernel_values=np.broadcast_to(M, (N, d, d)).copy(),
+                       g_values=integ @ M.T, time_step=h,
+                       coll_divs=coll_divs, coll_choices=coll_choices,
+                       force_continuous=True, soln_init_value=exact[0])
+    assert np.max(np.abs(soln - exact)) < 1e-9
+
+
+def test_continuous_matrix_without_init_value_raises_value_error():
+    """Used to surface as a bare AssertionError from a column worker thread."""
+    coll_divs, coll_choices = 2, [1, 2]
+    N = 4 * coll_divs**2 + 1
+    kernel = np.broadcast_to(np.eye(2), (N, 2, 2)).copy()
+    with pytest.raises(ValueError, match="soln_init_value"):
+        solve_VIE_1(kernel_values=kernel, g_values=np.zeros((N, 2, 3)), time_step=0.1,
+                    coll_divs=coll_divs, coll_choices=coll_choices, force_continuous=True)
+
+
+@pytest.mark.parametrize("force_continuous", [False, True])
+def test_empty_coll_choices_raises_value_error(force_continuous):
+    with pytest.raises(ValueError, match="at least one"):
+        solve_VIE_1(kernel_values=np.ones(10), g_values=np.zeros(10), time_step=0.1,
+                    coll_divs=3, coll_choices=[], force_continuous=force_continuous,
+                    soln_init_value=0.0, show_warnings=False)
+
+
+# ---------------------------------------------------------------------------
+# The exact |rho| <= 1 criterion, applied to both methods
+# ---------------------------------------------------------------------------
+
+def test_discontinuous_rejects_divergent_uncompiled_setting():
+    """(5, [1]) has |rho_m| = 4. It is not compiled into the D extension, so
+    it used to reach the Numba fallback (only the three compiled divergent
+    settings were blacklisted) and diverge silently."""
+    N = 25 * 4 + 1
+    with pytest.raises(ValueError, match="convergent"):
+        solve_VIE_1(kernel_values=np.ones(N), g_values=np.zeros(N), time_step=0.1,
+                    coll_divs=5, coll_choices=[1], show_warnings=False)
+
+
+def test_rho_criterion_is_exact_and_reproduces_the_old_blacklist():
+    from fractions import Fraction
+    from voles.solvers import _vie1_rho, _VIE1_NONCONVERGENT
+    assert _VIE1_NONCONVERGENT == {(3, (1,)), (4, (1,)), (4, (1, 2))}
+    assert _vie1_rho(3, [1, 2]) == 1                      # boundary, admitted
+    assert _vie1_rho(5, [1]) == -4
+    assert _vie1_rho(4, [1, 2, 3, 4], continuous=True) == Fraction(1)
+    assert _vie1_rho(1, [1], continuous=True) == -1       # trapezoidal method
+    # closest approach to the boundary from above for coll_divs <= 16
+    assert _vie1_rho(16, [7, 8, 10], ) == -Fraction(9 * 8 * 6, 7 * 8 * 10)
+
+
+@needs_numba
+def test_boundary_rho_setting_still_admitted_on_numba_fallback():
+    """|rho_m| = 1 exactly, (6, [2, 4]): (4/2)(2/4) = 1, stays admissible."""
+    coll_divs, coll_choices = 6, [2, 4]
+    N = 36 * 4 + 1
+    t = 0.01 * np.arange(N)
+    soln = solve_VIE_1(kernel_values=np.ones(N), g_values=t, time_step=0.01,
+                       coll_divs=coll_divs, coll_choices=coll_choices, show_warnings=False)
+    assert np.max(np.abs(soln - 1.0)) < 1e-9
+
+
+def test_d_extension_guards_the_continuous_method_itself():
+    """The folded history assumes c_m = 1, so the extension refuses settings
+    without it even when called below the Python validation layer."""
+    from voles import _dlang
+    N = 9 * 3 + 1
+    with pytest.raises(RuntimeError, match="error code 1"):
+        _dlang.solve_vie1_d(np.zeros(N), np.ones(N), 0.0, 0.1, 3, [1, 2], False, True)
+    # |rho_(m-1)| = 2 > 1
+    with pytest.raises(RuntimeError, match="error code 1"):
+        _dlang.solve_vie1_d(np.zeros(N), np.ones(N), 0.0, 0.1, 3, [1, 3], False, True)
