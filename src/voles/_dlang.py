@@ -28,6 +28,25 @@ def _setup_argtypes() -> None:
     _lib.volterra_have_lapack.restype = ctypes.c_int
     _lib.volterra_have_lapack.argtypes = []
 
+    # Block drivers for precomputed lag blocks (product-integration quadrature,
+    # see _product.py). Guarded: a dylib built before these were added still loads.
+    global _have_block_drivers
+    _have_block_drivers = (hasattr(_lib, "volterra_solve_vie1_blocks")
+                           and hasattr(_lib, "volterra_solve_vie1_cont_blocks"))
+    if _have_block_drivers:
+        _lib.volterra_solve_vie1_blocks.restype = ctypes.c_int
+        _lib.volterra_solve_vie1_blocks.argtypes = [
+            _dp, _dp,                                         # lagB, g
+            ctypes.c_int, ctypes.c_int,                       # M, Db
+            _dp,                                              # out_U
+        ]
+        _lib.volterra_solve_vie1_cont_blocks.restype = ctypes.c_int
+        _lib.volterra_solve_vie1_cont_blocks.argtypes = [
+            _dp, _dp, _dp, ctypes.c_double, _dp,              # lagB, g, adv_U, adv_0, y0
+            ctypes.c_int, ctypes.c_int, ctypes.c_int,         # M, m, d
+            _dp, _dp,                                         # out_U, out_y
+        ]
+
     _lib.function_solve_vie2.restype = ctypes.c_int
     _lib.function_solve_vie2.argtypes = [
         _dp, _dp, ctypes.c_int, ctypes.c_int,  # W, g, M, p
@@ -150,6 +169,9 @@ def _setup_argtypes() -> None:
         ctypes.c_int,                          # return_polys
         _dp, _dp, _ip,                         # out_soln, out_poly_coefs, out_mesh_divs
     ]
+
+
+_have_block_drivers = False
 
 
 def _load() -> None:
@@ -858,3 +880,76 @@ def supported_coll_settings_d():
         choices = [int(x) for x in row[1:] if x != -1]
         result.append((coll_divs, choices))
     return result
+
+
+# ---------------------------------------------------------------------------
+# Block drivers (product-integration quadrature; blocks built in _product.py)
+# ---------------------------------------------------------------------------
+
+def have_block_drivers() -> bool:
+    """True if the loaded extension exports the lag-block stepping drivers."""
+    return _have_block_drivers
+
+
+def solve_vie1_blocks_d(lagB, g):
+    """Step precomputed lag blocks through the D Toeplitz history
+    (discontinuous VIE-1).
+
+    Parameters
+    ----------
+    lagB : ndarray, shape (M, Db, Db); ``lagB[0]`` is the diagonal block.
+    g : ndarray, shape (M, Db); right-hand side at the collocation points.
+
+    Returns
+    -------
+    U : ndarray, shape (M, Db)
+    """
+    lb = np.ascontiguousarray(lagB, dtype=np.float64)
+    gg = np.ascontiguousarray(g, dtype=np.float64)
+    M, Db = gg.shape
+    if lb.shape != (M, Db, Db):
+        raise ValueError(f"lagB shape {lb.shape} inconsistent with g shape {gg.shape}")
+    out = np.zeros((M, Db), dtype=np.float64)
+    ret = _lib.volterra_solve_vie1_blocks(
+        lb.ctypes.data_as(_dp), gg.ctypes.data_as(_dp),
+        ctypes.c_int(M), ctypes.c_int(Db),
+        out.ctypes.data_as(_dp))
+    _check_return(ret, "volterra_solve_vie1_blocks")
+    return out
+
+
+def solve_vie1_cont_blocks_d(lagB, g, adv_U, adv_0, y0, m, d):
+    """Step precomputed rectangular lag blocks through the D Toeplitz history
+    (continuous VIE-1).
+
+    Parameters
+    ----------
+    lagB : ndarray, shape (M, Db, Db + d), Db = m*d; the trailing d columns
+        multiply the boundary value carried into the source interval.
+    g : ndarray, shape (M, Db)
+    adv_U : ndarray, shape (m,); adv_0 : float; the boundary advance
+        ``y_{n+1} = adv_0 * y_n + sum_k adv_U[k] * U_{n,k}``.
+    y0 : ndarray, shape (d,)
+
+    Returns
+    -------
+    (U, y) : shapes (M, Db) and (M+1, d)
+    """
+    lb = np.ascontiguousarray(lagB, dtype=np.float64)
+    gg = np.ascontiguousarray(g, dtype=np.float64)
+    au = np.ascontiguousarray(adv_U, dtype=np.float64)
+    yy = np.ascontiguousarray(y0, dtype=np.float64)
+    M, Db = gg.shape
+    if Db != m * d or lb.shape != (M, Db, Db + d) or au.shape != (m,) or yy.shape != (d,):
+        raise ValueError(
+            f"continuous block-driver shapes inconsistent: lagB {lb.shape}, g {gg.shape}, "
+            f"adv_U {au.shape}, y0 {yy.shape}, m={m}, d={d}")
+    out_U = np.zeros((M, Db), dtype=np.float64)
+    out_y = np.zeros((M + 1, d), dtype=np.float64)
+    ret = _lib.volterra_solve_vie1_cont_blocks(
+        lb.ctypes.data_as(_dp), gg.ctypes.data_as(_dp), au.ctypes.data_as(_dp),
+        ctypes.c_double(float(adv_0)), yy.ctypes.data_as(_dp),
+        ctypes.c_int(M), ctypes.c_int(m), ctypes.c_int(d),
+        out_U.ctypes.data_as(_dp), out_y.ctypes.data_as(_dp))
+    _check_return(ret, "volterra_solve_vie1_cont_blocks")
+    return out_U, out_y

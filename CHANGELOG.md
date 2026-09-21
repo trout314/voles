@@ -3,6 +3,25 @@
 ## [Unreleased]
 
 ### Added
+- **Product-integration quadrature for the sampled-data VIE-1 solver:**
+  ``solve_VIE_1(quadrature="product", mesh_samples=..., kernel_interp_degree=...)``.
+  The default (``quadrature="collocation"``) evaluates every integral with the
+  interpolatory rule on the collocation nodes, which forces the mesh to be
+  ``coll_divs**2`` samples wide and reads only every ``coll_divs``-th sample
+  of the data in the history sums; at a fixed data spacing the higher-order
+  methods therefore run on a much coarser mesh than the low-order ones. The
+  new mode replaces the kernel by its piecewise-polynomial interpolant on the
+  data grid (degree ``kernel_interp_degree``, default the number of nodes) and
+  integrates products with the collocation polynomial exactly (Linz 1971; de
+  Hoog and Weiss 1973). The mesh can then be any multiple of ``coll_divs``
+  samples wide (``mesh_samples``, default ``coll_divs``), every sample is
+  used, any convergent node set is available without the Numba fallback, and
+  the blocks keep the lag structure, so the FFT-accelerated Toeplitz history
+  is used through two new runtime-dimension D drivers
+  (``volterra_solve_vie1_blocks`` / ``..._cont_blocks``). Existing calls are
+  unchanged. The scheme is exact collocation for the interpolated kernel;
+  the kernel-perturbation error enters through the derivative of the
+  interpolation error and is of order ``time_step**kernel_interp_degree``.
 - **Arbitrary collocation nodes** on the callable-input solvers via the
   ``coll_nodes`` parameter (floats in $[0, 1]$, mutually exclusive with
   ``coll_divs``/``coll_choices``), with helpers ``gauss_legendre_nodes``,
