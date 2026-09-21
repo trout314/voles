@@ -1381,11 +1381,16 @@ element of a tuple (see Returns). Default is <code>False</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If <code>True</code>, enforce continuity of the piecewise polynomial solution
-across mesh-interval boundaries, using <code>soln_init_value</code> as the
-starting condition. The default discontinuous method is generally more
-accurate for the same number of collocation nodes. Default is
-<code>False</code>.</p>
+                <p>If <code>True</code>, use the continuous collocation method (Brunner's
+<span class="arithmatex">\(S_m^{(0)}\)</span>): on each mesh interval the solution is a polynomial of
+degree <span class="arithmatex">\(m\)</span> (one more than the default) that is continuous across mesh
+points, starting from <code>soln_init_value</code> at <span class="arithmatex">\(t = 0\)</span>. Requires the last
+collocation node to be the right endpoint of the mesh interval
+(<code>max(coll_choices) == coll_divs</code>) and a node set with
+<span class="arithmatex">\(|\rho_{m-1}| \le 1\)</span> (see Notes). Converges with order <span class="arithmatex">\(m + 1\)</span> when
+<span class="arithmatex">\(-1 \le \rho_{m-1} &lt; 1\)</span> and with order <span class="arithmatex">\(m\)</span> when <span class="arithmatex">\(\rho_{m-1} = 1\)</span>,
+versus order <span class="arithmatex">\(m\)</span> for the default discontinuous method with the same
+nodes. Default is <code>False</code>.</p>
               </div>
             </td>
             <td>
@@ -1473,7 +1478,9 @@ equations), one polynomial per component.</p>
               <div class="doc-md-description">
                 <p>For invalid shapes or collocation settings — including the known
 non-convergent VIE-1 settings <code>(coll_divs=3, [1])</code>,
-<code>(4, [1])</code>, and <code>(4, [1, 2])</code>, which are rejected outright —
+<code>(4, [1])</code>, and <code>(4, [1, 2])</code>, which are rejected outright, and,
+with <code>force_continuous=True</code>, node sets whose last node is not the
+right endpoint or whose <span class="arithmatex">\(|\rho_{m-1}|\)</span> exceeds 1 (see Notes) —
 inputs too short to form one mesh interval, matrix input with zero
 columns, or inputs so large that a solver buffer would exceed
 <span class="arithmatex">\(2^{31}\)</span> elements.</p>
@@ -1517,6 +1524,22 @@ is truncated to the largest conforming length and a warning is printed
 scheme does not place nodes at <span class="arithmatex">\(t = 0\)</span>; doing so would require evaluating
 the equation at <span class="arithmatex">\(t = 0\)</span> where both sides are zero by definition, giving no
 information about <span class="arithmatex">\(y(0)\)</span>.</p>
+<p>First-kind collocation converges only for some node sets. With
+<span class="arithmatex">\(c_i = k_i / \text{coll\_divs}\)</span>, the default discontinuous method
+(<span class="arithmatex">\(S_{m-1}^{(-1)}\)</span>) converges iff
+<span class="arithmatex">\(-1 \le \rho_m := (-1)^m \prod_{i=1}^{m} (1 - c_i)/c_i \le 1\)</span>, with order
+<span class="arithmatex">\(m\)</span> for <span class="arithmatex">\(\rho_m &lt; 1\)</span> (Brunner [1], Theorem 2.4.2); any set with
+<span class="arithmatex">\(c_m = 1\)</span> has <span class="arithmatex">\(\rho_m = 0\)</span>. The continuous method (<code>force_continuous</code>)
+requires <span class="arithmatex">\(c_m = 1\)</span> and converges iff
+<span class="arithmatex">\(-1 \le \rho_{m-1} := (-1)^m \prod_{i=1}^{m-1} (1 - c_i)/c_i \le 1\)</span>, with
+order <span class="arithmatex">\(m + 1\)</span> for <span class="arithmatex">\(\rho_{m-1} &lt; 1\)</span> and order <span class="arithmatex">\(m\)</span> for <span class="arithmatex">\(\rho_{m-1} = 1\)</span>
+([1], Theorem 2.4.5). The equispaced sets <code>list(range(1, coll_divs+1))</code>
+have <span class="arithmatex">\(\rho_{m-1} = -1\)</span> for odd <span class="arithmatex">\(m\)</span> and <span class="arithmatex">\(+1\)</span> for even <span class="arithmatex">\(m\)</span>. All integrals
+are evaluated with the interpolatory quadrature rule on the method's own
+nodes, i.e. on <span class="arithmatex">\(\{c_1, \ldots, c_m\}\)</span> for the discontinuous method and on
+<span class="arithmatex">\(\{0, c_1, \ldots, c_m\}\)</span> for the continuous one ([1], Section 2.4.5);
+for <code>coll_divs=1</code>, <code>coll_choices=[1]</code> the continuous method is the
+product trapezoidal rule.</p>
 <p>The solver dispatches at runtime to a D-extension routine specialised for
 the given collocation setting. For scalar equations, settings not compiled
 into the extension fall back to a Numba-JIT implementation (requires the
@@ -1530,42 +1553,12 @@ supported settings (with the non-convergent ones excluded) are listed in
   <summary>References</summary>
   <p>.. [1] Brunner, H. <em>Collocation Methods for Volterra Integral and Related
    Functional Differential Equations.</em> Cambridge University Press, 2004.
-   Sections 2.4.1, 2.4.3, and 2.4.5.</p>
+   Sections 2.4.1--2.4.3 and 2.4.5.</p>
 </details>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">417</span>
-<span class="normal">418</span>
-<span class="normal">419</span>
-<span class="normal">420</span>
-<span class="normal">421</span>
-<span class="normal">422</span>
-<span class="normal">423</span>
-<span class="normal">424</span>
-<span class="normal">425</span>
-<span class="normal">426</span>
-<span class="normal">427</span>
-<span class="normal">428</span>
-<span class="normal">429</span>
-<span class="normal">430</span>
-<span class="normal">431</span>
-<span class="normal">432</span>
-<span class="normal">433</span>
-<span class="normal">434</span>
-<span class="normal">435</span>
-<span class="normal">436</span>
-<span class="normal">437</span>
-<span class="normal">438</span>
-<span class="normal">439</span>
-<span class="normal">440</span>
-<span class="normal">441</span>
-<span class="normal">442</span>
-<span class="normal">443</span>
-<span class="normal">444</span>
-<span class="normal">445</span>
-<span class="normal">446</span>
-<span class="normal">447</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">447</span>
 <span class="normal">448</span>
 <span class="normal">449</span>
 <span class="normal">450</span>
@@ -1849,7 +1842,65 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="normal">728</span>
 <span class="normal">729</span>
 <span class="normal">730</span>
-<span class="normal">731</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="normal">731</span>
+<span class="normal">732</span>
+<span class="normal">733</span>
+<span class="normal">734</span>
+<span class="normal">735</span>
+<span class="normal">736</span>
+<span class="normal">737</span>
+<span class="normal">738</span>
+<span class="normal">739</span>
+<span class="normal">740</span>
+<span class="normal">741</span>
+<span class="normal">742</span>
+<span class="normal">743</span>
+<span class="normal">744</span>
+<span class="normal">745</span>
+<span class="normal">746</span>
+<span class="normal">747</span>
+<span class="normal">748</span>
+<span class="normal">749</span>
+<span class="normal">750</span>
+<span class="normal">751</span>
+<span class="normal">752</span>
+<span class="normal">753</span>
+<span class="normal">754</span>
+<span class="normal">755</span>
+<span class="normal">756</span>
+<span class="normal">757</span>
+<span class="normal">758</span>
+<span class="normal">759</span>
+<span class="normal">760</span>
+<span class="normal">761</span>
+<span class="normal">762</span>
+<span class="normal">763</span>
+<span class="normal">764</span>
+<span class="normal">765</span>
+<span class="normal">766</span>
+<span class="normal">767</span>
+<span class="normal">768</span>
+<span class="normal">769</span>
+<span class="normal">770</span>
+<span class="normal">771</span>
+<span class="normal">772</span>
+<span class="normal">773</span>
+<span class="normal">774</span>
+<span class="normal">775</span>
+<span class="normal">776</span>
+<span class="normal">777</span>
+<span class="normal">778</span>
+<span class="normal">779</span>
+<span class="normal">780</span>
+<span class="normal">781</span>
+<span class="normal">782</span>
+<span class="normal">783</span>
+<span class="normal">784</span>
+<span class="normal">785</span>
+<span class="normal">786</span>
+<span class="normal">787</span>
+<span class="normal">788</span>
+<span class="normal">789</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
                 <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                 <span class="n">force_continuous</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">'''</span>
@@ -1892,11 +1943,16 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="sd">        Deprecated alias for ``return_function``; passing it emits a</span>
 <span class="sd">        ``DeprecationWarning``.</span>
 <span class="sd">    force_continuous : bool, optional</span>
-<span class="sd">        If ``True``, enforce continuity of the piecewise polynomial solution</span>
-<span class="sd">        across mesh-interval boundaries, using ``soln_init_value`` as the</span>
-<span class="sd">        starting condition. The default discontinuous method is generally more</span>
-<span class="sd">        accurate for the same number of collocation nodes. Default is</span>
-<span class="sd">        ``False``.</span>
+<span class="sd">        If ``True``, use the continuous collocation method (Brunner's</span>
+<span class="sd">        $S_m^{(0)}$): on each mesh interval the solution is a polynomial of</span>
+<span class="sd">        degree $m$ (one more than the default) that is continuous across mesh</span>
+<span class="sd">        points, starting from ``soln_init_value`` at $t = 0$. Requires the last</span>
+<span class="sd">        collocation node to be the right endpoint of the mesh interval</span>
+<span class="sd">        (``max(coll_choices) == coll_divs``) and a node set with</span>
+<span class="sd">        $|\rho_{m-1}| \le 1$ (see Notes). Converges with order $m + 1$ when</span>
+<span class="sd">        $-1 \le \rho_{m-1} &lt; 1$ and with order $m$ when $\rho_{m-1} = 1$,</span>
+<span class="sd">        versus order $m$ for the default discontinuous method with the same</span>
+<span class="sd">        nodes. Default is ``False``.</span>
 <span class="sd">    show_warnings : bool, optional</span>
 <span class="sd">        If ``True`` (default), print a warning when ``kernel_values`` is</span>
 <span class="sd">        truncated, when ``soln_init_value`` has no effect, or when the Numba</span>
@@ -1923,7 +1979,9 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="sd">    ValueError</span>
 <span class="sd">        For invalid shapes or collocation settings — including the known</span>
 <span class="sd">        non-convergent VIE-1 settings ``(coll_divs=3, [1])``,</span>
-<span class="sd">        ``(4, [1])``, and ``(4, [1, 2])``, which are rejected outright —</span>
+<span class="sd">        ``(4, [1])``, and ``(4, [1, 2])``, which are rejected outright, and,</span>
+<span class="sd">        with ``force_continuous=True``, node sets whose last node is not the</span>
+<span class="sd">        right endpoint or whose $|\rho_{m-1}|$ exceeds 1 (see Notes) —</span>
 <span class="sd">        inputs too short to form one mesh interval, matrix input with zero</span>
 <span class="sd">        columns, or inputs so large that a solver buffer would exceed</span>
 <span class="sd">        $2^{31}$ elements.</span>
@@ -1947,6 +2005,23 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="sd">    the equation at $t = 0$ where both sides are zero by definition, giving no</span>
 <span class="sd">    information about $y(0)$.</span>
 
+<span class="sd">    First-kind collocation converges only for some node sets. With</span>
+<span class="sd">    $c_i = k_i / \text{coll\_divs}$, the default discontinuous method</span>
+<span class="sd">    ($S_{m-1}^{(-1)}$) converges iff</span>
+<span class="sd">    $-1 \le \rho_m := (-1)^m \prod_{i=1}^{m} (1 - c_i)/c_i \le 1$, with order</span>
+<span class="sd">    $m$ for $\rho_m &lt; 1$ (Brunner [1], Theorem 2.4.2); any set with</span>
+<span class="sd">    $c_m = 1$ has $\rho_m = 0$. The continuous method (``force_continuous``)</span>
+<span class="sd">    requires $c_m = 1$ and converges iff</span>
+<span class="sd">    $-1 \le \rho_{m-1} := (-1)^m \prod_{i=1}^{m-1} (1 - c_i)/c_i \le 1$, with</span>
+<span class="sd">    order $m + 1$ for $\rho_{m-1} &lt; 1$ and order $m$ for $\rho_{m-1} = 1$</span>
+<span class="sd">    ([1], Theorem 2.4.5). The equispaced sets ``list(range(1, coll_divs+1))``</span>
+<span class="sd">    have $\rho_{m-1} = -1$ for odd $m$ and $+1$ for even $m$. All integrals</span>
+<span class="sd">    are evaluated with the interpolatory quadrature rule on the method's own</span>
+<span class="sd">    nodes, i.e. on $\{c_1, \ldots, c_m\}$ for the discontinuous method and on</span>
+<span class="sd">    $\{0, c_1, \ldots, c_m\}$ for the continuous one ([1], Section 2.4.5);</span>
+<span class="sd">    for ``coll_divs=1``, ``coll_choices=[1]`` the continuous method is the</span>
+<span class="sd">    product trapezoidal rule.</span>
+
 <span class="sd">    The solver dispatches at runtime to a D-extension routine specialised for</span>
 <span class="sd">    the given collocation setting. For scalar equations, settings not compiled</span>
 <span class="sd">    into the extension fall back to a Numba-JIT implementation (requires the</span>
@@ -1959,7 +2034,7 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="sd">    ----------</span>
 <span class="sd">    .. [1] Brunner, H. *Collocation Methods for Volterra Integral and Related</span>
 <span class="sd">       Functional Differential Equations.* Cambridge University Press, 2004.</span>
-<span class="sd">       Sections 2.4.1, 2.4.3, and 2.4.5.</span>
+<span class="sd">       Sections 2.4.1--2.4.3 and 2.4.5.</span>
 <span class="sd">    '''</span>
     <span class="n">return_function</span> <span class="o">=</span> <span class="n">_resolve_return_flag</span><span class="p">(</span><span class="n">return_function</span><span class="p">,</span> <span class="n">return_polys</span><span class="p">)</span>
     <span class="c1"># ------------------------------------------------------------------ complex dispatch</span>
@@ -2074,6 +2149,8 @@ supported settings (with the non-convergent ones excluded) are listed in
                 <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) "</span>
                 <span class="sa">f</span><span class="s2">"does not produce a convergent VIE-1 solver and is not supported. "</span>
                 <span class="sa">f</span><span class="s2">"Use a setting from fast_coll_settings_VIE_1."</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
+            <span class="n">_check_continuous_vie1_setting</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
         <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_fast_settings_VIE_1</span><span class="p">:</span>
             <span class="c1"># NotImplementedError subclasses RuntimeError, so callers</span>
             <span class="c1"># catching the historical RuntimeError still work; this matches</span>
@@ -2137,6 +2214,8 @@ supported settings (with the non-convergent ones excluded) are listed in
             <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) "</span>
             <span class="sa">f</span><span class="s2">"does not produce a convergent VIE-1 solver and is not supported. "</span>
             <span class="sa">f</span><span class="s2">"Use a setting from fast_coll_settings_VIE_1."</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
+        <span class="n">_check_continuous_vie1_setting</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
     <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_fast_settings_VIE_1</span><span class="p">:</span>
         <span class="n">soln_vals</span><span class="p">,</span> <span class="n">poly_coefs</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vie1_d</span><span class="p">(</span>
             <span class="n">g_values_</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span>
