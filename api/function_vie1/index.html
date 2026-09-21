@@ -1545,7 +1545,8 @@ skipped.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2481</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2480</span>
+<span class="normal">2481</span>
 <span class="normal">2482</span>
 <span class="normal">2483</span>
 <span class="normal">2484</span>
@@ -1884,9 +1885,7 @@ skipped.</p>
 <span class="normal">2817</span>
 <span class="normal">2818</span>
 <span class="normal">2819</span>
-<span class="normal">2820</span>
-<span class="normal">2821</span>
-<span class="normal">2822</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">2820</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">mesh_breakpoints</span><span class="p">,</span>
                           <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2027,7 +2026,11 @@ skipped.</p>
     <span class="c1"># The criteria assume a smooth kernel (Brunner Thm 2.4.2(b): |K(t,t)|&gt;=k0&gt;0),</span>
     <span class="c1"># so they are skipped when a weakly-singular kernel is declared.</span>
     <span class="k">if</span> <span class="n">kernel_singularity</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">_choices</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># Rational nodes k/coll_divs: the exact criterion shared with the</span>
+            <span class="c1"># array-input solve_VIE_1 (no tolerance needed at |rho| = 1).</span>
+            <span class="n">_check_vie1_setting</span><span class="p">(</span><span class="n">_divs</span><span class="p">,</span> <span class="n">_choices</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">force_continuous</span><span class="p">:</span>
             <span class="c1"># Continuous S_m^(0): converges iff c_m = 1 and |rho_{m-1}| &lt;= 1.</span>
             <span class="n">rho</span> <span class="o">=</span> <span class="n">_vie1_cont_amplification</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">rho</span> <span class="o">&gt;</span> <span class="mf">1.0</span> <span class="o">+</span> <span class="mf">1e-9</span><span class="p">:</span>
@@ -2038,11 +2041,6 @@ skipped.</p>
         <span class="k">elif</span> <span class="ow">not</span> <span class="n">_vie1_convergent</span><span class="p">(</span><span class="n">node_pos</span><span class="p">):</span>
             <span class="c1"># Discontinuous S_{m-1}^{(-1)}: converges iff |rho_m| &lt;= 1.</span>
             <span class="n">rho</span> <span class="o">=</span> <span class="n">_vie1_amplification</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">_choices</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">_choices</span><span class="si">}</span><span class="s2">) "</span>
-                    <span class="sa">f</span><span class="s2">"does not produce a convergent VIE-1 solver and is not supported "</span>
-                    <span class="sa">f</span><span class="s2">"(amplification |rho_m| = </span><span class="si">{</span><span class="n">rho</span><span class="si">:</span><span class="s2">.4g</span><span class="si">}</span><span class="s2"> &gt; 1)."</span><span class="p">)</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">"Collocation nodes </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">array2string</span><span class="p">(</span><span class="n">node_pos</span><span class="p">,</span><span class="w"> </span><span class="n">precision</span><span class="o">=</span><span class="mi">6</span><span class="p">)</span><span class="si">}</span><span class="s2"> do not "</span>
                 <span class="sa">f</span><span class="s2">"produce a convergent VIE-1 solver: the amplification factor "</span>

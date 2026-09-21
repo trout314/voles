@@ -1476,9 +1476,10 @@ equations), one polynomial per component.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>For invalid shapes or collocation settings — including the known
-non-convergent VIE-1 settings <code>(coll_divs=3, [1])</code>,
-<code>(4, [1])</code>, and <code>(4, [1, 2])</code>, which are rejected outright, and,
+                <p>For invalid shapes or collocation settings — including an empty
+<code>coll_choices</code>, node sets with <span class="arithmatex">\(|\rho_m| &gt; 1\)</span>, for which the method
+diverges (see Notes; e.g. <code>(coll_divs=3, [1])</code>, <code>(4, [1, 2])</code>,
+<code>(5, [1])</code>), <code>force_continuous=True</code> without <code>soln_init_value</code>, and,
 with <code>force_continuous=True</code>, node sets whose last node is not the
 right endpoint or whose <span class="arithmatex">\(|\rho_{m-1}|\)</span> exceeds 1 (see Notes) —
 inputs too short to form one mesh interval, matrix input with zero
@@ -1558,42 +1559,7 @@ supported settings (with the non-convergent ones excluded) are listed in
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">447</span>
-<span class="normal">448</span>
-<span class="normal">449</span>
-<span class="normal">450</span>
-<span class="normal">451</span>
-<span class="normal">452</span>
-<span class="normal">453</span>
-<span class="normal">454</span>
-<span class="normal">455</span>
-<span class="normal">456</span>
-<span class="normal">457</span>
-<span class="normal">458</span>
-<span class="normal">459</span>
-<span class="normal">460</span>
-<span class="normal">461</span>
-<span class="normal">462</span>
-<span class="normal">463</span>
-<span class="normal">464</span>
-<span class="normal">465</span>
-<span class="normal">466</span>
-<span class="normal">467</span>
-<span class="normal">468</span>
-<span class="normal">469</span>
-<span class="normal">470</span>
-<span class="normal">471</span>
-<span class="normal">472</span>
-<span class="normal">473</span>
-<span class="normal">474</span>
-<span class="normal">475</span>
-<span class="normal">476</span>
-<span class="normal">477</span>
-<span class="normal">478</span>
-<span class="normal">479</span>
-<span class="normal">480</span>
-<span class="normal">481</span>
-<span class="normal">482</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">482</span>
 <span class="normal">483</span>
 <span class="normal">484</span>
 <span class="normal">485</span>
@@ -1900,7 +1866,30 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="normal">786</span>
 <span class="normal">787</span>
 <span class="normal">788</span>
-<span class="normal">789</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="normal">789</span>
+<span class="normal">790</span>
+<span class="normal">791</span>
+<span class="normal">792</span>
+<span class="normal">793</span>
+<span class="normal">794</span>
+<span class="normal">795</span>
+<span class="normal">796</span>
+<span class="normal">797</span>
+<span class="normal">798</span>
+<span class="normal">799</span>
+<span class="normal">800</span>
+<span class="normal">801</span>
+<span class="normal">802</span>
+<span class="normal">803</span>
+<span class="normal">804</span>
+<span class="normal">805</span>
+<span class="normal">806</span>
+<span class="normal">807</span>
+<span class="normal">808</span>
+<span class="normal">809</span>
+<span class="normal">810</span>
+<span class="normal">811</span>
+<span class="normal">812</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
                 <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                 <span class="n">force_continuous</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">'''</span>
@@ -1977,9 +1966,10 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="sd">    Raises</span>
 <span class="sd">    ------</span>
 <span class="sd">    ValueError</span>
-<span class="sd">        For invalid shapes or collocation settings — including the known</span>
-<span class="sd">        non-convergent VIE-1 settings ``(coll_divs=3, [1])``,</span>
-<span class="sd">        ``(4, [1])``, and ``(4, [1, 2])``, which are rejected outright, and,</span>
+<span class="sd">        For invalid shapes or collocation settings — including an empty</span>
+<span class="sd">        ``coll_choices``, node sets with $|\rho_m| &gt; 1$, for which the method</span>
+<span class="sd">        diverges (see Notes; e.g. ``(coll_divs=3, [1])``, ``(4, [1, 2])``,</span>
+<span class="sd">        ``(5, [1])``), ``force_continuous=True`` without ``soln_init_value``, and,</span>
 <span class="sd">        with ``force_continuous=True``, node sets whose last node is not the</span>
 <span class="sd">        right endpoint or whose $|\rho_{m-1}|$ exceeds 1 (see Notes) —</span>
 <span class="sd">        inputs too short to form one mesh interval, matrix input with zero</span>
@@ -2037,6 +2027,8 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="sd">       Sections 2.4.1--2.4.3 and 2.4.5.</span>
 <span class="sd">    '''</span>
     <span class="n">return_function</span> <span class="o">=</span> <span class="n">_resolve_return_flag</span><span class="p">(</span><span class="n">return_function</span><span class="p">,</span> <span class="n">return_polys</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">force_continuous</span> <span class="ow">and</span> <span class="n">soln_init_value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"must specify soln_init_value when force_continuous=True"</span><span class="p">)</span>
     <span class="c1"># ------------------------------------------------------------------ complex dispatch</span>
     <span class="k">if</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">is_complex</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">):</span>
         <span class="n">K_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">)</span>
@@ -2133,7 +2125,6 @@ supported settings (with the non-convergent ones excluded) are listed in
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                     <span class="sa">f</span><span class="s2">"soln_init_value must have shape (</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">,) for d=</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">assert</span> <span class="ow">not</span> <span class="n">force_continuous</span><span class="p">,</span> <span class="s2">"must specify soln_init_value for continuous solutions"</span>
             <span class="n">soln_init_value_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
 
         <span class="k">assert</span> <span class="mi">0</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="s2">"zero cannot be a collocation parameter"</span>
@@ -2144,13 +2135,7 @@ supported settings (with the non-convergent ones excluded) are listed in
             <span class="k">assert</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">choice</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="s2">"coll_choices must contain only integers from 1 to coll_divs"</span>
         <span class="n">coll_choices</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">))</span> <span class="ow">in</span> <span class="n">_VIE1_NONCONVERGENT</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) "</span>
-                <span class="sa">f</span><span class="s2">"does not produce a convergent VIE-1 solver and is not supported. "</span>
-                <span class="sa">f</span><span class="s2">"Use a setting from fast_coll_settings_VIE_1."</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
-            <span class="n">_check_continuous_vie1_setting</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
+        <span class="n">_check_vie1_setting</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
         <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_fast_settings_VIE_1</span><span class="p">:</span>
             <span class="c1"># NotImplementedError subclasses RuntimeError, so callers</span>
             <span class="c1"># catching the historical RuntimeError still work; this matches</span>
@@ -2187,8 +2172,6 @@ supported settings (with the non-convergent ones excluded) are listed in
     <span class="k">assert</span> <span class="n">time_step</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">"time_step must be positive"</span>
 
     <span class="k">if</span> <span class="n">soln_init_value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">assert</span> <span class="ow">not</span> <span class="n">force_continuous</span><span class="p">,</span> \
-            <span class="s2">"must specify an initial value for continuous solutions"</span>
         <span class="c1"># We still need a value to pass into the JIT version. It shouldn't be used!</span>
         <span class="n">soln_init_value_</span> <span class="o">=</span> <span class="mf">0.0</span>
     <span class="k">else</span><span class="p">:</span>
@@ -2209,13 +2192,7 @@ supported settings (with the non-convergent ones excluded) are listed in
         <span class="k">assert</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">choice</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">,</span> \
             <span class="s2">"coll_choices must contain only integers from 1 to coll_divs"</span>
     <span class="n">coll_choices</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">)</span>
-    <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">))</span> <span class="ow">in</span> <span class="n">_VIE1_NONCONVERGENT</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) "</span>
-            <span class="sa">f</span><span class="s2">"does not produce a convergent VIE-1 solver and is not supported. "</span>
-            <span class="sa">f</span><span class="s2">"Use a setting from fast_coll_settings_VIE_1."</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
-        <span class="n">_check_continuous_vie1_setting</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
+    <span class="n">_check_vie1_setting</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
     <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_fast_settings_VIE_1</span><span class="p">:</span>
         <span class="n">soln_vals</span><span class="p">,</span> <span class="n">poly_coefs</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vie1_d</span><span class="p">(</span>
             <span class="n">g_values_</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span>
