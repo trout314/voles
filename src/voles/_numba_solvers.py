@@ -177,7 +177,7 @@ def BNL(mesh_indx_n, mesh_indx_ell, kernel_data, coll_info):
     return matrix
 
 @ncjit
-def BN(kernel_data, coll_info, add_zero_node=False):
+def BN(kernel_data, coll_info):
     num_coll_params = len(coll_info.choices)
     b = quad_weights(coll_info.params)
     c = coll_info.params
@@ -187,10 +187,7 @@ def BN(kernel_data, coll_info, add_zero_node=False):
 
     poly_vals = np.zeros((num_coll_params, num_coll_params, num_coll_params))
     for j,i,k in np.ndindex(poly_vals.shape):
-        if add_zero_node:
-            poly_vals[j,i,k] = lagrange_f(c[i] * c[k], j+1, [0] + list(coll_params))
-        else:
-            poly_vals[j,i,k] = lagrange_f(c[i] * c[k], j, coll_params)
+        poly_vals[j,i,k] = lagrange_f(c[i] * c[k], j, coll_params)
 
     matrix = np.zeros((num_coll_params, num_coll_params))
     for i,j in np.ndindex(matrix.shape):
@@ -207,26 +204,79 @@ def G(mesh_indx_n, current_solution, kernel_data, coll_info, dt):
         vector += dt * BNL(mesh_indx_n, ell, kernel_data, coll_info) @ current_solution[ell,:]
     return vector
 
+# ---------------------------------------------------------------------------
+# Continuous (Brunner S_m^(0)) VIE-1 helpers.
+#
+# The continuous method's trial polynomial on a mesh interval has degree m and
+# is interpolated on the augmented nodes {0, c_1, ..., c_m}; its value at node 0
+# is the carried boundary value y_n. All integrals of the trial polynomial are
+# evaluated with the (m+1)-point interpolatory rule on those same nodes, which
+# is exact for the trial space (Brunner 2004, Section 2.4.5 and Example 2.4.5;
+# for m = 1, c_1 = 1 this is the discretised continuous trapezoidal method).
+# The per-interval source vector is V_ell = (y_ell, U_{ell,1}, ..., U_{ell,m}).
+# ---------------------------------------------------------------------------
+
 @ncjit
-def rho(mesh_indx_n, kernel_data, coll_info):
+def augmented_nodes(coll_info):
+    """Nodes {0, c_1, ..., c_m} of the continuous method's trial polynomial."""
+    return np.concatenate((np.zeros(1), coll_info.params))
+
+@ncjit
+def BN_cont(kernel_data, coll_info):
+    """Local matrix of the continuous method, shape (m, m+1).
+
+    Row i is the collocation equation at c_i; column 0 multiplies the boundary
+    value y_n, columns 1..m the unknowns U_{n,1..m}. The current-interval
+    integral over [t_n, t_{n,i}] uses the (m+1)-point rule on the scaled
+    augmented nodes c_i * chat_k; the kernel argument c_i (1 - chat_k) H equals
+    k_i (coll_divs - khat_k) time_step, which is a sample point."""
     coll_divs = coll_info.divs
-    coll_params = coll_info.params
     coll_choices = coll_info.choices
-    num_coll_params = len(coll_params)
+    c = coll_info.params
+    num_coll_params = len(c)
+    nodes = augmented_nodes(coll_info)
+    b_hat = quad_weights(nodes)
+    choices_hat = [0] + list(coll_choices)
 
-    nodes = [0] + list(coll_params)
-    poly_vals = np.zeros((num_coll_params, num_coll_params))
-    for i, k in np.ndindex(poly_vals.shape):
-        poly_vals[i,k] = lagrange_f(coll_params[i] * coll_params[k], 0, nodes)
-
-    vector = np.zeros((num_coll_params))
+    matrix = np.zeros((num_coll_params, num_coll_params + 1))
     for i in range(num_coll_params):
-        for k in range(num_coll_params):
-            kernel_indx = coll_choices[i]*coll_divs - coll_choices[i]*coll_choices[k]
-            c = coll_params
-            b = quad_weights(coll_params)
-            vector[i] += c[i]*b[k] * kernel_data[kernel_indx] * poly_vals[i,k]
-    return -vector
+        for k in range(num_coll_params + 1):
+            k_indx = coll_choices[i] * (coll_divs - choices_hat[k])
+            x = c[i] * nodes[k]
+            for j in range(num_coll_params + 1):
+                matrix[i,j] += c[i] * b_hat[k] * kernel_data[k_indx] * lagrange_f(x, j, nodes)
+    return matrix
+
+@ncjit
+def BNL_cont(mesh_indx_n, mesh_indx_ell, kernel_data, coll_info):
+    """History block of the continuous method for the interval pair (n, ell),
+    shape (m, m+1), acting on V_ell = (y_ell, U_{ell,1..m})."""
+    assert mesh_indx_ell >= 0, "ell must be non-negative"
+    assert mesh_indx_ell < mesh_indx_n, "ell must be smaller than n"
+    coll_divs = coll_info.divs
+    coll_choices = coll_info.choices
+    num_coll_params = len(coll_choices)
+    b_hat = quad_weights(augmented_nodes(coll_info))
+    choices_hat = [0] + list(coll_choices)
+
+    matrix = np.zeros((num_coll_params, num_coll_params + 1))
+    mesh_point_indx = (mesh_indx_n - mesh_indx_ell) * coll_divs**2
+    for i in range(num_coll_params):
+        for j in range(num_coll_params + 1):
+            sub_indx = (coll_choices[i] - choices_hat[j]) * coll_divs
+            matrix[i,j] = b_hat[j] * kernel_data[mesh_point_indx + sub_indx]
+    return matrix
+
+@ncjit
+def G_cont(mesh_indx_n, current_solution, boundary_vals, kernel_data, coll_info, dt):
+    num_coll_params = len(coll_info.choices)
+    vector = np.zeros((num_coll_params))
+    source = np.zeros((num_coll_params + 1))
+    for ell in range(mesh_indx_n):
+        source[0] = boundary_vals[ell]
+        source[1:] = current_solution[ell,:]
+        vector += dt * BNL_cont(mesh_indx_n, ell, kernel_data, coll_info) @ source
+    return vector
 
 CollInfo = namedtuple('CollInfo', ['divs', 'choices', 'params', 'weights'])
 
@@ -371,11 +421,16 @@ def solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step, coll_di
     else:
         boundary_vals = np.zeros((num_mesh_points))
         boundary_vals[0] = soln_init_value
+        # Column 0 of the local matrix multiplies the carried boundary value
+        # y_n and moves to the right-hand side; columns 1..m form the system
+        # for the collocation unknowns.
+        local_matrix = dt*BN_cont(kernel_values, coll_info)
+        coef_matrix = np.ascontiguousarray(local_matrix[:, 1:])
+        boundary_column = np.ascontiguousarray(local_matrix[:, 0])
         for n in range(mesh_divs):
             rhs_vector = g(n, g_values, coll_info) \
-                - G(n, solution_U, kernel_values, coll_info, dt) \
-                + dt*boundary_vals[n]*rho(n, kernel_values, coll_info)
-            coef_matrix = dt*BN(kernel_values, coll_info, add_zero_node=True)
+                - G_cont(n, solution_U, boundary_vals, kernel_values, coll_info, dt) \
+                - boundary_column*boundary_vals[n]
             solution_U[n] = np.linalg.solve(coef_matrix, rhs_vector)
             boundary_vals[n+1] = poly_piece_f_continuous(1.0, n, solution_U, coll_info, boundary_vals[n])
 
