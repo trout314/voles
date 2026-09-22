@@ -99,25 +99,38 @@ def test_time_step_negative():
 # coll_divs must be positive
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
-def test_coll_divs_zero(solver):
-    with pytest.raises(AssertionError, match="coll_divs must be a positive integer"):
+# solve_VIE_1 validates its collocation setting with ValueError for both
+# quadratures; solve_VIE_2 / solve_VIDE still use assertions.
+_COLL_ERRORS = [(_vie1, ValueError), (_vie2, AssertionError), (_vide, AssertionError)]
+
+
+@pytest.mark.parametrize("solver, error", _COLL_ERRORS)
+def test_coll_divs_zero(solver, error):
+    with pytest.raises(error, match="coll_divs must be a positive integer"):
         solver(coll_divs=0, coll_choices=[1])
 
 
-@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
-def test_coll_divs_negative(solver):
-    with pytest.raises(AssertionError, match="coll_divs must be a positive integer"):
+@pytest.mark.parametrize("solver, error", _COLL_ERRORS)
+def test_coll_divs_negative(solver, error):
+    with pytest.raises(error, match="coll_divs must be a positive integer"):
         solver(coll_divs=-1, coll_choices=[1])
+
+
+def test_vie1_coll_divs_non_integer():
+    """Used to reach the solver and fail deep inside (or, with
+    quadrature='product', silently run as coll_divs=2)."""
+    for quadrature in ("collocation", "product"):
+        with pytest.raises(ValueError, match="coll_divs must be a positive integer"):
+            _vie1(coll_divs=2.7, coll_choices=[1, 2], quadrature=quadrature)
 
 
 # ---------------------------------------------------------------------------
 # coll_choices must be integers
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
-def test_coll_choices_floats(solver):
-    with pytest.raises(AssertionError, match="coll_choices must be a list of integers"):
+@pytest.mark.parametrize("solver, error", _COLL_ERRORS)
+def test_coll_choices_floats(solver, error):
+    with pytest.raises(error, match="coll_choices must be a list of integers"):
         solver(coll_choices=[1.0, 2.0])
 
 
@@ -125,9 +138,9 @@ def test_coll_choices_floats(solver):
 # coll_choices must be distinct
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
-def test_coll_choices_duplicates(solver):
-    with pytest.raises(AssertionError,
+@pytest.mark.parametrize("solver, error", _COLL_ERRORS)
+def test_coll_choices_duplicates(solver, error):
+    with pytest.raises(error,
                        match="all integers in coll_choices must be distinct"):
         solver(coll_choices=[1, 1, 2])
 
@@ -137,7 +150,7 @@ def test_coll_choices_duplicates(solver):
 # ---------------------------------------------------------------------------
 
 def test_vie1_choice_out_of_range():
-    with pytest.raises(AssertionError,
+    with pytest.raises(ValueError,
                        match="coll_choices must contain only integers from 1 to coll_divs"):
         _vie1(coll_divs=2, coll_choices=[1, 5])
 
@@ -159,7 +172,7 @@ def test_vide_choice_out_of_range():
 # ---------------------------------------------------------------------------
 
 def test_vie1_zero_choice():
-    with pytest.raises(AssertionError, match="zero cannot be a collocation parameter"):
+    with pytest.raises(ValueError, match="zero cannot be a collocation parameter"):
         _vie1(coll_divs=2, coll_choices=[0, 1])
 
 

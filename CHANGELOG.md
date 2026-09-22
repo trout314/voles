@@ -76,6 +76,31 @@
   scalar/vector input with an `AssertionError`.
 - An empty `coll_choices` raises `ValueError` in `solve_VIE_1` (was an
   `IndexError` with `force_continuous=True`).
+- **`solve_VIE_1` no longer truncates non-integer parameters.** With
+  `quadrature="product"`, `mesh_samples=2.6` ran silently as 2 and
+  `coll_divs=2.7` as 2, and on the default path `mesh_samples=9.9` passed the
+  `coll_divs**2` check as 9; each now raises `ValueError`. NumPy integers are
+  accepted everywhere (the collocation path used to reject them).
+- **`solve_VIE_1` validates its collocation setting once, the same way for
+  both quadratures**, with `ValueError` (the collocation path used `assert`,
+  which disappears under `python -O`). Code that caught `AssertionError` for
+  a bad `coll_divs`/`coll_choices` must catch `ValueError` instead.
+  `solve_VIE_2` and `solve_VIDE` are unchanged.
+- A node set with $\rho = 1$ exactly (e.g. `coll_divs=3, coll_choices=[1, 2]`)
+  converges one order lower than nominal; `solve_VIE_1` now prints a warning
+  saying so (unless `show_warnings=False`), and the product-quadrature path
+  uses the same exact criterion as the collocation path instead of a
+  floating-point copy with a tolerance.
+- Matrix-valued `g_values` must have the kernel's length on the collocation
+  path too (it was sliced without a check; the product path already required
+  it), and shape errors report the kernel shape that was passed rather than
+  the truncated one, which made compatible-looking shapes read as
+  "incompatible".
+- `quadrature="product"` with a D extension built before the block drivers
+  existed fell back to the $O(M^2)$ NumPy stepper without a word; it now
+  prints a warning. That fallback also applies the extension's relative
+  pivot threshold, so a nearly singular diagonal block raises `LinAlgError`
+  on both instead of returning garbage from `np.linalg.solve`.
 - **Callable-solver matrix (multi-RHS) column fan-out** now shares the
   array-solver behavior: thread pool capped at the CPU count (was one
   thread per column) and a clear ``ValueError`` for zero-column inputs.
@@ -106,6 +131,17 @@
   code 3) rather than risking undefined behavior.
 
 ### Changed
+- **`quadrature="product"` is faster for scalar and matrix input.** The
+  solution is evaluated on the sample grid for all mesh intervals at once
+  instead of in a Python loop over them (2.4x end to end for a scalar solve
+  at $N = 32001$), and a matrix-valued right-hand side builds the lag blocks
+  once and shares them between the column threads instead of rebuilding them
+  per column (1.9x at $d = 8$, 8 columns, and one copy of the dominant
+  allocation on the Python side instead of one per column). The block
+  drivers and the NumPy fallback factor the constant diagonal block once
+  rather than on every step. Results agree with the previous code to
+  $\sim 10^{-12}$ relative. `_product.py` reuses the callable-input solvers'
+  Lagrange-basis helpers instead of carrying copies.
 - **`solve_VIE_1(force_continuous=True)` is faster.** Because $c_m = 1$, the
   boundary value carried into a mesh interval is the previous interval's last
   collocation unknown, so the boundary column of each history block is folded

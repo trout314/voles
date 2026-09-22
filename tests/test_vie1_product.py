@@ -432,3 +432,158 @@ def test_truncation_warning(capsys):
                        coll_choices=[1, 2, 3], quadrature="product")
     assert len(vals) == N - 2
     assert "truncated" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# Follow-ups to the product-integration review
+# ---------------------------------------------------------------------------
+
+def _smooth_problem(N, h=0.01):
+    t = h * np.arange(N)
+    return np.exp(-t), (np.cos(2 * t) + 2 * np.sin(2 * t) - np.exp(-t)) / 5   # y = cos 2t
+
+
+@pytest.mark.parametrize("kwargs", [
+    dict(mesh_samples=2.6),              # used to run silently as mesh_samples=2
+    dict(mesh_samples=6.0),
+    dict(kernel_interp_degree=2.5),
+    dict(coll_divs=2.7),                 # used to run silently as coll_divs=2
+    dict(mesh_samples=True),
+])
+def test_product_rejects_non_integer_parameters(kwargs):
+    K, g = _smooth_problem(61)
+    base = dict(kernel_values=K, g_values=g, time_step=0.01, coll_divs=2,
+                coll_choices=[1, 2], quadrature="product", show_warnings=False)
+    base.update(kwargs)
+    with pytest.raises(ValueError, match="integer"):
+        solve_VIE_1(**base)
+
+
+def test_collocation_rejects_non_integer_mesh_samples():
+    """mesh_samples=9.9 used to be truncated to 9 == coll_divs**2 and accepted."""
+    K, g = _smooth_problem(91)
+    with pytest.raises(ValueError, match="integer"):
+        solve_VIE_1(kernel_values=K, g_values=g, time_step=0.01, mesh_samples=9.9)
+
+
+def test_numpy_integer_parameters_are_accepted():
+    K, g = _smooth_problem(61)
+    a = solve_VIE_1(kernel_values=K, g_values=g, time_step=0.01, coll_divs=np.int64(2),
+                    coll_choices=[np.int32(1), np.int64(2)], quadrature="product",
+                    mesh_samples=np.int64(4), kernel_interp_degree=np.int32(2))
+    b = solve_VIE_1(kernel_values=K, g_values=g, time_step=0.01, coll_divs=2,
+                    coll_choices=[1, 2], quadrature="product", mesh_samples=4,
+                    kernel_interp_degree=2)
+    assert np.array_equal(a, b)
+
+
+@pytest.mark.parametrize("quadrature", ["collocation", "product"])
+def test_rho_plus_one_setting_warns_about_reduced_order(quadrature, capsys):
+    """(3, [1, 2]) has rho_m = +1 exactly: admitted, but it converges at order
+    m - 1 = 1, and says so unless warnings are off."""
+    K, g = _smooth_problem(91)
+    kw = dict(kernel_values=K, g_values=g, time_step=0.01, coll_divs=3,
+              coll_choices=[1, 2], quadrature=quadrature)
+    solve_VIE_1(**kw)
+    assert "order 1 rather than 2" in capsys.readouterr().out
+    solve_VIE_1(show_warnings=False, **kw)
+    assert capsys.readouterr().out == ""
+    solve_VIE_1(**{**kw, "coll_choices": [1, 2, 3]})           # rho_m = 0
+    assert capsys.readouterr().out == ""
+
+
+def test_rho_plus_one_really_is_first_order_with_product_quadrature():
+    errs = []
+    for mesh in (40, 80, 160):
+        N = mesh * 3 + 1
+        h = 1.2 / (N - 1)
+        t = h * np.arange(N)
+        K = np.exp(-t)
+        g = (np.cos(2 * t) + 2 * np.sin(2 * t) - np.exp(-t)) / 5
+        s = solve_VIE_1(kernel_values=K, g_values=g, time_step=h, coll_divs=3,
+                        coll_choices=[1, 2], quadrature="product", show_warnings=False)
+        errs.append(np.max(np.abs(s - np.cos(2 * t))))
+    rates = np.log2(np.array(errs[:-1]) / np.array(errs[1:]))
+    assert np.all(np.abs(rates - 1.0) < 0.25), rates
+
+
+@pytest.mark.parametrize("quadrature", ["collocation", "product"])
+def test_matrix_g_must_match_the_kernel_length(quadrature):
+    """Both quadratures require g at the kernel's (untruncated) length, and
+    the message reports the kernel shape the caller actually passed."""
+    N, d = 9 * 4 + 3, 2                                     # truncates to 37
+    K = np.broadcast_to(np.eye(d), (N, d, d)).copy()
+    with pytest.raises(ValueError, match=rf"\({N}, {d}, {d}\)"):
+        solve_VIE_1(kernel_values=K, g_values=np.zeros((N - 2, d, 3)), time_step=0.1,
+                    quadrature=quadrature, show_warnings=False)
+
+
+def test_stale_extension_fallback_is_announced_and_agrees(monkeypatch, capsys):
+    from voles import _dlang
+    K, g = _smooth_problem(151)
+    kw = dict(kernel_values=K, g_values=g, time_step=0.01, quadrature="product")
+    fast = solve_VIE_1(**kw)
+    assert capsys.readouterr().out == ""
+    monkeypatch.setattr(_dlang, "have_block_drivers", lambda: False)
+    slow = solve_VIE_1(**kw)
+    assert "falling back to the NumPy stepper" in capsys.readouterr().out
+    assert np.max(np.abs(fast - slow)) < 1e-9
+    solve_VIE_1(show_warnings=False, **kw)
+    assert capsys.readouterr().out == ""
+
+
+def test_numpy_fallback_lu_matches_the_extension_singularity_test():
+    from voles import _product
+    rng = np.random.default_rng(0)
+    A = rng.standard_normal((7, 7))
+    A[0, 0] = 1e-9                                           # force a row swap
+    b = rng.standard_normal(7)
+    LU, piv = _product._lu_factor_checked(A, "test")
+    assert np.allclose(_product._lu_solve(LU, piv, b), np.linalg.solve(A, b), rtol=1e-10)
+    nearly_singular = np.array([[1.0, 1.0], [1.0, 1.0 + 1e-17]])
+    with pytest.raises(np.linalg.LinAlgError, match="nearly singular"):
+        _product._lu_factor_checked(nearly_singular, "test")
+    # np.linalg.solve accepts a tiny-but-nonzero diagonal block and returns garbage
+    with pytest.raises(np.linalg.LinAlgError):
+        _product.step_blocks_numpy(np.full((3, 1, 1), 0.0), np.ones((3, 1)))
+
+
+@pytest.mark.parametrize("use_extension", [True, False])
+def test_zero_kernel_raises_linalg_error(use_extension, monkeypatch):
+    from voles import _dlang
+    if not use_extension:
+        monkeypatch.setattr(_dlang, "have_block_drivers", lambda: False)
+    for fc in (False, True):
+        with pytest.raises(np.linalg.LinAlgError):
+            solve_VIE_1(kernel_values=np.zeros(31), g_values=np.ones(31), time_step=0.1,
+                        quadrature="product", force_continuous=fc, soln_init_value=0.0,
+                        show_warnings=False)
+
+
+def test_matrix_columns_share_one_set_of_blocks(monkeypatch):
+    """The lag blocks depend on the kernel only, so a multi-column solve
+    builds them once (it used to rebuild them for every column)."""
+    from voles import _product
+    calls = []
+    real = _product.build_lag_blocks
+    monkeypatch.setattr(_product, "build_lag_blocks",
+                        lambda *a, **k: calls.append(1) or real(*a, **k))
+    rng = np.random.default_rng(5)
+    N, d, m_cols = 30 * 3 + 1, 2, 4
+    t = 0.01 * np.arange(N)
+    K = np.exp(-t)[:, None, None] * (np.eye(d) + 0.1)
+    G = np.sin(t)[:, None, None] * rng.standard_normal((d, m_cols))
+    init = rng.standard_normal((d, m_cols))
+    for fc in (False, True):
+        calls.clear()
+        soln, fn = solve_VIE_1(kernel_values=K, g_values=G, time_step=0.01, quadrature="product",
+                               force_continuous=fc, soln_init_value=init, return_function=True,
+                               show_warnings=False)
+        assert len(calls) == 1
+        for j in range(m_cols):
+            col, col_fn = solve_VIE_1(kernel_values=K, g_values=G[:, :, j], time_step=0.01,
+                                      quadrature="product", force_continuous=fc,
+                                      soln_init_value=init[:, j], return_function=True,
+                                      show_warnings=False)
+            assert np.array_equal(soln[:, :, j], col)
+            assert np.allclose(fn(0.123)[:, j], col_fn(0.123), rtol=0, atol=1e-13)

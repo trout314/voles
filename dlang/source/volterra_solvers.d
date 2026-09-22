@@ -141,6 +141,78 @@ bool lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv)
     return true;
 }
 
+// Factor-once / solve-many form of lin_solve_rt, for drivers whose coefficient
+// matrix is the same on every step. lu_factor_rt overwrites a_colmaj with the
+// packed LU factors (unit-diagonal L below, U on and above the diagonal) and
+// records the row swaps in ipiv, applying exactly lin_solve_rt's singularity
+// test; lu_solve_rt then solves in place for any number of right-hand sides
+// at O(dm^2) each instead of O(dm^3).
+bool lu_factor_rt(double[] a_colmaj, int dm, int[] ipiv)
+{
+    enum double eps = double.epsilon;
+    double max_pivot_seen = 0.0;
+
+    foreach (k; 0 .. dm)
+    {
+        int pivot = k;
+        double max_val = a_colmaj[k + k * dm];
+        if (max_val < 0) max_val = -max_val;
+        foreach (i; k + 1 .. dm)
+        {
+            double v = a_colmaj[i + k * dm];
+            if (v < 0) v = -v;
+            if (v > max_val) { max_val = v; pivot = i; }
+        }
+        ipiv[k] = pivot;
+
+        if (pivot != k)
+        {
+            foreach (j; 0 .. dm)
+            {
+                double tmp = a_colmaj[k + j * dm];
+                a_colmaj[k + j * dm] = a_colmaj[pivot + j * dm];
+                a_colmaj[pivot + j * dm] = tmp;
+            }
+        }
+
+        if (max_val > max_pivot_seen) max_pivot_seen = max_val;
+        if (max_val <= dm * eps * max_pivot_seen)
+            return false;
+
+        double pivot_val = a_colmaj[k + k * dm];
+        foreach (i; k + 1 .. dm)
+        {
+            double m = a_colmaj[i + k * dm] / pivot_val;
+            a_colmaj[i + k * dm] = m;
+            foreach (j; k + 1 .. dm)
+                a_colmaj[i + j * dm] -= m * a_colmaj[k + j * dm];
+        }
+    }
+    return true;
+}
+
+void lu_solve_rt(const double[] lu_colmaj, double[] b, int dm, const int[] ipiv)
+{
+    // Whole rows (multipliers included) were swapped during factorisation,
+    // so the permutation is applied to b up front.
+    foreach (k; 0 .. dm)
+    {
+        if (ipiv[k] != k)
+        {
+            double tmp = b[k]; b[k] = b[ipiv[k]]; b[ipiv[k]] = tmp;
+        }
+    }
+    foreach (i; 1 .. dm)
+        foreach (kk; 0 .. i)
+            b[i] -= lu_colmaj[i + kk * dm] * b[kk];
+    foreach_reverse (i; 0 .. dm)
+    {
+        foreach (kk; i + 1 .. dm)
+            b[i] -= lu_colmaj[i + kk * dm] * b[kk];
+        b[i] /= lu_colmaj[i + i * dm];
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Linear solver (LU factorization with partial pivoting)
 // ---------------------------------------------------------------------------
@@ -3148,13 +3220,15 @@ int volterra_solve_vie1_blocks(
         blk[] = lag_s[cast(size_t) lag * Dsz * Dsz .. (cast(size_t) lag + 1) * Dsz * Dsz];
     });
 
-    double[] a_col  = new double[Dsz * Dsz];
-    double[] a_work = new double[Dsz * Dsz];
-    double[] rhs    = new double[Dsz];
-    int[]    ipiv   = new int[Dsz];
+    // The diagonal block is the same on every step: factor it once.
+    double[] a_lu = new double[Dsz * Dsz];
+    double[] rhs  = new double[Dsz];
+    int[]    ipiv = new int[Dsz];
     foreach (i; 0 .. Db)
         foreach (j; 0 .. Db)
-            a_col[i + j * Db] = lag_s[cast(size_t) i * Dsz + j];
+            a_lu[i + j * Db] = lag_s[cast(size_t) i * Dsz + j];
+    if (!lu_factor_rt(a_lu, Db, ipiv))
+        return 2;
 
     foreach (n; 0 .. M)
     {
@@ -3162,9 +3236,7 @@ int volterra_solve_vie1_blocks(
         rhs[] = g_s[nb .. nb + Dsz];
         auto G_hist = hist.G(n);
         rhs[] -= G_hist[];
-        a_work[] = a_col[];
-        if (!lin_solve_lapack(a_work, rhs, Db, ipiv))
-            return 2;
+        lu_solve_rt(a_lu, rhs, Db, ipiv);
         U_s[nb .. nb + Dsz] = rhs[];
         hist.push(U_s[nb .. nb + Dsz]);
     }
@@ -3198,8 +3270,7 @@ int volterra_solve_vie1_cont_blocks(
         blk[] = lag_s[cast(size_t) lag * Dbz * Dsz .. (cast(size_t) lag + 1) * Dbz * Dsz];
     });
 
-    double[] a_col  = new double[Dbz * Dbz];   // value columns of the diagonal block, column-major
-    double[] a_work = new double[Dbz * Dbz];
+    double[] a_lu   = new double[Dbz * Dbz];   // value columns of the diagonal block, column-major
     double[] bnd    = new double[Dbz * dz];    // boundary columns of the diagonal block, row-major
     double[] rhs    = new double[Dbz];
     double[] source = new double[Dsz];
@@ -3207,10 +3278,13 @@ int volterra_solve_vie1_cont_blocks(
     foreach (i; 0 .. Db)
     {
         foreach (j; 0 .. Db)
-            a_col[i + j * Db] = lag_s[cast(size_t) i * Dsz + j];
+            a_lu[i + j * Db] = lag_s[cast(size_t) i * Dsz + j];
         foreach (s; 0 .. d)
             bnd[cast(size_t) i * dz + s] = lag_s[cast(size_t) i * Dsz + Dbz + s];
     }
+    // The diagonal block is the same on every step: factor it once.
+    if (!lu_factor_rt(a_lu, Db, ipiv))
+        return 2;
 
     foreach (n; 0 .. M)
     {
@@ -3224,9 +3298,7 @@ int volterra_solve_vie1_cont_blocks(
             foreach (s; 0 .. d)
                 rhs[i] -= bnd[cast(size_t) i * dz + s] * y_s[ny + s];
         }
-        a_work[] = a_col[];
-        if (!lin_solve_lapack(a_work, rhs, Db, ipiv))
-            return 2;
+        lu_solve_rt(a_lu, rhs, Db, ipiv);
         U_s[nb .. nb + Dbz] = rhs[];
         source[0 .. Dbz] = rhs[];
         source[Dbz .. Dsz] = y_s[ny .. ny + dz];

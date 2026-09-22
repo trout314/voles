@@ -50,46 +50,23 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from numpy.polynomial import polynomial as npp
 
+from ._callable_solvers import (_lagrange_basis_coefs, _vie1_cont_basis_coefs,
+                                _vie1_cont_advance)
+
 
 # ---------------------------------------------------------------------------
 # Small polynomial helpers
 # ---------------------------------------------------------------------------
 
-def _lagrange_coefs_on_nodes(nodes):
-    """Coefficients (lowest degree first) of the Lagrange basis polynomials on
-    an arbitrary node set.  Row k is the polynomial that is 1 at ``nodes[k]``
-    and 0 at the others; shape ``(nb, nb)``."""
-    nodes = np.asarray(nodes, dtype=float)
-    nb = len(nodes)
-    out = np.zeros((nb, nb))
-    for k in range(nb):
-        coef = np.array([1.0])
-        for kp in range(nb):
-            if kp == k:
-                continue
-            coef = npp.polymul(coef, [-nodes[kp], 1.0]) / (nodes[k] - nodes[kp])
-        out[k, :len(coef)] = coef
-    return out
+# The Lagrange-basis machinery is the callable-input solvers'; this module
+# used to carry its own copies.
+_lagrange_coefs_on_nodes = _lagrange_basis_coefs
 
 
 def _gauss_legendre_01(npts):
     """Gauss-Legendre nodes and weights on [0, 1]."""
     x, w = np.polynomial.legendre.leggauss(npts)
     return 0.5 * (x + 1.0), 0.5 * w
-
-
-def _basis_nodes(coll_divs, coll_choices, force_continuous):
-    """Collocation nodes as fractions of the mesh interval, plus the basis
-    node set: the collocation nodes for the discontinuous method, the
-    augmented set {0, c_1, ..., c_m} for the continuous one.  The basis is
-    returned with the boundary function (node 0) LAST, matching the block
-    column layout ``[values; boundary]``."""
-    c = np.array([k / coll_divs for k in coll_choices], dtype=float)
-    if force_continuous:
-        basis_nodes = np.concatenate([c, [0.0]])
-    else:
-        basis_nodes = c
-    return c, basis_nodes
 
 
 # ---------------------------------------------------------------------------
@@ -206,19 +183,61 @@ def flatten_blocks(lagB, d):
 # Reference stepping (direct history sums), also the fallback
 # ---------------------------------------------------------------------------
 
+def _lu_factor_checked(A, name):
+    """LU factorisation with partial pivoting, ``P A = L U`` packed in one
+    array, applying the D extension's singularity test: a pivot no larger
+    than ``dim * eps * (largest pivot so far)`` raises LinAlgError.
+
+    ``np.linalg.solve`` only reports exactly singular matrices, so a nearly
+    singular diagonal block (e.g. K(0) ~ 1e-160) would come back as ~1e160
+    garbage here while the extension raises; this keeps the two in step."""
+    LU = np.array(A, dtype=float)
+    n = LU.shape[0]
+    piv = np.zeros(n, dtype=int)
+    max_pivot = 0.0
+    for k in range(n):
+        r = k + int(np.argmax(np.abs(LU[k:, k])))
+        piv[k] = r
+        if r != k:
+            LU[[k, r]] = LU[[r, k]]
+        pivot = abs(LU[k, k])
+        max_pivot = max(max_pivot, pivot)
+        if pivot <= n * np.finfo(float).eps * max_pivot:
+            raise np.linalg.LinAlgError(
+                f"{name}: singular or nearly singular coefficient matrix")
+        LU[k + 1:, k] /= LU[k, k]
+        LU[k + 1:, k + 1:] -= np.outer(LU[k + 1:, k], LU[k, k + 1:])
+    return LU, piv
+
+
+def _lu_solve(LU, piv, b):
+    """Solve with the factors from :func:`_lu_factor_checked`."""
+    x = np.array(b, dtype=float)
+    n = LU.shape[0]
+    for k in range(n):
+        if piv[k] != k:
+            x[[k, piv[k]]] = x[[piv[k], k]]
+    for i in range(1, n):
+        x[i] -= LU[i, :i] @ x[:i]
+    for i in range(n - 1, -1, -1):
+        x[i] = (x[i] - LU[i, i + 1:] @ x[i + 1:]) / LU[i, i]
+    return x
+
+
 def step_blocks_numpy(lagB, g):
     """Discontinuous stepping with direct O(M^2) history sums.
 
-    lagB : (M, Db, Db), g : (M, Db).  Returns U : (M, Db)."""
+    lagB : (M, Db, Db), g : (M, Db).  Returns U : (M, Db).  The diagonal
+    block is the same for every interval and is factorised once."""
     M, Db = g.shape
     U = np.zeros((M, Db))
-    A = lagB[0]
+    LU, piv = _lu_factor_checked(lagB[0], "step_blocks_numpy")
     for n in range(M):
         rhs = g[n].copy()
         if n > 0:
             # sum_{l<n} lagB[n-l] U[l]
             rhs -= np.einsum('lab,lb->a', lagB[n:0:-1], U[:n])
-        U[n] = np.linalg.solve(A, rhs)
+        U[n] = _lu_solve(LU, piv, rhs)
     return U
 
 
@@ -231,14 +250,14 @@ def step_cont_blocks_numpy(lagB, g, adv_U, adv_0, y0, m, d):
     U = np.zeros((M, Db))
     y = np.zeros((M + 1, d))
     y[0] = y0
-    A = lagB[0, :, :Db]
+    LU, piv = _lu_factor_checked(lagB[0, :, :Db], "step_cont_blocks_numpy")
     Abnd = lagB[0, :, Db:]
     src = np.zeros((M, Db + d))
     for n in range(M):
         rhs = g[n] - Abnd @ y[n]
         if n > 0:
             rhs -= np.einsum('lab,lb->a', lagB[n:0:-1], src[:n])
-        U[n] = np.linalg.solve(A, rhs)
+        U[n] = _lu_solve(LU, piv, rhs)
         src[n, :Db] = U[n]
         src[n, Db:] = y[n]
         # y_{n+1} = adv_0 * y_n + sum_k adv_U[k] * U_{n,k}
@@ -263,15 +282,14 @@ def evaluate_on_grid(U, y, basis_coefs, Q, M, d, force_continuous, N):
     nb = basis_coefs.shape[0]
     s = np.arange(Q + 1) / Q
     E = npp.polyval(s, basis_coefs.T)                        # (nb, Q+1)
-    vals = np.zeros((N, dd))
     Ur = U.reshape(M, m, dd)
-    for n in range(M):
-        block = np.einsum('ks,kb->sb', E[:m], Ur[n])         # (Q+1, dd)
-        if force_continuous:
-            block += np.outer(E[m], y[n])
-        vals[n * Q:(n + 1) * Q + 1] += block
-    for n in range(1, M):
-        vals[n * Q] *= 0.5
+    block = np.einsum('ks,nkb->nsb', E[:m], Ur)              # (M, Q+1, dd)
+    if force_continuous:
+        block += E[m][None, :, None] * np.asarray(y)[:M, None, :]
+    vals = np.zeros((N, dd))
+    vals[:M * Q].reshape(M, Q, dd)[...] = block[:, :Q]       # points 0 .. Q-1 of each interval
+    vals[Q::Q] += block[:, Q]                                # right endpoints Q, 2Q, ..., MQ
+    vals[Q:M * Q:Q] *= 0.5                                   # interior mesh points: average
     return vals[:, 0] if d == 0 else vals
 
 
@@ -300,43 +318,93 @@ def build_polynomials(U, y, basis_coefs, Q, M, d, force_continuous, delta):
 # Driver
 # ---------------------------------------------------------------------------
 
+def block_drivers_available(use_extension=True, show_warnings=False):
+    """True if the stepping can run in the D extension. When it cannot and
+    ``show_warnings`` is set, say so: the NumPy stepper is O(M^2) in the
+    number of mesh intervals, and the usual cause is an extension built
+    before the block drivers existed (sources updated, library not rebuilt)."""
+    from . import _dlang as _dlang_module
+    have = use_extension and getattr(_dlang_module, "have_block_drivers", lambda: False)()
+    if use_extension and not have and show_warnings:
+        print("warning: the loaded D extension does not export the lag-block drivers "
+              "(it was probably built before they were added); falling back to the NumPy "
+              "stepper, whose cost grows quadratically with the number of mesh intervals. "
+              "Rebuild the extension to restore the fast path.")
+    return have
+
+
+class Vie1ProductSetup:
+    """Everything :func:`solve_vie1_product` derives from the kernel alone:
+    the lag blocks (the dominant cost and allocation), the basis and the
+    sample indices of the collocation points. Independent of ``g_values``
+    and the initial value, so a multi-column solve builds it once and shares
+    it (read-only) between the column threads."""
+
+    def __init__(self, kernel_values, time_step, coll_divs, coll_choices,
+                 mesh_samples, kernel_interp_degree, force_continuous):
+        K = np.asarray(kernel_values, dtype=float)
+        self.N = K.shape[0]
+        self.d = 0 if K.ndim == 1 else K.shape[1]
+        self.Q = int(mesh_samples)
+        self.m = len(coll_choices)
+        self.M = (self.N - 1) // self.Q
+        self.delta = float(time_step)
+        self.force_continuous = bool(force_continuous)
+        q = int(coll_divs)
+        p = int(kernel_interp_degree)
+
+        c = np.array([k / q for k in coll_choices], dtype=float)
+        self.kappa = [k * self.Q // q for k in coll_choices]
+        # basis with the boundary function (node 0) LAST when continuous,
+        # matching the block column layout [values; boundary]
+        self.basis_coefs = (_vie1_cont_basis_coefs(c) if force_continuous
+                            else _lagrange_basis_coefs(c))
+        if force_continuous:
+            # y_{n+1} = u_n(1) = y_n * Lhat_0(1) + sum_k U_{n,k} * Lhat_k(1)
+            adv_U, adv_0 = _vie1_cont_advance(c)
+            self.adv_U = np.ascontiguousarray(adv_U, dtype=float)
+            self.adv_0 = float(adv_0)
+
+        coef = interp_cell_coefs(K, p)
+        Lam = moment_tensor(self.basis_coefs, self.Q, p)
+        self.lagB = flatten_blocks(
+            build_lag_blocks(coef, Lam, self.kappa, self.Q, self.M, self.delta), self.d)
+        # sample indices of the collocation points, interval by interval
+        self.coll_idx = (np.arange(self.M)[:, None] * self.Q
+                         + np.asarray(self.kappa)[None, :]).ravel()
+
+
 def solve_vie1_product(kernel_values, g_values, time_step, coll_divs, coll_choices,
                        mesh_samples, kernel_interp_degree, force_continuous,
-                       soln_init_value, return_function, *, use_extension=True):
+                       soln_init_value, return_function, *, use_extension=True,
+                       show_warnings=False, setup=None):
     """Solve the sampled-data VIE-1 with product-integration quadrature.
 
     Parameters are validated by :func:`voles.solve_VIE_1`; ``kernel_values``
     is ``(N,)`` or ``(N, d, d)`` with ``N = M*mesh_samples + 1``, ``g_values``
     is ``(N,)`` or ``(N, d)``, ``coll_choices`` sorted.  Returns
     ``(values, polys)`` where ``polys`` is ``None`` unless ``return_function``.
+
+    ``setup`` is an optional :class:`Vie1ProductSetup` built from the same
+    kernel and settings, to share the blocks between several right-hand
+    sides.  ``show_warnings`` reports a fall back to the NumPy stepper.
     """
     from . import _dlang as _dlang_module
 
-    K = np.asarray(kernel_values, dtype=float)
+    if setup is None:
+        setup = Vie1ProductSetup(kernel_values, time_step, coll_divs, coll_choices,
+                                 mesh_samples, kernel_interp_degree, force_continuous)
     g = np.asarray(g_values, dtype=float)
-    N = K.shape[0]
-    d = 0 if K.ndim == 1 else K.shape[1]
+    N, d, Q, M, m = setup.N, setup.d, setup.Q, setup.M, setup.m
     dd = max(d, 1)
-    Q = int(mesh_samples)
-    q = int(coll_divs)
-    m = len(coll_choices)
-    M = (N - 1) // Q
-    delta = float(time_step)
-    p = int(kernel_interp_degree)
-
-    c, basis_nodes = _basis_nodes(q, coll_choices, force_continuous)
-    kappa = [k * Q // q for k in coll_choices]
-    basis_coefs = _lagrange_coefs_on_nodes(basis_nodes)      # (nb, nb)
-
-    coef = interp_cell_coefs(K, p)
-    Lam = moment_tensor(basis_coefs, Q, p)
-    lagB = flatten_blocks(build_lag_blocks(coef, Lam, kappa, Q, M, delta), d)
+    delta = setup.delta
+    lagB = setup.lagB
+    basis_coefs = setup.basis_coefs
 
     # right-hand side at the collocation points, row i*d + a
-    idx = (np.arange(M)[:, None] * Q + np.asarray(kappa)[None, :]).ravel()
-    g_coll = g[idx].reshape(M, m * dd) if d else g[idx].reshape(M, m)
+    g_coll = g[setup.coll_idx].reshape(M, m * dd) if d else g[setup.coll_idx].reshape(M, m)
 
-    have_drivers = use_extension and getattr(_dlang_module, "have_block_drivers", lambda: False)()
+    have_drivers = block_drivers_available(use_extension, show_warnings)
 
     if not force_continuous:
         if have_drivers:
@@ -346,14 +414,11 @@ def solve_vie1_product(kernel_values, g_values, time_step, coll_divs, coll_choic
         y = None
     else:
         y0 = np.broadcast_to(np.asarray(soln_init_value, dtype=float), (dd,))
-        # y_{n+1} = u_n(1) = y_n * Lhat_0(1) + sum_k U_{n,k} * Lhat_k(1)
-        at1 = npp.polyval(1.0, basis_coefs.T)                # (nb,)
-        adv_U = np.ascontiguousarray(at1[:m])
-        adv_0 = float(at1[m])
         if have_drivers:
-            U, y = _dlang_module.solve_vie1_cont_blocks_d(lagB, g_coll, adv_U, adv_0, y0, m, dd)
+            U, y = _dlang_module.solve_vie1_cont_blocks_d(
+                lagB, g_coll, setup.adv_U, setup.adv_0, y0, m, dd)
         else:
-            U, y = step_cont_blocks_numpy(lagB, g_coll, adv_U, adv_0, y0, m, dd)
+            U, y = step_cont_blocks_numpy(lagB, g_coll, setup.adv_U, setup.adv_0, y0, m, dd)
 
     values = evaluate_on_grid(U, y, basis_coefs, Q, M, d, force_continuous, N)
     polys = None
