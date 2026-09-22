@@ -1407,8 +1407,11 @@ nodes. Default is <code>False</code>.</p>
             <td>
               <div class="doc-md-description">
                 <p>If <code>True</code> (default), print a warning when <code>kernel_values</code> is
-truncated, when <code>soln_init_value</code> has no effect, or when the Numba
-fallback is used.</p>
+truncated, when <code>soln_init_value</code> has no effect, when the node set
+has <span class="arithmatex">\(\rho = 1\)</span> exactly and so converges one order lower (see Notes),
+when the Numba fallback is used, or when <code>quadrature="product"</code>
+has to step in NumPy because the loaded D extension predates its
+block drivers.</p>
               </div>
             </td>
             <td>
@@ -1545,17 +1548,25 @@ equations), one polynomial per component.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>For invalid shapes or collocation settings — including an empty
-<code>coll_choices</code>, node sets with <span class="arithmatex">\(|\rho_m| &gt; 1\)</span>, for which the method
-diverges (see Notes; e.g. <code>(coll_divs=3, [1])</code>, <code>(4, [1, 2])</code>,
-<code>(5, [1])</code>), <code>force_continuous=True</code> without <code>soln_init_value</code>, and,
-with <code>force_continuous=True</code>, node sets whose last node is not the
-right endpoint or whose <span class="arithmatex">\(|\rho_{m-1}|\)</span> exceeds 1 (see Notes) —
-inputs too short to form one mesh interval, matrix input with zero
-columns, inputs so large that a solver buffer would exceed
-<span class="arithmatex">\(2^{31}\)</span> elements, an unknown <code>quadrature</code>, a <code>mesh_samples</code> that
-is not admissible for the chosen quadrature, or
-<code>kernel_interp_degree</code> given with <code>quadrature="collocation"</code>.</p>
+                <p>For invalid input:</p>
+<ul>
+<li>shapes that do not fit together (<code>g_values</code> must have the length
+  of <code>kernel_values</code>, before any truncation), inputs too short to
+  form one mesh interval, matrix input with zero columns, or inputs
+  so large that a solver buffer would exceed <span class="arithmatex">\(2^{31}\)</span> elements;</li>
+<li>a <code>coll_divs</code> that is not a positive integer, or <code>coll_choices</code>
+  that is empty or not made of distinct integers in
+  <code>1 .. coll_divs</code> (floats are rejected, not truncated);</li>
+<li>node sets with <span class="arithmatex">\(|\rho_m| &gt; 1\)</span>, for which the method diverges (see
+  Notes; e.g. <code>(coll_divs=3, [1])</code>, <code>(4, [1, 2])</code>, <code>(5, [1])</code>);</li>
+<li>with <code>force_continuous=True</code>: a missing <code>soln_init_value</code>, or a
+  node set whose last node is not the right endpoint or whose
+  <span class="arithmatex">\(|\rho_{m-1}|\)</span> exceeds 1 (see Notes);</li>
+<li>an unknown <code>quadrature</code>, a <code>mesh_samples</code> or
+  <code>kernel_interp_degree</code> that is not an integer or not admissible
+  for the chosen quadrature, or <code>kernel_interp_degree</code> given with
+  <code>quadrature="collocation"</code>.</li>
+</ul>
               </div>
             </td>
           </tr>
@@ -1625,7 +1636,8 @@ their lag, so the FFT-accelerated history of the D extension is used. The
 convergence conditions on the node sets are unchanged (they are
 properties of the collocation method, not of the quadrature); the
 discontinuous method is admitted for any <code>coll_divs</code> provided
-<span class="arithmatex">\(-1 \le \rho_m \le 1\)</span>. Inverting a first-kind equation amplifies errors
+<span class="arithmatex">\(-1 \le \rho_m \le 1\)</span>, with order <span class="arithmatex">\(m - 1\)</span> rather than <span class="arithmatex">\(m\)</span> at
+<span class="arithmatex">\(\rho_m = 1\)</span> (e.g. <code>coll_divs=3, coll_choices=[1, 2]</code>). Inverting a first-kind equation amplifies errors
 in the data by roughly the inverse of the mesh width, so on noisy data a
 finer mesh is not automatically better; <code>mesh_samples</code> is the knob.</p>
 <p>The solver dispatches at runtime to a D-extension routine specialised for
@@ -1650,27 +1662,7 @@ supported settings (with the non-convergent ones excluded) are listed in
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 634</span>
-<span class="normal"> 635</span>
-<span class="normal"> 636</span>
-<span class="normal"> 637</span>
-<span class="normal"> 638</span>
-<span class="normal"> 639</span>
-<span class="normal"> 640</span>
-<span class="normal"> 641</span>
-<span class="normal"> 642</span>
-<span class="normal"> 643</span>
-<span class="normal"> 644</span>
-<span class="normal"> 645</span>
-<span class="normal"> 646</span>
-<span class="normal"> 647</span>
-<span class="normal"> 648</span>
-<span class="normal"> 649</span>
-<span class="normal"> 650</span>
-<span class="normal"> 651</span>
-<span class="normal"> 652</span>
-<span class="normal"> 653</span>
-<span class="normal"> 654</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 654</span>
 <span class="normal"> 655</span>
 <span class="normal"> 656</span>
 <span class="normal"> 657</span>
@@ -2049,7 +2041,25 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="normal">1030</span>
 <span class="normal">1031</span>
 <span class="normal">1032</span>
-<span class="normal">1033</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="normal">1033</span>
+<span class="normal">1034</span>
+<span class="normal">1035</span>
+<span class="normal">1036</span>
+<span class="normal">1037</span>
+<span class="normal">1038</span>
+<span class="normal">1039</span>
+<span class="normal">1040</span>
+<span class="normal">1041</span>
+<span class="normal">1042</span>
+<span class="normal">1043</span>
+<span class="normal">1044</span>
+<span class="normal">1045</span>
+<span class="normal">1046</span>
+<span class="normal">1047</span>
+<span class="normal">1048</span>
+<span class="normal">1049</span>
+<span class="normal">1050</span>
+<span class="normal">1051</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
                 <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                 <span class="n">force_continuous</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                 <span class="n">quadrature</span><span class="o">=</span><span class="s2">"collocation"</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -2105,8 +2115,11 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="sd">        nodes. Default is ``False``.</span>
 <span class="sd">    show_warnings : bool, optional</span>
 <span class="sd">        If ``True`` (default), print a warning when ``kernel_values`` is</span>
-<span class="sd">        truncated, when ``soln_init_value`` has no effect, or when the Numba</span>
-<span class="sd">        fallback is used.</span>
+<span class="sd">        truncated, when ``soln_init_value`` has no effect, when the node set</span>
+<span class="sd">        has $\rho = 1$ exactly and so converges one order lower (see Notes),</span>
+<span class="sd">        when the Numba fallback is used, or when ``quadrature="product"``</span>
+<span class="sd">        has to step in NumPy because the loaded D extension predates its</span>
+<span class="sd">        block drivers.</span>
 <span class="sd">    quadrature : {"collocation", "product"}, optional</span>
 <span class="sd">        How the integrals of the collocation equations are evaluated from the</span>
 <span class="sd">        sampled kernel. ``"collocation"`` (default) applies the interpolatory</span>
@@ -2154,17 +2167,24 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="sd">    Raises</span>
 <span class="sd">    ------</span>
 <span class="sd">    ValueError</span>
-<span class="sd">        For invalid shapes or collocation settings — including an empty</span>
-<span class="sd">        ``coll_choices``, node sets with $|\rho_m| &gt; 1$, for which the method</span>
-<span class="sd">        diverges (see Notes; e.g. ``(coll_divs=3, [1])``, ``(4, [1, 2])``,</span>
-<span class="sd">        ``(5, [1])``), ``force_continuous=True`` without ``soln_init_value``, and,</span>
-<span class="sd">        with ``force_continuous=True``, node sets whose last node is not the</span>
-<span class="sd">        right endpoint or whose $|\rho_{m-1}|$ exceeds 1 (see Notes) —</span>
-<span class="sd">        inputs too short to form one mesh interval, matrix input with zero</span>
-<span class="sd">        columns, inputs so large that a solver buffer would exceed</span>
-<span class="sd">        $2^{31}$ elements, an unknown ``quadrature``, a ``mesh_samples`` that</span>
-<span class="sd">        is not admissible for the chosen quadrature, or</span>
-<span class="sd">        ``kernel_interp_degree`` given with ``quadrature="collocation"``.</span>
+<span class="sd">        For invalid input:</span>
+
+<span class="sd">        - shapes that do not fit together (``g_values`` must have the length</span>
+<span class="sd">          of ``kernel_values``, before any truncation), inputs too short to</span>
+<span class="sd">          form one mesh interval, matrix input with zero columns, or inputs</span>
+<span class="sd">          so large that a solver buffer would exceed $2^{31}$ elements;</span>
+<span class="sd">        - a ``coll_divs`` that is not a positive integer, or ``coll_choices``</span>
+<span class="sd">          that is empty or not made of distinct integers in</span>
+<span class="sd">          ``1 .. coll_divs`` (floats are rejected, not truncated);</span>
+<span class="sd">        - node sets with $|\rho_m| &gt; 1$, for which the method diverges (see</span>
+<span class="sd">          Notes; e.g. ``(coll_divs=3, [1])``, ``(4, [1, 2])``, ``(5, [1])``);</span>
+<span class="sd">        - with ``force_continuous=True``: a missing ``soln_init_value``, or a</span>
+<span class="sd">          node set whose last node is not the right endpoint or whose</span>
+<span class="sd">          $|\rho_{m-1}|$ exceeds 1 (see Notes);</span>
+<span class="sd">        - an unknown ``quadrature``, a ``mesh_samples`` or</span>
+<span class="sd">          ``kernel_interp_degree`` that is not an integer or not admissible</span>
+<span class="sd">          for the chosen quadrature, or ``kernel_interp_degree`` given with</span>
+<span class="sd">          ``quadrature="collocation"``.</span>
 <span class="sd">    NotImplementedError</span>
 <span class="sd">        For a collocation setting not compiled into the D extension, on the</span>
 <span class="sd">        vector/matrix path (no fallback exists) or on the scalar path when</span>
@@ -2215,7 +2235,8 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="sd">    convergence conditions on the node sets are unchanged (they are</span>
 <span class="sd">    properties of the collocation method, not of the quadrature); the</span>
 <span class="sd">    discontinuous method is admitted for any ``coll_divs`` provided</span>
-<span class="sd">    $-1 \le \rho_m \le 1$. Inverting a first-kind equation amplifies errors</span>
+<span class="sd">    $-1 \le \rho_m \le 1$, with order $m - 1$ rather than $m$ at</span>
+<span class="sd">    $\rho_m = 1$ (e.g. ``coll_divs=3, coll_choices=[1, 2]``). Inverting a first-kind equation amplifies errors</span>
 <span class="sd">    in the data by roughly the inverse of the mesh width, so on noisy data a</span>
 <span class="sd">    finer mesh is not automatically better; ``mesh_samples`` is the knob.</span>
 
@@ -2278,7 +2299,12 @@ supported settings (with the non-convergent ones excluded) are listed in
     <span class="k">if</span> <span class="n">kernel_interp_degree</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
             <span class="s2">"kernel_interp_degree applies only to quadrature='product'"</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">mesh_samples</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">mesh_samples</span><span class="p">)</span> <span class="o">!=</span> <span class="n">coll_divs</span> <span class="o">**</span> <span class="mi">2</span><span class="p">:</span>
+    <span class="c1"># One validation of the collocation setting for the scalar, vector and</span>
+    <span class="c1"># matrix paths (the product path applies the same checks itself).</span>
+    <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span> <span class="o">=</span> <span class="n">_validate_vie1_coll_setting</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
+    <span class="n">_check_vie1_setting</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
+    <span class="n">_warn_reduced_order</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">mesh_samples</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">_as_int</span><span class="p">(</span><span class="s2">"mesh_samples"</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="p">)</span> <span class="o">!=</span> <span class="n">coll_divs</span> <span class="o">**</span> <span class="mi">2</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">"with quadrature='collocation' the mesh is coll_divs**2 = </span><span class="si">{</span><span class="n">coll_divs</span><span class="w"> </span><span class="o">**</span><span class="w"> </span><span class="mi">2</span><span class="si">}</span><span class="s2"> "</span>
             <span class="sa">f</span><span class="s2">"samples wide (got mesh_samples=</span><span class="si">{</span><span class="n">mesh_samples</span><span class="si">}</span><span class="s2">); pass quadrature='product' "</span>
@@ -2298,9 +2324,10 @@ supported settings (with the non-convergent ones excluded) are listed in
             <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">g_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">g_values_</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>  <span class="c1"># matrix case: shape (N, d, m_cols)</span>
                 <span class="n">m_cols</span> <span class="o">=</span> <span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-                <span class="k">if</span> <span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="n">d</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">!=</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
                     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">"g_values shape </span><span class="si">{</span><span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel_values shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+                        <span class="sa">f</span><span class="s2">"g_values shape </span><span class="si">{</span><span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel_values shape "</span>
+                        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="p">(</span><span class="n">N_orig</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">)</span><span class="si">}</span><span class="s2">: expected (</span><span class="si">{</span><span class="n">N_orig</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">, m)"</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">soln_init_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="n">init_cols</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
                     <span class="k">if</span> <span class="n">init_cols</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">m_cols</span><span class="p">):</span>
@@ -2339,7 +2366,8 @@ supported settings (with the non-convergent ones excluded) are listed in
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
                     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">"g_values shape </span><span class="si">{</span><span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel_values shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+                        <span class="sa">f</span><span class="s2">"g_values shape </span><span class="si">{</span><span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel_values shape "</span>
+                        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="p">(</span><span class="n">N_orig</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">)</span><span class="si">}</span><span class="s2">: expected (</span><span class="si">{</span><span class="n">N_orig</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
                 <span class="n">g_values_</span> <span class="o">=</span> <span class="n">g_values_</span><span class="p">[:</span><span class="n">N</span><span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
@@ -2356,15 +2384,6 @@ supported settings (with the non-convergent ones excluded) are listed in
         <span class="k">else</span><span class="p">:</span>
             <span class="n">soln_init_value_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
 
-        <span class="k">assert</span> <span class="mi">0</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="s2">"zero cannot be a collocation parameter"</span>
-        <span class="k">assert</span> <span class="n">coll_divs</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"coll_divs must be a positive integer"</span>
-        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">),</span> <span class="s2">"coll_choices must be a list of integers"</span>
-        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="n">coll_choices</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">),</span> <span class="s2">"coll_choices must be distinct"</span>
-        <span class="k">for</span> <span class="n">choice</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-            <span class="k">assert</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">choice</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="s2">"coll_choices must contain only integers from 1 to coll_divs"</span>
-        <span class="n">coll_choices</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">)</span>
-
-        <span class="n">_check_vie1_setting</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
         <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_fast_settings_VIE_1</span><span class="p">:</span>
             <span class="c1"># NotImplementedError subclasses RuntimeError, so callers</span>
             <span class="c1"># catching the historical RuntimeError still work; this matches</span>
@@ -2411,17 +2430,6 @@ supported settings (with the non-convergent ones excluded) are listed in
         <span class="k">else</span><span class="p">:</span>
             <span class="n">soln_init_value_</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">)</span>
 
-    <span class="k">assert</span> <span class="mi">0</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="s2">"zero cannot be a collocation parameter"</span>
-    <span class="k">assert</span> <span class="n">coll_divs</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"coll_divs must be a positive integer"</span>
-    <span class="k">assert</span> <span class="nb">all</span><span class="p">([</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">choice</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">for</span> <span class="n">choice</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">]),</span> \
-        <span class="s2">"coll_choices must be a list of integers"</span>
-    <span class="k">assert</span> <span class="nb">all</span><span class="p">([</span><span class="n">coll_choices</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">]),</span> \
-        <span class="s2">"all integers in coll_choices must be distinct"</span>
-    <span class="k">for</span> <span class="n">choice</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-        <span class="k">assert</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">choice</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">,</span> \
-            <span class="s2">"coll_choices must contain only integers from 1 to coll_divs"</span>
-    <span class="n">coll_choices</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">)</span>
-    <span class="n">_check_vie1_setting</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
     <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_fast_settings_VIE_1</span><span class="p">:</span>
         <span class="n">soln_vals</span><span class="p">,</span> <span class="n">poly_coefs</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vie1_d</span><span class="p">(</span>
             <span class="n">g_values_</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span>
