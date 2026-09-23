@@ -41,39 +41,32 @@ def _resolve_return_flag(return_function, return_polys):
     return bool(return_function)
 
 
-def _wrap_polys(polys, time_step, coll_divs, d=0, m=0):
-    """Wrap a per-interval list of polynomials in a callable `_SolutionFunction`.
-
-    The array-based solvers use a uniform mesh of width ``coll_divs**2 *
-    time_step``; the breakpoints are reconstructed from the interval count.
-    """
-    polys = list(polys)
+def _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=0, trim=True):
+    """`_SolutionFunction` over the D/Numba drivers' per-interval coefficient
+    array (``(mesh_divs, P)`` scalar, ``(mesh_divs, P, d)`` vector), in the
+    local variable on [0, 1] of each mesh interval. Polynomial objects are
+    built lazily and match what the eager builders produced: the scalar paths
+    use domains ``(i * coll_divs**2) * time_step`` (trimmed except for
+    VIDE), the vector paths ``i * (coll_divs**2 * time_step)``, trimmed."""
+    poly_coefs = np.asarray(poly_coefs)
+    M = poly_coefs.shape[0]
     h = coll_divs ** 2 * time_step
-    mesh_breakpoints = np.arange(len(polys) + 1) * h
-    return _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
+    mesh_breakpoints = np.arange(M + 1) * h
+    if d == 0:
+        edges = (np.arange(M + 1) * coll_divs ** 2) * time_step
+        return _SolutionFunction.from_unit_coefs(poly_coefs, mesh_breakpoints, d=0,
+                                                 edges=edges, trim=trim)
+    return _SolutionFunction.from_unit_coefs(poly_coefs, mesh_breakpoints, d=d)
 
 
-def _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step):
-    """Convert (mesh_divs, m+1, d) poly coef array to list of (d,) Polynomial arrays.
+def _stack_column_solutions(col_funcs, d, m_cols):
+    """Matrix-valued `_SolutionFunction` from the per-column vector ones
+    (each built by `_wrap_unit_coefs` / `from_unit_coefs`)."""
+    first = col_funcs[0]
+    unit = np.stack([f._unit for f in col_funcs], axis=-1)   # (M, P, d, m)
+    return _SolutionFunction.from_unit_coefs(unit, first.mesh_breakpoints, d=d, m=m_cols,
+                                             edges=first._edges, trim=first._trim)
 
-    poly_coefs[n, :, r] are coefficients in rel_x ∈ [0,1] for component r on interval n.
-    Returns a list of length mesh_divs where each element is a (d,) object array of
-    numpy.polynomial.Polynomial objects mapped to actual time.
-    """
-    d = poly_coefs.shape[2]
-    h = coll_divs ** 2 * time_step
-    polys = []
-    for n in range(mesh_divs):
-        t_start = n * h
-        t_end = (n + 1) * h
-        domain = (t_start, t_end)
-        arr = np.empty(d, dtype=object)
-        for r in range(d):
-            coefs = poly_coefs[n, :, r]
-            p = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
-            arr[r] = p.convert(domain=domain, window=domain).trim()
-        polys.append(arr)
-    return polys
 
 def _vie1_rho(coll_divs, coll_choices, continuous=False):
     r"""Exact amplification factor of a VIE-1 collocation method on the nodes
@@ -583,18 +576,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                 results = list(ex.map(_col_vide, range(m_cols)))
             if return_function:
-                col_solns = [r[0] for r in results]
-                col_polys = [r[1] for r in results]
-                soln = np.stack(col_solns, axis=2)
-                mesh_divs = len(col_polys[0])
-                mat_polys = []
-                for n in range(mesh_divs):
-                    arr = np.empty((d, m_cols), dtype=object)
-                    for j in range(m_cols):
-                        arr[:, j] = col_polys[j][n]
-                    mat_polys.append(arr)
-                return (soln, _wrap_polys(mat_polys, time_step, coll_divs,
-                                          d=d, m=m_cols))
+                soln = np.stack([r[0] for r in results], axis=2)
+                return (soln, _stack_column_solutions([r[1] for r in results], d, m_cols))
             return np.stack(results, axis=2)
 
         if g_values is not None:
@@ -630,9 +613,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         soln_vals, poly_coefs = _dlang_module.solve_vide_vec_d(
             g_c, k_c, a_c, soln_init_values_, time_step, coll_divs, coll_choices, return_function)
         if return_function:
-            return (soln_vals, _wrap_polys(
-                _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step),
-                time_step, coll_divs, d=d))
+            return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=d))
         return soln_vals
 
     # ------------------------------------------------------------------ scalar path
@@ -664,13 +645,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             f"use a supported setting (see fast_coll_settings_VIDE)."
         )
     if return_function:
-        polys = []
-        for i, coefs in enumerate(poly_coefs):
-            domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
-            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
-            poly = poly.convert(domain=domain, window=domain)
-            polys.append(poly)
-        return (soln_vals, _wrap_polys(polys, time_step, coll_divs, d=0))
+        return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=0,
+                                            trim=False))
     else:
         return soln_vals
 
@@ -716,21 +692,13 @@ def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh
     return Q, p, N_orig, N, K, d, M, np.arange(M + 1) * (Q * time_step)
 
 
-def _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints):
-    """Combine per-column ``(values, polys)`` pairs from the ``_product``
+def _stack_matrix_results(results, return_function, d, m_cols):
+    """Combine per-column ``(values, solution)`` pairs from the ``_product``
     drivers into the matrix-valued result."""
     soln = np.stack([r[0] for r in results], axis=2)
     if return_function:
-        col_polys = [r[1] for r in results]
-        mat_polys = []
-        for n in range(M):
-            arr = np.empty((d, m_cols), dtype=object)
-            for j in range(m_cols):
-                arr[:, j] = col_polys[j][n]
-            mat_polys.append(arr)
-        return soln, _SolutionFunction(mat_polys, breakpoints, d=d, m=m_cols)
+        return soln, _stack_column_solutions([r[1] for r in results], d, m_cols)
     return soln
-
 
 def _solve_vie2_product_path(kernel_values_, g_values, time_step, coll_divs, coll_choices,
                              return_function, show_warnings, mesh_samples, kernel_interp_degree):
@@ -762,7 +730,7 @@ def _solve_vie2_product_path(kernel_values_, g_values, time_step, coll_divs, col
                     setup=setup)
             with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                 results = list(ex.map(_col, range(m_cols)))
-            return _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints)
+            return _stack_matrix_results(results, return_function, d, m_cols)
         g = _check_series("g_values", g, N_orig, kernel_values_.shape,
                           (N_orig,) if d == 0 else (N_orig, d))[:N]
 
@@ -770,7 +738,7 @@ def _solve_vie2_product_path(kernel_values_, g_values, time_step, coll_divs, col
         K, g, time_step, q, coll_choices, Q, p, return_function,
         setup=setup, show_warnings=show_warnings)
     if return_function:
-        return values, _SolutionFunction(polys, breakpoints, d=d, m=0)
+        return values, polys
     return values
 
 
@@ -823,7 +791,7 @@ def _solve_vide_product_path(kernel_values_, a_values, g_values, soln_init_value
                 return_function, setup=setup)
         with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
             results = list(ex.map(_col, range(m_cols)))
-        return _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints)
+        return _stack_matrix_results(results, return_function, d, m_cols)
 
     # ---------------------------------------------------------------- g, y0
     g = None if g_values is None else _check_series(
@@ -843,7 +811,7 @@ def _solve_vide_product_path(kernel_values_, a_values, g_values, soln_init_value
         K, a, g, time_step, q, coll_choices, Q, p, init, return_function,
         setup=setup, show_warnings=show_warnings)
     if return_function:
-        return values, _SolutionFunction(polys, breakpoints, d=d, m=0)
+        return values, polys
     return values
 
 
@@ -893,7 +861,7 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
                     return_function, setup=setup)
             with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                 results = list(ex.map(_col, range(m_cols)))
-            return _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints)
+            return _stack_matrix_results(results, return_function, d, m_cols)
         g = _check_series("g_values", g, N_orig, kernel_values_.shape,
                           (N_orig,) if d == 0 else (N_orig, d))[:N]
 
@@ -914,7 +882,7 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
         K, g, time_step, q, coll_choices, Q, p, force_continuous, init, return_function,
         setup=setup, show_warnings=show_warnings)
     if return_function:
-        return values, _SolutionFunction(polys, breakpoints, d=d, m=0)
+        return values, polys
     return values
 
 
@@ -1223,18 +1191,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                 with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                     results = list(ex.map(_col_vie1, range(m_cols)))
                 if return_function:
-                    col_solns = [r[0] for r in results]
-                    col_polys = [r[1] for r in results]
-                    soln = np.stack(col_solns, axis=2)
-                    mesh_divs = len(col_polys[0])
-                    mat_polys = []
-                    for n in range(mesh_divs):
-                        arr = np.empty((d, m_cols), dtype=object)
-                        for j in range(m_cols):
-                            arr[:, j] = col_polys[j][n]
-                        mat_polys.append(arr)
-                    return (soln, _wrap_polys(mat_polys, time_step, coll_divs,
-                                              d=d, m=m_cols))
+                    soln = np.stack([r[0] for r in results], axis=2)
+                    return (soln, _stack_column_solutions([r[1] for r in results], d, m_cols))
                 return np.stack(results, axis=2)
             else:
                 if g_values_.shape != (N_orig, d):
@@ -1273,9 +1231,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             g_c, k_c, soln_init_value_, time_step,
             coll_divs, coll_choices, return_function, force_continuous)
         if return_function:
-            return (soln_vals, _wrap_polys(
-                _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step),
-                time_step, coll_divs, d=d))
+            return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=d))
         return soln_vals
 
     # ------------------------------------------------------------------ scalar path
@@ -1315,13 +1271,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         )
 
     if return_function:
-        polys = []
-        for i, coefs in enumerate(poly_coefs):
-            domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
-            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
-            poly = poly.convert(domain=domain, window=domain)
-            polys.append(poly.trim())
-        return (soln_vals, _wrap_polys(polys, time_step, coll_divs, d=0))
+        return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=0))
     else:
         return soln_vals
 
@@ -1522,18 +1472,8 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                 with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                     results = list(ex.map(_col_vie2, range(m_cols)))
                 if return_function:
-                    col_solns = [r[0] for r in results]
-                    col_polys = [r[1] for r in results]
-                    soln = np.stack(col_solns, axis=2)
-                    mesh_divs = len(col_polys[0])
-                    mat_polys = []
-                    for n in range(mesh_divs):
-                        arr = np.empty((d, m_cols), dtype=object)
-                        for j in range(m_cols):
-                            arr[:, j] = col_polys[j][n]
-                        mat_polys.append(arr)
-                    return (soln, _wrap_polys(mat_polys, time_step, coll_divs,
-                                              d=d, m=m_cols))
+                    soln = np.stack([r[0] for r in results], axis=2)
+                    return (soln, _stack_column_solutions([r[1] for r in results], d, m_cols))
                 return np.stack(results, axis=2)
             else:
                 g_values_ = _check_series("g_values", g_values_, N_orig, (N_orig, d, d),
@@ -1556,9 +1496,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         soln_vals, poly_coefs = _dlang_module.solve_vie2_vec_d(
             g_c, k_c, time_step, coll_divs, coll_choices, return_function)
         if return_function:
-            return (soln_vals, _wrap_polys(
-                _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step),
-                time_step, coll_divs, d=d))
+            return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=d))
         return soln_vals
 
     # ------------------------------------------------------------------ scalar path
@@ -1584,12 +1522,6 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         )
 
     if return_function:
-        polys = []
-        for i, coefs in enumerate(poly_coefs):
-            domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
-            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
-            poly = poly.convert(domain=domain, window=domain)
-            polys.append(poly.trim())
-        return (soln_vals, _wrap_polys(polys, time_step, coll_divs, d=0))
+        return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=0))
     else:
         return soln_vals

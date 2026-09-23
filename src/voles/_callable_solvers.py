@@ -1314,78 +1314,31 @@ def _detect_g_matrix_cols(g, d, sample_t):
 # ---------------------------------------------------------------------------
 
 
-def _build_polynomials(y: np.ndarray, mesh_breakpoints: np.ndarray,
-                       node_pos: np.ndarray) -> list:
-    """Convert collocation-node values y[n,k] to a list of M Polynomial objects.
+def _combine_basis(coefs, basis, out, scale=None):
+    """``out + sum_k [scale *] coefs[:, k] * basis[k]``, vectorized over
+    intervals and components (``coefs`` is ``(M, p, *comp)``, ``basis``
+    ``(p, P)``, ``out`` ``(M, P, *comp)``; ``scale`` is per-interval). Terms
+    are added in k order, matching the per-interval loops this replaced."""
+    extra = (1,) * (coefs.ndim - 2)
+    for k in range(coefs.shape[1]):
+        c = coefs[:, k]
+        if scale is not None:
+            c = scale.reshape((-1,) + extra) * c
+        out = out + c[:, None] * basis[k].reshape((1, -1) + extra)
+    return out
 
-    Each Polynomial maps actual time t to the Lagrange interpolant on interval n.
-    """
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
+
+def _lagrange_solution(y: np.ndarray, mesh_breakpoints: np.ndarray,
+                       node_pos: np.ndarray, d: int = 0, m: int = 0):
+    """Solution function for collocation-node values ``y`` (shape ``(M, p)``,
+    ``(M, p, d)`` or ``(M, p, d, m)``): on interval n the Lagrange
+    interpolant of ``y[n]`` in the local variable. Polynomial objects on
+    the time axis are built only on first access to ``.polynomials``."""
     basis = _lagrange_basis_coefs(node_pos)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        norm_coef = np.zeros(p)
-        for k in range(p):
-            norm_coef += y[n, k] * basis[k]
-        poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                        window=(0.0, 1.0), symbol='t')
-        polys.append(poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim())
-    return polys
-
-
-def _build_polynomials_vector(y: np.ndarray, mesh_breakpoints: np.ndarray,
-                               node_pos: np.ndarray,
-                               d: int) -> list:
-    """Vector analogue: y has shape (M, p, d); return list of (d,) Polynomial arrays."""
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
-    basis = _lagrange_basis_coefs(node_pos)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        comps = np.empty(d, dtype=object)
-        for r in range(d):
-            norm_coef = np.zeros(p)
-            for k in range(p):
-                norm_coef += y[n, k, r] * basis[k]
-            poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                            window=(0.0, 1.0), symbol='t')
-            comps[r] = poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim()
-        polys.append(comps)
-    return polys
-
-
-def _build_polynomials_matrix(y: np.ndarray, mesh_breakpoints: np.ndarray,
-                               node_pos: np.ndarray,
-                               d: int, m: int) -> list:
-    """Matrix analogue of _build_polynomials_vector.
-
-    y has shape (M, p, d, m); returns a list of M arrays each of shape (d, m)
-    holding one Polynomial per (component, right-hand-side) pair.
-    """
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
-    basis = _lagrange_basis_coefs(node_pos)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        comps = np.empty((d, m), dtype=object)
-        for r in range(d):
-            for c in range(m):
-                norm_coef = np.zeros(p)
-                for k in range(p):
-                    norm_coef += y[n, k, r, c] * basis[k]
-                poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                                window=(0.0, 1.0), symbol='t')
-                comps[r, c] = poly.convert(domain=(t_l, t_r),
-                                           window=(t_l, t_r)).trim()
-        polys.append(comps)
-    return polys
+    y = np.asarray(y, dtype=float)
+    unit = np.zeros((y.shape[0], basis.shape[1]) + y.shape[2:])
+    unit = _combine_basis(y, basis, unit)
+    return _SolutionFunction.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
 
 
 def _detect_kernel_shape(kernel, sample_u: float):
@@ -1752,9 +1705,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         y = _dlang_module.function_solve_vie2_d(W, g_arr)
 
         if return_function:
-            polys = _build_polynomials(y, mesh_breakpoints, node_pos)
-            y_func = _SolutionFunction(polys, mesh_breakpoints, d=0)
-            return y, y_func
+            return y, _lagrange_solution(y, mesh_breakpoints, node_pos)
         return y
 
     # ----- Vector / matrix path -----
@@ -1787,18 +1738,14 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         y = np.stack(cols, axis=3)  # (M, p, d, m)
 
         if return_function:
-            polys = _build_polynomials_matrix(y, mesh_breakpoints, node_pos,
-                                              d, m)
-            return y, _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
+            return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d, m=m)
         return y
 
     g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
     y = _dlang_module.function_solve_vie2_vec_d(W, g_arr)
 
     if return_function:
-        polys = _build_polynomials_vector(y, mesh_breakpoints, node_pos, d)
-        y_func = _SolutionFunction(polys, mesh_breakpoints, d=d)
-        return y, y_func
+        return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d)
     return y
 
 
@@ -1806,30 +1753,24 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
 # VIDE helpers
 # ---------------------------------------------------------------------------
 
-def _build_vide_polynomials_scalar(y_prime: np.ndarray, y_boundary: np.ndarray,
-                                    mesh_breakpoints: np.ndarray,
-                                    node_pos: np.ndarray) -> list:
-    """Build per-interval Polynomial objects for y(t) given y' values + boundary y values.
+def _vide_solution(y_prime: np.ndarray, y_boundary: np.ndarray,
+                   mesh_breakpoints: np.ndarray, node_pos: np.ndarray,
+                   d: int = 0, m: int = 0):
+    """Solution function for y(t) given y' at the nodes and boundary y values.
 
     On interval n, y(t) = y_n + h_n * sum_k y_prime[n, k] * I_k((t - t_n)/h_n),
-    where I_k is the antiderivative-of-Lagrange basis.
+    where I_k is the antiderivative-of-Lagrange basis. ``y_prime`` is
+    ``(M, p, *comp)``, ``y_boundary`` ``(M+1, *comp)``.
     """
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
     anti = _lagrange_antideriv_coefs(node_pos)  # (p, p+1)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        h = t_r - t_l
-        norm_coef = np.zeros(p + 1)
-        norm_coef[0] = y_boundary[n]  # constant: y_n
-        for k in range(p):
-            norm_coef += h * y_prime[n, k] * anti[k]
-        poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                        window=(0.0, 1.0), symbol='t')
-        polys.append(poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim())
-    return polys
+    y_prime = np.asarray(y_prime, dtype=float)
+    M = y_prime.shape[0]
+    bps = np.asarray(mesh_breakpoints, dtype=float)
+    h = bps[1:M + 1] - bps[:M]
+    unit = np.zeros((M, anti.shape[1]) + y_prime.shape[2:])
+    unit[:, 0] = np.asarray(y_boundary, dtype=float)[:M]   # constant: y_n
+    unit = _combine_basis(y_prime, anti, unit, scale=h)
+    return _SolutionFunction.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
 
 
 @_escalate_complex_warning
@@ -2010,10 +1951,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
             y_at_coll[n, :] = y_boundary[n] + widths[n] * (alpha @ y_prime[n])
 
         if return_function:
-            polys = _build_vide_polynomials_scalar(
-                y_prime, y_boundary, mesh_breakpoints, node_pos)
-            y_func = _SolutionFunction(polys, mesh_breakpoints, d=0)
-            return y_at_coll, y_func
+            return y_at_coll, _vide_solution(y_prime, y_boundary,
+                                             mesh_breakpoints, node_pos)
         return y_at_coll
 
     # ----- Vector / matrix path -----
@@ -2063,11 +2002,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
                 alpha, y_prime[n], axes=([1], [0]))
 
         if return_function:
-            polys = _build_vide_polynomials_matrix(
-                y_prime, y_boundary, mesh_breakpoints, node_pos,
-                d, m)
-            return y_at_coll, _SolutionFunction(polys, mesh_breakpoints,
-                                                d=d, m=m)
+            return y_at_coll, _vide_solution(y_prime, y_boundary,
+                                             mesh_breakpoints, node_pos, d=d, m=m)
         return y_at_coll
 
     # Vector path
@@ -2088,69 +2024,9 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         y_at_coll[n, :, :] = y_boundary[n] + widths[n] * (alpha @ y_prime[n])
 
     if return_function:
-        polys = _build_vide_polynomials_vector(
-            y_prime, y_boundary, mesh_breakpoints, node_pos, d)
-        y_func = _SolutionFunction(polys, mesh_breakpoints, d=d)
-        return y_at_coll, y_func
+        return y_at_coll, _vide_solution(y_prime, y_boundary,
+                                         mesh_breakpoints, node_pos, d=d)
     return y_at_coll
-
-
-def _build_vide_polynomials_vector(y_prime: np.ndarray, y_boundary: np.ndarray,
-                                    mesh_breakpoints: np.ndarray,
-                                    node_pos: np.ndarray,
-                                    d: int) -> list:
-    """Vector analogue of _build_vide_polynomials_scalar."""
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
-    anti = _lagrange_antideriv_coefs(node_pos)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        h = t_r - t_l
-        comps = np.empty(d, dtype=object)
-        for r in range(d):
-            norm_coef = np.zeros(p + 1)
-            norm_coef[0] = y_boundary[n, r]
-            for k in range(p):
-                norm_coef += h * y_prime[n, k, r] * anti[k]
-            poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                            window=(0.0, 1.0), symbol='t')
-            comps[r] = poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim()
-        polys.append(comps)
-    return polys
-
-
-def _build_vide_polynomials_matrix(y_prime: np.ndarray, y_boundary: np.ndarray,
-                                    mesh_breakpoints: np.ndarray,
-                                    node_pos: np.ndarray,
-                                    d: int, m: int) -> list:
-    """Matrix analogue of _build_vide_polynomials_vector.
-
-    y_prime has shape (M, p, d, m) and y_boundary shape (M+1, d, m); returns a
-    list of M arrays each of shape (d, m) of Polynomial objects.
-    """
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
-    anti = _lagrange_antideriv_coefs(node_pos)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        h = t_r - t_l
-        comps = np.empty((d, m), dtype=object)
-        for r in range(d):
-            for c in range(m):
-                norm_coef = np.zeros(p + 1)
-                norm_coef[0] = y_boundary[n, r, c]
-                for k in range(p):
-                    norm_coef += h * y_prime[n, k, r, c] * anti[k]
-                poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                                window=(0.0, 1.0), symbol='t')
-                comps[r, c] = poly.convert(domain=(t_l, t_r),
-                                           window=(t_l, t_r)).trim()
-        polys.append(comps)
-    return polys
 
 
 # ---------------------------------------------------------------------------
@@ -2443,78 +2319,22 @@ def _vie1_cont_advance(node_pos: np.ndarray):
     return adv_U, adv_0
 
 
-def _build_vie1_cont_polynomials_scalar(U, boundary, mesh_breakpoints, node_pos):
-    """Degree-m piecewise polynomials for the continuous VIE-1 solution.
+def _vie1_cont_solution(U, boundary, mesh_breakpoints, node_pos, d=0, m=0):
+    """Solution function for the continuous VIE-1 method (degree m pieces).
 
     On interval n: y(theta) = boundary[n]*Lt_0(theta) + sum_k U[n,k]*Lt_{k+1}(theta),
-    with Lt the augmented Lagrange basis on {0} ∪ node_pos.
+    with Lt the augmented Lagrange basis on {0} ∪ node_pos. ``U`` is
+    ``(M, p, *comp)``, ``boundary`` ``(M+1, *comp)``.
     """
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
     aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
     lag = _lagrange_basis_coefs(aug)            # rows: Lt_0, Lt_1, ..., Lt_p
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        norm_coef = boundary[n] * lag[0]
-        for k in range(p):
-            norm_coef = norm_coef + U[n, k] * lag[k + 1]
-        poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                        window=(0.0, 1.0), symbol='t')
-        polys.append(poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim())
-    return polys
-
-
-def _build_vie1_cont_polynomials_vector(U, boundary, mesh_breakpoints, node_pos, d):
-    """Vector analogue of _build_vie1_cont_polynomials_scalar.
-
-    U has shape (M, p, d), boundary (M+1, d); returns a list of M (d,) object
-    arrays of Polynomials.
-    """
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
-    aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
-    lag = _lagrange_basis_coefs(aug)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        comps = np.empty(d, dtype=object)
-        for r in range(d):
-            norm_coef = boundary[n, r] * lag[0]
-            for k in range(p):
-                norm_coef = norm_coef + U[n, k, r] * lag[k + 1]
-            poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                            window=(0.0, 1.0), symbol='t')
-            comps[r] = poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim()
-        polys.append(comps)
-    return polys
-
-
-def _build_vie1_cont_polynomials_matrix(U, boundary, mesh_breakpoints, node_pos, d, m):
-    """Matrix analogue: U has shape (M, p, d, m), boundary (M+1, d, m); returns
-    a list of M (d, m) object arrays of Polynomials."""
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
-    aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
-    lag = _lagrange_basis_coefs(aug)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        comps = np.empty((d, m), dtype=object)
-        for r in range(d):
-            for c in range(m):
-                norm_coef = boundary[n, r, c] * lag[0]
-                for k in range(p):
-                    norm_coef = norm_coef + U[n, k, r, c] * lag[k + 1]
-                poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                                window=(0.0, 1.0), symbol='t')
-                comps[r, c] = poly.convert(domain=(t_l, t_r),
-                                           window=(t_l, t_r)).trim()
-        polys.append(comps)
-    return polys
+    U = np.asarray(U, dtype=float)
+    M = U.shape[0]
+    extra = (1,) * (U.ndim - 2)
+    b = np.asarray(boundary, dtype=float)[:M]
+    unit = b[:, None] * lag[0].reshape((1, -1) + extra)
+    unit = _combine_basis(U, lag[1:], unit)
+    return _SolutionFunction.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
 
 
 def _warn_vie1_g_start_callable(g, mesh_breakpoints, show_warnings):
@@ -2788,9 +2608,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             y, boundary = _dlang_module.function_solve_vie1_cont_d(
                 W, g_arr, adv_U, adv_0, _scalar_init(soln_init_value))
             if return_function:
-                polys = _build_vie1_cont_polynomials_scalar(
-                    y, boundary, mesh_breakpoints, node_pos)
-                return y, _SolutionFunction(polys, mesh_breakpoints, d=0)
+                return y, _vie1_cont_solution(y, boundary, mesh_breakpoints, node_pos)
             return y
 
         W = _build_W_scalar(kernel, mesh_breakpoints, node_pos,
@@ -2798,9 +2616,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                             reuse_adaptive_blocks=reuse_adaptive_blocks)
         y = _dlang_module.function_solve_vie1_d(W, g_arr)
         if return_function:
-            polys = _build_polynomials(y, mesh_breakpoints, node_pos)
-            y_func = _SolutionFunction(polys, mesh_breakpoints, d=0)
-            return y, y_func
+            return y, _lagrange_solution(y, mesh_breakpoints, node_pos)
         return y
 
     # ----- Vector / matrix path -----
@@ -2851,9 +2667,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             y = np.stack([r[0] for r in results], axis=3)        # (M, p, d, m)
             if return_function:
                 boundary = np.stack([r[1] for r in results], axis=2)  # (M+1, d, m)
-                polys = _build_vie1_cont_polynomials_matrix(
-                    y, boundary, mesh_breakpoints, node_pos, d, m)
-                return y, _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
+                return y, _vie1_cont_solution(y, boundary, mesh_breakpoints,
+                                              node_pos, d=d, m=m)
             return y
 
         def _col_solve(j):
@@ -2865,9 +2680,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         y = np.stack(cols, axis=3)  # (M, p, d, m)
 
         if return_function:
-            polys = _build_polynomials_matrix(y, mesh_breakpoints, node_pos,
-                                              d, m)
-            return y, _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
+            return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d, m=m)
         return y
 
     g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
@@ -2881,15 +2694,12 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         y, boundary = _dlang_module.function_solve_vie1_cont_vec_d(
             W, g_arr, adv_U, adv_0, init_vec)
         if return_function:
-            polys = _build_vie1_cont_polynomials_vector(
-                y, boundary, mesh_breakpoints, node_pos, d)
-            return y, _SolutionFunction(polys, mesh_breakpoints, d=d)
+            return y, _vie1_cont_solution(y, boundary, mesh_breakpoints,
+                                          node_pos, d=d)
         return y
 
     y = _dlang_module.function_solve_vie1_vec_d(W, g_arr)
 
     if return_function:
-        polys = _build_polynomials_vector(y, mesh_breakpoints, node_pos, d)
-        y_func = _SolutionFunction(polys, mesh_breakpoints, d=d)
-        return y, y_func
+        return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d)
     return y
