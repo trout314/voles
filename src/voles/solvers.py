@@ -412,7 +412,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     (soln_values, solution) : tuple
         Returned when ``return_function=True``. ``soln_values`` is as above.
         ``solution`` is callable -- ``solution(t)`` evaluates the piecewise
-        polynomial solution at scalar or array ``t`` -- and also behaves like
+        polynomial solution at scalar or array ``t`` (NaN for ``t`` outside
+        the solved interval) -- and also behaves like
         the previous list of per-interval polynomials: ``len(solution)``,
         ``solution[n]``, and iteration operate on ``solution.polynomials``.
         For scalar equations each polynomial is a
@@ -984,7 +985,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     (soln_values, solution) : tuple
         Returned when ``return_function=True``. ``soln_values`` is as above.
         ``solution`` is callable -- ``solution(t)`` evaluates the piecewise
-        polynomial solution at scalar or array ``t`` -- and also behaves like
+        polynomial solution at scalar or array ``t`` (NaN for ``t`` outside
+        the solved interval) -- and also behaves like
         the previous list of per-interval polynomials: ``len(solution)``,
         ``solution[n]``, and iteration operate on ``solution.polynomials``.
         For scalar equations each polynomial is a
@@ -1361,7 +1363,8 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     (soln_values, solution) : tuple
         Returned when ``return_function=True``. ``soln_values`` is as above.
         ``solution`` is callable -- ``solution(t)`` evaluates the piecewise
-        polynomial solution at scalar or array ``t`` -- and also behaves like
+        polynomial solution at scalar or array ``t`` (NaN for ``t`` outside
+        the solved interval) -- and also behaves like
         the previous list of per-interval polynomials: ``len(solution)``,
         ``solution[n]``, and iteration operate on ``solution.polynomials``.
         For scalar equations each polynomial is a

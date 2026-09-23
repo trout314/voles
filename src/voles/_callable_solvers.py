@@ -1636,7 +1636,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         ``(M, p, d, m)`` for matrix-valued equations.
     (soln_values, y_callable) : tuple
         When ``return_function=True``. ``y_callable(t)`` evaluates the
-        piecewise polynomial at any time t, returning a scalar / ``(d,)`` /
+        piecewise polynomial at any time t in the mesh (NaN outside it), returning a scalar / ``(d,)`` /
         ``(d, m)`` value for scalar t (with a leading time axis for array t).
 
     Raises
