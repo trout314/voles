@@ -408,3 +408,15 @@ def test_no_g_start_warning_for_zero_or_rounding(offset, capsys):
 def test_no_g_start_warning_when_silenced(capsys):
     solve_VIE_1(**_g0_problem(0.5), show_warnings=False)
     assert _G0_MSG not in capsys.readouterr().out
+
+
+def test_g_start_warning_names_worst_column_for_matrix(capsys):
+    """Matrix problems report how many right-hand sides have g(0) != 0 and
+    the worst one, not a pooled maximum."""
+    t = np.arange(4 * 9 * 10 + 1) * 0.01
+    K = np.exp(-t)[:, None, None] * np.eye(2)
+    g = np.outer(np.sin(t), [1.0, 2.0])
+    G = np.stack([g, g + [0.0, 0.3], g], axis=2)        # only column 1 has g(0) != 0
+    solve_VIE_1(kernel_values=K, g_values=G, time_step=0.01)
+    out = capsys.readouterr().out
+    assert "g(0) is not zero in 1 of 3 columns; worst column 1" in out

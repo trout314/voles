@@ -27,7 +27,7 @@ import functools
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 
-from .solvers import _column_workers, _check_vie1_setting
+from .solvers import _column_workers, _check_vie1_setting, _warn_g_start_columns
 
 import numpy as np
 from numpy.polynomial import polynomial as npp
@@ -2491,15 +2491,15 @@ def _warn_vie1_g_start_callable(g, mesh_breakpoints, show_warnings):
     if not show_warnings or g is None:
         return
     try:
-        g0 = float(np.max(np.abs(np.asarray(g(0.0)))))
-        scale = max(float(np.max(np.abs(np.asarray(g(float(t))))))
-                    for t in mesh_breakpoints)
+        a = np.abs(np.asarray([np.asarray(g(float(t))) for t in mesh_breakpoints]))
+        g0 = np.abs(np.asarray(g(0.0)))
+        if g0.ndim == 2:                          # (d, m) matrix problem: per column
+            g0, scale = g0.max(axis=0), a.max(axis=(0, 1))
+        else:
+            g0, scale = g0.max(), a.max()
     except Exception:
         return
-    if np.isfinite(g0) and g0 > 1e-6 * scale:
-        print(f"warning: g(0) is not zero (max |g(0)| = {g0:.3g}, max |g| = {scale:.3g}). "
-              f"A first-kind equation g(t) = int_0^t K(t-s) y(s) ds requires g(0) = 0; "
-              f"otherwise it has no bounded solution and values near t = 0 are meaningless.")
+    _warn_g_start_columns(g0, scale)
 
 
 @_escalate_complex_warning

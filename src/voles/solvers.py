@@ -191,6 +191,26 @@ def _validate_second_kind_coll_setting(coll_divs, coll_choices):
     return int(coll_divs), sorted(int(c) for c in choices)
 
 
+def _warn_g_start_columns(g0, scale):
+    """Shared by the sampled and callable VIE-1 solvers. ``g0`` and ``scale``
+    are max |g(0)| and max |g| per right-hand side: 0-d for scalar and vector
+    problems, shape (m,) for matrix problems."""
+    g0 = np.atleast_1d(np.asarray(g0, dtype=float))
+    scale = np.atleast_1d(np.asarray(scale, dtype=float))
+    bad = np.isfinite(g0) & (g0 > 1e-6 * scale)
+    if not bad.any():
+        return
+    rule = (" A first-kind equation g(t) = int_0^t K(t-s) y(s) ds requires g(0) = 0; "
+            "otherwise it has no bounded solution and values near t = 0 are meaningless.")
+    if g0.size == 1:
+        print(f"warning: g(0) is not zero (max |g(0)| = {g0[0]:.3g}, "
+              f"max |g| = {scale[0]:.3g})." + rule)
+    else:
+        j = int(np.argmax(np.where(bad, g0 / np.maximum(scale, 1e-300), -np.inf)))
+        print(f"warning: g(0) is not zero in {int(bad.sum())} of {g0.size} columns; "
+              f"worst column {j}: max |g(0)| = {g0[j]:.3g}, max |g| = {scale[j]:.3g}." + rule)
+
+
 def _warn_vie1_g_start(g_values, show_warnings):
     """A first-kind equation forces g(0) = 0 (the integral vanishes at t = 0);
     with g(0) != 0 there is no bounded solution and the solver returns
@@ -199,15 +219,14 @@ def _warn_vie1_g_start(g_values, show_warnings):
     if not show_warnings or g_values is None:
         return
     try:
-        g = np.asarray(g_values)
-        scale = float(np.max(np.abs(g)))
-        g0 = float(np.max(np.abs(g[0])))
+        g = np.abs(np.asarray(g_values))
+        if g.ndim == 3:                                   # (N, d, m): per column
+            g0, scale = g[0].max(axis=0), g.max(axis=(0, 1))
+        else:
+            g0, scale = g[0].max(), g.max()
     except (TypeError, ValueError, IndexError):
         return
-    if np.isfinite(g0) and g0 > 1e-6 * scale:
-        print(f"warning: g(0) is not zero (max |g(0)| = {g0:.3g}, max |g| = {scale:.3g}). "
-              f"A first-kind equation g(t) = int_0^t K(t-s) y(s) ds requires g(0) = 0; "
-              f"otherwise it has no bounded solution and values near t = 0 are meaningless.")
+    _warn_g_start_columns(g0, scale)
 
 
 def _warn_vie1_kernel_start(kernel_values_, samples_per_mesh, show_warnings):
