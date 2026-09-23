@@ -471,3 +471,14 @@ def test_scalar_init_rejects_multiple_elements():
     with pytest.raises(ValueError, match="single number for a scalar equation"):
         solve_VIDE(kernel_values=np.exp(-_T30), g_values=np.sin(_T30),
                    soln_init_value=[0.5, 1.0], time_step=0.05)
+
+
+@pytest.mark.parametrize("quad", ["collocation", "product"])
+def test_vector_vide_scalar_init_message(quad):
+    """A scalar soln_init_value is not accepted for a vector equation; the
+    message used to claim it was ("must be a scalar or length-d array")."""
+    t = np.arange(37) * 0.05
+    K = np.exp(-t)[:, None, None] * np.eye(2)
+    with pytest.raises(ValueError, match=r"must have shape \(2,\) .* got shape \(\)"):
+        solve_VIDE(kernel_values=K, g_values=np.zeros((37, 2)), soln_init_value=0.5,
+                   time_step=0.05, quadrature=quad)

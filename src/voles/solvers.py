@@ -609,10 +609,12 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         else:
             a_values_ = np.zeros((N, d, d), dtype=float)
 
+        given_shape = soln_init_values_.shape
         soln_init_values_ = soln_init_values_.ravel()
         if soln_init_values_.shape != (d,):
             raise ValueError(
-                f"soln_init_value must be a scalar or length-{d} array for d={d}")
+                f"soln_init_value must have shape ({d},) for a d={d} vector equation "
+                f"(or ({d}, m) for m right-hand sides), got shape {given_shape}")
 
         if (coll_divs, coll_choices) not in _fast_settings_VIDE:
             # NotImplementedError subclasses RuntimeError, so callers
@@ -832,9 +834,12 @@ def _solve_vide_product_path(kernel_values_, a_values, g_values, soln_init_value
     if d == 0:
         init = _scalar_init(init)
     else:
+        given_shape = init.shape
         init = init.ravel()
         if init.shape != (d,):
-            raise ValueError(f"soln_init_value must be a scalar or length-{d} array for d={d}")
+            raise ValueError(
+                f"soln_init_value must have shape ({d},) for a d={d} vector equation "
+                f"(or ({d}, m) for m right-hand sides), got shape {given_shape}")
 
     values, polys = _product.solve_vide_product(
         K, a, g, time_step, q, coll_choices, Q, p, init, return_function,
