@@ -32,8 +32,15 @@ def _setup_argtypes() -> None:
     # see _product.py). Guarded: a dylib built before these were added still loads.
     global _have_block_drivers
     _have_block_drivers = (hasattr(_lib, "volterra_solve_vie1_blocks")
-                           and hasattr(_lib, "volterra_solve_vie1_cont_blocks"))
+                           and hasattr(_lib, "volterra_solve_vie1_cont_blocks")
+                           and hasattr(_lib, "volterra_solve_vide_blocks"))
     if _have_block_drivers:
+        _lib.volterra_solve_vide_blocks.restype = ctypes.c_int
+        _lib.volterra_solve_vide_blocks.argtypes = [
+            _dp, _dp, _dp, _dp, _dp, _dp,                     # lagB, g, a_coll, betaC, beta1, y0
+            ctypes.c_int, ctypes.c_int, ctypes.c_int,         # M, m, d
+            _dp, _dp,                                         # out_Y, out_y
+        ]
         _lib.volterra_solve_vie1_blocks.restype = ctypes.c_int
         _lib.volterra_solve_vie1_blocks.argtypes = [
             _dp, _dp,                                         # lagB, g
@@ -953,3 +960,35 @@ def solve_vie1_cont_blocks_d(lagB, g, adv_U, adv_0, y0, m, d):
         out_U.ctypes.data_as(_dp), out_y.ctypes.data_as(_dp))
     _check_return(ret, "volterra_solve_vie1_cont_blocks")
     return out_U, out_y
+
+
+def solve_vide_blocks_d(lagB, g, a_coll, betaC, beta1, y0, m, d):
+    """Step precomputed VIDE lag blocks through the D Toeplitz history.
+
+    lagB : (M, Db, Db + d) with Db = m*d (history added to the right-hand
+    side, boundary column last); g : (M, Db); a_coll : (M, m, d, d), the
+    values of a at the collocation points; betaC : (m, m) = H beta_k(c_i);
+    beta1 : (m,) = H beta_k(1); y0 : (d,).  Returns (Y, y) with shapes
+    (M, Db) and (M+1, d).
+    """
+    lb = np.ascontiguousarray(lagB, dtype=np.float64)
+    gg = np.ascontiguousarray(g, dtype=np.float64)
+    aa = np.ascontiguousarray(a_coll, dtype=np.float64)
+    bC = np.ascontiguousarray(betaC, dtype=np.float64)
+    b1 = np.ascontiguousarray(beta1, dtype=np.float64)
+    yy = np.ascontiguousarray(y0, dtype=np.float64)
+    M, Db = gg.shape
+    if (Db != m * d or lb.shape != (M, Db, Db + d) or aa.shape != (M, m, d, d)
+            or bC.shape != (m, m) or b1.shape != (m,) or yy.shape != (d,)):
+        raise ValueError(
+            f"VIDE block-driver shapes inconsistent: lagB {lb.shape}, g {gg.shape}, "
+            f"a_coll {aa.shape}, betaC {bC.shape}, beta1 {b1.shape}, y0 {yy.shape}, m={m}, d={d}")
+    out_Y = np.zeros((M, Db), dtype=np.float64)
+    out_y = np.zeros((M + 1, d), dtype=np.float64)
+    ret = _lib.volterra_solve_vide_blocks(
+        lb.ctypes.data_as(_dp), gg.ctypes.data_as(_dp), aa.ctypes.data_as(_dp),
+        bC.ctypes.data_as(_dp), b1.ctypes.data_as(_dp), yy.ctypes.data_as(_dp),
+        ctypes.c_int(M), ctypes.c_int(m), ctypes.c_int(d),
+        out_Y.ctypes.data_as(_dp), out_y.ctypes.data_as(_dp))
+    _check_return(ret, "volterra_solve_vide_blocks")
+    return out_Y, out_y

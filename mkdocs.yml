@@ -47,6 +47,7 @@ nav:
       - VIE Type 1: examples/vie1.md
       - VIE Type 2: examples/vie2.md
       - VIDE: examples/vide.md
+      - Product integration for sampled kernels: examples/product_integration.md
       - Callable inputs and arbitrary mesh: examples/function_solvers.md
       - Vector- and matrix-valued equations: examples/matrix_vector.md
       - Complex-valued equations: examples/complex.md

@@ -3,8 +3,9 @@
 ## [Unreleased]
 
 ### Added
-- **Product-integration quadrature for the sampled-data VIE-1 solver:**
-  ``solve_VIE_1(quadrature="product", mesh_samples=..., kernel_interp_degree=...)``.
+- **Product-integration quadrature for the sampled-data solvers:**
+  ``solve_VIE_1`` / ``solve_VIE_2`` / ``solve_VIDE`` accept
+  ``quadrature="product"``, ``mesh_samples=...`` and ``kernel_interp_degree=...``.
   The default (``quadrature="collocation"``) evaluates every integral with the
   interpolatory rule on the collocation nodes, which forces the mesh to be
   ``coll_divs**2`` samples wide and reads only every ``coll_divs``-th sample
@@ -17,11 +18,16 @@
   samples wide (``mesh_samples``, default ``coll_divs``), every sample is
   used, any convergent node set is available without the Numba fallback, and
   the blocks keep the lag structure, so the FFT-accelerated Toeplitz history
-  is used through two new runtime-dimension D drivers
-  (``volterra_solve_vie1_blocks`` / ``..._cont_blocks``). Existing calls are
-  unchanged. The scheme is exact collocation for the interpolated kernel;
-  the kernel-perturbation error enters through the derivative of the
-  interpolation error and is of order ``time_step**kernel_interp_degree``.
+  is used through three new runtime-dimension D drivers that step
+  precomputed lag blocks (``volterra_solve_vie1_blocks``,
+  ``volterra_solve_vie1_cont_blocks``, ``volterra_solve_vide_blocks``; the
+  second-kind equation reuses the first-kind driver on transformed blocks).
+  Existing calls are unchanged. The scheme is exact collocation for the
+  interpolated kernel. For the first-kind equation the kernel-perturbation
+  error enters through the derivative of the interpolation error and is of
+  order ``time_step**kernel_interp_degree``, and a finer mesh amplifies
+  errors in the data correspondingly; the second-kind equation and the VIDE
+  are well posed, so there the finer mesh is pure accuracy gain.
 - **Arbitrary collocation nodes** on the callable-input solvers via the
   ``coll_nodes`` parameter (floats in $[0, 1]$, mutually exclusive with
   ``coll_divs``/``coll_choices``), with helpers ``gauss_legendre_nodes``,
