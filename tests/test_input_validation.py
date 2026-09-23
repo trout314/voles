@@ -482,3 +482,14 @@ def test_vector_vide_scalar_init_message(quad):
     with pytest.raises(ValueError, match=r"must have shape \(2,\) .* got shape \(\)"):
         solve_VIDE(kernel_values=K, g_values=np.zeros((37, 2)), soln_init_value=0.5,
                    time_step=0.05, quadrature=quad)
+
+
+@pytest.mark.parametrize("quad", ["collocation", "product"])
+@pytest.mark.parametrize("N", [0, 3])
+def test_too_short_input_message(N, quad, capsys):
+    """An empty input used to report 'truncated to -3', after printing a
+    truncation warning; now the length check comes first."""
+    with pytest.raises(ValueError, match=rf"has length {N}, which leaves zero mesh intervals"):
+        solve_VIE_2(kernel_values=np.ones(N), g_values=np.ones(N), time_step=0.1,
+                    quadrature=quad, mesh_samples=4 if quad == "product" else None)
+    assert "truncated" not in capsys.readouterr().out

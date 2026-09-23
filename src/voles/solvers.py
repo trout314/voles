@@ -332,10 +332,15 @@ def _truncate_N(kernel_values_, coll_divs, show_warnings):
     """Truncate kernel_values_ to the largest valid length; return (N, kernel_values_).
 
     Valid lengths satisfy N ≡ 1 (mod coll_divs²).  Prints a warning when
-    truncation is needed and show_warnings is True. Raises ValueError if the
-    truncated length leaves zero mesh intervals (i.e. N < coll_divs² + 1).
+    truncation is needed and show_warnings is True. Raises ValueError, before
+    any truncation warning, if N < coll_divs² + 1 (zero mesh intervals).
     """
     N = len(kernel_values_)
+    if N < coll_divs ** 2 + 1:
+        raise ValueError(
+            f"kernel_values has length {N}, which leaves zero mesh intervals for "
+            f"coll_divs={coll_divs}: one mesh interval needs at least "
+            f"{coll_divs ** 2 + 1} input points.")
     if coll_divs > 1 and N % coll_divs**2 != 1:
         N_used = (N - 1) // coll_divs**2 * coll_divs**2 + 1
         if show_warnings:
@@ -348,13 +353,6 @@ def _truncate_N(kernel_values_, coll_divs, show_warnings):
             )
     else:
         N_used = N
-
-    if N_used < coll_divs ** 2 + 1:
-        raise ValueError(
-            f"kernel_values has length {N} (truncated to {N_used}), which leaves "
-            f"zero mesh intervals for coll_divs={coll_divs}. Need at least "
-            f"{coll_divs ** 2 + 1} input points to form one mesh interval."
-        )
     return N_used, kernel_values_[:N_used]
 
 
@@ -696,6 +694,10 @@ def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh
         raise ValueError("kernel_interp_degree must be a positive integer")
     _check_time_step(time_step)
     N_orig = len(kernel_values_)
+    if N_orig < Q + 1:
+        raise ValueError(
+            f"kernel_values has length {N_orig}, which leaves zero mesh intervals for "
+            f"mesh_samples={Q}: one mesh interval needs at least {Q + 1} input points.")
     N = (N_orig - 1) // Q * Q + 1
     if N != N_orig and show_warnings:
         print(
@@ -703,10 +705,6 @@ def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh
             f"(multiple of mesh_samples) + 1 where mesh_samples = {Q}. All input data "
             f"lists will be truncated to the next smaller number of this form ({N}) "
             f"which will also be the length of the returned list of solution values.")
-    if N < Q + 1:
-        raise ValueError(
-            f"kernel_values has length {N_orig} (truncated to {N}), which leaves zero mesh "
-            f"intervals for mesh_samples={Q}. Need at least {Q + 1} input points.")
     if N < p + 1:
         raise ValueError(
             f"kernel interpolation of degree {p} needs at least {p + 1} samples, got {N}")
