@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-22
+
 ### Added
 - **Product-integration quadrature for the sampled-data solvers:**
   ``solve_VIE_1`` / ``solve_VIE_2`` / ``solve_VIDE`` accept
