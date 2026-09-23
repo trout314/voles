@@ -129,10 +129,103 @@ def _check_vie1_setting(coll_divs, coll_choices, force_continuous):
                 f"right endpoint (coll_divs in coll_choices) qualifies.")
 
 
-def _check_continuous_vie1_setting(coll_divs, coll_choices):
-    """Continuous-mode form of `_check_vie1_setting`, kept under its original
-    name for callers written against it."""
-    _check_vie1_setting(coll_divs, coll_choices, force_continuous=True)
+def _as_int(name, value):
+    """``value`` as a Python int, or ValueError. Only genuine integers are
+    accepted (int, numpy integers): a float is rejected rather than
+    truncated, since e.g. ``mesh_samples=2.6`` silently running as 2 would
+    solve a different discretisation from the one asked for."""
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)):
+        raise ValueError(f"{name} must be an integer, got {value!r}")
+    return int(value)
+
+
+def _validate_vie1_coll_setting(coll_divs, coll_choices):
+    """Structural checks shared by the VIE-1 paths (both quadratures);
+    returns ``(coll_divs, sorted coll_choices)`` as Python ints."""
+    if (isinstance(coll_divs, (bool, np.bool_))
+            or not isinstance(coll_divs, (int, np.integer)) or coll_divs <= 0):
+        raise ValueError(f"coll_divs must be a positive integer, got {coll_divs!r}")
+    choices = list(coll_choices)
+    if not all(isinstance(c, (int, np.integer)) and not isinstance(c, (bool, np.bool_))
+               for c in choices):
+        raise ValueError("coll_choices must be a list of integers")
+    if len(choices) == 0:
+        raise ValueError("coll_choices must contain at least one collocation node")
+    if 0 in choices:
+        raise ValueError("zero cannot be a collocation parameter")
+    if len(set(choices)) != len(choices):
+        raise ValueError("all integers in coll_choices must be distinct")
+    if any(c < 1 or c > coll_divs for c in choices):
+        raise ValueError("coll_choices must contain only integers from 1 to coll_divs")
+    return int(coll_divs), sorted(int(c) for c in choices)
+
+
+def _warn_reduced_order(coll_divs, coll_choices, force_continuous, show_warnings):
+    """An admissible node set with rho = +1 exactly converges one order lower
+    than the method's nominal order (Brunner 2004, Theorems 2.4.2 and 2.4.5)."""
+    if show_warnings and _vie1_rho(coll_divs, coll_choices, continuous=force_continuous) == 1:
+        m = len(coll_choices)
+        nominal = m + 1 if force_continuous else m
+        print(f"warning: collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
+              f"has amplification factor rho = 1 exactly, so the "
+              f"{'continuous' if force_continuous else 'discontinuous'} VIE-1 method converges "
+              f"at order {nominal - 1} rather than {nominal}.")
+
+
+def _validate_second_kind_coll_setting(coll_divs, coll_choices):
+    """Structural checks for VIE-2 / VIDE node sets (0 allowed); returns
+    ``(coll_divs, sorted coll_choices)`` as Python ints."""
+    if (isinstance(coll_divs, (bool, np.bool_))
+            or not isinstance(coll_divs, (int, np.integer)) or coll_divs <= 0):
+        raise ValueError(f"coll_divs must be a positive integer, got {coll_divs!r}")
+    choices = list(coll_choices)
+    if not all(isinstance(c, (int, np.integer)) and not isinstance(c, (bool, np.bool_))
+               for c in choices):
+        raise ValueError("coll_choices must be a list of integers")
+    if len(choices) == 0:
+        raise ValueError("coll_choices must contain at least one collocation node")
+    if len(set(choices)) != len(choices):
+        raise ValueError("all integers in coll_choices must be distinct")
+    if any(c < 0 or c > coll_divs for c in choices):
+        raise ValueError("coll_choices must contain only integers from 0 to coll_divs")
+    return int(coll_divs), sorted(int(c) for c in choices)
+
+
+def _check_time_step(time_step):
+    if not time_step > 0.0:
+        raise ValueError("time_step must be positive")
+
+
+def _use_product_quadrature(quadrature, mesh_samples, kernel_interp_degree, coll_divs):
+    """Shared by the three sampled-data solvers: validate ``quadrature`` and,
+    for the default collocation quadrature, the two product-only parameters.
+    Returns True when the product path should be taken."""
+    if quadrature not in ("collocation", "product"):
+        raise ValueError(
+            f"quadrature must be 'collocation' or 'product', got {quadrature!r}")
+    if quadrature == "product":
+        return True
+    if kernel_interp_degree is not None:
+        raise ValueError(
+            "kernel_interp_degree applies only to quadrature='product'")
+    if mesh_samples is not None and _as_int("mesh_samples", mesh_samples) != coll_divs ** 2:
+        raise ValueError(
+            f"with quadrature='collocation' the mesh is coll_divs**2 = {coll_divs ** 2} "
+            f"samples wide (got mesh_samples={mesh_samples}); pass quadrature='product' "
+            f"to choose the mesh width")
+    return False
+
+
+def _check_series(name, values, N_orig, kernel_shape, expected_shape):
+    """``values`` as a float array, checked against the shape a series sampled
+    alongside the (untruncated) kernel must have. Returns the array."""
+    arr = np.asarray(values, dtype=float)
+    if arr.shape != expected_shape:
+        raise ValueError(
+            f"{name} shape {arr.shape} incompatible with kernel_values shape "
+            f"{kernel_shape}: expected {expected_shape}")
+    return arr
+
 
 _all_fast = _dlang_module.supported_coll_settings_d()
 # The compiled VIE-1 settings that fail the convergence criterion |rho_m| <= 1
@@ -236,7 +329,9 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         ``DeprecationWarning``.
     show_warnings : bool, optional
         If ``True`` (default), print a warning when ``kernel_values`` is
-        truncated or when the Numba fallback is used.
+        truncated, when the Numba fallback is used, or when
+        ``quadrature="product"`` has to step in NumPy because the loaded D
+        extension predates its block driver.
 
     quadrature : {"collocation", "product"}, optional
         How the integrals are evaluated from the sampled kernel. The default
@@ -261,6 +356,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         Degree of the kernel interpolant for ``quadrature="product"``;
         defaults to the number of collocation nodes. Not accepted with
         ``quadrature="collocation"``.
+
     Returns
     -------
     soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)
@@ -280,9 +376,16 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     Raises
     ------
     ValueError
-        For invalid shapes or collocation settings, inputs too short to form
-        one mesh interval, matrix input with zero columns, or inputs so large
-        that a solver buffer would exceed $2^{31}$ elements.
+        For invalid input: shapes that do not fit together (``g_values`` and
+        ``a_values`` must have the length of ``kernel_values``, before any
+        truncation), inputs too short to form one mesh interval, matrix input
+        with zero columns, inputs so large that a solver buffer would exceed
+        $2^{31}$ elements, a ``coll_divs`` that is not a positive integer or
+        ``coll_choices`` that is empty or not made of distinct integers in
+        ``0 .. coll_divs`` (floats are rejected, not truncated), a
+        non-positive ``time_step``, an unknown ``quadrature``, or a
+        ``mesh_samples`` / ``kernel_interp_degree`` that is not an integer or
+        not admissible for the chosen quadrature.
     NotImplementedError
         For a collocation setting not compiled into the D extension, on the
         vector/matrix path (no fallback exists) or on the scalar path when
@@ -346,21 +449,12 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         raise ValueError(
             f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
 
-    if quadrature not in ("collocation", "product"):
-        raise ValueError(
-            f"quadrature must be 'collocation' or 'product', got {quadrature!r}")
-    if quadrature == "product":
+    if _use_product_quadrature(quadrature, mesh_samples, kernel_interp_degree, coll_divs):
         return _solve_vide_product_path(
             kernel_values_, a_values, g_values, soln_init_value, time_step, coll_divs,
             coll_choices, return_function, show_warnings, mesh_samples, kernel_interp_degree)
-    if kernel_interp_degree is not None:
-        raise ValueError(
-            "kernel_interp_degree applies only to quadrature='product'")
-    if mesh_samples is not None and int(mesh_samples) != coll_divs ** 2:
-        raise ValueError(
-            f"with quadrature='collocation' the mesh is coll_divs**2 = {coll_divs ** 2} "
-            f"samples wide (got mesh_samples={mesh_samples}); pass quadrature='product' "
-            f"to choose the mesh width")
+    coll_divs, coll_choices = _validate_second_kind_coll_setting(coll_divs, coll_choices)
+    _check_time_step(time_step)
 
     N_orig = len(kernel_values_)
     N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
@@ -379,18 +473,25 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             if d_init != d:
                 raise ValueError(
                     f"soln_init_value shape {soln_init_values_.shape} incompatible with d={d}")
-            if g_values is not None:
+            # a and g are sampled alongside the kernel, so they must have its
+            # (untruncated) length, for a single solve and for every column.
+            if g_values is None:
+                g_cols = [None] * m_cols
+            else:
                 g_mat = np.asarray(g_values, dtype=float)
                 if g_mat.ndim == 3:
-                    if g_mat.shape[1:] != (d, m_cols):
+                    if g_mat.shape != (N_orig, d, m_cols):
                         raise ValueError(
-                            f"g_values shape {g_mat.shape} incompatible with kernel/soln_init shapes")
+                            f"g_values shape {g_mat.shape} incompatible with kernel_values shape "
+                            f"{(N_orig, d, d)} and soln_init_value shape "
+                            f"{soln_init_values_.shape}: expected ({N_orig}, {d}, {m_cols})")
                     g_cols = [g_mat[:N, :, j] for j in range(m_cols)]
                 else:
-                    g_cols = [g_values] * m_cols
-            else:
-                g_cols = [None] * m_cols
-            a_trunc = np.asarray(a_values, dtype=float)[:N] if a_values is not None else None
+                    # one right-hand side shared by all columns
+                    g_cols = [_check_series("g_values", g_mat, N_orig, (N_orig, d, d),
+                                            (N_orig, d))[:N]] * m_cols
+            a_trunc = None if a_values is None else _check_series(
+                "a_values", a_values, N_orig, (N_orig, d, d), (N_orig, d, d))[:N]
             def _col_vide(j):
                 # column 0 carries any per-solve warnings; the others would
                 # only duplicate them m_cols times from interleaved threads
@@ -420,20 +521,12 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             return np.stack(results, axis=2)
 
         if g_values is not None:
-            g_values_ = np.asarray(g_values, dtype=float)
-            if g_values_.shape != (N_orig, d):
-                raise ValueError(
-                    f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
-            g_values_ = g_values_[:N]
+            g_values_ = _check_series("g_values", g_values, N_orig, (N_orig, d, d), (N_orig, d))[:N]
         else:
             g_values_ = np.zeros((N, d), dtype=float)
 
         if a_values is not None:
-            a_values_ = np.asarray(a_values, dtype=float)
-            if a_values_.shape != (N_orig, d, d):
-                raise ValueError(
-                    f"a_values shape {a_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
-            a_values_ = a_values_[:N]
+            a_values_ = _check_series("a_values", a_values, N_orig, (N_orig, d, d), (N_orig, d, d))[:N]
         else:
             a_values_ = np.zeros((N, d, d), dtype=float)
 
@@ -441,14 +534,6 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         if soln_init_values_.shape != (d,):
             raise ValueError(
                 f"soln_init_value must be a scalar or length-{d} array for d={d}")
-
-        assert coll_divs > 0, "coll_divs must be a positive integer"
-        assert all(isinstance(c, int) for c in coll_choices), "coll_choices must be a list of integers"
-        assert all(coll_choices.count(c) <= 1 for c in coll_choices), \
-            "all integers in coll_choices must be distinct"
-        for choice in coll_choices:
-            assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
-        coll_choices = sorted(coll_choices)
 
         if (coll_divs, coll_choices) not in _fast_settings_VIDE:
             # NotImplementedError subclasses RuntimeError, so callers
@@ -472,32 +557,17 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         return soln_vals
 
     # ------------------------------------------------------------------ scalar path
-    assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
 
     if g_values is not None:
-        g_values_ = np.asarray(g_values, dtype=float)
-        assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"
-        assert len(g_values_) == N_orig, "kernel_values and g_values must have the same length"
-        g_values_ = g_values_[:N]
+        g_values_ = _check_series("g_values", g_values, N_orig, (N_orig,), (N_orig,))[:N]
     else:
         g_values_ = np.zeros(N)
 
     if a_values is not None:
-        a_values_ = np.asarray(a_values, dtype=float)
-        assert len(a_values_.shape) == 1, "a_values must be a 1-dim array"
-        assert len(a_values_) == N_orig, "kernel_values and a_values must have the same length"
-        a_values_ = a_values_[:N]
+        a_values_ = _check_series("a_values", a_values, N_orig, (N_orig,), (N_orig,))[:N]
     else:
         a_values_ = np.zeros(N)
 
-    assert coll_divs > 0, "coll_divs must be a positive integer"
-    assert all([isinstance(choice, int) for choice in coll_choices]), \
-        "coll_choices must be a list of integers"
-    assert all([coll_choices.count(c) <= 1 for c in coll_choices]), \
-        "all integers in coll_choices must be distinct"
-    for choice in coll_choices:
-        assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
-    coll_choices = sorted(coll_choices)
     if (coll_divs, coll_choices) in _fast_settings_VIDE:
         soln_vals, poly_coefs = _dlang_module.solve_vide_d(
             g_values_, kernel_values_, a_values_, soln_init_value,
@@ -528,36 +598,22 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
 
 
 
-def _validate_second_kind_coll_setting(coll_divs, coll_choices):
-    """Structural checks for VIE-2 / VIDE node sets (0 allowed); returns sorted choices."""
-    if not (isinstance(coll_divs, (int, np.integer)) and coll_divs > 0):
-        raise ValueError("coll_divs must be a positive integer")
-    choices = list(coll_choices)
-    if not choices or not all(isinstance(c, (int, np.integer)) for c in choices):
-        raise ValueError("coll_choices must be a non-empty list of integers")
-    if len(set(choices)) != len(choices):
-        raise ValueError("all integers in coll_choices must be distinct")
-    if any(c < 0 or c > coll_divs for c in choices):
-        raise ValueError("coll_choices must contain only integers from 0 to coll_divs")
-    return sorted(int(c) for c in choices)
-
-
 def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh_samples,
                         kernel_interp_degree, show_warnings):
     """Resolve mesh_samples / kernel_interp_degree and truncate the kernel to
-    N = 1 (mod mesh_samples).  Returns (Q, p, N_orig, N, K, d, M, breakpoints)."""
-    q = int(coll_divs)
+    N = 1 (mod mesh_samples).  ``coll_divs``/``coll_choices`` are already
+    validated.  Returns (Q, p, N_orig, N, K, d, M, breakpoints)."""
+    q = coll_divs
     m = len(coll_choices)
-    Q = q if mesh_samples is None else int(mesh_samples)
+    Q = q if mesh_samples is None else _as_int("mesh_samples", mesh_samples)
     if Q < 1 or Q % q != 0:
         raise ValueError(
             f"with quadrature='product', mesh_samples must be a positive multiple of "
             f"coll_divs={q} so that every collocation point is a sample; got {mesh_samples}")
-    p = m if kernel_interp_degree is None else int(kernel_interp_degree)
+    p = m if kernel_interp_degree is None else _as_int("kernel_interp_degree", kernel_interp_degree)
     if p < 1:
         raise ValueError("kernel_interp_degree must be a positive integer")
-    if not time_step > 0.0:
-        raise ValueError("time_step must be positive")
+    _check_time_step(time_step)
     N_orig = len(kernel_values_)
     N = (N_orig - 1) // Q * Q + 1
     if N != N_orig and show_warnings:
@@ -582,8 +638,10 @@ def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh
 
 
 def _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints):
+    """Combine per-column ``(values, polys)`` pairs from the ``_product``
+    drivers into the matrix-valued result."""
+    soln = np.stack([r[0] for r in results], axis=2)
     if return_function:
-        soln = np.stack([r[0] for r in results], axis=2)
         col_polys = [r[1] for r in results]
         mat_polys = []
         for n in range(M):
@@ -592,7 +650,7 @@ def _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints):
                 arr[:, j] = col_polys[j][n]
             mat_polys.append(arr)
         return soln, _SolutionFunction(mat_polys, breakpoints, d=d, m=m_cols)
-    return np.stack(results, axis=2)
+    return soln
 
 
 def _solve_vie2_product_path(kernel_values_, g_values, time_step, coll_divs, coll_choices,
@@ -600,11 +658,11 @@ def _solve_vie2_product_path(kernel_values_, g_values, time_step, coll_divs, col
     """VIE-2 with product-integration quadrature (see ``_product``)."""
     from . import _product
 
-    q = int(coll_divs)
-    coll_choices = _validate_second_kind_coll_setting(q, coll_choices)
+    q, coll_choices = _validate_second_kind_coll_setting(coll_divs, coll_choices)
     Q, p, N_orig, N, K, d, M, breakpoints = _product_mesh_setup(
         kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
         show_warnings)
+    setup = _product.ProductSetup("vie2", K, time_step, q, coll_choices, Q, p)
 
     if g_values is None:
         g = np.zeros((N,) if d == 0 else (N, d))
@@ -612,29 +670,26 @@ def _solve_vie2_product_path(kernel_values_, g_values, time_step, coll_divs, col
         g = np.asarray(g_values, dtype=float)
         if d and g.ndim == 3:
             m_cols = g.shape[2]
-            if g.shape[0] != N_orig or g.shape[1] != d:
+            if g.shape[:2] != (N_orig, d):
                 raise ValueError(
-                    f"g_values shape {g.shape} incompatible with kernel_values shape {K.shape}")
+                    f"g_values shape {g.shape} incompatible with kernel_values shape "
+                    f"{kernel_values_.shape}: expected ({N_orig}, {d}, m)")
             g_cols = g[:N]
+            _product.block_drivers_available("vie2", show_warnings=show_warnings)
 
             def _col(j):
-                return solve_VIE_2(
-                    kernel_values=K, g_values=g_cols[:, :, j], time_step=time_step,
-                    coll_divs=q, coll_choices=coll_choices, return_function=return_function,
-                    show_warnings=False, quadrature="product", mesh_samples=Q,
-                    kernel_interp_degree=p)
+                return _product.solve_vie2_product(
+                    K, g_cols[:, :, j], time_step, q, coll_choices, Q, p, return_function,
+                    setup=setup)
             with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                 results = list(ex.map(_col, range(m_cols)))
             return _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints)
-        expected = (N_orig,) if d == 0 else (N_orig, d)
-        if g.shape != expected:
-            raise ValueError(
-                f"g_values shape {g.shape} incompatible with kernel_values shape "
-                f"{kernel_values_.shape}: expected {expected}")
-        g = g[:N]
+        g = _check_series("g_values", g, N_orig, kernel_values_.shape,
+                          (N_orig,) if d == 0 else (N_orig, d))[:N]
 
     values, polys = _product.solve_vie2_product(
-        K, g, time_step, q, coll_choices, Q, p, return_function)
+        K, g, time_step, q, coll_choices, Q, p, return_function,
+        setup=setup, show_warnings=show_warnings)
     if return_function:
         return values, _SolutionFunction(polys, breakpoints, d=d, m=0)
     return values
@@ -646,12 +701,18 @@ def _solve_vide_product_path(kernel_values_, a_values, g_values, soln_init_value
     """VIDE with product-integration quadrature (see ``_product``)."""
     from . import _product
 
-    q = int(coll_divs)
-    coll_choices = _validate_second_kind_coll_setting(q, coll_choices)
+    q, coll_choices = _validate_second_kind_coll_setting(coll_divs, coll_choices)
     Q, p, N_orig, N, K, d, M, breakpoints = _product_mesh_setup(
         kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
         show_warnings)
     init = np.asarray(soln_init_value, dtype=float)
+
+    # a and g are sampled alongside the kernel, so they must have its
+    # (untruncated) length, for a single solve and for every matrix column.
+    a_shape = (N_orig,) if d == 0 else (N_orig, d, d)
+    a = None if a_values is None else _check_series(
+        "a_values", a_values, N_orig, kernel_values_.shape, a_shape)[:N]
+    setup = _product.ProductSetup("vide", K, time_step, q, coll_choices, Q, p, a_values=a)
 
     # ---------------------------------------------------------------- matrix case
     if d and init.ndim == 2:
@@ -659,51 +720,36 @@ def _solve_vide_product_path(kernel_values_, a_values, g_values, soln_init_value
         if d_init != d:
             raise ValueError(
                 f"soln_init_value shape {init.shape} incompatible with d={d}")
-        if g_values is not None:
+        if g_values is None:
+            g_cols = [None] * m_cols
+        else:
             g_mat = np.asarray(g_values, dtype=float)
             if g_mat.ndim == 3:
-                if g_mat.shape[0] != N_orig or g_mat.shape[1:] != (d, m_cols):
+                if g_mat.shape != (N_orig, d, m_cols):
                     raise ValueError(
-                        f"g_values shape {g_mat.shape} incompatible with kernel/soln_init shapes")
+                        f"g_values shape {g_mat.shape} incompatible with kernel_values shape "
+                        f"{kernel_values_.shape} and soln_init_value shape {init.shape}: "
+                        f"expected ({N_orig}, {d}, {m_cols})")
                 g_cols = [g_mat[:N, :, j] for j in range(m_cols)]
             else:
-                g_cols = [g_values] * m_cols
-        else:
-            g_cols = [None] * m_cols
-        a_trunc = None if a_values is None else np.asarray(a_values, dtype=float)[:N]
+                # one right-hand side shared by all columns
+                g_shared = _check_series("g_values", g_mat, N_orig, kernel_values_.shape,
+                                         (N_orig, d))[:N]
+                g_cols = [g_shared] * m_cols
+        _product.block_drivers_available("vide", show_warnings=show_warnings)
 
         def _col(j):
-            return solve_VIDE(
-                kernel_values=K, a_values=a_trunc, g_values=g_cols[j],
-                soln_init_value=init[:, j], time_step=time_step, coll_divs=q,
-                coll_choices=coll_choices, return_function=return_function,
-                show_warnings=False, quadrature="product", mesh_samples=Q,
-                kernel_interp_degree=p)
+            return _product.solve_vide_product(
+                K, a, g_cols[j], time_step, q, coll_choices, Q, p, init[:, j],
+                return_function, setup=setup)
         with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
             results = list(ex.map(_col, range(m_cols)))
         return _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints)
 
-    # ---------------------------------------------------------------- a, g, y0
-    a_shape = (N_orig,) if d == 0 else (N_orig, d, d)
-    if a_values is None:
-        a = np.zeros((N,) if d == 0 else (N, d, d))
-    else:
-        a = np.asarray(a_values, dtype=float)
-        if a.shape != a_shape and a.shape != ((N,) if d == 0 else (N, d, d)):
-            raise ValueError(
-                f"a_values shape {a.shape} incompatible with kernel_values shape "
-                f"{kernel_values_.shape}: expected {a_shape}")
-        a = a[:N]
-    g_shape = (N_orig,) if d == 0 else (N_orig, d)
-    if g_values is None:
-        g = np.zeros((N,) if d == 0 else (N, d))
-    else:
-        g = np.asarray(g_values, dtype=float)
-        if g.shape != g_shape and g.shape != ((N,) if d == 0 else (N, d)):
-            raise ValueError(
-                f"g_values shape {g.shape} incompatible with kernel_values shape "
-                f"{kernel_values_.shape}: expected {g_shape}")
-        g = g[:N]
+    # ---------------------------------------------------------------- g, y0
+    g = None if g_values is None else _check_series(
+        "g_values", g_values, N_orig, kernel_values_.shape,
+        (N_orig,) if d == 0 else (N_orig, d))[:N]
     if d == 0:
         if init.shape != ():
             raise ValueError("soln_init_value must be a scalar for a scalar equation")
@@ -714,59 +760,11 @@ def _solve_vide_product_path(kernel_values_, a_values, g_values, soln_init_value
             raise ValueError(f"soln_init_value must be a scalar or length-{d} array for d={d}")
 
     values, polys = _product.solve_vide_product(
-        K, a, g, time_step, q, coll_choices, Q, p, init, return_function)
+        K, a, g, time_step, q, coll_choices, Q, p, init, return_function,
+        setup=setup, show_warnings=show_warnings)
     if return_function:
         return values, _SolutionFunction(polys, breakpoints, d=d, m=0)
     return values
-
-
-def _vie1_rho_m(coll_divs, coll_choices):
-    r"""Brunner's $\rho_m = (-1)^m \prod_{i=1}^{m} (1 - c_i)/c_i$ for the
-    discontinuous ($S_{m-1}^{(-1)}$) VIE-1 method (Brunner 2004, Theorem 2.4.2)."""
-    return float(_vie1_rho(coll_divs, coll_choices))
-
-
-def _as_int(name, value):
-    """``value`` as a Python int, or ValueError. Only genuine integers are
-    accepted (int, numpy integers): a float is rejected rather than
-    truncated, since e.g. ``mesh_samples=2.6`` silently running as 2 would
-    solve a different discretisation from the one asked for."""
-    if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)):
-        raise ValueError(f"{name} must be an integer, got {value!r}")
-    return int(value)
-
-
-def _validate_vie1_coll_setting(coll_divs, coll_choices):
-    """Structural checks shared by the VIE-1 paths (both quadratures);
-    returns ``(coll_divs, sorted coll_choices)`` as Python ints."""
-    if (isinstance(coll_divs, (bool, np.bool_))
-            or not isinstance(coll_divs, (int, np.integer)) or coll_divs <= 0):
-        raise ValueError(f"coll_divs must be a positive integer, got {coll_divs!r}")
-    choices = list(coll_choices)
-    if not all(isinstance(c, (int, np.integer)) and not isinstance(c, (bool, np.bool_))
-               for c in choices):
-        raise ValueError("coll_choices must be a list of integers")
-    if len(choices) == 0:
-        raise ValueError("coll_choices must contain at least one collocation node")
-    if 0 in choices:
-        raise ValueError("zero cannot be a collocation parameter")
-    if len(set(choices)) != len(choices):
-        raise ValueError("all integers in coll_choices must be distinct")
-    if any(c < 1 or c > coll_divs for c in choices):
-        raise ValueError("coll_choices must contain only integers from 1 to coll_divs")
-    return int(coll_divs), sorted(int(c) for c in choices)
-
-
-def _warn_reduced_order(coll_divs, coll_choices, force_continuous, show_warnings):
-    """An admissible node set with rho = +1 exactly converges one order lower
-    than the method's nominal order (Brunner 2004, Theorems 2.4.2 and 2.4.5)."""
-    if show_warnings and _vie1_rho(coll_divs, coll_choices, continuous=force_continuous) == 1:
-        m = len(coll_choices)
-        nominal = m + 1 if force_continuous else m
-        print(f"warning: collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
-              f"has amplification factor rho = 1 exactly, so the "
-              f"{'continuous' if force_continuous else 'discontinuous'} VIE-1 method converges "
-              f"at order {nominal - 1} rather than {nominal}.")
 
 
 def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_step,
@@ -776,41 +774,13 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
     from . import _product
 
     q, coll_choices = _validate_vie1_coll_setting(coll_divs, coll_choices)
-    m = len(coll_choices)
-    Q = q if mesh_samples is None else _as_int("mesh_samples", mesh_samples)
-    if Q < 1 or Q % q != 0:
-        raise ValueError(
-            f"with quadrature='product', mesh_samples must be a positive multiple of "
-            f"coll_divs={q} so that every collocation point is a sample; got {mesh_samples}")
-    p = m if kernel_interp_degree is None else _as_int("kernel_interp_degree", kernel_interp_degree)
-    if p < 1:
-        raise ValueError("kernel_interp_degree must be a positive integer")
-    if not time_step > 0.0:
-        raise ValueError("time_step must be positive")
     _check_vie1_setting(q, coll_choices, force_continuous)
     _warn_reduced_order(q, coll_choices, force_continuous, show_warnings)
-
-    N_orig = len(kernel_values_)
-    N = (N_orig - 1) // Q * Q + 1
-    if N != N_orig and show_warnings:
-        print(
-            f"warning: the length of kernel_values ({N_orig}) is not of the form: "
-            f"(multiple of mesh_samples) + 1 where mesh_samples = {Q}. All input data "
-            f"lists will be truncated to the next smaller number of this form ({N}) "
-            f"which will also be the length of the returned list of solution values.")
-    if N < Q + 1:
-        raise ValueError(
-            f"kernel_values has length {N_orig} (truncated to {N}), which leaves zero mesh "
-            f"intervals for mesh_samples={Q}. Need at least {Q + 1} input points.")
-    if N < p + 1:
-        raise ValueError(
-            f"kernel interpolation of degree {p} needs at least {p + 1} samples, got {N}")
-    K = kernel_values_[:N]
-    d = 0 if K.ndim == 1 else K.shape[1]
-    if K.ndim == 3 and K.shape[1] != K.shape[2]:
-        raise ValueError(f"kernel_values must have shape (N, d, d), got {K.shape}")
-    M = (N - 1) // Q
-    breakpoints = np.arange(M + 1) * (Q * time_step)
+    Q, p, N_orig, N, K, d, M, breakpoints = _product_mesh_setup(
+        kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
+        show_warnings)
+    kind = "vie1_cont" if force_continuous else "vie1"
+    setup = _product.ProductSetup(kind, K, time_step, q, coll_choices, Q, p)
 
     # ---------------------------------------------------------------- right-hand side
     if g_values is None:
@@ -819,7 +789,7 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
         g = np.asarray(g_values, dtype=float)
         if d and g.ndim == 3:
             # matrix case: independent solves per column, threaded as in the
-            # collocation path
+            # collocation path, sharing the kernel-only blocks
             m_cols = g.shape[2]
             if g.shape[:2] != (N_orig, d):
                 raise ValueError(
@@ -834,39 +804,18 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
                 if (not force_continuous) and show_warnings:
                     print("warning: setting soln_init_value has no effect when force_continuous=False.")
             g_cols = g[:N]
-
-            # The lag blocks depend on the kernel only: build them once and
-            # share them between the column threads, rather than once per
-            # column (each copy is the dominant allocation of the solve).
-            setup = _product.Vie1ProductSetup(K, time_step, q, coll_choices, Q, p,
-                                              force_continuous)
-            _product.block_drivers_available(show_warnings=show_warnings)
+            _product.block_drivers_available(kind, show_warnings=show_warnings)
 
             def _col(j):
-                values, polys = _product.solve_vie1_product(
+                return _product.solve_vie1_product(
                     K, g_cols[:, :, j], time_step, q, coll_choices, Q, p, force_continuous,
                     (init_cols[:, j] if init_cols is not None else None),
                     return_function, setup=setup)
-                return (values, polys) if return_function else values
             with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                 results = list(ex.map(_col, range(m_cols)))
-            if return_function:
-                soln = np.stack([r[0] for r in results], axis=2)
-                col_polys = [r[1] for r in results]
-                mat_polys = []
-                for n in range(M):
-                    arr = np.empty((d, m_cols), dtype=object)
-                    for j in range(m_cols):
-                        arr[:, j] = col_polys[j][n]
-                    mat_polys.append(arr)
-                return soln, _SolutionFunction(mat_polys, breakpoints, d=d, m=m_cols)
-            return np.stack(results, axis=2)
-        expected = (N_orig,) if d == 0 else (N_orig, d)
-        if g.shape != expected:
-            raise ValueError(
-                f"g_values shape {g.shape} incompatible with kernel_values shape "
-                f"{kernel_values_.shape}: expected {expected}")
-        g = g[:N]
+            return _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints)
+        g = _check_series("g_values", g, N_orig, kernel_values_.shape,
+                          (N_orig,) if d == 0 else (N_orig, d))[:N]
 
     # ---------------------------------------------------------------- initial value
     if soln_init_value is None:
@@ -885,7 +834,7 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
 
     values, polys = _product.solve_vie1_product(
         K, g, time_step, q, coll_choices, Q, p, force_continuous, init, return_function,
-        show_warnings=show_warnings)
+        setup=setup, show_warnings=show_warnings)
     if return_function:
         return values, _SolutionFunction(polys, breakpoints, d=d, m=0)
     return values
@@ -1120,27 +1069,17 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         raise ValueError(
             f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
 
-    if quadrature not in ("collocation", "product"):
-        raise ValueError(
-            f"quadrature must be 'collocation' or 'product', got {quadrature!r}")
-    if quadrature == "product":
+    if _use_product_quadrature(quadrature, mesh_samples, kernel_interp_degree, coll_divs):
         return _solve_vie1_product_path(
             kernel_values_, g_values, soln_init_value, time_step, coll_divs,
             coll_choices, return_function, force_continuous, show_warnings,
             mesh_samples, kernel_interp_degree)
-    if kernel_interp_degree is not None:
-        raise ValueError(
-            "kernel_interp_degree applies only to quadrature='product'")
     # One validation of the collocation setting for the scalar, vector and
     # matrix paths (the product path applies the same checks itself).
     coll_divs, coll_choices = _validate_vie1_coll_setting(coll_divs, coll_choices)
     _check_vie1_setting(coll_divs, coll_choices, force_continuous)
     _warn_reduced_order(coll_divs, coll_choices, force_continuous, show_warnings)
-    if mesh_samples is not None and _as_int("mesh_samples", mesh_samples) != coll_divs ** 2:
-        raise ValueError(
-            f"with quadrature='collocation' the mesh is coll_divs**2 = {coll_divs ** 2} "
-            f"samples wide (got mesh_samples={mesh_samples}); pass quadrature='product' "
-            f"to choose the mesh width")
+    _check_time_step(time_step)
 
     N_orig = len(kernel_values_)
     N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
@@ -1204,7 +1143,6 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         else:
             g_values_ = np.zeros((N, d), dtype=float)
 
-        assert time_step > 0.0, "time_step must be positive"
 
         if soln_init_value is not None:
             if (not force_continuous) and show_warnings:
@@ -1239,17 +1177,12 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         return soln_vals
 
     # ------------------------------------------------------------------ scalar path
-    assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
 
     if g_values is not None:
-        g_values_ = np.asarray(g_values, dtype=float)
-        assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"
-        assert len(g_values_) == N_orig, "kernel_values and g_values must have the same length"
-        g_values_ = g_values_[:N]
+        g_values_ = _check_series("g_values", g_values, N_orig, (N_orig,), (N_orig,))[:N]
     else:
         g_values_ = np.zeros(N)
 
-    assert time_step > 0.0, "time_step must be positive"
 
     if soln_init_value is None:
         # We still need a value to pass into the JIT version. It shouldn't be used!
@@ -1330,7 +1263,9 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         ``DeprecationWarning``.
     show_warnings : bool, optional
         If ``True`` (default), print a warning when ``kernel_values`` is
-        truncated or when the Numba fallback is used.
+        truncated, when the Numba fallback is used, or when
+        ``quadrature="product"`` has to step in NumPy because the loaded D
+        extension predates its block driver.
 
     quadrature : {"collocation", "product"}, optional
         How the integrals are evaluated from the sampled kernel. The default
@@ -1355,6 +1290,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         Degree of the kernel interpolant for ``quadrature="product"``;
         defaults to the number of collocation nodes. Not accepted with
         ``quadrature="collocation"``.
+
     Returns
     -------
     soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)
@@ -1374,9 +1310,16 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     Raises
     ------
     ValueError
-        For invalid shapes or collocation settings, inputs too short to form
-        one mesh interval, matrix input with zero columns, or inputs so large
-        that a solver buffer would exceed $2^{31}$ elements.
+        For invalid input: shapes that do not fit together (``g_values`` and
+        ``a_values`` must have the length of ``kernel_values``, before any
+        truncation), inputs too short to form one mesh interval, matrix input
+        with zero columns, inputs so large that a solver buffer would exceed
+        $2^{31}$ elements, a ``coll_divs`` that is not a positive integer or
+        ``coll_choices`` that is empty or not made of distinct integers in
+        ``0 .. coll_divs`` (floats are rejected, not truncated), a
+        non-positive ``time_step``, an unknown ``quadrature``, or a
+        ``mesh_samples`` / ``kernel_interp_degree`` that is not an integer or
+        not admissible for the chosen quadrature.
     NotImplementedError
         For a collocation setting not compiled into the D extension, on the
         vector/matrix path (no fallback exists) or on the scalar path when
@@ -1438,21 +1381,12 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         raise ValueError(
             f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
 
-    if quadrature not in ("collocation", "product"):
-        raise ValueError(
-            f"quadrature must be 'collocation' or 'product', got {quadrature!r}")
-    if quadrature == "product":
+    if _use_product_quadrature(quadrature, mesh_samples, kernel_interp_degree, coll_divs):
         return _solve_vie2_product_path(
             kernel_values_, g_values, time_step, coll_divs, coll_choices,
             return_function, show_warnings, mesh_samples, kernel_interp_degree)
-    if kernel_interp_degree is not None:
-        raise ValueError(
-            "kernel_interp_degree applies only to quadrature='product'")
-    if mesh_samples is not None and int(mesh_samples) != coll_divs ** 2:
-        raise ValueError(
-            f"with quadrature='collocation' the mesh is coll_divs**2 = {coll_divs ** 2} "
-            f"samples wide (got mesh_samples={mesh_samples}); pass quadrature='product' "
-            f"to choose the mesh width")
+    coll_divs, coll_choices = _validate_second_kind_coll_setting(coll_divs, coll_choices)
+    _check_time_step(time_step)
 
     N_orig = len(kernel_values_)
     N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
@@ -1468,9 +1402,10 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
             g_values_ = np.asarray(g_values, dtype=float)
             if g_values_.ndim == 3:  # matrix case: shape (N, d, m_cols)
                 m_cols = g_values_.shape[2]
-                if g_values_.shape[1] != d:
+                if g_values_.shape[:2] != (N_orig, d):
                     raise ValueError(
-                        f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
+                        f"g_values shape {g_values_.shape} incompatible with kernel_values shape "
+                        f"{(N_orig, d, d)}: expected ({N_orig}, {d}, m)")
                 g_cols = g_values_[:N]
                 def _col_vie2(j):
                     # column 0 carries any per-solve warnings; the others
@@ -1498,20 +1433,10 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                                               d=d, m=m_cols))
                 return np.stack(results, axis=2)
             else:
-                if g_values_.shape != (N_orig, d):
-                    raise ValueError(
-                        f"g_values shape {g_values_.shape} incompatible with kernel_values shape {kernel_values_.shape}")
-                g_values_ = g_values_[:N]
+                g_values_ = _check_series("g_values", g_values_, N_orig, (N_orig, d, d),
+                                          (N_orig, d))[:N]
         else:
             g_values_ = np.zeros((N, d), dtype=float)
-
-        assert coll_divs > 0, "coll_divs must be a positive integer"
-        assert all(isinstance(c, int) for c in coll_choices), "coll_choices must be a list of integers"
-        assert all(coll_choices.count(c) <= 1 for c in coll_choices), \
-            "all integers in coll_choices must be distinct"
-        for choice in coll_choices:
-            assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
-        coll_choices = sorted(coll_choices)
 
         if (coll_divs, coll_choices) not in _fast_settings_VIE_2:
             # NotImplementedError subclasses RuntimeError, so callers
@@ -1534,24 +1459,12 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         return soln_vals
 
     # ------------------------------------------------------------------ scalar path
-    assert len(kernel_values_.shape) == 1, "kernel_values must be a 1-dim array"
 
     if g_values is not None:
-        g_values_ = np.asarray(g_values, dtype=float)
-        assert len(g_values_.shape) == 1, "g_values must be a 1-dim array"
-        assert len(g_values_) == N_orig, "kernel_values and g_values must have the same length"
-        g_values_ = g_values_[:N]
+        g_values_ = _check_series("g_values", g_values, N_orig, (N_orig,), (N_orig,))[:N]
     else:
         g_values_ = np.zeros(N)
 
-    assert coll_divs > 0, "coll_divs must be a positive integer"
-    assert all([isinstance(choice, int) for choice in coll_choices]), \
-        "coll_choices must be a list of integers"
-    assert all([coll_choices.count(c) <= 1 for c in coll_choices]), \
-        "all integers in coll_choices must be distinct"
-    for choice in coll_choices:
-        assert 0 <= choice <= coll_divs, "coll_choices must contain only integers from 0 to coll_divs"
-    coll_choices = sorted(coll_choices)
     if (coll_divs, coll_choices) in _fast_settings_VIE_2:
         soln_vals, poly_coefs = _dlang_module.solve_vie2_d(
             g_values_, kernel_values_, time_step, coll_divs, coll_choices, return_function)

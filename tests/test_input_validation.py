@@ -53,16 +53,18 @@ def test_kernel_2d_vie1():
 # g_values must be 1-D and same length as kernel_values
 # ---------------------------------------------------------------------------
 
+# All three array-input solvers report bad input with ValueError (they used
+# assert statements, which vanish under python -O).
+
 @pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
 def test_g_values_2d(solver):
-    with pytest.raises(AssertionError, match="g_values must be a 1-dim array"):
+    with pytest.raises(ValueError, match="g_values shape \\(3, 3\\) incompatible"):
         solver(g_values=np.ones((3, 3)))
 
 
 @pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
 def test_g_values_wrong_length(solver):
-    with pytest.raises(AssertionError,
-                       match="kernel_values and g_values must have the same length"):
+    with pytest.raises(ValueError, match=r"g_values shape \(5,\) incompatible .* expected \(9,\)"):
         solver(g_values=np.ones(5))
 
 
@@ -71,13 +73,12 @@ def test_g_values_wrong_length(solver):
 # ---------------------------------------------------------------------------
 
 def test_a_values_2d():
-    with pytest.raises(AssertionError, match="a_values must be a 1-dim array"):
+    with pytest.raises(ValueError, match="a_values shape \\(3, 3\\) incompatible"):
         _vide(a_values=np.ones((3, 3)))
 
 
 def test_a_values_wrong_length():
-    with pytest.raises(AssertionError,
-                       match="kernel_values and a_values must have the same length"):
+    with pytest.raises(ValueError, match=r"a_values shape \(5,\) incompatible .* expected \(9,\)"):
         _vide(a_values=np.ones(5))
 
 
@@ -85,23 +86,23 @@ def test_a_values_wrong_length():
 # time_step (VIE_1 only)
 # ---------------------------------------------------------------------------
 
-def test_time_step_zero():
-    with pytest.raises(AssertionError, match="time_step must be positive"):
-        _vie1(time_step=0.0)
+@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
+def test_time_step_zero(solver):
+    with pytest.raises(ValueError, match="time_step must be positive"):
+        solver(time_step=0.0)
 
 
-def test_time_step_negative():
-    with pytest.raises(AssertionError, match="time_step must be positive"):
-        _vie1(time_step=-1.0)
+@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
+def test_time_step_negative(solver):
+    with pytest.raises(ValueError, match="time_step must be positive"):
+        solver(time_step=-1.0)
 
 
 # ---------------------------------------------------------------------------
 # coll_divs must be positive
 # ---------------------------------------------------------------------------
 
-# solve_VIE_1 validates its collocation setting with ValueError for both
-# quadratures; solve_VIE_2 / solve_VIDE still use assertions.
-_COLL_ERRORS = [(_vie1, ValueError), (_vie2, AssertionError), (_vide, AssertionError)]
+_COLL_ERRORS = [(_vie1, ValueError), (_vie2, ValueError), (_vide, ValueError)]
 
 
 @pytest.mark.parametrize("solver, error", _COLL_ERRORS)
@@ -156,13 +157,13 @@ def test_vie1_choice_out_of_range():
 
 
 def test_vie2_choice_out_of_range():
-    with pytest.raises(AssertionError,
+    with pytest.raises(ValueError,
                        match="coll_choices must contain only integers from 0 to coll_divs"):
         _vie2(coll_divs=2, coll_choices=[1, 5])
 
 
 def test_vide_choice_out_of_range():
-    with pytest.raises(AssertionError,
+    with pytest.raises(ValueError,
                        match="coll_choices must contain only integers from 0 to coll_divs"):
         _vide(coll_divs=2, coll_choices=[1, 5])
 

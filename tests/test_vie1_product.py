@@ -524,7 +524,7 @@ def test_stale_extension_fallback_is_announced_and_agrees(monkeypatch, capsys):
     kw = dict(kernel_values=K, g_values=g, time_step=0.01, quadrature="product")
     fast = solve_VIE_1(**kw)
     assert capsys.readouterr().out == ""
-    monkeypatch.setattr(_dlang, "have_block_drivers", lambda: False)
+    monkeypatch.setattr(_dlang, "have_block_driver", lambda name: False)
     slow = solve_VIE_1(**kw)
     assert "falling back to the NumPy stepper" in capsys.readouterr().out
     assert np.max(np.abs(fast - slow)) < 1e-9
@@ -552,7 +552,7 @@ def test_numpy_fallback_lu_matches_the_extension_singularity_test():
 def test_zero_kernel_raises_linalg_error(use_extension, monkeypatch):
     from voles import _dlang
     if not use_extension:
-        monkeypatch.setattr(_dlang, "have_block_drivers", lambda: False)
+        monkeypatch.setattr(_dlang, "have_block_driver", lambda name: False)
     for fc in (False, True):
         with pytest.raises(np.linalg.LinAlgError):
             solve_VIE_1(kernel_values=np.zeros(31), g_values=np.ones(31), time_step=0.1,

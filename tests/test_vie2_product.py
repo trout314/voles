@@ -236,3 +236,72 @@ def test_validation():
         solve_VIE_2(quadrature="product", mesh_samples=3, **common)
     with pytest.raises(ValueError):
         solve_VIE_2(quadrature="product", kernel_interp_degree=0, **common)
+
+
+# ---------------------------------------------------------------------------
+# Follow-ups to the review
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("quadrature", ["collocation", "product"])
+def test_matrix_shape_error_reports_the_untruncated_kernel(quadrature):
+    N, d = 4 * 10 + 3, 2                                   # truncates to 41
+    K = np.broadcast_to(0.5 * np.eye(d), (N, d, d)).copy()
+    with pytest.raises(ValueError, match=rf"kernel_values shape \({N}, {d}, {d}\).*expected \({N}, {d}, m\)"):
+        solve_VIE_2(kernel_values=K, g_values=np.zeros((41, d, 3)), time_step=0.05,
+                    coll_divs=2, coll_choices=[0, 1, 2], quadrature=quadrature, show_warnings=False)
+
+
+def test_matrix_columns_share_one_set_of_blocks(monkeypatch):
+    calls = []
+    real = _product.build_lag_blocks
+    monkeypatch.setattr(_product, "build_lag_blocks",
+                        lambda *a, **k: calls.append(1) or real(*a, **k))
+    rng = np.random.default_rng(1)
+    N, d, m_cols = 4 * 10 + 1, 2, 3
+    t = 0.05 * np.arange(N)
+    K = np.exp(-t)[:, None, None] * (np.eye(d) + 0.1)
+    G = np.cos(t)[:, None, None] * rng.standard_normal((d, m_cols))
+    soln, fn = solve_VIE_2(kernel_values=K, g_values=G, time_step=0.05, coll_divs=2,
+                           coll_choices=[0, 1, 2], quadrature="product", return_function=True,
+                           show_warnings=False)
+    assert len(calls) == 1
+    for j in range(m_cols):
+        col, col_fn = solve_VIE_2(kernel_values=K, g_values=G[:, :, j], time_step=0.05,
+                                  coll_divs=2, coll_choices=[0, 1, 2], quadrature="product",
+                                  return_function=True, show_warnings=False)
+        assert np.array_equal(soln[:, :, j], col)
+        assert np.allclose(fn(0.321)[:, j], col_fn(0.321), rtol=0, atol=1e-13)
+
+
+def test_blocks_are_transformed_in_place_without_a_second_copy():
+    """The second-kind transform [I - A, -B_1, ...] used to be built as a
+    negated full-size copy of the lag blocks."""
+    dt, q, Q = 0.05, 2, 2
+    N = n_samples(Q, 12)
+    t, K, g, _ = cos_problem(dt, N)
+    s1 = _product.ProductSetup("vie1", K, dt, q, [1, 2], Q, 2)
+    s2 = _product.ProductSetup("vie2", K, dt, q, [1, 2], Q, 2)
+    assert np.allclose(s2.lagB[1:], -s1.lagB[1:])
+    assert np.allclose(s2.lagB[0], np.eye(2) - s1.lagB[0])
+
+
+def test_linalg_error_names_the_second_kind_solver():
+    """K = 1/H with a single node at c = 1: I - A is exactly zero."""
+    dt, q = 0.05, 1
+    N = n_samples(1, 5)
+    with pytest.raises(np.linalg.LinAlgError, match="solve_VIE_2"):
+        solve_VIE_2(kernel_values=np.full(N, 1.0 / dt), g_values=np.ones(N), time_step=dt,
+                    coll_divs=q, coll_choices=[1], quadrature="product", show_warnings=False)
+
+
+@pytest.mark.parametrize("kwargs", [dict(mesh_samples=2.5), dict(kernel_interp_degree=2.0),
+                                    dict(coll_divs=2.0)])
+def test_non_integer_parameters_are_rejected(kwargs):
+    dt = 0.05
+    N = n_samples(4, 4)
+    t, K, g, _ = cos_problem(dt, N)
+    base = dict(kernel_values=K, g_values=g, time_step=dt, coll_divs=2, coll_choices=[0, 1, 2],
+                quadrature="product", show_warnings=False)
+    base.update(kwargs)
+    with pytest.raises(ValueError, match="integer"):
+        solve_VIE_2(**base)

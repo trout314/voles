@@ -29,29 +29,31 @@ def _setup_argtypes() -> None:
     _lib.volterra_have_lapack.argtypes = []
 
     # Block drivers for precomputed lag blocks (product-integration quadrature,
-    # see _product.py). Guarded: a dylib built before these were added still loads.
-    global _have_block_drivers
-    _have_block_drivers = (hasattr(_lib, "volterra_solve_vie1_blocks")
-                           and hasattr(_lib, "volterra_solve_vie1_cont_blocks")
-                           and hasattr(_lib, "volterra_solve_vide_blocks"))
-    if _have_block_drivers:
-        _lib.volterra_solve_vide_blocks.restype = ctypes.c_int
-        _lib.volterra_solve_vide_blocks.argtypes = [
-            _dp, _dp, _dp, _dp, _dp, _dp,                     # lagB, g, a_coll, betaC, beta1, y0
-            ctypes.c_int, ctypes.c_int, ctypes.c_int,         # M, m, d
-            _dp, _dp,                                         # out_Y, out_y
-        ]
+    # see _product.py). Each is guarded on its own, so a dylib built before
+    # some of them were added still loads and keeps the drivers it does have.
+    global _block_drivers
+    _block_drivers = {name: hasattr(_lib, f"volterra_solve_{name}_blocks")
+                      for name in ("vie1", "vie1_cont", "vide")}
+    if _block_drivers["vie1"]:
         _lib.volterra_solve_vie1_blocks.restype = ctypes.c_int
         _lib.volterra_solve_vie1_blocks.argtypes = [
             _dp, _dp,                                         # lagB, g
             ctypes.c_int, ctypes.c_int,                       # M, Db
             _dp,                                              # out_U
         ]
+    if _block_drivers["vie1_cont"]:
         _lib.volterra_solve_vie1_cont_blocks.restype = ctypes.c_int
         _lib.volterra_solve_vie1_cont_blocks.argtypes = [
             _dp, _dp, _dp, ctypes.c_double, _dp,              # lagB, g, adv_U, adv_0, y0
             ctypes.c_int, ctypes.c_int, ctypes.c_int,         # M, m, d
             _dp, _dp,                                         # out_U, out_y
+        ]
+    if _block_drivers["vide"]:
+        _lib.volterra_solve_vide_blocks.restype = ctypes.c_int
+        _lib.volterra_solve_vide_blocks.argtypes = [
+            _dp, _dp, _dp, _dp, _dp, _dp,                     # lagB, g, a_coll, betaC, beta1, y0
+            ctypes.c_int, ctypes.c_int, ctypes.c_int,         # M, m, d
+            _dp, _dp,                                         # out_Y, out_y
         ]
 
     _lib.function_solve_vie2.restype = ctypes.c_int
@@ -178,7 +180,7 @@ def _setup_argtypes() -> None:
     ]
 
 
-_have_block_drivers = False
+_block_drivers = {"vie1": False, "vie1_cont": False, "vide": False}
 
 
 def _load() -> None:
@@ -893,12 +895,19 @@ def supported_coll_settings_d():
 # Block drivers (product-integration quadrature; blocks built in _product.py)
 # ---------------------------------------------------------------------------
 
+def have_block_driver(name: str) -> bool:
+    """True if the loaded extension exports the lag-block stepping driver
+    ``volterra_solve_<name>_blocks`` (``name`` in ``vie1``, ``vie1_cont``,
+    ``vide``)."""
+    return _block_drivers[name]
+
+
 def have_block_drivers() -> bool:
-    """True if the loaded extension exports the lag-block stepping drivers."""
-    return _have_block_drivers
+    """True if the loaded extension exports all lag-block stepping drivers."""
+    return all(_block_drivers.values())
 
 
-def solve_vie1_blocks_d(lagB, g):
+def solve_vie1_blocks_d(lagB, g, name="volterra_solve_vie1_blocks"):
     """Step precomputed lag blocks through the D Toeplitz history
     (discontinuous VIE-1).
 
@@ -921,7 +930,7 @@ def solve_vie1_blocks_d(lagB, g):
         lb.ctypes.data_as(_dp), gg.ctypes.data_as(_dp),
         ctypes.c_int(M), ctypes.c_int(Db),
         out.ctypes.data_as(_dp))
-    _check_return(ret, "volterra_solve_vie1_blocks")
+    _check_return(ret, name)
     return out
 
 

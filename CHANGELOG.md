@@ -82,6 +82,35 @@
   scalar/vector input with an `AssertionError`.
 - An empty `coll_choices` raises `ValueError` in `solve_VIE_1` (was an
   `IndexError` with `force_continuous=True`).
+- **`solve_VIDE` with matrix-valued `soln_init_value` and a shared 2-D
+  `g_values` failed whenever the kernel had to be truncated**: the shared
+  `g` was forwarded to the column solves at its original length while the
+  kernel and `a` were truncated, so every column raised `ValueError` right
+  after the truncation warning. Both quadratures were affected (the flaw
+  predates the product path). The shared `g` is now checked and truncated
+  like the other inputs.
+- **`solve_VIDE`'s matrix path did not validate `a_values`**: an `a` of the
+  wrong length was sliced silently and the wrong model solved, where the
+  single-column path raised. Both matrix paths now check `a_values` and
+  `g_values` against the kernel length.
+- **All three array-input solvers report bad input with `ValueError`**
+  (`solve_VIE_2` and `solve_VIDE` used `assert`, which disappears under
+  `python -O`), with one shape policy: series sampled alongside the kernel
+  (`g_values`, `a_values`) must have the kernel's length before truncation,
+  on every path and for both quadratures. The VIDE product path used to
+  accept a pre-truncated `g` too. Messages report the kernel shape that was
+  passed, not the truncated one.
+- **A D extension that predates one of the lag-block drivers keeps the
+  others.** The availability check required all three drivers, so an
+  extension built between the VIE-1 and VIDE drivers silently dropped
+  `solve_VIE_1(quadrature="product")` to the O(M²) NumPy stepper; each
+  driver is now checked on its own, and the fallback warning names the
+  missing driver. The NumPy fallback for the VIDE applies the extension's
+  pivot threshold too.
+- `LinAlgError` from a second-kind product solve is reported for
+  `solve_VIE_2`, not for the first-kind driver it reuses.
+- The `kernel_interp_degree` entries in the `solve_VIE_2` / `solve_VIDE`
+  docstrings were missing the blank line before "Returns".
 - **`solve_VIE_1` no longer truncates non-integer parameters.** With
   `quadrature="product"`, `mesh_samples=2.6` ran silently as 2 and
   `coll_divs=2.7` as 2, and on the default path `mesh_samples=9.9` passed the
@@ -137,6 +166,15 @@
   code 3) rather than risking undefined behavior.
 
 ### Changed
+- **`solve_VIE_2` and `solve_VIDE` with `quadrature="product"` and
+  matrix-valued input build the lag blocks once** and share them between
+  the column threads (they rebuilt them per column, m copies of the
+  dominant allocation at once), and the second-kind transform of the
+  blocks is done in place instead of in a second full-size copy. The
+  three product paths and the three quadrature dispatch blocks now share
+  one implementation (`_product.ProductSetup`, `_product_mesh_setup`),
+  including the strict integer parsing of `mesh_samples` and
+  `kernel_interp_degree`.
 - **`quadrature="product"` is faster for scalar and matrix input.** The
   solution is evaluated on the sample grid for all mesh intervals at once
   instead of in a Python loop over them (2.4x end to end for a scalar solve

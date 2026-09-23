@@ -243,3 +243,129 @@ def test_validation():
         solve_VIDE(kernel_values=K, a_values=a[:-1], g_values=g, soln_init_value=1.0,
                    time_step=dt, coll_divs=q, coll_choices=[0, 1, 2], quadrature="product",
                    show_warnings=False)
+
+
+# ---------------------------------------------------------------------------
+# Follow-ups to the review
+# ---------------------------------------------------------------------------
+
+def _matrix_problem(N, d=2, m_cols=3, seed=0):
+    rng = np.random.default_rng(seed)
+    t = 0.01 * np.arange(N)
+    K = -np.exp(-t)[:, None, None] * (np.eye(d) + 0.1 * rng.standard_normal((d, d)))
+    a = 0.1 * np.cos(t)[:, None, None] * np.eye(d)
+    g = np.sin(t)[:, None] * rng.standard_normal(d)
+    init = rng.standard_normal((d, m_cols))
+    return K, a, g, init
+
+
+@pytest.mark.parametrize("quadrature", ["collocation", "product"])
+def test_matrix_shared_g_solves_under_kernel_truncation(quadrature):
+    """A 2-D g shared by all columns was forwarded untruncated while the
+    kernel and a were truncated, so every column raised ValueError whenever
+    the kernel length was not of the admissible form."""
+    q, choices = 2, [0, 1, 2]
+    N = (4 * 10 + 1) + 3                 # collocation mesh is 4 wide: truncated to 41
+    K, a, g, init = _matrix_problem(N)
+    soln = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=init,
+                      time_step=0.01, coll_divs=q, coll_choices=choices, quadrature=quadrature,
+                      show_warnings=False)
+    N_used = 41 if quadrature == "collocation" else 43       # product mesh is 2 wide
+    assert soln.shape[0] == N_used and soln.shape[1:] == init.shape
+    for j in range(init.shape[1]):
+        col = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=init[:, j],
+                         time_step=0.01, coll_divs=q, coll_choices=choices, quadrature=quadrature,
+                         show_warnings=False)
+        assert np.array_equal(soln[:, :, j], col)
+
+
+@pytest.mark.parametrize("quadrature", ["collocation", "product"])
+def test_matrix_path_validates_a_and_g_lengths(quadrature):
+    """A mismatched a (or g) used to be sliced silently on the matrix path,
+    solving a different model; the single-column path rejected it."""
+    q, choices = 2, [0, 1, 2]
+    N = 4 * 10 + 1
+    K, a, g, init = _matrix_problem(N)
+    kw = dict(kernel_values=K, soln_init_value=init, time_step=0.01, coll_divs=q,
+              coll_choices=choices, quadrature=quadrature, show_warnings=False)
+    with pytest.raises(ValueError, match=r"a_values shape \(50, 2, 2\) incompatible"):
+        solve_VIDE(a_values=np.broadcast_to(a[0], (50, 2, 2)), g_values=g, **kw)
+    with pytest.raises(ValueError, match=r"g_values shape \(50, 2\) incompatible"):
+        solve_VIDE(a_values=a, g_values=np.zeros((50, 2)), **kw)
+    with pytest.raises(ValueError, match=r"expected \(41, 2, 3\)"):
+        solve_VIDE(a_values=a, g_values=np.zeros((N, 2, 2)), **kw)
+
+
+def test_pre_truncated_g_is_rejected_like_the_other_solvers():
+    """Data sampled alongside the kernel must have the kernel's length; the
+    VIDE product path used to accept the truncated length too, alone among
+    the sampled-data solvers."""
+    dt, q = 0.05, 2
+    N = n_samples(4, 4) + 2
+    t, K, a, g, _ = exp_problem(dt, N)
+    with pytest.raises(ValueError, match="g_values shape"):
+        solve_VIDE(kernel_values=K, a_values=a, g_values=g[:-2], soln_init_value=1.0,
+                   time_step=dt, coll_divs=q, coll_choices=[0, 1, 2], quadrature="product",
+                   show_warnings=False)
+
+
+def test_matrix_columns_share_one_set_of_blocks(monkeypatch):
+    calls = []
+    real = _product.build_lag_blocks
+    monkeypatch.setattr(_product, "build_lag_blocks",
+                        lambda *a, **k: calls.append(1) or real(*a, **k))
+    K, a, g, init = _matrix_problem(4 * 10 + 1)
+    soln, fn = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=init,
+                          time_step=0.01, coll_divs=2, coll_choices=[0, 1, 2],
+                          quadrature="product", return_function=True, show_warnings=False)
+    assert len(calls) == 1
+    col, col_fn = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=init[:, 1],
+                             time_step=0.01, coll_divs=2, coll_choices=[0, 1, 2],
+                             quadrature="product", return_function=True, show_warnings=False)
+    assert np.array_equal(soln[:, :, 1], col)
+    assert np.allclose(fn(0.123)[:, 1], col_fn(0.123), rtol=0, atol=1e-13)
+
+
+def test_missing_a_is_not_materialised_and_agrees_with_zeros():
+    dt, q = 0.05, 2
+    N = n_samples(2, 30)
+    t, K, y = damped(dt, N)
+    kw = dict(kernel_values=K, soln_init_value=1.0, time_step=dt, coll_divs=q,
+              coll_choices=[1, 2], quadrature="product", show_warnings=False)
+    assert np.array_equal(solve_VIDE(a_values=None, **kw), solve_VIDE(a_values=np.zeros(N), **kw))
+    assert np.max(np.abs(solve_VIDE(**kw) - y)) < 1e-3
+
+
+def test_stale_driver_fallback_is_per_driver(monkeypatch, capsys):
+    """An extension with the VIE-1 drivers but not the VIDE one keeps the
+    fast path for VIE-1 and announces the fallback for the VIDE only."""
+    from voles import _dlang, solve_VIE_1
+    monkeypatch.setattr(_dlang, "have_block_driver", lambda name: name != "vide")
+    dt, q = 0.05, 2
+    N = n_samples(2, 20)
+    t, K, a, g, y = exp_problem(dt, N)
+    vals = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=1.0,
+                      time_step=dt, coll_divs=q, coll_choices=[0, 1, 2], quadrature="product")
+    out = capsys.readouterr().out
+    assert "volterra_solve_vide_blocks" in out and "falling back" in out
+    assert np.max(np.abs(vals - y)) < 1e-6
+    solve_VIE_1(kernel_values=np.exp(-t), g_values=1 - np.exp(-t), time_step=dt,
+                coll_divs=q, coll_choices=[1, 2], quadrature="product")
+    assert capsys.readouterr().out == ""
+
+
+def test_numpy_fallback_raises_on_nearly_singular_local_system(monkeypatch):
+    """a(t) chosen so that I - betaC a - P_val is singular at the first step."""
+    from voles import _dlang
+    dt, q = 0.05, 1
+    N = n_samples(1, 5)
+    K = np.zeros(N)
+    # with K = 0 and one node at c = 1: local system 1 - H a(t) = 0 for a = 1/H
+    a = np.full(N, 1.0 / dt)
+    for fallback in (False, True):
+        if fallback:
+            monkeypatch.setattr(_dlang, "have_block_driver", lambda name: False)
+        with pytest.raises(np.linalg.LinAlgError):
+            solve_VIDE(kernel_values=K, a_values=a, g_values=np.ones(N), soln_init_value=1.0,
+                       time_step=dt, coll_divs=q, coll_choices=[1], quadrature="product",
+                       show_warnings=False)
