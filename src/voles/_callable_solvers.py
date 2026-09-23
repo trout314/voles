@@ -104,10 +104,16 @@ def _import_scipy_quad_vec():
 # tolerance than the per-row defaults it replaces. Two-order-check fallback
 # quadratures always use the defaults and stay on the per-row repair path, so
 # the flag is a strict no-op for kernels with no declared singularity.
-_QUAD_OPTS_DEFAULT = {'limit': 100}
-# scipy.integrate.quad converges when err <= max(epsabs, epsrel*|result|) with
-# default epsabs=1.49e-8, so 1e-12/1e-12 is strictly tighter.
-_QUAD_OPTS_REUSE = {'limit': 200, 'epsabs': 1e-12, 'epsrel': 1e-12}
+# scipy.integrate.quad converges when err <= max(epsabs, epsrel*|result|).
+# Its default epsabs=1.49e-8 is an ABSOLUTE floor, which on the tiny leading
+# intervals of a graded mesh exceeds the block weights themselves (a weight
+# of an Abel kernel over width h is ~2 sqrt(h) ~ 1e-5 at h ~ 1e-11), letting
+# first-kind solves lose accuracy as the mesh is refined. Relative-only
+# convergence (epsabs=0) keeps every block at its own scale, matching the
+# vector path's quad_vec options below.
+_QUAD_OPTS_DEFAULT = {'limit': 100, 'epsabs': 0.0, 'epsrel': 1.49e-8}
+# Strictly tighter than the defaults in relative terms.
+_QUAD_OPTS_REUSE = {'limit': 200, 'epsabs': 0.0, 'epsrel': 1e-12}
 # scipy.integrate.quad_vec defaults to epsabs=1e-200 (pure-relative 1e-8
 # convergence). Keep that epsabs so small-magnitude blocks are never computed
 # *less* accurately than the per-row defaults; tighten only epsrel.

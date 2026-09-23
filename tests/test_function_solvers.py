@@ -2849,3 +2849,18 @@ def test_vie1_force_continuous_singular_kernel_requires_right_endpoint():
             mesh_breakpoints=_uniform_mesh(10), coll_nodes=[0.3, 0.7],
             force_continuous=True, soln_init_value=0.0,
             kernel_singularity=p["kernel_singularity"], show_warnings=False)
+
+
+def test_adaptive_singular_blocks_accurate_on_fine_graded_mesh():
+    """Adaptive (location-only) singular quadrature must stay accurate as a
+    graded mesh is refined. Its leading intervals get tiny (width ~1e-11 at
+    M=64 here), so the block weights are ~1e-5: an absolute quad tolerance
+    (scipy's default 1.49e-8) left them percent-level wrong and the VIE-1
+    error grew with refinement (1.8e-6 at M=64). Relative-only convergence
+    keeps it at the rounding floor. Exact solution y = 1 for g = 2 sqrt(t)."""
+    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=64, order=3)
+    y = function_solve_VIE_1(
+        kernel=lambda u: 1.0 / np.sqrt(np.maximum(u, 1e-300)),
+        g=lambda s: 2.0 * np.sqrt(s), mesh_breakpoints=mesh,
+        kernel_singularity=0.0, show_warnings=False)
+    assert np.max(np.abs(y - 1.0)) < 1e-8
