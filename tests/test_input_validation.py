@@ -98,6 +98,20 @@ def test_time_step_negative(solver):
         solver(time_step=-1.0)
 
 
+@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
+@pytest.mark.parametrize("bad", [np.inf, np.nan])
+def test_time_step_non_finite(solver, bad):
+    """inf used to pass the positivity check and return all-NaN output."""
+    with pytest.raises(ValueError, match="time_step must be positive and finite"):
+        solver(time_step=bad)
+
+
+@pytest.mark.parametrize("quad", ["collocation", "product"])
+def test_time_step_non_finite_both_quadratures(quad):
+    with pytest.raises(ValueError, match="time_step must be positive and finite"):
+        _vie2(time_step=np.inf, quadrature=quad)
+
+
 # ---------------------------------------------------------------------------
 # coll_divs must be positive
 # ---------------------------------------------------------------------------

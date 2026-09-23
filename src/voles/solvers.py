@@ -192,8 +192,8 @@ def _validate_second_kind_coll_setting(coll_divs, coll_choices):
 
 
 def _check_time_step(time_step):
-    if not time_step > 0.0:
-        raise ValueError("time_step must be positive")
+    if not (time_step > 0.0 and np.isfinite(time_step)):
+        raise ValueError("time_step must be positive and finite")
 
 
 def _use_product_quadrature(quadrature, mesh_samples, kernel_interp_degree, coll_divs):
