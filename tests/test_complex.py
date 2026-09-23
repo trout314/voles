@@ -326,7 +326,8 @@ def _complex_list_inputs():
 
 
 def _vie1_cplx(**kw):
-    base = dict(kernel_values=_complex_list_inputs(),
+    # VIE-1 needs K(0) != 0 (the shared lists start at 0; g(0) = 0 is fine).
+    base = dict(kernel_values=[complex(1 + 0.1 * x, 0.05 * x) for x in range(9)],
                 g_values=_complex_list_inputs(),
                 coll_divs=2, coll_choices=[1, 2])
     base.update(kw)
@@ -485,10 +486,14 @@ def test_complex_matrix_valued_d49_workflow_smoke():
     N = 19  # = 2 * coll_divs**2 + 1 for coll_divs=3, so mesh_divs = 2
 
     rng = np.random.default_rng(0)
-    C = (rng.standard_normal((N, d, d))
-         + 1j * rng.standard_normal((N, d, d))).astype(np.complex128)
-    lhs = (rng.standard_normal((N, d, d))
-           + 1j * rng.standard_normal((N, d, d))).astype(np.complex128)
+    # A well-posed first-kind problem at the same size (the old random-noise
+    # data had no meaningful solution): smooth kernel with K(0) close to I,
+    # right-hand side with lhs(0) = 0.
+    t = np.arange(N, dtype=float)[:, None, None]
+    R1, R2, R3 = ((rng.standard_normal((d, d)) + 1j * rng.standard_normal((d, d)))
+                  / np.sqrt(2 * d) for _ in range(3))
+    C = (np.eye(d) + 0.1 * np.exp(-0.2 * t) * R1).astype(np.complex128)
+    lhs = (0.1 * t * R2 + 0.01 * t ** 2 * R3).astype(np.complex128)
     L = (rng.standard_normal((d, d))
          + 1j * rng.standard_normal((d, d))).astype(np.complex128)
 

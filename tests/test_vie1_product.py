@@ -101,7 +101,7 @@ def test_polynomial_kernel_matches_exact_collocation(coll_divs, choices, force_c
     g = lambda tt: np.sin(1.3 * tt) + 0.2 * tt
     K = kernel(t)
     gv = g(t)
-    init = 0.7
+    init = 1.5      # consistent with the data: y(0) = g'(0) / K(0) = (1.3 + 0.2) / 1
     vals = solve_VIE_1(kernel_values=K, g_values=gv, time_step=dt, coll_divs=coll_divs,
                        coll_choices=choices, quadrature="product", mesh_samples=Q,
                        kernel_interp_degree=p, force_continuous=force_continuous,
@@ -127,7 +127,8 @@ def test_polynomial_kernel_matches_exact_collocation_vector():
     K = np.array([kernel(tau) for tau in t])
     gv = np.array([g(tt) for tt in t])
     for fc in (False, True):
-        init = np.array([0.3, -0.4]) if fc else None
+        # consistent with the data: y(0) = K(0)^-1 g'(0) = A^-1 [1, 0.5]
+        init = np.linalg.solve(A, [1.0, 0.5]) if fc else None
         vals = solve_VIE_1(kernel_values=K, g_values=gv, time_step=dt, coll_divs=coll_divs,
                            coll_choices=choices, quadrature="product", mesh_samples=Q,
                            kernel_interp_degree=p, force_continuous=fc,
