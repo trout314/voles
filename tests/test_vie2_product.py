@@ -285,13 +285,20 @@ def test_blocks_are_transformed_in_place_without_a_second_copy():
     assert np.allclose(s2.lagB[0], np.eye(2) - s1.lagB[0])
 
 
-def test_linalg_error_names_the_second_kind_solver():
-    """K = 1/H with a single node at c = 1: I - A is exactly zero (the step
-    is a power of two so that dt * (1/dt) is exactly 1 on every platform)."""
-    dt, q = 0.25, 1
+def test_linalg_error_names_the_second_kind_solver(monkeypatch):
+    """A singular local system is reported for solve_VIE_2, not for the
+    first-kind block driver it reuses. The diagonal block is zeroed after
+    assembly so the singularity is exact on every platform."""
+    real_init = _product.ProductSetup.__init__
+
+    def zero_diagonal(self, *args, **kwargs):
+        real_init(self, *args, **kwargs)
+        self.lagB[0][:] = 0.0
+    monkeypatch.setattr(_product.ProductSetup, "__init__", zero_diagonal)
+    dt, q = 0.05, 1
     N = n_samples(1, 5)
     with pytest.raises(np.linalg.LinAlgError, match="solve_VIE_2"):
-        solve_VIE_2(kernel_values=np.full(N, 1.0 / dt), g_values=np.ones(N), time_step=dt,
+        solve_VIE_2(kernel_values=np.exp(-dt * np.arange(N)), g_values=np.ones(N), time_step=dt,
                     coll_divs=q, coll_choices=[1], quadrature="product", show_warnings=False)
 
 
