@@ -257,6 +257,18 @@ def _warn_vie1_kernel_start(kernel_values_, samples_per_mesh, show_warnings):
               f"quadrature='product' (stable here), or a finer time_step if K(0) != 0.")
 
 
+def _scalar_init(value):
+    """``soln_init_value`` of a scalar equation as a float. Any single-element
+    array-like is accepted (``0.5``, ``[0.5]``, ``np.array([0.5])``), so a
+    value computed as a length-1 array does not trip a bare float()."""
+    arr = np.asarray(value, dtype=float)
+    if arr.size != 1:
+        raise ValueError(
+            f"soln_init_value must be a single number for a scalar equation, "
+            f"got shape {arr.shape}")
+    return float(arr.reshape(()))
+
+
 def _check_time_step(time_step):
     if not (time_step > 0.0 and np.isfinite(time_step)):
         raise ValueError("time_step must be positive and finite")
@@ -637,13 +649,13 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
 
     if (coll_divs, coll_choices) in _fast_settings_VIDE:
         soln_vals, poly_coefs = _dlang_module.solve_vide_d(
-            g_values_, kernel_values_, a_values_, soln_init_value,
+            g_values_, kernel_values_, a_values_, _scalar_init(soln_init_value),
             time_step, coll_divs, coll_choices, return_function)
     elif _numba_available:
         if show_warnings:
             print("warning: falling back to slower python/numba code")
         soln_vals, poly_coefs = _numba_solvers.solve_VIDE_jit(
-            g_values_, kernel_values_, a_values_, soln_init_value,
+            g_values_, kernel_values_, a_values_, _scalar_init(soln_init_value),
             time_step, coll_divs, coll_choices, return_function)
     else:
         raise NotImplementedError(
@@ -818,9 +830,7 @@ def _solve_vide_product_path(kernel_values_, a_values, g_values, soln_init_value
         "g_values", g_values, N_orig, kernel_values_.shape,
         (N_orig,) if d == 0 else (N_orig, d))[:N]
     if d == 0:
-        if init.shape != ():
-            raise ValueError("soln_init_value must be a scalar for a scalar equation")
-        init = float(init)
+        init = _scalar_init(init)
     else:
         init = init.ravel()
         if init.shape != (d,):
@@ -893,9 +903,7 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
                   "force_continuous is set to false.")
         init = np.asarray(soln_init_value, dtype=float)
         if d == 0:
-            if init.shape != ():
-                raise ValueError("soln_init_value must be a scalar for a scalar equation")
-            init = float(init)
+            init = _scalar_init(init)
         elif init.shape != (d,):
             raise ValueError(f"soln_init_value must have shape ({d},) for d={d}")
 
@@ -1284,7 +1292,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                   "force_continuous is set to false.")
             soln_init_value_ = 0.0
         else:
-            soln_init_value_ = float(soln_init_value)
+            soln_init_value_ = _scalar_init(soln_init_value)
 
     if (coll_divs, coll_choices) in _fast_settings_VIE_1:
         soln_vals, poly_coefs = _dlang_module.solve_vie1_d(

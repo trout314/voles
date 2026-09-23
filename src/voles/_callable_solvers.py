@@ -27,7 +27,8 @@ import functools
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 
-from .solvers import _column_workers, _check_vie1_setting, _warn_g_start_columns
+from .solvers import (_column_workers, _check_vie1_setting, _warn_g_start_columns,
+                      _scalar_init)
 
 import numpy as np
 from numpy.polynomial import polynomial as npp
@@ -1982,7 +1983,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         g_arr = _sample_callable_scalar(g)
         a_arr = _sample_callable_scalar(a)
         y_prime, y_boundary = _dlang_module.function_solve_vide_d(
-            W, g_arr, a_arr, alpha, w_vec, widths, float(soln_init_value))
+            W, g_arr, a_arr, alpha, w_vec, widths, _scalar_init(soln_init_value))
 
         # Reconstruct y at collocation nodes: y_{n,i} = y_n + h_n * sum_k Y'_{n,k} alpha[i,k]
         y_at_coll = np.zeros((M, p), dtype=np.float64)
@@ -2749,7 +2750,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                 reuse_adaptive_blocks=reuse_adaptive_blocks)
             adv_U, adv_0 = _vie1_cont_advance(node_pos)
             y, boundary = _dlang_module.function_solve_vie1_cont_d(
-                W, g_arr, adv_U, adv_0, float(soln_init_value))
+                W, g_arr, adv_U, adv_0, _scalar_init(soln_init_value))
             if return_function:
                 polys = _build_vie1_cont_polynomials_scalar(
                     y, boundary, mesh_breakpoints, node_pos)

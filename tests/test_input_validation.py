@@ -434,3 +434,40 @@ def test_too_short_input_vector_raises():
                     g_values=np.zeros((5, 2)),
                     time_step=1.0,
                     coll_divs=3, coll_choices=[1, 2, 3])
+
+
+# ---------------------------------------------------------------------------
+# Scalar soln_init_value given as a one-element array-like
+# ---------------------------------------------------------------------------
+
+_T30 = np.arange(37) * 0.05
+
+
+def _scalar_init_solves(init):
+    from voles import function_solve_VIDE, function_solve_VIE_1
+    K, g = np.exp(-_T30), np.sin(_T30)
+    mesh = np.linspace(0, 1, 6)
+    return [
+        solve_VIDE(kernel_values=K, g_values=g, soln_init_value=init, time_step=0.05),
+        solve_VIDE(kernel_values=K, g_values=g, soln_init_value=init, time_step=0.05,
+                   quadrature="product"),
+        solve_VIE_1(kernel_values=K + 1, g_values=g, soln_init_value=init, time_step=0.05,
+                    force_continuous=True, show_warnings=False),
+        function_solve_VIDE(kernel=lambda u: np.exp(-u), g=np.sin, soln_init_value=init,
+                            mesh_breakpoints=mesh),
+        function_solve_VIE_1(kernel=lambda u: np.exp(-u) + 1, g=np.sin, soln_init_value=init,
+                             mesh_breakpoints=mesh, force_continuous=True, show_warnings=False),
+    ]
+
+
+@pytest.mark.parametrize("init", [[0.5], np.array([0.5]), np.array([[0.5]]), np.float32(0.5)])
+def test_scalar_init_accepts_single_element(init):
+    """Used to raise a bare TypeError from float() for [0.5] / array([0.5])."""
+    for got, ref in zip(_scalar_init_solves(init), _scalar_init_solves(0.5)):
+        np.testing.assert_array_equal(got, ref)
+
+
+def test_scalar_init_rejects_multiple_elements():
+    with pytest.raises(ValueError, match="single number for a scalar equation"):
+        solve_VIDE(kernel_values=np.exp(-_T30), g_values=np.sin(_T30),
+                   soln_init_value=[0.5, 1.0], time_step=0.05)
