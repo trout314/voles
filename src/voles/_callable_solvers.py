@@ -386,6 +386,65 @@ def _gauss_jacobi_nodes_weights(order: int, alpha: float, left: bool):
     return nodes, weights
 
 
+# Off-diagonal blocks per batched kernel call in the W builders' smooth path
+# (bounds the (blocks, nodes, GL order[, d, d]) scratch arrays).
+_SMOOTH_BATCH = 256
+
+
+def _smooth_offdiag_batch_vals(kernel, ls, taus, mesh_breakpoints, orders, gl,
+                               B_off, tail):
+    """Two-order estimates for many full off-diagonal blocks l in ``ls`` at
+    once (all nodes ``taus`` smooth, kernel vectorized): one kernel call and
+    one einsum per order for the whole batch instead of per block. ``tail``
+    is the kernel value shape, () for scalar or (d, d) for vector equations.
+    Returns two (L, p, n_basis, *tail) arrays."""
+    a_int = mesh_breakpoints[ls]
+    b_int = mesh_breakpoints[ls + 1]
+    half = 0.5 * (b_int - a_int)
+    mid = 0.5 * (a_int + b_int)
+    half_b = half.reshape((-1, 1, 1) + (1,) * len(tail))
+    est = []
+    for o in orders:
+        nodes, weights = gl[o]
+        s_points = mid[:, None] + half[:, None] * nodes[None, :]      # (L, o)
+        arg = taus[None, :, None] - s_points[:, None, :]              # (L, p, o)
+        kvals = np.asarray(kernel(arg.reshape(-1)),
+                           dtype=np.float64).reshape(arg.shape + tail)
+        est.append(half_b
+                   * np.einsum('kq,q,liq...->lik...', B_off[o], weights, kvals))
+    return est[0], est[1]
+
+
+def _integrate_smooth_batch(W, n, ls, tau_n, ok_off, *, kernel, mesh_breakpoints,
+                            widths, orders, gl, B_off, tol, get_quad,
+                            make_integrand):
+    """Off-diagonal blocks ``ls`` of row n of W whose nodes are all smooth:
+    batched two-order values, stored, then checked. Accept (node, basis) iff
+    max|v1 - v2| <= tol * max(1, max|v2|) over any trailing (d, d) entries;
+    the negation (which also catches NaN) falls back to adaptive quadrature
+    via ``get_quad()``. When ``ok_off`` is given, records per-(node, lag)
+    acceptance. Shared by the scalar and vector W builders; the kernel value
+    shape is W.shape[4:]."""
+    tail = W.shape[4:]
+    tail_axes = tuple(range(3, 3 + len(tail)))
+    for c0 in range(0, len(ls), _SMOOTH_BATCH):
+        lb = np.asarray(ls[c0:c0 + _SMOOTH_BATCH])
+        v1, v2 = _smooth_offdiag_batch_vals(kernel, lb, tau_n, mesh_breakpoints,
+                                            orders, gl, B_off, tail)
+        W[n][:, lb] = np.swapaxes(v2, 0, 1)
+        err = np.max(np.abs(v1 - v2), axis=tail_axes)           # (L, p, n_basis)
+        ref = np.maximum(1.0, np.max(np.abs(v2), axis=tail_axes))
+        ok = err <= tol * ref
+        if ok_off is not None:
+            ok_off[:, n - lb] = ok.all(axis=2).T
+        for bj, bi, bk in zip(*(ix.tolist() for ix in np.nonzero(~ok))):
+            l = int(lb[bj])
+            val, _err = get_quad()(
+                make_integrand(tau_n[bi], mesh_breakpoints[l], widths[l], bk),
+                mesh_breakpoints[l], mesh_breakpoints[l + 1], **_QUAD_OPTS_DEFAULT)
+            W[n, bi, l, bk] = val
+
+
 def _classify_sing_block(sing, a_int, b_int):
     """Classify block [a_int, b_int] against declared singular locations.
 
@@ -457,6 +516,26 @@ def _toeplitz_W_rows(widths: np.ndarray, is_convolution: bool) -> bool:
         return False
     w_mean = float(widths.mean())
     return float(widths.max() - widths.min()) <= 1e-12 * w_mean
+
+
+def _maybe_singular_blocks(sing_per_i, mesh_breakpoints, n):
+    """Boolean mask over blocks l < n: False only where no declared singular
+    location of any node can touch [t_l, t_{l+1}] under _classify_sing_block's
+    tolerance. A conservative screen (it may flag extra blocks, never miss
+    one), so unflagged blocks are known smooth without the per-(node, block)
+    classification call; flagged ones still go through it."""
+    flagged = np.zeros(n, dtype=bool)
+    if n == 0:
+        return flagged
+    bps = mesh_breakpoints[:n + 1]
+    # >= every per-block tol 1e-12 * max(1, width) used by the classifier
+    tol = 2e-12 * max(1.0, float(bps[-1] - bps[0]))
+    for sing in sing_per_i:
+        for sp, _alpha in sing:
+            lo = np.searchsorted(bps, sp - tol, side='left') - 1
+            hi = np.searchsorted(bps, sp + tol, side='right')
+            flagged[max(lo, 0):min(hi, n)] = True
+    return flagged
 
 
 def _pending_lags(dirty_lags: np.ndarray, n: int) -> list:
@@ -750,6 +829,13 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             W[n, smooth_is[bi], l, bk] = val
         return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
+    def integrate_smooth_batch(n, ls, tau_n, ok_off):
+        _integrate_smooth_batch(
+            W, n, ls, tau_n, ok_off, kernel=kernel,
+            mesh_breakpoints=mesh_breakpoints, widths=widths, orders=orders,
+            gl=gl, B_off=B_off, tol=smooth_check_tol, get_quad=get_quad,
+            make_integrand=make_integrand)
+
     def integrate_row(n, skip_off=None, dirty_lags=None, skip_diag=None,
                       record=False):
         """Integrate row n of W, exactly as the general path does.
@@ -778,6 +864,17 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             l_iter = range(n)
         else:
             l_iter = _pending_lags(dirty_lags, n)
+        batch_ls = []   # blocks with every node smooth: done together below
+        if kernel_vec and n > 0:
+            # Blocks that no declared singularity can touch and that have no
+            # reused entries are smooth for every node: send them straight to
+            # the batch, leaving only the rest for per-node classification.
+            ls_all = np.asarray(l_iter, dtype=np.intp)
+            slow = _maybe_singular_blocks(sing_per_i, mesh_breakpoints, n)[ls_all]
+            if skip_off is not None:
+                slow |= skip_off[:, n - ls_all].any(axis=0)
+            batch_ls = ls_all[~slow].tolist()
+            l_iter = ls_all[slow].tolist()
         for l in l_iter:
             lag = n - l
             t_l = mesh_breakpoints[l]
@@ -805,6 +902,9 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                 else:
                     smooth_is.append(i)
 
+            if kernel_vec and len(smooth_is) == p:
+                batch_ls.append(l)
+                continue
             if smooth_is:
                 taus = tau_n[smooth_is]
                 v1, v2 = smooth_offdiag_vals(a_int, b_int, taus)
@@ -813,6 +913,9 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                 if record:
                     for i in smooth_is:
                         ok_off[i, lag] = i not in bad
+
+        if batch_ls:
+            integrate_smooth_batch(n, batch_ls, tau_n, ok_off)
 
         # Diagonal block l == n: the upper limit is tau_i, so it stays per-node.
         l = n
@@ -1097,6 +1200,13 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             W[n, smooth_is[bi], l, bk, :, :] = val
         return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
+    def integrate_smooth_batch(n, ls, tau_n, ok_off):
+        _integrate_smooth_batch(
+            W, n, ls, tau_n, ok_off, kernel=kernel,
+            mesh_breakpoints=mesh_breakpoints, widths=widths, orders=orders,
+            gl=gl, B_off=B_off, tol=smooth_check_tol, get_quad=get_quad_vec,
+            make_integrand=make_integrand)
+
     def integrate_row(n, skip_off=None, dirty_lags=None, skip_diag=None,
                       record=False):
         """Integrate row n of W, exactly as the general path does; see the
@@ -1118,6 +1228,17 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             l_iter = range(n)
         else:
             l_iter = _pending_lags(dirty_lags, n)
+        batch_ls = []   # blocks with every node smooth: done together below
+        if kernel_vec and n > 0:
+            # Blocks that no declared singularity can touch and that have no
+            # reused entries are smooth for every node: send them straight to
+            # the batch, leaving only the rest for per-node classification.
+            ls_all = np.asarray(l_iter, dtype=np.intp)
+            slow = _maybe_singular_blocks(sing_per_i, mesh_breakpoints, n)[ls_all]
+            if skip_off is not None:
+                slow |= skip_off[:, n - ls_all].any(axis=0)
+            batch_ls = ls_all[~slow].tolist()
+            l_iter = ls_all[slow].tolist()
         for l in l_iter:
             lag = n - l
             t_l = mesh_breakpoints[l]
@@ -1145,6 +1266,9 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 else:
                     smooth_is.append(i)
 
+            if kernel_vec and len(smooth_is) == p:
+                batch_ls.append(l)
+                continue
             if smooth_is:
                 taus = tau_n[smooth_is]
                 v1, v2 = smooth_offdiag_vals(a_int, b_int, taus)
@@ -1153,6 +1277,9 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 if record:
                     for i in smooth_is:
                         ok_off[i, lag] = i not in bad
+
+        if batch_ls:
+            integrate_smooth_batch(n, batch_ls, tau_n, ok_off)
 
         # Diagonal block l == n: the upper limit is tau_i, so it stays per-node.
         l = n
