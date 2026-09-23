@@ -28,12 +28,6 @@
   order ``time_step**kernel_interp_degree``, and a finer mesh amplifies
   errors in the data correspondingly; the second-kind equation and the VIDE
   are well posed, so there the finer mesh is pure accuracy gain.
-- **Arbitrary collocation nodes** on the callable-input solvers via the
-  ``coll_nodes`` parameter (floats in $[0, 1]$, mutually exclusive with
-  ``coll_divs``/``coll_choices``), with helpers ``gauss_legendre_nodes``,
-  ``radau_iia_nodes``, and ``lobatto_nodes`` for the classical families, and
-  Brunner-faithful convergence checks for VIE-1 node sets (this entry was
-  missed when the feature landed).
 
 ### Fixed
 - **`solve_VIE_1(force_continuous=True)` integrated its trial polynomials
@@ -136,34 +130,6 @@
   prints a warning. That fallback also applies the extension's relative
   pivot threshold, so a nearly singular diagonal block raises `LinAlgError`
   on both instead of returning garbage from `np.linalg.solve`.
-- **Callable-solver matrix (multi-RHS) column fan-out** now shares the
-  array-solver behavior: thread pool capped at the CPU count (was one
-  thread per column) and a clear ``ValueError`` for zero-column inputs.
-- The in-tree development fallback path for locating the compiled D library
-  pointed one directory too high, making the documented copy step silently
-  mandatory; ``<repo>/dlang/build`` now works directly, and the ImportError
-  message points at CONTRIBUTING.md instead of a nonexistent file.
-- **Adaptive quadrature could evaluate the kernel exactly at a declared
-  singular point and let that value poison the weights.** `quad_vec` (the
-  vector/matrix/complex backend) subdivides an endpoint-singular integrand
-  down to ulp scale, where `tau - s` rounds exactly onto the declared
-  location; whatever the kernel returns there (0, `inf`, or a clamped huge
-  value) was multiplied into the weight tensor -- for kernels not returning
-  0 at the singular point this produced garbage weights and, previously, a
-  silently wrong solve. Integrand evaluations landing exactly on a declared
-  singular location (a measure-zero set) are now masked to zero in both
-  builders, making all conventions for the kernel's value at the
-  singularity equivalent.
-- **Near-singular systems now raise `LinAlgError` on LAPACK builds too**:
-  `dgesv_` only reports exactly-zero pivots, so a nearly singular
-  collocation matrix raised on no-LAPACK builds but silently amplified
-  noise on LAPACK builds. The LAPACK path now applies the pure-D backend's
-  relative pivot threshold to the returned U diagonal, unifying the
-  semantics.
-- **Oversized inputs are rejected up front** instead of overflowing the D
-  extension's 32-bit index arithmetic: inputs whose flat buffers would
-  reach 2^31 elements (>= 17 GB) now raise a clear `ValueError` (new return
-  code 3) rather than risking undefined behavior.
 
 ### Changed
 - **`solve_VIE_2` and `solve_VIDE` with `quadrature="product"` and
@@ -200,6 +166,81 @@
   compile-time tables. The Numba fallback no longer recomputes the quadrature
   weights and allocates a block for every $(n, \ell)$ pair of the history
   sum (24 s to 0.1 s at $N = 27001$, `coll_divs=3`).
+
+## [0.8.0] - 2026-08-27
+
+### Added
+- **Arbitrary collocation nodes** on the callable-input solvers via the
+  ``coll_nodes`` parameter (floats in $[0, 1]$, mutually exclusive with
+  ``coll_divs``/``coll_choices``), with helpers ``gauss_legendre_nodes``,
+  ``radau_iia_nodes``, and ``lobatto_nodes`` for the classical families, and
+  Brunner-faithful convergence checks for VIE-1 node sets (this entry was
+  missed when the feature landed).
+- **Power-law singularity declaration (Gauss-Jacobi quadrature)** on the
+  callable-input solvers: `kernel_singularity` now also accepts a dict
+  `{location: alpha}` declaring $K(u) \sim |u-u_0|^{-\alpha}$
+  ($0 < \alpha < 1$; `None` keeps a location adaptive). Blocks touching a
+  declared power-law singularity are integrated by deterministic fixed-order
+  Gauss-Jacobi rules with the singular factor absorbed into the weight --
+  measured ~16x faster than the adaptive path on Abel builds, matching the
+  `reuse_adaptive_blocks` speed *on the default strict-reproducibility
+  policy* (the flag becomes a no-op for fully declared kernels, as sketched
+  in the adaptive-reuse notes' outlook). Each Jacobi block passes the same
+  two-order acceptance check as the smooth path; wrong exponents or extra
+  structure (e.g. log factors) fall back to the adaptive treatment
+  bit-identically. Float/list/callable forms are unchanged.
+- **`reuse_adaptive_blocks` flag** on the callable-input solvers
+  (`function_solve_VIE_1/2`, `function_solve_VIDE`). On uniform meshes with
+  convolution kernels the weight tensor is assembled from one integrated row;
+  by default only deterministic fixed-order (Gauss-Legendre) blocks are
+  reused across rows, and adaptive-quadrature blocks (declared singularities
+  and two-order fallbacks) are re-evaluated per row, which reproduces the
+  general assembly to rounding level. With the flag, the declared-singularity
+  blocks are reused too -- computed once at tightened tolerance, so they are
+  at least as accurate as the per-row values they replace (two-order fallback
+  blocks always stay on the per-row default-tolerance path). The
+  singular-kernel build cost drops by roughly another order of magnitude
+  (Abel VIE-1, p=3, M=320: ~1 s -> ~0.02 s), at the price of deviations from
+  the default path bounded by the adaptive quadrature's own tolerance
+  (scalar ~1e-8, typically ~1e-9; vector/matrix and complex problems, which
+  integrate via `quad_vec`, up to ~1e-7) -- far below discretization error in
+  practice. Default `False`; strict no-op on non-uniform meshes and for any
+  kernel with no declared `kernel_singularity`, enforced by construction.
+  scipy `IntegrationWarning`s raised by the deliberately tightened reuse
+  quadratures are suppressed (the best-obtainable value is what reuse wants);
+  default-tolerance quadratures still warn as before.
+
+### Fixed
+- **Callable-solver matrix (multi-RHS) column fan-out** now shares the
+  array-solver behavior: thread pool capped at the CPU count (was one
+  thread per column) and a clear ``ValueError`` for zero-column inputs.
+- The in-tree development fallback path for locating the compiled D library
+  pointed one directory too high, making the documented copy step silently
+  mandatory; ``<repo>/dlang/build`` now works directly, and the ImportError
+  message points at CONTRIBUTING.md instead of a nonexistent file.
+- **Adaptive quadrature could evaluate the kernel exactly at a declared
+  singular point and let that value poison the weights.** `quad_vec` (the
+  vector/matrix/complex backend) subdivides an endpoint-singular integrand
+  down to ulp scale, where `tau - s` rounds exactly onto the declared
+  location; whatever the kernel returns there (0, `inf`, or a clamped huge
+  value) was multiplied into the weight tensor -- for kernels not returning
+  0 at the singular point this produced garbage weights and, previously, a
+  silently wrong solve. Integrand evaluations landing exactly on a declared
+  singular location (a measure-zero set) are now masked to zero in both
+  builders, making all conventions for the kernel's value at the
+  singularity equivalent.
+- **Near-singular systems now raise `LinAlgError` on LAPACK builds too**:
+  `dgesv_` only reports exactly-zero pivots, so a nearly singular
+  collocation matrix raised on no-LAPACK builds but silently amplified
+  noise on LAPACK builds. The LAPACK path now applies the pure-D backend's
+  relative pivot threshold to the returned U diagonal, unifying the
+  semantics.
+- **Oversized inputs are rejected up front** instead of overflowing the D
+  extension's 32-bit index arithmetic: inputs whose flat buffers would
+  reach 2^31 elements (>= 17 GB) now raise a clear `ValueError` (new return
+  code 3) rather than risking undefined behavior.
+
+### Changed
 - Matrix (multi-RHS) column fan-out now caps its thread pool at the CPU
   count instead of one thread per column (each column carries its own
   D-side lag table, so unbounded workers multiplied peak memory), raises a
@@ -234,41 +275,6 @@
   locations; empty list/tuple/dict declarations are canonicalized to `None`
   so they no longer (silently) disable the VIE-1 convergence guard or
   trigger the graded-mesh warning.
-
-### Added
-- **Power-law singularity declaration (Gauss-Jacobi quadrature)** on the
-  callable-input solvers: `kernel_singularity` now also accepts a dict
-  `{location: alpha}` declaring $K(u) \sim |u-u_0|^{-\alpha}$
-  ($0 < \alpha < 1$; `None` keeps a location adaptive). Blocks touching a
-  declared power-law singularity are integrated by deterministic fixed-order
-  Gauss-Jacobi rules with the singular factor absorbed into the weight --
-  measured ~16x faster than the adaptive path on Abel builds, matching the
-  `reuse_adaptive_blocks` speed *on the default strict-reproducibility
-  policy* (the flag becomes a no-op for fully declared kernels, as sketched
-  in the adaptive-reuse notes' outlook). Each Jacobi block passes the same
-  two-order acceptance check as the smooth path; wrong exponents or extra
-  structure (e.g. log factors) fall back to the adaptive treatment
-  bit-identically. Float/list/callable forms are unchanged.
-- **`reuse_adaptive_blocks` flag** on the callable-input solvers
-  (`function_solve_VIE_1/2`, `function_solve_VIDE`). On uniform meshes with
-  convolution kernels the weight tensor is assembled from one integrated row;
-  by default only deterministic fixed-order (Gauss-Legendre) blocks are
-  reused across rows, and adaptive-quadrature blocks (declared singularities
-  and two-order fallbacks) are re-evaluated per row, which reproduces the
-  general assembly to rounding level. With the flag, the declared-singularity
-  blocks are reused too -- computed once at tightened tolerance, so they are
-  at least as accurate as the per-row values they replace (two-order fallback
-  blocks always stay on the per-row default-tolerance path). The
-  singular-kernel build cost drops by roughly another order of magnitude
-  (Abel VIE-1, p=3, M=320: ~1 s -> ~0.02 s), at the price of deviations from
-  the default path bounded by the adaptive quadrature's own tolerance
-  (scalar ~1e-8, typically ~1e-9; vector/matrix and complex problems, which
-  integrate via `quad_vec`, up to ~1e-7) -- far below discretization error in
-  practice. Default `False`; strict no-op on non-uniform meshes and for any
-  kernel with no declared `kernel_singularity`, enforced by construction.
-  scipy `IntegrationWarning`s raised by the deliberately tightened reuse
-  quadratures are suppressed (the best-obtainable value is what reuse wants);
-  default-tolerance quadratures still warn as before.
 
 ### Documentation
 - Full documentation consistency pass. Corrected statements that had drifted
