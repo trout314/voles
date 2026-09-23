@@ -1669,6 +1669,8 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
         raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
+    if not np.all(np.isfinite(mesh_breakpoints)):
+        raise ValueError("mesh_breakpoints must be finite (no inf or NaN)")
     if not np.all(np.diff(mesh_breakpoints) > 0):
         raise ValueError("mesh_breakpoints must be strictly increasing")
     if mesh_breakpoints[0] != 0.0:
@@ -1897,6 +1899,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
         raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
+    if not np.all(np.isfinite(mesh_breakpoints)):
+        raise ValueError("mesh_breakpoints must be finite (no inf or NaN)")
     if not np.all(np.diff(mesh_breakpoints) > 0):
         raise ValueError("mesh_breakpoints must be strictly increasing")
     if mesh_breakpoints[0] != 0.0:
@@ -2630,6 +2634,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
         raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
+    if not np.all(np.isfinite(mesh_breakpoints)):
+        raise ValueError("mesh_breakpoints must be finite (no inf or NaN)")
     if not np.all(np.diff(mesh_breakpoints) > 0):
         raise ValueError("mesh_breakpoints must be strictly increasing")
     if mesh_breakpoints[0] != 0.0:

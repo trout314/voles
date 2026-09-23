@@ -2895,3 +2895,12 @@ def test_vie1_callable_warns_when_g_start_nonzero(offset, warns, capsys):
     function_solve_VIE_1(kernel=lambda u: np.exp(-u), g=lambda s: np.sin(s) + offset,
                          mesh_breakpoints=np.linspace(0, 2, 11))
     assert ("g(0) is not zero" in capsys.readouterr().out) == warns
+
+
+@pytest.mark.parametrize("bad", [np.inf, np.nan])
+def test_mesh_breakpoints_must_be_finite(bad):
+    """An inf breakpoint used to surface as 'your kernel appears to be
+    singular'; NaN as 'must be strictly increasing'."""
+    with pytest.raises(ValueError, match="mesh_breakpoints must be finite"):
+        function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=np.sin,
+                             mesh_breakpoints=[0.0, 0.5, 1.0, bad])
