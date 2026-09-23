@@ -191,6 +191,34 @@ def _validate_second_kind_coll_setting(coll_divs, coll_choices):
     return int(coll_divs), sorted(int(c) for c in choices)
 
 
+def _warn_vie1_kernel_start(kernel_values_, samples_per_mesh, show_warnings):
+    """The collocation-quadrature VIE-1 scheme is unstable when K(0) is small
+    next to the kernel's change over one mesh interval: the error grows
+    geometrically, and without bound as the mesh is refined when K(0) = 0.
+    Warn when |K(H) - K(0)| > 2 |K(0)| (vector: ||K(0)^-1 (K(H) - K(0))|| > 2,
+    or K(0) numerically singular), where divergence was observed from a
+    ratio of about 5. Product quadrature does not have this restriction."""
+    if not show_warnings or len(kernel_values_) <= samples_per_mesh:
+        return
+    K0 = kernel_values_[0]
+    dK = kernel_values_[samples_per_mesh] - K0
+    if not (np.all(np.isfinite(K0)) and np.all(np.isfinite(dK))):
+        return
+    if np.ndim(K0) == 0:
+        ratio = np.inf if K0 == 0 else abs(dK) / abs(K0)
+    else:
+        if np.linalg.cond(K0) > 1e12:
+            ratio = np.inf
+        else:
+            ratio = np.linalg.norm(np.linalg.solve(K0, dK), 2)
+    if ratio > 2:
+        which = ("K(0) is zero or singular" if not np.isfinite(ratio) else
+                 f"K changes by {ratio:.3g} x |K(0)| over one mesh interval")
+        print(f"warning: {which}. The first-kind collocation scheme is unstable in "
+              f"this regime and can return values that grow without bound. Use "
+              f"quadrature='product' (stable here), or a finer time_step if K(0) != 0.")
+
+
 def _check_time_step(time_step):
     if not (time_step > 0.0 and np.isfinite(time_step)):
         raise ValueError("time_step must be positive and finite")
@@ -1003,6 +1031,15 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     for ``coll_divs=1``, ``coll_choices=[1]`` the continuous method is the
     product trapezoidal rule.
 
+    The theory above assumes $K(0) \ne 0$ ($K(0)$ nonsingular for vector
+    equations). With the default quadrature the scheme is also unstable when
+    $K(0)$ is small next to the kernel's change over one mesh interval $H$
+    (divergence was observed once $H |K'(0)| / |K(0)| \gtrsim 5$), and when
+    $K(0) = 0$ it diverges without bound as the mesh is refined. A warning is
+    printed when $|K(H) - K(0)| > 2 |K(0)|$ (vector: $\|K(0)^{-1}(K(H) -
+    K(0))\|_2 > 2$ or $K(0)$ singular). ``quadrature="product"`` does not
+    have this restriction.
+
     With ``quadrature="product"`` the scheme is exact collocation for the
     interpolated kernel $K_h$, so its error is the collocation error plus a
     kernel-perturbation term. For a first-kind equation that term enters
@@ -1083,6 +1120,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
 
     N_orig = len(kernel_values_)
     N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
+    if kernel_values_.ndim == 1 or kernel_values_.shape[1] == kernel_values_.shape[2]:
+        _warn_vie1_kernel_start(kernel_values_, coll_divs ** 2, show_warnings)
 
     # ------------------------------------------------------------------ vector path
     if ndim == 3:
