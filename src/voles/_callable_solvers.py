@@ -2534,6 +2534,14 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         otherwise. A warning is emitted if a value is passed when it has no
         effect. For a matrix-valued problem with ``force_continuous=True`` it
         must have shape $(d, m)$.
+        It must be the value the equation implies: differentiating at
+        $t = 0$ gives $g'(0) = K(0)\,y(0)$. Any other value gives a wrong
+        solution on the whole interval, not only near $t = 0$, and is not
+        detected. If $y(0)$ is not known independently, use the default
+        method, or estimate it by solving with ``force_continuous=False,
+        return_function=True`` and evaluating the solution at $t = 0$ (the
+        continuous solve is then more accurate than the default method but
+        falls short of its full order).
     mesh_breakpoints : array_like
         Strictly-increasing 1-D array starting at 0.
     coll_divs, coll_choices : int, list of int, optional

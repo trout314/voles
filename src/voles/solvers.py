@@ -932,6 +932,14 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         Initial value $y(0)$ imposed when ``force_continuous=True``. Has no
         effect when ``force_continuous=False`` (default). Required when
         ``force_continuous=True``.
+        It must be the value the equation implies: differentiating at
+        $t = 0$ gives $g'(0) = K(0)\,y(0)$. Any other value gives a wrong
+        solution on the whole interval, not only near $t = 0$, and is not
+        detected. If $y(0)$ is not known independently, use the default
+        method, or estimate it by solving with ``force_continuous=False,
+        return_function=True`` and evaluating the solution at $t = 0$ (the
+        continuous solve is then more accurate than the default method but
+        falls short of its full order).
     time_step : float, optional
         Spacing $h$ between consecutive sample times. Must be positive.
         Default is 1.0.
