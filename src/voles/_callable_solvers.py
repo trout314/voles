@@ -2330,10 +2330,24 @@ def _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints: np.ndarray,
                                               kernel_singularity,
                                               show_warnings: bool) -> None:
     """If a singularity is declared but the mesh appears uniform (max/min
-    interval ratio < 1.5), suggest `optimal_graded_mesh`.
+    interval ratio < 1.5), suggest `optimal_graded_mesh`. Also warn about
+    declared locations outside [0, T]: the kernel is only evaluated at
+    u = t - s in [0, T], so such a declaration has no effect.
     """
     if not show_warnings or kernel_singularity is None:
         return
+    if not callable(kernel_singularity):
+        locs = (list(kernel_singularity.keys()) if isinstance(kernel_singularity, dict)
+                else list(np.atleast_1d(np.asarray(kernel_singularity, dtype=float))))
+        T = float(mesh_breakpoints[-1])
+        tol = 1e-12 * max(1.0, T)
+        outside = [float(u) for u in locs if not (-tol <= float(u) <= T + tol)]
+        if outside:
+            print(f"warning: kernel_singularity location(s) {outside} lie outside "
+                  f"[0, T] = [0, {T:.6g}]; the kernel is only evaluated at u in "
+                  f"[0, T], so they have no effect.")
+            if len(outside) == len(locs):
+                return
     widths = np.diff(mesh_breakpoints)
     ratio = float(widths.max() / widths.min())
     if ratio < 1.5:

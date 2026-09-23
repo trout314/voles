@@ -2904,3 +2904,20 @@ def test_mesh_breakpoints_must_be_finite(bad):
     with pytest.raises(ValueError, match="mesh_breakpoints must be finite"):
         function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=np.sin,
                              mesh_breakpoints=[0.0, 0.5, 1.0, bad])
+
+
+@pytest.mark.parametrize("sing, n_outside", [(5.0, 1), (-1.0, 1), ([0.0, 5.0], 1),
+                                             ({0.0: 0.5, 9.0: 0.5}, 1)])
+def test_singularity_outside_mesh_warns(sing, n_outside, capsys):
+    kernel = lambda u: 1.0 / np.sqrt(np.maximum(np.abs(u), 1e-300))
+    function_solve_VIE_2(kernel=kernel, g=np.cos, kernel_singularity=sing,
+                         mesh_breakpoints=optimal_graded_mesh(alpha=0.5, T=1.0, M=8, order=3))
+    out = capsys.readouterr().out
+    assert "lie outside [0, T]" in out
+
+
+def test_singularity_inside_mesh_no_outside_warning(capsys):
+    function_solve_VIE_2(kernel=lambda u: 1.0 / np.sqrt(np.maximum(u, 1e-300)), g=np.cos,
+                         kernel_singularity={0.0: 0.5},
+                         mesh_breakpoints=optimal_graded_mesh(alpha=0.5, T=1.0, M=8, order=3))
+    assert "lie outside" not in capsys.readouterr().out
