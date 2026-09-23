@@ -1391,7 +1391,9 @@ element of a tuple (see Returns). Default is <code>False</code>.</p>
             <td>
               <div class="doc-md-description">
                 <p>If <code>True</code> (default), print a warning when <code>kernel_values</code> is
-truncated or when the Numba fallback is used.</p>
+truncated, when the Numba fallback is used, or when
+<code>quadrature="product"</code> has to step in NumPy because the loaded D
+extension predates its block driver.</p>
               </div>
             </td>
             <td>
@@ -1524,9 +1526,16 @@ equations), one polynomial per component.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>For invalid shapes or collocation settings, inputs too short to form
-one mesh interval, matrix input with zero columns, or inputs so large
-that a solver buffer would exceed <span class="arithmatex">\(2^{31}\)</span> elements.</p>
+                <p>For invalid input: shapes that do not fit together (<code>g_values</code> and
+<code>a_values</code> must have the length of <code>kernel_values</code>, before any
+truncation), inputs too short to form one mesh interval, matrix input
+with zero columns, inputs so large that a solver buffer would exceed
+<span class="arithmatex">\(2^{31}\)</span> elements, a <code>coll_divs</code> that is not a positive integer or
+<code>coll_choices</code> that is empty or not made of distinct integers in
+<code>0 .. coll_divs</code> (floats are rejected, not truncated), a
+non-positive <code>time_step</code>, an unknown <code>quadrature</code>, or a
+<code>mesh_samples</code> / <code>kernel_interp_degree</code> that is not an integer or
+not admissible for the chosen quadrature.</p>
               </div>
             </td>
           </tr>
@@ -1585,7 +1594,74 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1293</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1226</span>
+<span class="normal">1227</span>
+<span class="normal">1228</span>
+<span class="normal">1229</span>
+<span class="normal">1230</span>
+<span class="normal">1231</span>
+<span class="normal">1232</span>
+<span class="normal">1233</span>
+<span class="normal">1234</span>
+<span class="normal">1235</span>
+<span class="normal">1236</span>
+<span class="normal">1237</span>
+<span class="normal">1238</span>
+<span class="normal">1239</span>
+<span class="normal">1240</span>
+<span class="normal">1241</span>
+<span class="normal">1242</span>
+<span class="normal">1243</span>
+<span class="normal">1244</span>
+<span class="normal">1245</span>
+<span class="normal">1246</span>
+<span class="normal">1247</span>
+<span class="normal">1248</span>
+<span class="normal">1249</span>
+<span class="normal">1250</span>
+<span class="normal">1251</span>
+<span class="normal">1252</span>
+<span class="normal">1253</span>
+<span class="normal">1254</span>
+<span class="normal">1255</span>
+<span class="normal">1256</span>
+<span class="normal">1257</span>
+<span class="normal">1258</span>
+<span class="normal">1259</span>
+<span class="normal">1260</span>
+<span class="normal">1261</span>
+<span class="normal">1262</span>
+<span class="normal">1263</span>
+<span class="normal">1264</span>
+<span class="normal">1265</span>
+<span class="normal">1266</span>
+<span class="normal">1267</span>
+<span class="normal">1268</span>
+<span class="normal">1269</span>
+<span class="normal">1270</span>
+<span class="normal">1271</span>
+<span class="normal">1272</span>
+<span class="normal">1273</span>
+<span class="normal">1274</span>
+<span class="normal">1275</span>
+<span class="normal">1276</span>
+<span class="normal">1277</span>
+<span class="normal">1278</span>
+<span class="normal">1279</span>
+<span class="normal">1280</span>
+<span class="normal">1281</span>
+<span class="normal">1282</span>
+<span class="normal">1283</span>
+<span class="normal">1284</span>
+<span class="normal">1285</span>
+<span class="normal">1286</span>
+<span class="normal">1287</span>
+<span class="normal">1288</span>
+<span class="normal">1289</span>
+<span class="normal">1290</span>
+<span class="normal">1291</span>
+<span class="normal">1292</span>
+<span class="normal">1293</span>
 <span class="normal">1294</span>
 <span class="normal">1295</span>
 <span class="normal">1296</span>
@@ -1784,94 +1860,7 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
 <span class="normal">1489</span>
 <span class="normal">1490</span>
 <span class="normal">1491</span>
-<span class="normal">1492</span>
-<span class="normal">1493</span>
-<span class="normal">1494</span>
-<span class="normal">1495</span>
-<span class="normal">1496</span>
-<span class="normal">1497</span>
-<span class="normal">1498</span>
-<span class="normal">1499</span>
-<span class="normal">1500</span>
-<span class="normal">1501</span>
-<span class="normal">1502</span>
-<span class="normal">1503</span>
-<span class="normal">1504</span>
-<span class="normal">1505</span>
-<span class="normal">1506</span>
-<span class="normal">1507</span>
-<span class="normal">1508</span>
-<span class="normal">1509</span>
-<span class="normal">1510</span>
-<span class="normal">1511</span>
-<span class="normal">1512</span>
-<span class="normal">1513</span>
-<span class="normal">1514</span>
-<span class="normal">1515</span>
-<span class="normal">1516</span>
-<span class="normal">1517</span>
-<span class="normal">1518</span>
-<span class="normal">1519</span>
-<span class="normal">1520</span>
-<span class="normal">1521</span>
-<span class="normal">1522</span>
-<span class="normal">1523</span>
-<span class="normal">1524</span>
-<span class="normal">1525</span>
-<span class="normal">1526</span>
-<span class="normal">1527</span>
-<span class="normal">1528</span>
-<span class="normal">1529</span>
-<span class="normal">1530</span>
-<span class="normal">1531</span>
-<span class="normal">1532</span>
-<span class="normal">1533</span>
-<span class="normal">1534</span>
-<span class="normal">1535</span>
-<span class="normal">1536</span>
-<span class="normal">1537</span>
-<span class="normal">1538</span>
-<span class="normal">1539</span>
-<span class="normal">1540</span>
-<span class="normal">1541</span>
-<span class="normal">1542</span>
-<span class="normal">1543</span>
-<span class="normal">1544</span>
-<span class="normal">1545</span>
-<span class="normal">1546</span>
-<span class="normal">1547</span>
-<span class="normal">1548</span>
-<span class="normal">1549</span>
-<span class="normal">1550</span>
-<span class="normal">1551</span>
-<span class="normal">1552</span>
-<span class="normal">1553</span>
-<span class="normal">1554</span>
-<span class="normal">1555</span>
-<span class="normal">1556</span>
-<span class="normal">1557</span>
-<span class="normal">1558</span>
-<span class="normal">1559</span>
-<span class="normal">1560</span>
-<span class="normal">1561</span>
-<span class="normal">1562</span>
-<span class="normal">1563</span>
-<span class="normal">1564</span>
-<span class="normal">1565</span>
-<span class="normal">1566</span>
-<span class="normal">1567</span>
-<span class="normal">1568</span>
-<span class="normal">1569</span>
-<span class="normal">1570</span>
-<span class="normal">1571</span>
-<span class="normal">1572</span>
-<span class="normal">1573</span>
-<span class="normal">1574</span>
-<span class="normal">1575</span>
-<span class="normal">1576</span>
-<span class="normal">1577</span>
-<span class="normal">1578</span>
-<span class="normal">1579</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<span class="normal">1492</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
                 <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">],</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                 <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                 <span class="n">quadrature</span><span class="o">=</span><span class="s2">"collocation"</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -1911,7 +1900,9 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
 <span class="sd">        ``DeprecationWarning``.</span>
 <span class="sd">    show_warnings : bool, optional</span>
 <span class="sd">        If ``True`` (default), print a warning when ``kernel_values`` is</span>
-<span class="sd">        truncated or when the Numba fallback is used.</span>
+<span class="sd">        truncated, when the Numba fallback is used, or when</span>
+<span class="sd">        ``quadrature="product"`` has to step in NumPy because the loaded D</span>
+<span class="sd">        extension predates its block driver.</span>
 
 <span class="sd">    quadrature : {"collocation", "product"}, optional</span>
 <span class="sd">        How the integrals are evaluated from the sampled kernel. The default</span>
@@ -1936,6 +1927,7 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
 <span class="sd">        Degree of the kernel interpolant for ``quadrature="product"``;</span>
 <span class="sd">        defaults to the number of collocation nodes. Not accepted with</span>
 <span class="sd">        ``quadrature="collocation"``.</span>
+
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)</span>
@@ -1955,9 +1947,16 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
 <span class="sd">    Raises</span>
 <span class="sd">    ------</span>
 <span class="sd">    ValueError</span>
-<span class="sd">        For invalid shapes or collocation settings, inputs too short to form</span>
-<span class="sd">        one mesh interval, matrix input with zero columns, or inputs so large</span>
-<span class="sd">        that a solver buffer would exceed $2^{31}$ elements.</span>
+<span class="sd">        For invalid input: shapes that do not fit together (``g_values`` and</span>
+<span class="sd">        ``a_values`` must have the length of ``kernel_values``, before any</span>
+<span class="sd">        truncation), inputs too short to form one mesh interval, matrix input</span>
+<span class="sd">        with zero columns, inputs so large that a solver buffer would exceed</span>
+<span class="sd">        $2^{31}$ elements, a ``coll_divs`` that is not a positive integer or</span>
+<span class="sd">        ``coll_choices`` that is empty or not made of distinct integers in</span>
+<span class="sd">        ``0 .. coll_divs`` (floats are rejected, not truncated), a</span>
+<span class="sd">        non-positive ``time_step``, an unknown ``quadrature``, or a</span>
+<span class="sd">        ``mesh_samples`` / ``kernel_interp_degree`` that is not an integer or</span>
+<span class="sd">        not admissible for the chosen quadrature.</span>
 <span class="sd">    NotImplementedError</span>
 <span class="sd">        For a collocation setting not compiled into the D extension, on the</span>
 <span class="sd">        vector/matrix path (no fallback exists) or on the scalar path when</span>
@@ -2019,21 +2018,12 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">quadrature</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"collocation"</span><span class="p">,</span> <span class="s2">"product"</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">"quadrature must be 'collocation' or 'product', got </span><span class="si">{</span><span class="n">quadrature</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">quadrature</span> <span class="o">==</span> <span class="s2">"product"</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">_use_product_quadrature</span><span class="p">(</span><span class="n">quadrature</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">_solve_vie2_product_path</span><span class="p">(</span>
             <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">g_values</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
             <span class="n">return_function</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">kernel_interp_degree</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="s2">"kernel_interp_degree applies only to quadrature='product'"</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">mesh_samples</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">mesh_samples</span><span class="p">)</span> <span class="o">!=</span> <span class="n">coll_divs</span> <span class="o">**</span> <span class="mi">2</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">"with quadrature='collocation' the mesh is coll_divs**2 = </span><span class="si">{</span><span class="n">coll_divs</span><span class="w"> </span><span class="o">**</span><span class="w"> </span><span class="mi">2</span><span class="si">}</span><span class="s2"> "</span>
-            <span class="sa">f</span><span class="s2">"samples wide (got mesh_samples=</span><span class="si">{</span><span class="n">mesh_samples</span><span class="si">}</span><span class="s2">); pass quadrature='product' "</span>
-            <span class="sa">f</span><span class="s2">"to choose the mesh width"</span><span class="p">)</span>
+    <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span> <span class="o">=</span> <span class="n">_validate_second_kind_coll_setting</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
+    <span class="n">_check_time_step</span><span class="p">(</span><span class="n">time_step</span><span class="p">)</span>
 
     <span class="n">N_orig</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">)</span>
     <span class="n">N</span><span class="p">,</span> <span class="n">kernel_values_</span> <span class="o">=</span> <span class="n">_truncate_N</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
@@ -2049,9 +2039,10 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
             <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">g_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">g_values_</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>  <span class="c1"># matrix case: shape (N, d, m_cols)</span>
                 <span class="n">m_cols</span> <span class="o">=</span> <span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-                <span class="k">if</span> <span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="n">d</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">!=</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
                     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">"g_values shape </span><span class="si">{</span><span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel_values shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+                        <span class="sa">f</span><span class="s2">"g_values shape </span><span class="si">{</span><span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel_values shape "</span>
+                        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="p">(</span><span class="n">N_orig</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">)</span><span class="si">}</span><span class="s2">: expected (</span><span class="si">{</span><span class="n">N_orig</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">, m)"</span><span class="p">)</span>
                 <span class="n">g_cols</span> <span class="o">=</span> <span class="n">g_values_</span><span class="p">[:</span><span class="n">N</span><span class="p">]</span>
                 <span class="k">def</span><span class="w"> </span><span class="nf">_col_vie2</span><span class="p">(</span><span class="n">j</span><span class="p">):</span>
                     <span class="c1"># column 0 carries any per-solve warnings; the others</span>
@@ -2079,20 +2070,10 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
                                               <span class="n">d</span><span class="o">=</span><span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="n">m_cols</span><span class="p">))</span>
                 <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
-                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">"g_values shape </span><span class="si">{</span><span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel_values shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-                <span class="n">g_values_</span> <span class="o">=</span> <span class="n">g_values_</span><span class="p">[:</span><span class="n">N</span><span class="p">]</span>
+                <span class="n">g_values_</span> <span class="o">=</span> <span class="n">_check_series</span><span class="p">(</span><span class="s2">"g_values"</span><span class="p">,</span> <span class="n">g_values_</span><span class="p">,</span> <span class="n">N_orig</span><span class="p">,</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span>
+                                          <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">))[:</span><span class="n">N</span><span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-
-        <span class="k">assert</span> <span class="n">coll_divs</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"coll_divs must be a positive integer"</span>
-        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">),</span> <span class="s2">"coll_choices must be a list of integers"</span>
-        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="n">coll_choices</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">),</span> \
-            <span class="s2">"all integers in coll_choices must be distinct"</span>
-        <span class="k">for</span> <span class="n">choice</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-            <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">choice</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="s2">"coll_choices must contain only integers from 0 to coll_divs"</span>
-        <span class="n">coll_choices</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_fast_settings_VIE_2</span><span class="p">:</span>
             <span class="c1"># NotImplementedError subclasses RuntimeError, so callers</span>
@@ -2115,24 +2096,12 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
         <span class="k">return</span> <span class="n">soln_vals</span>
 
     <span class="c1"># ------------------------------------------------------------------ scalar path</span>
-    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">"kernel_values must be a 1-dim array"</span>
 
     <span class="k">if</span> <span class="n">g_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">g_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">g_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">"g_values must be a 1-dim array"</span>
-        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">g_values_</span><span class="p">)</span> <span class="o">==</span> <span class="n">N_orig</span><span class="p">,</span> <span class="s2">"kernel_values and g_values must have the same length"</span>
-        <span class="n">g_values_</span> <span class="o">=</span> <span class="n">g_values_</span><span class="p">[:</span><span class="n">N</span><span class="p">]</span>
+        <span class="n">g_values_</span> <span class="o">=</span> <span class="n">_check_series</span><span class="p">(</span><span class="s2">"g_values"</span><span class="p">,</span> <span class="n">g_values</span><span class="p">,</span> <span class="n">N_orig</span><span class="p">,</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,),</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,))[:</span><span class="n">N</span><span class="p">]</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
 
-    <span class="k">assert</span> <span class="n">coll_divs</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"coll_divs must be a positive integer"</span>
-    <span class="k">assert</span> <span class="nb">all</span><span class="p">([</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">choice</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">for</span> <span class="n">choice</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">]),</span> \
-        <span class="s2">"coll_choices must be a list of integers"</span>
-    <span class="k">assert</span> <span class="nb">all</span><span class="p">([</span><span class="n">coll_choices</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">]),</span> \
-        <span class="s2">"all integers in coll_choices must be distinct"</span>
-    <span class="k">for</span> <span class="n">choice</span> <span class="ow">in</span> <span class="n">coll_choices</span><span class="p">:</span>
-        <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">choice</span> <span class="o">&lt;=</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="s2">"coll_choices must contain only integers from 0 to coll_divs"</span>
-    <span class="n">coll_choices</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">coll_choices</span><span class="p">)</span>
     <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_fast_settings_VIE_2</span><span class="p">:</span>
         <span class="n">soln_vals</span><span class="p">,</span> <span class="n">poly_coefs</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vie2_d</span><span class="p">(</span>
             <span class="n">g_values_</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="p">)</span>
