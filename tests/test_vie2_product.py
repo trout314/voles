@@ -286,8 +286,9 @@ def test_blocks_are_transformed_in_place_without_a_second_copy():
 
 
 def test_linalg_error_names_the_second_kind_solver():
-    """K = 1/H with a single node at c = 1: I - A is exactly zero."""
-    dt, q = 0.05, 1
+    """K = 1/H with a single node at c = 1: I - A is exactly zero (the step
+    is a power of two so that dt * (1/dt) is exactly 1 on every platform)."""
+    dt, q = 0.25, 1
     N = n_samples(1, 5)
     with pytest.raises(np.linalg.LinAlgError, match="solve_VIE_2"):
         solve_VIE_2(kernel_values=np.full(N, 1.0 / dt), g_values=np.ones(N), time_step=dt,

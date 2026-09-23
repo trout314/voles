@@ -355,9 +355,10 @@ def test_stale_driver_fallback_is_per_driver(monkeypatch, capsys):
 
 
 def test_numpy_fallback_raises_on_nearly_singular_local_system(monkeypatch):
-    """a(t) chosen so that I - betaC a - P_val is singular at the first step."""
+    """a(t) chosen so that I - betaC a - P_val is singular at the first step
+    (power-of-two step so that H * (1/H) is exactly 1 on every platform)."""
     from voles import _dlang
-    dt, q = 0.05, 1
+    dt, q = 0.25, 1
     N = n_samples(1, 5)
     K = np.zeros(N)
     # with K = 0 and one node at c = 1: local system 1 - H a(t) = 0 for a = 1/H
