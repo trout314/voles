@@ -42,6 +42,20 @@ except AttributeError:  # numpy < 1.25
     _ComplexWarning = np.ComplexWarning
 
 
+def _scalar_g_value(value, t):
+    """g(t) for a scalar equation as a 0-d array. A non-scalar return (e.g. a
+    (d,) vector with a scalar kernel) gets a ValueError naming the shapes
+    instead of float()'s TypeError; a complex value is left for the float64
+    assignment, whose ComplexWarning _escalate_complex_warning turns into
+    its clear error."""
+    arr = np.asarray(value)
+    if arr.size != 1:
+        raise ValueError(
+            f"g(t) returned shape {arr.shape} at t={t:.6g}, but kernel(u) returns a "
+            f"scalar: for a vector equation kernel(u) must return a (d, d) matrix.")
+    return arr.reshape(())
+
+
 def _escalate_complex_warning(fn):
     """Decorator: while ``fn`` runs, escalate numpy ComplexWarning to an
     exception, then catch it and re-raise as a clear ValueError.
@@ -1733,7 +1747,8 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
                 t_n = mesh_breakpoints[n]
                 h_n = widths[n]
                 for i in range(p):
-                    g_arr[n, i] = float(g(t_n + node_pos[i] * h_n))
+                    t_ni = t_n + node_pos[i] * h_n
+                    g_arr[n, i] = _scalar_g_value(g(t_ni), t_ni)
         y = _dlang_module.function_solve_vie2_d(W, g_arr)
 
         if return_function:
@@ -2758,7 +2773,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                 t_n = mesh_breakpoints[n]
                 h_n = widths[n]
                 for i in range(p):
-                    g_arr[n, i] = float(g(t_n + node_pos[i] * h_n))
+                    t_ni = t_n + node_pos[i] * h_n
+                    g_arr[n, i] = _scalar_g_value(g(t_ni), t_ni)
         if force_continuous:
             # Brunner S_m^(0): degree-m polynomial on {0} ∪ node_pos, with the
             # boundary value carried forward for continuity. Extended weight

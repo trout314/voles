@@ -2921,3 +2921,21 @@ def test_singularity_inside_mesh_no_outside_warning(capsys):
                          kernel_singularity={0.0: 0.5},
                          mesh_breakpoints=optimal_graded_mesh(alpha=0.5, T=1.0, M=8, order=3))
     assert "lie outside" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("solver", [function_solve_VIE_2, function_solve_VIE_1])
+def test_vector_g_with_scalar_kernel_message(solver):
+    """Used to fail with float()'s TypeError."""
+    with pytest.raises(ValueError, match=r"g\(t\) returned shape \(2,\) .* kernel\(u\) returns a scalar"):
+        solver(kernel=lambda u: np.exp(-u), g=lambda t: np.array([t, 2 * t]),
+               mesh_breakpoints=np.linspace(0, 1, 5))
+
+
+def test_late_complex_g_gets_clear_error(monkeypatch):
+    """A complex g that sampling missed now reaches the complex-escalation
+    error instead of float()'s TypeError."""
+    import voles._callable_solvers as cs
+    monkeypatch.setattr(cs, "_samples_indicate_complex", lambda *a, **k: False)
+    with pytest.raises(ValueError, match="multi-point sampling"):
+        function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=lambda t: t + 0.5j,
+                             mesh_breakpoints=np.linspace(0, 1, 5))
