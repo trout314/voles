@@ -1008,6 +1008,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../examples/product_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Product integration for sampled kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../examples/function_solvers/" class="md-nav__link">
         
   
@@ -1407,6 +1435,71 @@ truncated or when the Numba fallback is used.</p>
                   <code>True</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>quadrature</code>
+            </td>
+            <td>
+                  <code>(<span title="collocation">collocation</span>, <span title="product">product</span>)</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>How the integrals are evaluated from the sampled kernel. The default
+applies the interpolatory rule on the collocation nodes, which forces
+a mesh <code>coll_divs**2</code> samples wide and reads only every
+<code>coll_divs</code>-th sample of the data in the history sums.
+<code>"product"</code> replaces the kernel by a piecewise polynomial
+interpolant of degree <code>kernel_interp_degree</code> on the data grid and
+integrates its products with the collocation polynomial exactly
+(product integration), so the mesh can be any multiple of
+<code>coll_divs</code> samples wide (<code>mesh_samples</code>), every sample is used,
+and any node set is available without the Numba fallback. See
+<code>solve_VIE_1</code> for the construction; unlike the first-kind case this
+equation is well posed, so there is no amplification of data errors
+to trade against the finer mesh.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#34;collocation&#34;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>mesh_samples</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Samples per mesh interval; the mesh width is
+<code>mesh_samples * time_step</code>. Must be <code>coll_divs**2</code> (the default)
+with <code>quadrature="collocation"</code>; any positive multiple of
+<code>coll_divs</code> with <code>quadrature="product"</code>, default <code>coll_divs</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>kernel_interp_degree</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Degree of the kernel interpolant for <code>quadrature="product"</code>;
+defaults to the number of collocation nodes. Not accepted with
+<code>quadrature="collocation"</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -1506,6 +1599,12 @@ vector/matrix path (no fallback exists) or on the scalar path when
 <span class="arithmatex">\(N \equiv 1 \pmod{\text{coll\_divs}^2}\)</span>. If a longer array is supplied it
 is truncated to the largest conforming length and a warning is printed
 (unless <code>show_warnings=False</code>).</p>
+<p>With <code>quadrature="product"</code> the scheme is exact collocation for the
+interpolated kernel; the kernel-perturbation error is of order
+<span class="arithmatex">\(\delta^{p+1}\)</span> for interpolation degree <span class="arithmatex">\(p\)</span>, the input length must
+satisfy <span class="arithmatex">\(N \equiv 1 \pmod{\text{mesh\_samples}}\)</span> (longer inputs are
+truncated with a warning), and the lag structure of the blocks lets the
+FFT-accelerated history of the D extension be used.</p>
 <p>The solver dispatches at runtime to a D-extension routine specialised for
 the given collocation setting. For scalar equations, settings not compiled
 into the extension fall back to a Numba-JIT implementation (requires the
@@ -1811,9 +1910,58 @@ compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
 <span class="normal">475</span>
 <span class="normal">476</span>
 <span class="normal">477</span>
-<span class="normal">478</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">a_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<span class="normal">478</span>
+<span class="normal">479</span>
+<span class="normal">480</span>
+<span class="normal">481</span>
+<span class="normal">482</span>
+<span class="normal">483</span>
+<span class="normal">484</span>
+<span class="normal">485</span>
+<span class="normal">486</span>
+<span class="normal">487</span>
+<span class="normal">488</span>
+<span class="normal">489</span>
+<span class="normal">490</span>
+<span class="normal">491</span>
+<span class="normal">492</span>
+<span class="normal">493</span>
+<span class="normal">494</span>
+<span class="normal">495</span>
+<span class="normal">496</span>
+<span class="normal">497</span>
+<span class="normal">498</span>
+<span class="normal">499</span>
+<span class="normal">500</span>
+<span class="normal">501</span>
+<span class="normal">502</span>
+<span class="normal">503</span>
+<span class="normal">504</span>
+<span class="normal">505</span>
+<span class="normal">506</span>
+<span class="normal">507</span>
+<span class="normal">508</span>
+<span class="normal">509</span>
+<span class="normal">510</span>
+<span class="normal">511</span>
+<span class="normal">512</span>
+<span class="normal">513</span>
+<span class="normal">514</span>
+<span class="normal">515</span>
+<span class="normal">516</span>
+<span class="normal">517</span>
+<span class="normal">518</span>
+<span class="normal">519</span>
+<span class="normal">520</span>
+<span class="normal">521</span>
+<span class="normal">522</span>
+<span class="normal">523</span>
+<span class="normal">524</span>
+<span class="normal">525</span>
+<span class="normal">526</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">a_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
                <span class="n">coll_divs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">],</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-               <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+               <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+               <span class="n">quadrature</span><span class="o">=</span><span class="s2">"collocation"</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">'''</span>
 <span class="sd">    Solve a Volterra integro-differential equation.</span>
 
@@ -1861,6 +2009,29 @@ compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
 <span class="sd">        If ``True`` (default), print a warning when ``kernel_values`` is</span>
 <span class="sd">        truncated or when the Numba fallback is used.</span>
 
+<span class="sd">    quadrature : {"collocation", "product"}, optional</span>
+<span class="sd">        How the integrals are evaluated from the sampled kernel. The default</span>
+<span class="sd">        applies the interpolatory rule on the collocation nodes, which forces</span>
+<span class="sd">        a mesh ``coll_divs**2`` samples wide and reads only every</span>
+<span class="sd">        ``coll_divs``-th sample of the data in the history sums.</span>
+<span class="sd">        ``"product"`` replaces the kernel by a piecewise polynomial</span>
+<span class="sd">        interpolant of degree ``kernel_interp_degree`` on the data grid and</span>
+<span class="sd">        integrates its products with the collocation polynomial exactly</span>
+<span class="sd">        (product integration), so the mesh can be any multiple of</span>
+<span class="sd">        ``coll_divs`` samples wide (``mesh_samples``), every sample is used,</span>
+<span class="sd">        and any node set is available without the Numba fallback. See</span>
+<span class="sd">        ``solve_VIE_1`` for the construction; unlike the first-kind case this</span>
+<span class="sd">        equation is well posed, so there is no amplification of data errors</span>
+<span class="sd">        to trade against the finer mesh.</span>
+<span class="sd">    mesh_samples : int, optional</span>
+<span class="sd">        Samples per mesh interval; the mesh width is</span>
+<span class="sd">        ``mesh_samples * time_step``. Must be ``coll_divs**2`` (the default)</span>
+<span class="sd">        with ``quadrature="collocation"``; any positive multiple of</span>
+<span class="sd">        ``coll_divs`` with ``quadrature="product"``, default ``coll_divs``.</span>
+<span class="sd">    kernel_interp_degree : int, optional</span>
+<span class="sd">        Degree of the kernel interpolant for ``quadrature="product"``;</span>
+<span class="sd">        defaults to the number of collocation nodes. Not accepted with</span>
+<span class="sd">        ``quadrature="collocation"``.</span>
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)</span>
@@ -1897,6 +2068,13 @@ compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
 <span class="sd">    is truncated to the largest conforming length and a warning is printed</span>
 <span class="sd">    (unless ``show_warnings=False``).</span>
 
+<span class="sd">    With ``quadrature="product"`` the scheme is exact collocation for the</span>
+<span class="sd">    interpolated kernel; the kernel-perturbation error is of order</span>
+<span class="sd">    $\delta^{p+1}$ for interpolation degree $p$, the input length must</span>
+<span class="sd">    satisfy $N \equiv 1 \pmod{\text{mesh\_samples}}$ (longer inputs are</span>
+<span class="sd">    truncated with a warning), and the lag structure of the blocks lets the</span>
+<span class="sd">    FFT-accelerated history of the D extension be used.</span>
+
 <span class="sd">    The solver dispatches at runtime to a D-extension routine specialised for</span>
 <span class="sd">    the given collocation setting. For scalar equations, settings not compiled</span>
 <span class="sd">    into the extension fall back to a Numba-JIT implementation (requires the</span>
@@ -1924,7 +2102,8 @@ compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
             <span class="n">kernel_values</span><span class="o">=</span><span class="n">K_real</span><span class="p">,</span> <span class="n">a_values</span><span class="o">=</span><span class="n">a_real</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="n">g_real</span><span class="p">,</span>
             <span class="n">soln_init_value</span><span class="o">=</span><span class="n">init_real</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="n">coll_divs</span><span class="p">,</span>
             <span class="n">coll_choices</span><span class="o">=</span><span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span>
-            <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span><span class="p">)</span>
+            <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span><span class="p">,</span> <span class="n">quadrature</span><span class="o">=</span><span class="n">quadrature</span><span class="p">,</span>
+            <span class="n">mesh_samples</span><span class="o">=</span><span class="n">mesh_samples</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="n">kernel_interp_degree</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
             <span class="n">soln_real</span><span class="p">,</span> <span class="n">sf_real</span> <span class="o">=</span> <span class="n">result</span>
             <span class="k">return</span> <span class="p">(</span><span class="n">_cplx</span><span class="o">.</span><span class="n">_recombine</span><span class="p">(</span><span class="n">soln_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">),</span>
@@ -1937,6 +2116,22 @@ compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
     <span class="k">if</span> <span class="n">ndim</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">quadrature</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"collocation"</span><span class="p">,</span> <span class="s2">"product"</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"quadrature must be 'collocation' or 'product', got </span><span class="si">{</span><span class="n">quadrature</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">quadrature</span> <span class="o">==</span> <span class="s2">"product"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_solve_vide_product_path</span><span class="p">(</span>
+            <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">a_values</span><span class="p">,</span> <span class="n">g_values</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span>
+            <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">kernel_interp_degree</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">"kernel_interp_degree applies only to quadrature='product'"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">mesh_samples</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">mesh_samples</span><span class="p">)</span> <span class="o">!=</span> <span class="n">coll_divs</span> <span class="o">**</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"with quadrature='collocation' the mesh is coll_divs**2 = </span><span class="si">{</span><span class="n">coll_divs</span><span class="w"> </span><span class="o">**</span><span class="w"> </span><span class="mi">2</span><span class="si">}</span><span class="s2"> "</span>
+            <span class="sa">f</span><span class="s2">"samples wide (got mesh_samples=</span><span class="si">{</span><span class="n">mesh_samples</span><span class="si">}</span><span class="s2">); pass quadrature='product' "</span>
+            <span class="sa">f</span><span class="s2">"to choose the mesh width"</span><span class="p">)</span>
 
     <span class="n">N_orig</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">)</span>
     <span class="n">N</span><span class="p">,</span> <span class="n">kernel_values_</span> <span class="o">=</span> <span class="n">_truncate_N</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
