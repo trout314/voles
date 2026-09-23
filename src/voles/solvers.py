@@ -191,6 +191,25 @@ def _validate_second_kind_coll_setting(coll_divs, coll_choices):
     return int(coll_divs), sorted(int(c) for c in choices)
 
 
+def _warn_vie1_g_start(g_values, show_warnings):
+    """A first-kind equation forces g(0) = 0 (the integral vanishes at t = 0);
+    with g(0) != 0 there is no bounded solution and the solver returns
+    meaningless values near t = 0. Warn when g(0) is not negligible next to
+    the scale of g. Shape problems are left to the solver's own validation."""
+    if not show_warnings or g_values is None:
+        return
+    try:
+        g = np.asarray(g_values)
+        scale = float(np.max(np.abs(g)))
+        g0 = float(np.max(np.abs(g[0])))
+    except (TypeError, ValueError, IndexError):
+        return
+    if np.isfinite(g0) and g0 > 1e-6 * scale:
+        print(f"warning: g(0) is not zero (max |g(0)| = {g0:.3g}, max |g| = {scale:.3g}). "
+              f"A first-kind equation g(t) = int_0^t K(t-s) y(s) ds requires g(0) = 0; "
+              f"otherwise it has no bounded solution and values near t = 0 are meaningless.")
+
+
 def _warn_vie1_kernel_start(kernel_values_, samples_per_mesh, show_warnings):
     """The collocation-quadrature VIE-1 scheme is unstable when K(0) is small
     next to the kernel's change over one mesh interval: the error grows
@@ -1031,6 +1050,9 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     for ``coll_divs=1``, ``coll_choices=[1]`` the continuous method is the
     product trapezoidal rule.
 
+    The equation forces $g(0) = 0$; for $g(0) \ne 0$ there is no bounded
+    solution, and a warning is printed.
+
     The theory above assumes $K(0) \ne 0$ ($K(0)$ nonsingular for vector
     equations). With the default quadrature the scheme is also unstable when
     $K(0)$ is small next to the kernel's change over one mesh interval $H$
@@ -1106,6 +1128,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         raise ValueError(
             f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
 
+    _warn_vie1_g_start(g_values, show_warnings)
     if _use_product_quadrature(quadrature, mesh_samples, kernel_interp_degree, coll_divs):
         return _solve_vie1_product_path(
             kernel_values_, g_values, soln_init_value, time_step, coll_divs,

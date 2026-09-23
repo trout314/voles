@@ -2864,3 +2864,11 @@ def test_adaptive_singular_blocks_accurate_on_fine_graded_mesh():
         g=lambda s: 2.0 * np.sqrt(s), mesh_breakpoints=mesh,
         kernel_singularity=0.0, show_warnings=False)
     assert np.max(np.abs(y - 1.0)) < 1e-8
+
+
+@pytest.mark.parametrize("offset, warns", [(0.5, True), (0.0, False), (1e-15, False)])
+def test_vie1_callable_warns_when_g_start_nonzero(offset, warns, capsys):
+    """A first-kind equation needs g(0) = 0; otherwise warn."""
+    function_solve_VIE_1(kernel=lambda u: np.exp(-u), g=lambda s: np.sin(s) + offset,
+                         mesh_breakpoints=np.linspace(0, 2, 11))
+    assert ("g(0) is not zero" in capsys.readouterr().out) == warns

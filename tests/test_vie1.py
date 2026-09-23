@@ -379,3 +379,32 @@ def test_no_kernel_start_warning_for_resolved_kernel(d, capsys):
     y = solve_VIE_1(**_k0_problem(1.0, d=d))
     assert _K0_MSG not in capsys.readouterr().out
     assert np.all(np.isfinite(y))
+
+
+# ---------------------------------------------------------------------------
+# Warning for g(0) != 0 (no bounded solution exists)
+# ---------------------------------------------------------------------------
+
+_G0_MSG = "g(0) is not zero"
+
+
+def _g0_problem(g0_offset):
+    t = np.arange(4 * 9 * 10 + 1) * 0.01
+    return dict(kernel_values=np.exp(-t), g_values=np.sin(t) + g0_offset, time_step=0.01)
+
+
+@pytest.mark.parametrize("quad", ["collocation", "product"])
+def test_warns_when_g_start_nonzero(quad, capsys):
+    solve_VIE_1(**_g0_problem(0.5), quadrature=quad)
+    assert _G0_MSG in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("offset", [0.0, 1e-15])
+def test_no_g_start_warning_for_zero_or_rounding(offset, capsys):
+    solve_VIE_1(**_g0_problem(offset))
+    assert _G0_MSG not in capsys.readouterr().out
+
+
+def test_no_g_start_warning_when_silenced(capsys):
+    solve_VIE_1(**_g0_problem(0.5), show_warnings=False)
+    assert _G0_MSG not in capsys.readouterr().out

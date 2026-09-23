@@ -2483,6 +2483,25 @@ def _build_vie1_cont_polynomials_matrix(U, boundary, mesh_breakpoints, node_pos,
     return polys
 
 
+def _warn_vie1_g_start_callable(g, mesh_breakpoints, show_warnings):
+    """Callable-input analogue of solvers._warn_vie1_g_start: warn when g(0)
+    is not negligible next to the scale of g (sampled at the mesh
+    breakpoints). A first-kind equation forces g(0) = 0. Any failure to
+    evaluate g here is left to the solver's own sampling to report."""
+    if not show_warnings or g is None:
+        return
+    try:
+        g0 = float(np.max(np.abs(np.asarray(g(0.0)))))
+        scale = max(float(np.max(np.abs(np.asarray(g(float(t))))))
+                    for t in mesh_breakpoints)
+    except Exception:
+        return
+    if np.isfinite(g0) and g0 > 1e-6 * scale:
+        print(f"warning: g(0) is not zero (max |g(0)| = {g0:.3g}, max |g| = {scale:.3g}). "
+              f"A first-kind equation g(t) = int_0^t K(t-s) y(s) ds requires g(0) = 0; "
+              f"otherwise it has no bounded solution and values near t = 0 are meaningless.")
+
+
 @_escalate_complex_warning
 def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                           mesh_breakpoints,
@@ -2568,6 +2587,9 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
 
     Notes
     -----
+    The equation forces $g(0) = 0$; for $g(0) \ne 0$ there is no bounded
+    solution, and a warning is printed.
+
     Whether a given node set yields a convergent method depends on the nodes
     (Brunner 2004, smooth-kernel chapter). For a smooth kernel with
     $|K(t, t)| \ge k_0 > 0$, writing $c_1 < \dots < c_m$ for the nodes:
@@ -2680,6 +2702,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             return (_recombine_complex_y(y_real, d_orig),
                     _ComplexSolutionFunction(y_func_real, d_orig))
         return _recombine_complex_y(result, d_orig)
+
+    _warn_vie1_g_start_callable(g, mesh_breakpoints, show_warnings)
 
     M = len(mesh_breakpoints) - 1
     p = len(node_pos)
