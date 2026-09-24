@@ -11,11 +11,11 @@
   <img src="docs/vole_chalkboard.png" alt="Volterra equation solvers mascot" width="400">
 </p>
 
-The Volterra Equation Solvers (VOLES) package is a collection of collocation-method solvers for Volterra integral and integro-differential equations. The algorithms used come from the book
+The Volterra Equation Solvers (VOLES) package is a collection of fast collocation-method solvers for Volterra integral and integro-differential equations. The algorithms used come from the book
 
 > Brunner H. *Collocation Methods for Volterra Integral and Related Functional Differential Equations.* Cambridge University Press; 2004.
 
-The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code. All solvers support real-valued and complex-valued data, and scalar-, vector-, and matrix-valued equations. Currently, only convolution type kernels are supported, but this restriction is likely to be lifted in a future version.
+The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code. All solvers support real-valued and complex-valued data, scalar-, vector-, and matrix-valued equations, and singular kernels. Currently, only convolution type kernels are supported, but this restriction is likely to be lifted in a future version.
 
 ## Solvers
 
@@ -23,7 +23,7 @@ Two solver families are provided.
 
 - The **array-input** family (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`) take the kernel and other input functions as arrays of values given on a uniform time grid. They do not support singular kernels.
 
-- The **callable-input** family (`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`) accept the kernel and other input functions as Python callables, and allow arbitrary collocation mesh intervals. These solvers support kernels with one or more integrable singularities, declared via the `kernel_singularity` parameter. Declaring just the singular *locations* (e.g. `kernel_singularity=0.0` for an Abel kernel) makes the solver integrate the affected blocks with adaptive quadrature; declaring the *power law* too, with the dict form `kernel_singularity={0.0: 0.5}` for $K(u) \sim u^{-1/2}$, switches those blocks to deterministic Gauss–Jacobi rules — typically an order of magnitude faster to build, with the same accuracy. A helper function `optimal_graded_mesh` builds the optimally graded mesh for a power-law singularity at time zero, and collocation nodes can be given directly via `coll_nodes` (with `gauss_legendre_nodes`, `radau_iia_nodes`, and `lobatto_nodes` helpers for the classical families).
+- The **callable-input** family (`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`) accept the kernel and other input functions as Python callables, and allow arbitrary collocation mesh intervals. These solvers support kernels with one or more integrable singularities.
 
 Note that the callable-input family of solvers require the package `scipy`, which is included by default.
 
