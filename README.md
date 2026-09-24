@@ -115,7 +115,7 @@ soln = solve_VIE_2(
 print(f"Max error: {max(abs(soln - np.sin(times[:len(soln)]))):.2e}")
 ```
 
-All solvers accept `return_function=True` to also return a callable solution object (`return_polys=True` is a deprecated alias). The object evaluates the piecewise polynomial solution at any time and also indexes/iterates like a list of `numpy.polynomial.Polynomial` objects.
+All solvers accept `return_function=True` to also return a callable solution object (`return_polys=True` is a deprecated alias). The object evaluates the piecewise polynomial solution at any time in the solved interval $[0, T]$ (NaN outside it) and also indexes/iterates like a list of `numpy.polynomial.Polynomial` objects.
 
 The solvers require input arrays to satisfy an internal size constraint. Any length can be passed; if the length doesn't meet the constraint, the arrays are automatically truncated to the nearest valid length and a warning is printed. See the API reference for each solver for details.
 
@@ -143,7 +143,7 @@ The figure below shows an actual `voles` solution to a first-kind VIE ($g(t) = \
 
 ## Polynomial Solutions
 
-Passing `return_function=True` to any solver returns a `(soln_values, solution)` tuple (`return_polys=True` is a deprecated alias). `solution(t)` evaluates the piecewise polynomial at any time, and `solution` also indexes/iterates like a list of `numpy.polynomial.Polynomial` objects covering successive mesh intervals — these can be evaluated at any point, differentiated, integrated, and so on. See the [polynomial-solutions example](https://trout314.github.io/voles/examples/polynomial_solutions/) for a worked case that evaluates the solution and its derivative off the time grid.
+Passing `return_function=True` to any solver returns a `(soln_values, solution)` tuple (`return_polys=True` is a deprecated alias). `solution(t)` evaluates the piecewise polynomial at any time in $[0, T]$ (NaN outside), and `solution` also indexes/iterates like a list of `numpy.polynomial.Polynomial` objects covering successive mesh intervals — these can be evaluated at any point, differentiated, integrated, and so on. See the [polynomial-solutions example](https://trout314.github.io/voles/examples/polynomial_solutions/) for a worked case that evaluates the solution and its derivative off the time grid.
 
 ## Benchmarks
 

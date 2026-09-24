@@ -208,3 +208,35 @@ def test_vie2_return_polys_deprecated_alias(vie2_data):
     assert type(sol_old) is type(sol_new)
     assert sol_old(0.5 * d["coll_divs"] ** 2 * d["time_step"]) == pytest.approx(
         sol_new(0.5 * d["coll_divs"] ** 2 * d["time_step"]))
+
+
+# ---------------------------------------------------------------------------
+# Solution function outside the solved interval
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("shape", ["scalar", "vector", "matrix", "complex"])
+def test_solution_function_nan_outside_domain(shape):
+    """Extrapolating the end polynomials gave plausible but meaningless
+    values (f(T+5) = -5.75 for a solution near -0.36); outside [0, T] the
+    solution function now returns NaN, while T itself (up to rounding) and
+    interior points are unchanged."""
+    dt = 0.01
+    t = np.arange(401) * dt
+    K, g = np.exp(-t), np.sin(t) + 1.0
+    if shape in ("vector", "matrix"):
+        K = K[:, None, None] * np.eye(2)
+        g = np.outer(g, [1.0, 2.0])
+        if shape == "matrix":
+            g = np.stack([g, 3 * g], axis=2)
+    if shape == "complex":
+        K = K * (1 + 0.5j)
+    y, f = solve_VIE_2(kernel_values=K, g_values=g, time_step=dt, return_function=True)
+    T = t[-1]
+    inside = f(np.array([0.0, 0.5 * T, T, T * (1 + 1e-14)]))
+    assert np.all(np.isfinite(inside))
+    np.testing.assert_allclose(inside[2], y[-1], rtol=1e-9)
+    assert np.all(np.isnan(f(np.array([-1e-3, T + 1e-3, T + 5]))))
+    scalar_out = f(T + 1.0)
+    assert np.all(np.isnan(scalar_out))
+    if shape == "scalar":
+        assert isinstance(scalar_out, float)
