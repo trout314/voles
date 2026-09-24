@@ -121,7 +121,7 @@ The solvers require input arrays to satisfy an internal size constraint. Any len
 
 ## Vector and Matrix Valued Equations
 
-All solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ is a $d$-dimensional vector, $g(t)$ is also a $d$-dimensional vector and $K(t)$ and $a(t)$ are $d \times d$ matrices. When $y(t)$ is a $d \times m$ matrix, $g(t)$ is also a $d \times m$ matrix and $K(t)$ and $a(t)$ are $d \times d$ matrices. The solvers detect which case is appropriate automatically: for the array-based family from the shapes of the input arrays, and for the callable family from the shape returned by `g(t)`.
+All solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ is a $d$-dimensional vector, $g(t)$ is also a $d$-dimensional vector and $K(t)$ and $a(t)$ are $d \times d$ matrices. When $y(t)$ is a $d \times m$ matrix, $g(t)$ is also a $d \times m$ matrix and $K(t)$ and $a(t)$ are $d \times d$ matrices. The solvers detect which case is appropriate automatically: for the array-based family from the shapes of the input arrays, and for the callable family from the shape returned by `g(t)` or the shape of `soln_init_value` for the VIDE solver. The callable family builds the kernel weight tensor once and shares it across the $m$ columns, so a matrix solve is much cheaper than $m$ separate calls.
 
 See the worked examples: [vector- and matrix-valued equations](https://trout314.github.io/voles/examples/matrix_vector/), and the [callable-solver examples](https://trout314.github.io/voles/examples/function_solvers/) for the matrix-valued callable case.
 
