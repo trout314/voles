@@ -27,7 +27,8 @@ import functools
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 
-from .solvers import _column_workers, _check_vie1_setting
+from .solvers import (_column_workers, _check_vie1_setting, _warn_g_start_columns,
+                      _scalar_init)
 
 import numpy as np
 from numpy.polynomial import polynomial as npp
@@ -39,6 +40,20 @@ try:
     _ComplexWarning = np.exceptions.ComplexWarning
 except AttributeError:  # numpy < 1.25
     _ComplexWarning = np.ComplexWarning
+
+
+def _scalar_g_value(value, t):
+    """g(t) for a scalar equation as a 0-d array. A non-scalar return (e.g. a
+    (d,) vector with a scalar kernel) gets a ValueError naming the shapes
+    instead of float()'s TypeError; a complex value is left for the float64
+    assignment, whose ComplexWarning _escalate_complex_warning turns into
+    its clear error."""
+    arr = np.asarray(value)
+    if arr.size != 1:
+        raise ValueError(
+            f"g(t) returned shape {arr.shape} at t={t:.6g}, but kernel(u) returns a "
+            f"scalar: for a vector equation kernel(u) must return a (d, d) matrix.")
+    return arr.reshape(())
 
 
 def _escalate_complex_warning(fn):
@@ -104,10 +119,16 @@ def _import_scipy_quad_vec():
 # tolerance than the per-row defaults it replaces. Two-order-check fallback
 # quadratures always use the defaults and stay on the per-row repair path, so
 # the flag is a strict no-op for kernels with no declared singularity.
-_QUAD_OPTS_DEFAULT = {'limit': 100}
-# scipy.integrate.quad converges when err <= max(epsabs, epsrel*|result|) with
-# default epsabs=1.49e-8, so 1e-12/1e-12 is strictly tighter.
-_QUAD_OPTS_REUSE = {'limit': 200, 'epsabs': 1e-12, 'epsrel': 1e-12}
+# scipy.integrate.quad converges when err <= max(epsabs, epsrel*|result|).
+# Its default epsabs=1.49e-8 is an ABSOLUTE floor, which on the tiny leading
+# intervals of a graded mesh exceeds the block weights themselves (a weight
+# of an Abel kernel over width h is ~2 sqrt(h) ~ 1e-5 at h ~ 1e-11), letting
+# first-kind solves lose accuracy as the mesh is refined. Relative-only
+# convergence (epsabs=0) keeps every block at its own scale, matching the
+# vector path's quad_vec options below.
+_QUAD_OPTS_DEFAULT = {'limit': 100, 'epsabs': 0.0, 'epsrel': 1.49e-8}
+# Strictly tighter than the defaults in relative terms.
+_QUAD_OPTS_REUSE = {'limit': 200, 'epsabs': 0.0, 'epsrel': 1e-12}
 # scipy.integrate.quad_vec defaults to epsabs=1e-200 (pure-relative 1e-8
 # convergence). Keep that epsabs so small-magnitude blocks are never computed
 # *less* accurately than the per-row defaults; tighten only epsrel.
@@ -365,6 +386,65 @@ def _gauss_jacobi_nodes_weights(order: int, alpha: float, left: bool):
     return nodes, weights
 
 
+# Off-diagonal blocks per batched kernel call in the W builders' smooth path
+# (bounds the (blocks, nodes, GL order[, d, d]) scratch arrays).
+_SMOOTH_BATCH = 256
+
+
+def _smooth_offdiag_batch_vals(kernel, ls, taus, mesh_breakpoints, orders, gl,
+                               B_off, tail):
+    """Two-order estimates for many full off-diagonal blocks l in ``ls`` at
+    once (all nodes ``taus`` smooth, kernel vectorized): one kernel call and
+    one einsum per order for the whole batch instead of per block. ``tail``
+    is the kernel value shape, () for scalar or (d, d) for vector equations.
+    Returns two (L, p, n_basis, *tail) arrays."""
+    a_int = mesh_breakpoints[ls]
+    b_int = mesh_breakpoints[ls + 1]
+    half = 0.5 * (b_int - a_int)
+    mid = 0.5 * (a_int + b_int)
+    half_b = half.reshape((-1, 1, 1) + (1,) * len(tail))
+    est = []
+    for o in orders:
+        nodes, weights = gl[o]
+        s_points = mid[:, None] + half[:, None] * nodes[None, :]      # (L, o)
+        arg = taus[None, :, None] - s_points[:, None, :]              # (L, p, o)
+        kvals = np.asarray(kernel(arg.reshape(-1)),
+                           dtype=np.float64).reshape(arg.shape + tail)
+        est.append(half_b
+                   * np.einsum('kq,q,liq...->lik...', B_off[o], weights, kvals))
+    return est[0], est[1]
+
+
+def _integrate_smooth_batch(W, n, ls, tau_n, ok_off, *, kernel, mesh_breakpoints,
+                            widths, orders, gl, B_off, tol, get_quad,
+                            make_integrand):
+    """Off-diagonal blocks ``ls`` of row n of W whose nodes are all smooth:
+    batched two-order values, stored, then checked. Accept (node, basis) iff
+    max|v1 - v2| <= tol * max(1, max|v2|) over any trailing (d, d) entries;
+    the negation (which also catches NaN) falls back to adaptive quadrature
+    via ``get_quad()``. When ``ok_off`` is given, records per-(node, lag)
+    acceptance. Shared by the scalar and vector W builders; the kernel value
+    shape is W.shape[4:]."""
+    tail = W.shape[4:]
+    tail_axes = tuple(range(3, 3 + len(tail)))
+    for c0 in range(0, len(ls), _SMOOTH_BATCH):
+        lb = np.asarray(ls[c0:c0 + _SMOOTH_BATCH])
+        v1, v2 = _smooth_offdiag_batch_vals(kernel, lb, tau_n, mesh_breakpoints,
+                                            orders, gl, B_off, tail)
+        W[n][:, lb] = np.swapaxes(v2, 0, 1)
+        err = np.max(np.abs(v1 - v2), axis=tail_axes)           # (L, p, n_basis)
+        ref = np.maximum(1.0, np.max(np.abs(v2), axis=tail_axes))
+        ok = err <= tol * ref
+        if ok_off is not None:
+            ok_off[:, n - lb] = ok.all(axis=2).T
+        for bj, bi, bk in zip(*(ix.tolist() for ix in np.nonzero(~ok))):
+            l = int(lb[bj])
+            val, _err = get_quad()(
+                make_integrand(tau_n[bi], mesh_breakpoints[l], widths[l], bk),
+                mesh_breakpoints[l], mesh_breakpoints[l + 1], **_QUAD_OPTS_DEFAULT)
+            W[n, bi, l, bk] = val
+
+
 def _classify_sing_block(sing, a_int, b_int):
     """Classify block [a_int, b_int] against declared singular locations.
 
@@ -436,6 +516,26 @@ def _toeplitz_W_rows(widths: np.ndarray, is_convolution: bool) -> bool:
         return False
     w_mean = float(widths.mean())
     return float(widths.max() - widths.min()) <= 1e-12 * w_mean
+
+
+def _maybe_singular_blocks(sing_per_i, mesh_breakpoints, n):
+    """Boolean mask over blocks l < n: False only where no declared singular
+    location of any node can touch [t_l, t_{l+1}] under _classify_sing_block's
+    tolerance. A conservative screen (it may flag extra blocks, never miss
+    one), so unflagged blocks are known smooth without the per-(node, block)
+    classification call; flagged ones still go through it."""
+    flagged = np.zeros(n, dtype=bool)
+    if n == 0:
+        return flagged
+    bps = mesh_breakpoints[:n + 1]
+    # >= every per-block tol 1e-12 * max(1, width) used by the classifier
+    tol = 2e-12 * max(1.0, float(bps[-1] - bps[0]))
+    for sing in sing_per_i:
+        for sp, _alpha in sing:
+            lo = np.searchsorted(bps, sp - tol, side='left') - 1
+            hi = np.searchsorted(bps, sp + tol, side='right')
+            flagged[max(lo, 0):min(hi, n)] = True
+    return flagged
 
 
 def _pending_lags(dirty_lags: np.ndarray, n: int) -> list:
@@ -729,6 +829,13 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             W[n, smooth_is[bi], l, bk] = val
         return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
+    def integrate_smooth_batch(n, ls, tau_n, ok_off):
+        _integrate_smooth_batch(
+            W, n, ls, tau_n, ok_off, kernel=kernel,
+            mesh_breakpoints=mesh_breakpoints, widths=widths, orders=orders,
+            gl=gl, B_off=B_off, tol=smooth_check_tol, get_quad=get_quad,
+            make_integrand=make_integrand)
+
     def integrate_row(n, skip_off=None, dirty_lags=None, skip_diag=None,
                       record=False):
         """Integrate row n of W, exactly as the general path does.
@@ -757,6 +864,17 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             l_iter = range(n)
         else:
             l_iter = _pending_lags(dirty_lags, n)
+        batch_ls = []   # blocks with every node smooth: done together below
+        if kernel_vec and n > 0:
+            # Blocks that no declared singularity can touch and that have no
+            # reused entries are smooth for every node: send them straight to
+            # the batch, leaving only the rest for per-node classification.
+            ls_all = np.asarray(l_iter, dtype=np.intp)
+            slow = _maybe_singular_blocks(sing_per_i, mesh_breakpoints, n)[ls_all]
+            if skip_off is not None:
+                slow |= skip_off[:, n - ls_all].any(axis=0)
+            batch_ls = ls_all[~slow].tolist()
+            l_iter = ls_all[slow].tolist()
         for l in l_iter:
             lag = n - l
             t_l = mesh_breakpoints[l]
@@ -784,6 +902,9 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                 else:
                     smooth_is.append(i)
 
+            if kernel_vec and len(smooth_is) == p:
+                batch_ls.append(l)
+                continue
             if smooth_is:
                 taus = tau_n[smooth_is]
                 v1, v2 = smooth_offdiag_vals(a_int, b_int, taus)
@@ -792,6 +913,9 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                 if record:
                     for i in smooth_is:
                         ok_off[i, lag] = i not in bad
+
+        if batch_ls:
+            integrate_smooth_batch(n, batch_ls, tau_n, ok_off)
 
         # Diagonal block l == n: the upper limit is tau_i, so it stays per-node.
         l = n
@@ -1076,6 +1200,13 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             W[n, smooth_is[bi], l, bk, :, :] = val
         return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
+    def integrate_smooth_batch(n, ls, tau_n, ok_off):
+        _integrate_smooth_batch(
+            W, n, ls, tau_n, ok_off, kernel=kernel,
+            mesh_breakpoints=mesh_breakpoints, widths=widths, orders=orders,
+            gl=gl, B_off=B_off, tol=smooth_check_tol, get_quad=get_quad_vec,
+            make_integrand=make_integrand)
+
     def integrate_row(n, skip_off=None, dirty_lags=None, skip_diag=None,
                       record=False):
         """Integrate row n of W, exactly as the general path does; see the
@@ -1097,6 +1228,17 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             l_iter = range(n)
         else:
             l_iter = _pending_lags(dirty_lags, n)
+        batch_ls = []   # blocks with every node smooth: done together below
+        if kernel_vec and n > 0:
+            # Blocks that no declared singularity can touch and that have no
+            # reused entries are smooth for every node: send them straight to
+            # the batch, leaving only the rest for per-node classification.
+            ls_all = np.asarray(l_iter, dtype=np.intp)
+            slow = _maybe_singular_blocks(sing_per_i, mesh_breakpoints, n)[ls_all]
+            if skip_off is not None:
+                slow |= skip_off[:, n - ls_all].any(axis=0)
+            batch_ls = ls_all[~slow].tolist()
+            l_iter = ls_all[slow].tolist()
         for l in l_iter:
             lag = n - l
             t_l = mesh_breakpoints[l]
@@ -1124,6 +1266,9 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 else:
                     smooth_is.append(i)
 
+            if kernel_vec and len(smooth_is) == p:
+                batch_ls.append(l)
+                continue
             if smooth_is:
                 taus = tau_n[smooth_is]
                 v1, v2 = smooth_offdiag_vals(a_int, b_int, taus)
@@ -1132,6 +1277,9 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                 if record:
                     for i in smooth_is:
                         ok_off[i, lag] = i not in bad
+
+        if batch_ls:
+            integrate_smooth_batch(n, batch_ls, tau_n, ok_off)
 
         # Diagonal block l == n: the upper limit is tau_i, so it stays per-node.
         l = n
@@ -1293,78 +1441,31 @@ def _detect_g_matrix_cols(g, d, sample_t):
 # ---------------------------------------------------------------------------
 
 
-def _build_polynomials(y: np.ndarray, mesh_breakpoints: np.ndarray,
-                       node_pos: np.ndarray) -> list:
-    """Convert collocation-node values y[n,k] to a list of M Polynomial objects.
+def _combine_basis(coefs, basis, out, scale=None):
+    """``out + sum_k [scale *] coefs[:, k] * basis[k]``, vectorized over
+    intervals and components (``coefs`` is ``(M, p, *comp)``, ``basis``
+    ``(p, P)``, ``out`` ``(M, P, *comp)``; ``scale`` is per-interval). Terms
+    are added in k order, matching the per-interval loops this replaced."""
+    extra = (1,) * (coefs.ndim - 2)
+    for k in range(coefs.shape[1]):
+        c = coefs[:, k]
+        if scale is not None:
+            c = scale.reshape((-1,) + extra) * c
+        out = out + c[:, None] * basis[k].reshape((1, -1) + extra)
+    return out
 
-    Each Polynomial maps actual time t to the Lagrange interpolant on interval n.
-    """
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
+
+def _lagrange_solution(y: np.ndarray, mesh_breakpoints: np.ndarray,
+                       node_pos: np.ndarray, d: int = 0, m: int = 0):
+    """Solution function for collocation-node values ``y`` (shape ``(M, p)``,
+    ``(M, p, d)`` or ``(M, p, d, m)``): on interval n the Lagrange
+    interpolant of ``y[n]`` in the local variable. Polynomial objects on
+    the time axis are built only on first access to ``.polynomials``."""
     basis = _lagrange_basis_coefs(node_pos)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        norm_coef = np.zeros(p)
-        for k in range(p):
-            norm_coef += y[n, k] * basis[k]
-        poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                        window=(0.0, 1.0), symbol='t')
-        polys.append(poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim())
-    return polys
-
-
-def _build_polynomials_vector(y: np.ndarray, mesh_breakpoints: np.ndarray,
-                               node_pos: np.ndarray,
-                               d: int) -> list:
-    """Vector analogue: y has shape (M, p, d); return list of (d,) Polynomial arrays."""
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
-    basis = _lagrange_basis_coefs(node_pos)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        comps = np.empty(d, dtype=object)
-        for r in range(d):
-            norm_coef = np.zeros(p)
-            for k in range(p):
-                norm_coef += y[n, k, r] * basis[k]
-            poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                            window=(0.0, 1.0), symbol='t')
-            comps[r] = poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim()
-        polys.append(comps)
-    return polys
-
-
-def _build_polynomials_matrix(y: np.ndarray, mesh_breakpoints: np.ndarray,
-                               node_pos: np.ndarray,
-                               d: int, m: int) -> list:
-    """Matrix analogue of _build_polynomials_vector.
-
-    y has shape (M, p, d, m); returns a list of M arrays each of shape (d, m)
-    holding one Polynomial per (component, right-hand-side) pair.
-    """
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
-    basis = _lagrange_basis_coefs(node_pos)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        comps = np.empty((d, m), dtype=object)
-        for r in range(d):
-            for c in range(m):
-                norm_coef = np.zeros(p)
-                for k in range(p):
-                    norm_coef += y[n, k, r, c] * basis[k]
-                poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                                window=(0.0, 1.0), symbol='t')
-                comps[r, c] = poly.convert(domain=(t_l, t_r),
-                                           window=(t_l, t_r)).trim()
-        polys.append(comps)
-    return polys
+    y = np.asarray(y, dtype=float)
+    unit = np.zeros((y.shape[0], basis.shape[1]) + y.shape[2:])
+    unit = _combine_basis(y, basis, unit)
+    return _SolutionFunction.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
 
 
 def _detect_kernel_shape(kernel, sample_u: float):
@@ -1630,7 +1731,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         ``(M, p, d, m)`` for matrix-valued equations.
     (soln_values, y_callable) : tuple
         When ``return_function=True``. ``y_callable(t)`` evaluates the
-        piecewise polynomial at any time t, returning a scalar / ``(d,)`` /
+        piecewise polynomial at any time t in the mesh (NaN outside it), returning a scalar / ``(d,)`` /
         ``(d, m)`` value for scalar t (with a leading time axis for array t).
 
     Raises
@@ -1662,6 +1763,8 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
         raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
+    if not np.all(np.isfinite(mesh_breakpoints)):
+        raise ValueError("mesh_breakpoints must be finite (no inf or NaN)")
     if not np.all(np.diff(mesh_breakpoints) > 0):
         raise ValueError("mesh_breakpoints must be strictly increasing")
     if mesh_breakpoints[0] != 0.0:
@@ -1724,13 +1827,12 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
                 t_n = mesh_breakpoints[n]
                 h_n = widths[n]
                 for i in range(p):
-                    g_arr[n, i] = float(g(t_n + node_pos[i] * h_n))
+                    t_ni = t_n + node_pos[i] * h_n
+                    g_arr[n, i] = _scalar_g_value(g(t_ni), t_ni)
         y = _dlang_module.function_solve_vie2_d(W, g_arr)
 
         if return_function:
-            polys = _build_polynomials(y, mesh_breakpoints, node_pos)
-            y_func = _SolutionFunction(polys, mesh_breakpoints, d=0)
-            return y, y_func
+            return y, _lagrange_solution(y, mesh_breakpoints, node_pos)
         return y
 
     # ----- Vector / matrix path -----
@@ -1763,18 +1865,14 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         y = np.stack(cols, axis=3)  # (M, p, d, m)
 
         if return_function:
-            polys = _build_polynomials_matrix(y, mesh_breakpoints, node_pos,
-                                              d, m)
-            return y, _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
+            return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d, m=m)
         return y
 
     g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
     y = _dlang_module.function_solve_vie2_vec_d(W, g_arr)
 
     if return_function:
-        polys = _build_polynomials_vector(y, mesh_breakpoints, node_pos, d)
-        y_func = _SolutionFunction(polys, mesh_breakpoints, d=d)
-        return y, y_func
+        return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d)
     return y
 
 
@@ -1782,30 +1880,24 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
 # VIDE helpers
 # ---------------------------------------------------------------------------
 
-def _build_vide_polynomials_scalar(y_prime: np.ndarray, y_boundary: np.ndarray,
-                                    mesh_breakpoints: np.ndarray,
-                                    node_pos: np.ndarray) -> list:
-    """Build per-interval Polynomial objects for y(t) given y' values + boundary y values.
+def _vide_solution(y_prime: np.ndarray, y_boundary: np.ndarray,
+                   mesh_breakpoints: np.ndarray, node_pos: np.ndarray,
+                   d: int = 0, m: int = 0):
+    """Solution function for y(t) given y' at the nodes and boundary y values.
 
     On interval n, y(t) = y_n + h_n * sum_k y_prime[n, k] * I_k((t - t_n)/h_n),
-    where I_k is the antiderivative-of-Lagrange basis.
+    where I_k is the antiderivative-of-Lagrange basis. ``y_prime`` is
+    ``(M, p, *comp)``, ``y_boundary`` ``(M+1, *comp)``.
     """
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
     anti = _lagrange_antideriv_coefs(node_pos)  # (p, p+1)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        h = t_r - t_l
-        norm_coef = np.zeros(p + 1)
-        norm_coef[0] = y_boundary[n]  # constant: y_n
-        for k in range(p):
-            norm_coef += h * y_prime[n, k] * anti[k]
-        poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                        window=(0.0, 1.0), symbol='t')
-        polys.append(poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim())
-    return polys
+    y_prime = np.asarray(y_prime, dtype=float)
+    M = y_prime.shape[0]
+    bps = np.asarray(mesh_breakpoints, dtype=float)
+    h = bps[1:M + 1] - bps[:M]
+    unit = np.zeros((M, anti.shape[1]) + y_prime.shape[2:])
+    unit[:, 0] = np.asarray(y_boundary, dtype=float)[:M]   # constant: y_n
+    unit = _combine_basis(y_prime, anti, unit, scale=h)
+    return _SolutionFunction.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
 
 
 @_escalate_complex_warning
@@ -1890,6 +1982,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
         raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
+    if not np.all(np.isfinite(mesh_breakpoints)):
+        raise ValueError("mesh_breakpoints must be finite (no inf or NaN)")
     if not np.all(np.diff(mesh_breakpoints) > 0):
         raise ValueError("mesh_breakpoints must be strictly increasing")
     if mesh_breakpoints[0] != 0.0:
@@ -1976,7 +2070,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         g_arr = _sample_callable_scalar(g)
         a_arr = _sample_callable_scalar(a)
         y_prime, y_boundary = _dlang_module.function_solve_vide_d(
-            W, g_arr, a_arr, alpha, w_vec, widths, float(soln_init_value))
+            W, g_arr, a_arr, alpha, w_vec, widths, _scalar_init(soln_init_value))
 
         # Reconstruct y at collocation nodes: y_{n,i} = y_n + h_n * sum_k Y'_{n,k} alpha[i,k]
         y_at_coll = np.zeros((M, p), dtype=np.float64)
@@ -1984,10 +2078,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
             y_at_coll[n, :] = y_boundary[n] + widths[n] * (alpha @ y_prime[n])
 
         if return_function:
-            polys = _build_vide_polynomials_scalar(
-                y_prime, y_boundary, mesh_breakpoints, node_pos)
-            y_func = _SolutionFunction(polys, mesh_breakpoints, d=0)
-            return y_at_coll, y_func
+            return y_at_coll, _vide_solution(y_prime, y_boundary,
+                                             mesh_breakpoints, node_pos)
         return y_at_coll
 
     # ----- Vector / matrix path -----
@@ -2037,11 +2129,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
                 alpha, y_prime[n], axes=([1], [0]))
 
         if return_function:
-            polys = _build_vide_polynomials_matrix(
-                y_prime, y_boundary, mesh_breakpoints, node_pos,
-                d, m)
-            return y_at_coll, _SolutionFunction(polys, mesh_breakpoints,
-                                                d=d, m=m)
+            return y_at_coll, _vide_solution(y_prime, y_boundary,
+                                             mesh_breakpoints, node_pos, d=d, m=m)
         return y_at_coll
 
     # Vector path
@@ -2062,69 +2151,9 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         y_at_coll[n, :, :] = y_boundary[n] + widths[n] * (alpha @ y_prime[n])
 
     if return_function:
-        polys = _build_vide_polynomials_vector(
-            y_prime, y_boundary, mesh_breakpoints, node_pos, d)
-        y_func = _SolutionFunction(polys, mesh_breakpoints, d=d)
-        return y_at_coll, y_func
+        return y_at_coll, _vide_solution(y_prime, y_boundary,
+                                         mesh_breakpoints, node_pos, d=d)
     return y_at_coll
-
-
-def _build_vide_polynomials_vector(y_prime: np.ndarray, y_boundary: np.ndarray,
-                                    mesh_breakpoints: np.ndarray,
-                                    node_pos: np.ndarray,
-                                    d: int) -> list:
-    """Vector analogue of _build_vide_polynomials_scalar."""
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
-    anti = _lagrange_antideriv_coefs(node_pos)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        h = t_r - t_l
-        comps = np.empty(d, dtype=object)
-        for r in range(d):
-            norm_coef = np.zeros(p + 1)
-            norm_coef[0] = y_boundary[n, r]
-            for k in range(p):
-                norm_coef += h * y_prime[n, k, r] * anti[k]
-            poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                            window=(0.0, 1.0), symbol='t')
-            comps[r] = poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim()
-        polys.append(comps)
-    return polys
-
-
-def _build_vide_polynomials_matrix(y_prime: np.ndarray, y_boundary: np.ndarray,
-                                    mesh_breakpoints: np.ndarray,
-                                    node_pos: np.ndarray,
-                                    d: int, m: int) -> list:
-    """Matrix analogue of _build_vide_polynomials_vector.
-
-    y_prime has shape (M, p, d, m) and y_boundary shape (M+1, d, m); returns a
-    list of M arrays each of shape (d, m) of Polynomial objects.
-    """
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
-    anti = _lagrange_antideriv_coefs(node_pos)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        h = t_r - t_l
-        comps = np.empty((d, m), dtype=object)
-        for r in range(d):
-            for c in range(m):
-                norm_coef = np.zeros(p + 1)
-                norm_coef[0] = y_boundary[n, r, c]
-                for k in range(p):
-                    norm_coef += h * y_prime[n, k, r, c] * anti[k]
-                poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                                window=(0.0, 1.0), symbol='t')
-                comps[r, c] = poly.convert(domain=(t_l, t_r),
-                                           window=(t_l, t_r)).trim()
-        polys.append(comps)
-    return polys
 
 
 # ---------------------------------------------------------------------------
@@ -2319,10 +2348,24 @@ def _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints: np.ndarray,
                                               kernel_singularity,
                                               show_warnings: bool) -> None:
     """If a singularity is declared but the mesh appears uniform (max/min
-    interval ratio < 1.5), suggest `optimal_graded_mesh`.
+    interval ratio < 1.5), suggest `optimal_graded_mesh`. Also warn about
+    declared locations outside [0, T]: the kernel is only evaluated at
+    u = t - s in [0, T], so such a declaration has no effect.
     """
     if not show_warnings or kernel_singularity is None:
         return
+    if not callable(kernel_singularity):
+        locs = (list(kernel_singularity.keys()) if isinstance(kernel_singularity, dict)
+                else list(np.atleast_1d(np.asarray(kernel_singularity, dtype=float))))
+        T = float(mesh_breakpoints[-1])
+        tol = 1e-12 * max(1.0, T)
+        outside = [float(u) for u in locs if not (-tol <= float(u) <= T + tol)]
+        if outside:
+            print(f"warning: kernel_singularity location(s) {outside} lie outside "
+                  f"[0, T] = [0, {T:.6g}]; the kernel is only evaluated at u in "
+                  f"[0, T], so they have no effect.")
+            if len(outside) == len(locs):
+                return
     widths = np.diff(mesh_breakpoints)
     ratio = float(widths.max() / widths.min())
     if ratio < 1.5:
@@ -2403,78 +2446,41 @@ def _vie1_cont_advance(node_pos: np.ndarray):
     return adv_U, adv_0
 
 
-def _build_vie1_cont_polynomials_scalar(U, boundary, mesh_breakpoints, node_pos):
-    """Degree-m piecewise polynomials for the continuous VIE-1 solution.
+def _vie1_cont_solution(U, boundary, mesh_breakpoints, node_pos, d=0, m=0):
+    """Solution function for the continuous VIE-1 method (degree m pieces).
 
     On interval n: y(theta) = boundary[n]*Lt_0(theta) + sum_k U[n,k]*Lt_{k+1}(theta),
-    with Lt the augmented Lagrange basis on {0} ∪ node_pos.
+    with Lt the augmented Lagrange basis on {0} ∪ node_pos. ``U`` is
+    ``(M, p, *comp)``, ``boundary`` ``(M+1, *comp)``.
     """
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
     aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
     lag = _lagrange_basis_coefs(aug)            # rows: Lt_0, Lt_1, ..., Lt_p
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        norm_coef = boundary[n] * lag[0]
-        for k in range(p):
-            norm_coef = norm_coef + U[n, k] * lag[k + 1]
-        poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                        window=(0.0, 1.0), symbol='t')
-        polys.append(poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim())
-    return polys
+    U = np.asarray(U, dtype=float)
+    M = U.shape[0]
+    extra = (1,) * (U.ndim - 2)
+    b = np.asarray(boundary, dtype=float)[:M]
+    unit = b[:, None] * lag[0].reshape((1, -1) + extra)
+    unit = _combine_basis(U, lag[1:], unit)
+    return _SolutionFunction.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
 
 
-def _build_vie1_cont_polynomials_vector(U, boundary, mesh_breakpoints, node_pos, d):
-    """Vector analogue of _build_vie1_cont_polynomials_scalar.
-
-    U has shape (M, p, d), boundary (M+1, d); returns a list of M (d,) object
-    arrays of Polynomials.
-    """
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
-    aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
-    lag = _lagrange_basis_coefs(aug)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        comps = np.empty(d, dtype=object)
-        for r in range(d):
-            norm_coef = boundary[n, r] * lag[0]
-            for k in range(p):
-                norm_coef = norm_coef + U[n, k, r] * lag[k + 1]
-            poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                            window=(0.0, 1.0), symbol='t')
-            comps[r] = poly.convert(domain=(t_l, t_r), window=(t_l, t_r)).trim()
-        polys.append(comps)
-    return polys
-
-
-def _build_vie1_cont_polynomials_matrix(U, boundary, mesh_breakpoints, node_pos, d, m):
-    """Matrix analogue: U has shape (M, p, d, m), boundary (M+1, d, m); returns
-    a list of M (d, m) object arrays of Polynomials."""
-    p = len(node_pos)
-    M = len(mesh_breakpoints) - 1
-    aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
-    lag = _lagrange_basis_coefs(aug)
-    polys = []
-    for n in range(M):
-        t_l = mesh_breakpoints[n]
-        t_r = mesh_breakpoints[n + 1]
-        comps = np.empty((d, m), dtype=object)
-        for r in range(d):
-            for c in range(m):
-                norm_coef = boundary[n, r, c] * lag[0]
-                for k in range(p):
-                    norm_coef = norm_coef + U[n, k, r, c] * lag[k + 1]
-                poly = np.polynomial.Polynomial(norm_coef, domain=(t_l, t_r),
-                                                window=(0.0, 1.0), symbol='t')
-                comps[r, c] = poly.convert(domain=(t_l, t_r),
-                                           window=(t_l, t_r)).trim()
-        polys.append(comps)
-    return polys
+def _warn_vie1_g_start_callable(g, mesh_breakpoints, show_warnings):
+    """Callable-input analogue of solvers._warn_vie1_g_start: warn when g(0)
+    is not negligible next to the scale of g (sampled at the mesh
+    breakpoints). A first-kind equation forces g(0) = 0. Any failure to
+    evaluate g here is left to the solver's own sampling to report."""
+    if not show_warnings or g is None:
+        return
+    try:
+        a = np.abs(np.asarray([np.asarray(g(float(t))) for t in mesh_breakpoints]))
+        g0 = np.abs(np.asarray(g(0.0)))
+        if g0.ndim == 2:                          # (d, m) matrix problem: per column
+            g0, scale = g0.max(axis=0), a.max(axis=(0, 1))
+        else:
+            g0, scale = g0.max(), a.max()
+    except Exception:
+        return
+    _warn_g_start_columns(g0, scale)
 
 
 @_escalate_complex_warning
@@ -2509,6 +2515,14 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         otherwise. A warning is emitted if a value is passed when it has no
         effect. For a matrix-valued problem with ``force_continuous=True`` it
         must have shape $(d, m)$.
+        It must be the value the equation implies: differentiating at
+        $t = 0$ gives $g'(0) = K(0)\,y(0)$. Any other value gives a wrong
+        solution on the whole interval, not only near $t = 0$, and is not
+        detected. If $y(0)$ is not known independently, use the default
+        method, or estimate it by solving with ``force_continuous=False,
+        return_function=True`` and evaluating the solution at $t = 0$ (the
+        continuous solve is then more accurate than the default method but
+        falls short of its full order).
     mesh_breakpoints : array_like
         Strictly-increasing 1-D array starting at 0.
     coll_divs, coll_choices : int, list of int, optional
@@ -2562,6 +2576,9 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
 
     Notes
     -----
+    The equation forces $g(0) = 0$; for $g(0) \ne 0$ there is no bounded
+    solution, and a warning is printed.
+
     Whether a given node set yields a convergent method depends on the nodes
     (Brunner 2004, smooth-kernel chapter). For a smooth kernel with
     $|K(t, t)| \ge k_0 > 0$, writing $c_1 < \dots < c_m$ for the nodes:
@@ -2593,6 +2610,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
         raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
+    if not np.all(np.isfinite(mesh_breakpoints)):
+        raise ValueError("mesh_breakpoints must be finite (no inf or NaN)")
     if not np.all(np.diff(mesh_breakpoints) > 0):
         raise ValueError("mesh_breakpoints must be strictly increasing")
     if mesh_breakpoints[0] != 0.0:
@@ -2675,6 +2694,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                     _ComplexSolutionFunction(y_func_real, d_orig))
         return _recombine_complex_y(result, d_orig)
 
+    _warn_vie1_g_start_callable(g, mesh_breakpoints, show_warnings)
+
     M = len(mesh_breakpoints) - 1
     p = len(node_pos)
     widths = np.diff(mesh_breakpoints)
@@ -2699,7 +2720,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                 t_n = mesh_breakpoints[n]
                 h_n = widths[n]
                 for i in range(p):
-                    g_arr[n, i] = float(g(t_n + node_pos[i] * h_n))
+                    t_ni = t_n + node_pos[i] * h_n
+                    g_arr[n, i] = _scalar_g_value(g(t_ni), t_ni)
         if force_continuous:
             # Brunner S_m^(0): degree-m polynomial on {0} ∪ node_pos, with the
             # boundary value carried forward for continuity. Extended weight
@@ -2711,11 +2733,9 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                 reuse_adaptive_blocks=reuse_adaptive_blocks)
             adv_U, adv_0 = _vie1_cont_advance(node_pos)
             y, boundary = _dlang_module.function_solve_vie1_cont_d(
-                W, g_arr, adv_U, adv_0, float(soln_init_value))
+                W, g_arr, adv_U, adv_0, _scalar_init(soln_init_value))
             if return_function:
-                polys = _build_vie1_cont_polynomials_scalar(
-                    y, boundary, mesh_breakpoints, node_pos)
-                return y, _SolutionFunction(polys, mesh_breakpoints, d=0)
+                return y, _vie1_cont_solution(y, boundary, mesh_breakpoints, node_pos)
             return y
 
         W = _build_W_scalar(kernel, mesh_breakpoints, node_pos,
@@ -2723,9 +2743,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                             reuse_adaptive_blocks=reuse_adaptive_blocks)
         y = _dlang_module.function_solve_vie1_d(W, g_arr)
         if return_function:
-            polys = _build_polynomials(y, mesh_breakpoints, node_pos)
-            y_func = _SolutionFunction(polys, mesh_breakpoints, d=0)
-            return y, y_func
+            return y, _lagrange_solution(y, mesh_breakpoints, node_pos)
         return y
 
     # ----- Vector / matrix path -----
@@ -2776,9 +2794,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             y = np.stack([r[0] for r in results], axis=3)        # (M, p, d, m)
             if return_function:
                 boundary = np.stack([r[1] for r in results], axis=2)  # (M+1, d, m)
-                polys = _build_vie1_cont_polynomials_matrix(
-                    y, boundary, mesh_breakpoints, node_pos, d, m)
-                return y, _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
+                return y, _vie1_cont_solution(y, boundary, mesh_breakpoints,
+                                              node_pos, d=d, m=m)
             return y
 
         def _col_solve(j):
@@ -2790,9 +2807,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         y = np.stack(cols, axis=3)  # (M, p, d, m)
 
         if return_function:
-            polys = _build_polynomials_matrix(y, mesh_breakpoints, node_pos,
-                                              d, m)
-            return y, _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
+            return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d, m=m)
         return y
 
     g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
@@ -2806,15 +2821,12 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         y, boundary = _dlang_module.function_solve_vie1_cont_vec_d(
             W, g_arr, adv_U, adv_0, init_vec)
         if return_function:
-            polys = _build_vie1_cont_polynomials_vector(
-                y, boundary, mesh_breakpoints, node_pos, d)
-            return y, _SolutionFunction(polys, mesh_breakpoints, d=d)
+            return y, _vie1_cont_solution(y, boundary, mesh_breakpoints,
+                                          node_pos, d=d)
         return y
 
     y = _dlang_module.function_solve_vie1_vec_d(W, g_arr)
 
     if return_function:
-        polys = _build_polynomials_vector(y, mesh_breakpoints, node_pos, d)
-        y_func = _SolutionFunction(polys, mesh_breakpoints, d=d)
-        return y, y_func
+        return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d)
     return y

@@ -56,6 +56,8 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from numpy.polynomial import polynomial as npp
 
+from ._solution import _SolutionFunction
+
 from ._callable_solvers import (_lagrange_basis_coefs, _vie1_cont_basis_coefs,
                                 _vie1_cont_advance)
 
@@ -295,24 +297,19 @@ def evaluate_on_grid(U, y, basis_coefs, Q, M, d, force_continuous, N):
 
 
 def build_polynomials(U, y, basis_coefs, Q, M, d, force_continuous, delta):
-    """Per-interval numpy Polynomials on the actual time axis (scalar: list
-    of Polynomial; vector: list of (d,) object arrays)."""
+    """Solution function over per-interval Polynomials on the actual time
+    axis (scalar: Polynomial; vector: (d,) object arrays). The Polynomial
+    objects are built on first access; evaluation uses the local
+    coefficients directly (see `_SolutionFunction.from_unit_coefs`)."""
     m = U.shape[1] // max(d, 1)
     dd = max(d, 1)
     Ur = U.reshape(M, m, dd)
-    H = Q * delta
-    polys = []
-    for n in range(M):
-        domain = (n * H, (n + 1) * H)
-        comps = np.empty(dd, dtype=object)
-        for r in range(dd):
-            coefs = Ur[n, :, r] @ basis_coefs[:m]
-            if force_continuous:
-                coefs = coefs + y[n, r] * basis_coefs[m]
-            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
-            comps[r] = poly.convert(domain=domain, window=domain).trim()
-        polys.append(comps[0] if d == 0 else comps)
-    return polys
+    unit = np.einsum('nkr,kj->njr', Ur, basis_coefs[:m])      # (M, P, dd)
+    if force_continuous:
+        unit = unit + np.asarray(y)[:M, None, :] * basis_coefs[m][None, :, None]
+    edges = np.arange(M + 1) * (Q * delta)
+    return _SolutionFunction.from_unit_coefs(unit[:, :, 0] if d == 0 else unit,
+                                             edges, d=d)
 
 
 # ---------------------------------------------------------------------------

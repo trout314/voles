@@ -41,39 +41,32 @@ def _resolve_return_flag(return_function, return_polys):
     return bool(return_function)
 
 
-def _wrap_polys(polys, time_step, coll_divs, d=0, m=0):
-    """Wrap a per-interval list of polynomials in a callable `_SolutionFunction`.
-
-    The array-based solvers use a uniform mesh of width ``coll_divs**2 *
-    time_step``; the breakpoints are reconstructed from the interval count.
-    """
-    polys = list(polys)
+def _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=0, trim=True):
+    """`_SolutionFunction` over the D/Numba drivers' per-interval coefficient
+    array (``(mesh_divs, P)`` scalar, ``(mesh_divs, P, d)`` vector), in the
+    local variable on [0, 1] of each mesh interval. Polynomial objects are
+    built lazily and match what the eager builders produced: the scalar paths
+    use domains ``(i * coll_divs**2) * time_step`` (trimmed except for
+    VIDE), the vector paths ``i * (coll_divs**2 * time_step)``, trimmed."""
+    poly_coefs = np.asarray(poly_coefs)
+    M = poly_coefs.shape[0]
     h = coll_divs ** 2 * time_step
-    mesh_breakpoints = np.arange(len(polys) + 1) * h
-    return _SolutionFunction(polys, mesh_breakpoints, d=d, m=m)
+    mesh_breakpoints = np.arange(M + 1) * h
+    if d == 0:
+        edges = (np.arange(M + 1) * coll_divs ** 2) * time_step
+        return _SolutionFunction.from_unit_coefs(poly_coefs, mesh_breakpoints, d=0,
+                                                 edges=edges, trim=trim)
+    return _SolutionFunction.from_unit_coefs(poly_coefs, mesh_breakpoints, d=d)
 
 
-def _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step):
-    """Convert (mesh_divs, m+1, d) poly coef array to list of (d,) Polynomial arrays.
+def _stack_column_solutions(col_funcs, d, m_cols):
+    """Matrix-valued `_SolutionFunction` from the per-column vector ones
+    (each built by `_wrap_unit_coefs` / `from_unit_coefs`)."""
+    first = col_funcs[0]
+    unit = np.stack([f._unit for f in col_funcs], axis=-1)   # (M, P, d, m)
+    return _SolutionFunction.from_unit_coefs(unit, first.mesh_breakpoints, d=d, m=m_cols,
+                                             edges=first._edges, trim=first._trim)
 
-    poly_coefs[n, :, r] are coefficients in rel_x ∈ [0,1] for component r on interval n.
-    Returns a list of length mesh_divs where each element is a (d,) object array of
-    numpy.polynomial.Polynomial objects mapped to actual time.
-    """
-    d = poly_coefs.shape[2]
-    h = coll_divs ** 2 * time_step
-    polys = []
-    for n in range(mesh_divs):
-        t_start = n * h
-        t_end = (n + 1) * h
-        domain = (t_start, t_end)
-        arr = np.empty(d, dtype=object)
-        for r in range(d):
-            coefs = poly_coefs[n, :, r]
-            p = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
-            arr[r] = p.convert(domain=domain, window=domain).trim()
-        polys.append(arr)
-    return polys
 
 def _vie1_rho(coll_divs, coll_choices, continuous=False):
     r"""Exact amplification factor of a VIE-1 collocation method on the nodes
@@ -191,9 +184,87 @@ def _validate_second_kind_coll_setting(coll_divs, coll_choices):
     return int(coll_divs), sorted(int(c) for c in choices)
 
 
+def _warn_g_start_columns(g0, scale):
+    """Shared by the sampled and callable VIE-1 solvers. ``g0`` and ``scale``
+    are max |g(0)| and max |g| per right-hand side: 0-d for scalar and vector
+    problems, shape (m,) for matrix problems."""
+    g0 = np.atleast_1d(np.asarray(g0, dtype=float))
+    scale = np.atleast_1d(np.asarray(scale, dtype=float))
+    bad = np.isfinite(g0) & (g0 > 1e-6 * scale)
+    if not bad.any():
+        return
+    rule = (" A first-kind equation g(t) = int_0^t K(t-s) y(s) ds requires g(0) = 0; "
+            "otherwise it has no bounded solution and values near t = 0 are meaningless.")
+    if g0.size == 1:
+        print(f"warning: g(0) is not zero (max |g(0)| = {g0[0]:.3g}, "
+              f"max |g| = {scale[0]:.3g})." + rule)
+    else:
+        j = int(np.argmax(np.where(bad, g0 / np.maximum(scale, 1e-300), -np.inf)))
+        print(f"warning: g(0) is not zero in {int(bad.sum())} of {g0.size} columns; "
+              f"worst column {j}: max |g(0)| = {g0[j]:.3g}, max |g| = {scale[j]:.3g}." + rule)
+
+
+def _warn_vie1_g_start(g_values, show_warnings):
+    """A first-kind equation forces g(0) = 0 (the integral vanishes at t = 0);
+    with g(0) != 0 there is no bounded solution and the solver returns
+    meaningless values near t = 0. Warn when g(0) is not negligible next to
+    the scale of g. Shape problems are left to the solver's own validation."""
+    if not show_warnings or g_values is None:
+        return
+    try:
+        g = np.abs(np.asarray(g_values))
+        if g.ndim == 3:                                   # (N, d, m): per column
+            g0, scale = g[0].max(axis=0), g.max(axis=(0, 1))
+        else:
+            g0, scale = g[0].max(), g.max()
+    except (TypeError, ValueError, IndexError):
+        return
+    _warn_g_start_columns(g0, scale)
+
+
+def _warn_vie1_kernel_start(kernel_values_, samples_per_mesh, show_warnings):
+    """The collocation-quadrature VIE-1 scheme is unstable when K(0) is small
+    next to the kernel's change over one mesh interval: the error grows
+    geometrically, and without bound as the mesh is refined when K(0) = 0.
+    Warn when |K(H) - K(0)| > 2 |K(0)| (vector: ||K(0)^-1 (K(H) - K(0))|| > 2,
+    or K(0) numerically singular), where divergence was observed from a
+    ratio of about 5. Product quadrature does not have this restriction."""
+    if not show_warnings or len(kernel_values_) <= samples_per_mesh:
+        return
+    K0 = kernel_values_[0]
+    dK = kernel_values_[samples_per_mesh] - K0
+    if not (np.all(np.isfinite(K0)) and np.all(np.isfinite(dK))):
+        return
+    if np.ndim(K0) == 0:
+        ratio = np.inf if K0 == 0 else abs(dK) / abs(K0)
+    else:
+        if np.linalg.cond(K0) > 1e12:
+            ratio = np.inf
+        else:
+            ratio = np.linalg.norm(np.linalg.solve(K0, dK), 2)
+    if ratio > 2:
+        which = ("K(0) is zero or singular" if not np.isfinite(ratio) else
+                 f"K changes by {ratio:.3g} x |K(0)| over one mesh interval")
+        print(f"warning: {which}. The first-kind collocation scheme is unstable in "
+              f"this regime and can return values that grow without bound. Use "
+              f"quadrature='product' (stable here), or a finer time_step if K(0) != 0.")
+
+
+def _scalar_init(value):
+    """``soln_init_value`` of a scalar equation as a float. Any single-element
+    array-like is accepted (``0.5``, ``[0.5]``, ``np.array([0.5])``), so a
+    value computed as a length-1 array does not trip a bare float()."""
+    arr = np.asarray(value, dtype=float)
+    if arr.size != 1:
+        raise ValueError(
+            f"soln_init_value must be a single number for a scalar equation, "
+            f"got shape {arr.shape}")
+    return float(arr.reshape(()))
+
+
 def _check_time_step(time_step):
-    if not time_step > 0.0:
-        raise ValueError("time_step must be positive")
+    if not (time_step > 0.0 and np.isfinite(time_step)):
+        raise ValueError("time_step must be positive and finite")
 
 
 def _use_product_quadrature(quadrature, mesh_samples, kernel_interp_degree, coll_divs):
@@ -254,10 +325,15 @@ def _truncate_N(kernel_values_, coll_divs, show_warnings):
     """Truncate kernel_values_ to the largest valid length; return (N, kernel_values_).
 
     Valid lengths satisfy N ≡ 1 (mod coll_divs²).  Prints a warning when
-    truncation is needed and show_warnings is True. Raises ValueError if the
-    truncated length leaves zero mesh intervals (i.e. N < coll_divs² + 1).
+    truncation is needed and show_warnings is True. Raises ValueError, before
+    any truncation warning, if N < coll_divs² + 1 (zero mesh intervals).
     """
     N = len(kernel_values_)
+    if N < coll_divs ** 2 + 1:
+        raise ValueError(
+            f"kernel_values has length {N}, which leaves zero mesh intervals for "
+            f"coll_divs={coll_divs}: one mesh interval needs at least "
+            f"{coll_divs ** 2 + 1} input points.")
     if coll_divs > 1 and N % coll_divs**2 != 1:
         N_used = (N - 1) // coll_divs**2 * coll_divs**2 + 1
         if show_warnings:
@@ -270,13 +346,6 @@ def _truncate_N(kernel_values_, coll_divs, show_warnings):
             )
     else:
         N_used = N
-
-    if N_used < coll_divs ** 2 + 1:
-        raise ValueError(
-            f"kernel_values has length {N} (truncated to {N_used}), which leaves "
-            f"zero mesh intervals for coll_divs={coll_divs}. Need at least "
-            f"{coll_divs ** 2 + 1} input points to form one mesh interval."
-        )
     return N_used, kernel_values_[:N_used]
 
 
@@ -365,7 +434,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     (soln_values, solution) : tuple
         Returned when ``return_function=True``. ``soln_values`` is as above.
         ``solution`` is callable -- ``solution(t)`` evaluates the piecewise
-        polynomial solution at scalar or array ``t`` -- and also behaves like
+        polynomial solution at scalar or array ``t`` (NaN for ``t`` outside
+        the solved interval) -- and also behaves like
         the previous list of per-interval polynomials: ``len(solution)``,
         ``solution[n]``, and iteration operate on ``solution.polynomials``.
         For scalar equations each polynomial is a
@@ -506,18 +576,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                 results = list(ex.map(_col_vide, range(m_cols)))
             if return_function:
-                col_solns = [r[0] for r in results]
-                col_polys = [r[1] for r in results]
-                soln = np.stack(col_solns, axis=2)
-                mesh_divs = len(col_polys[0])
-                mat_polys = []
-                for n in range(mesh_divs):
-                    arr = np.empty((d, m_cols), dtype=object)
-                    for j in range(m_cols):
-                        arr[:, j] = col_polys[j][n]
-                    mat_polys.append(arr)
-                return (soln, _wrap_polys(mat_polys, time_step, coll_divs,
-                                          d=d, m=m_cols))
+                soln = np.stack([r[0] for r in results], axis=2)
+                return (soln, _stack_column_solutions([r[1] for r in results], d, m_cols))
             return np.stack(results, axis=2)
 
         if g_values is not None:
@@ -530,10 +590,12 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         else:
             a_values_ = np.zeros((N, d, d), dtype=float)
 
+        given_shape = soln_init_values_.shape
         soln_init_values_ = soln_init_values_.ravel()
         if soln_init_values_.shape != (d,):
             raise ValueError(
-                f"soln_init_value must be a scalar or length-{d} array for d={d}")
+                f"soln_init_value must have shape ({d},) for a d={d} vector equation "
+                f"(or ({d}, m) for m right-hand sides), got shape {given_shape}")
 
         if (coll_divs, coll_choices) not in _fast_settings_VIDE:
             # NotImplementedError subclasses RuntimeError, so callers
@@ -551,9 +613,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         soln_vals, poly_coefs = _dlang_module.solve_vide_vec_d(
             g_c, k_c, a_c, soln_init_values_, time_step, coll_divs, coll_choices, return_function)
         if return_function:
-            return (soln_vals, _wrap_polys(
-                _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step),
-                time_step, coll_divs, d=d))
+            return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=d))
         return soln_vals
 
     # ------------------------------------------------------------------ scalar path
@@ -570,13 +630,13 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
 
     if (coll_divs, coll_choices) in _fast_settings_VIDE:
         soln_vals, poly_coefs = _dlang_module.solve_vide_d(
-            g_values_, kernel_values_, a_values_, soln_init_value,
+            g_values_, kernel_values_, a_values_, _scalar_init(soln_init_value),
             time_step, coll_divs, coll_choices, return_function)
     elif _numba_available:
         if show_warnings:
             print("warning: falling back to slower python/numba code")
         soln_vals, poly_coefs = _numba_solvers.solve_VIDE_jit(
-            g_values_, kernel_values_, a_values_, soln_init_value,
+            g_values_, kernel_values_, a_values_, _scalar_init(soln_init_value),
             time_step, coll_divs, coll_choices, return_function)
     else:
         raise NotImplementedError(
@@ -585,13 +645,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             f"use a supported setting (see fast_coll_settings_VIDE)."
         )
     if return_function:
-        polys = []
-        for i, coefs in enumerate(poly_coefs):
-            domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
-            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
-            poly = poly.convert(domain=domain, window=domain)
-            polys.append(poly)
-        return (soln_vals, _wrap_polys(polys, time_step, coll_divs, d=0))
+        return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=0,
+                                            trim=False))
     else:
         return soln_vals
 
@@ -615,6 +670,10 @@ def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh
         raise ValueError("kernel_interp_degree must be a positive integer")
     _check_time_step(time_step)
     N_orig = len(kernel_values_)
+    if N_orig < Q + 1:
+        raise ValueError(
+            f"kernel_values has length {N_orig}, which leaves zero mesh intervals for "
+            f"mesh_samples={Q}: one mesh interval needs at least {Q + 1} input points.")
     N = (N_orig - 1) // Q * Q + 1
     if N != N_orig and show_warnings:
         print(
@@ -622,10 +681,6 @@ def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh
             f"(multiple of mesh_samples) + 1 where mesh_samples = {Q}. All input data "
             f"lists will be truncated to the next smaller number of this form ({N}) "
             f"which will also be the length of the returned list of solution values.")
-    if N < Q + 1:
-        raise ValueError(
-            f"kernel_values has length {N_orig} (truncated to {N}), which leaves zero mesh "
-            f"intervals for mesh_samples={Q}. Need at least {Q + 1} input points.")
     if N < p + 1:
         raise ValueError(
             f"kernel interpolation of degree {p} needs at least {p + 1} samples, got {N}")
@@ -637,21 +692,13 @@ def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh
     return Q, p, N_orig, N, K, d, M, np.arange(M + 1) * (Q * time_step)
 
 
-def _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints):
-    """Combine per-column ``(values, polys)`` pairs from the ``_product``
+def _stack_matrix_results(results, return_function, d, m_cols):
+    """Combine per-column ``(values, solution)`` pairs from the ``_product``
     drivers into the matrix-valued result."""
     soln = np.stack([r[0] for r in results], axis=2)
     if return_function:
-        col_polys = [r[1] for r in results]
-        mat_polys = []
-        for n in range(M):
-            arr = np.empty((d, m_cols), dtype=object)
-            for j in range(m_cols):
-                arr[:, j] = col_polys[j][n]
-            mat_polys.append(arr)
-        return soln, _SolutionFunction(mat_polys, breakpoints, d=d, m=m_cols)
+        return soln, _stack_column_solutions([r[1] for r in results], d, m_cols)
     return soln
-
 
 def _solve_vie2_product_path(kernel_values_, g_values, time_step, coll_divs, coll_choices,
                              return_function, show_warnings, mesh_samples, kernel_interp_degree):
@@ -683,7 +730,7 @@ def _solve_vie2_product_path(kernel_values_, g_values, time_step, coll_divs, col
                     setup=setup)
             with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                 results = list(ex.map(_col, range(m_cols)))
-            return _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints)
+            return _stack_matrix_results(results, return_function, d, m_cols)
         g = _check_series("g_values", g, N_orig, kernel_values_.shape,
                           (N_orig,) if d == 0 else (N_orig, d))[:N]
 
@@ -691,7 +738,7 @@ def _solve_vie2_product_path(kernel_values_, g_values, time_step, coll_divs, col
         K, g, time_step, q, coll_choices, Q, p, return_function,
         setup=setup, show_warnings=show_warnings)
     if return_function:
-        return values, _SolutionFunction(polys, breakpoints, d=d, m=0)
+        return values, polys
     return values
 
 
@@ -744,26 +791,27 @@ def _solve_vide_product_path(kernel_values_, a_values, g_values, soln_init_value
                 return_function, setup=setup)
         with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
             results = list(ex.map(_col, range(m_cols)))
-        return _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints)
+        return _stack_matrix_results(results, return_function, d, m_cols)
 
     # ---------------------------------------------------------------- g, y0
     g = None if g_values is None else _check_series(
         "g_values", g_values, N_orig, kernel_values_.shape,
         (N_orig,) if d == 0 else (N_orig, d))[:N]
     if d == 0:
-        if init.shape != ():
-            raise ValueError("soln_init_value must be a scalar for a scalar equation")
-        init = float(init)
+        init = _scalar_init(init)
     else:
+        given_shape = init.shape
         init = init.ravel()
         if init.shape != (d,):
-            raise ValueError(f"soln_init_value must be a scalar or length-{d} array for d={d}")
+            raise ValueError(
+                f"soln_init_value must have shape ({d},) for a d={d} vector equation "
+                f"(or ({d}, m) for m right-hand sides), got shape {given_shape}")
 
     values, polys = _product.solve_vide_product(
         K, a, g, time_step, q, coll_choices, Q, p, init, return_function,
         setup=setup, show_warnings=show_warnings)
     if return_function:
-        return values, _SolutionFunction(polys, breakpoints, d=d, m=0)
+        return values, polys
     return values
 
 
@@ -813,7 +861,7 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
                     return_function, setup=setup)
             with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                 results = list(ex.map(_col, range(m_cols)))
-            return _stack_matrix_results(results, return_function, d, m_cols, M, breakpoints)
+            return _stack_matrix_results(results, return_function, d, m_cols)
         g = _check_series("g_values", g, N_orig, kernel_values_.shape,
                           (N_orig,) if d == 0 else (N_orig, d))[:N]
 
@@ -826,9 +874,7 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
                   "force_continuous is set to false.")
         init = np.asarray(soln_init_value, dtype=float)
         if d == 0:
-            if init.shape != ():
-                raise ValueError("soln_init_value must be a scalar for a scalar equation")
-            init = float(init)
+            init = _scalar_init(init)
         elif init.shape != (d,):
             raise ValueError(f"soln_init_value must have shape ({d},) for d={d}")
 
@@ -836,7 +882,7 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
         K, g, time_step, q, coll_choices, Q, p, force_continuous, init, return_function,
         setup=setup, show_warnings=show_warnings)
     if return_function:
-        return values, _SolutionFunction(polys, breakpoints, d=d, m=0)
+        return values, polys
     return values
 
 
@@ -865,6 +911,14 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         Initial value $y(0)$ imposed when ``force_continuous=True``. Has no
         effect when ``force_continuous=False`` (default). Required when
         ``force_continuous=True``.
+        It must be the value the equation implies: differentiating at
+        $t = 0$ gives $g'(0) = K(0)\,y(0)$. Any other value gives a wrong
+        solution on the whole interval, not only near $t = 0$, and is not
+        detected. If $y(0)$ is not known independently, use the default
+        method, or estimate it by solving with ``force_continuous=False,
+        return_function=True`` and evaluating the solution at $t = 0$ (the
+        continuous solve is then more accurate than the default method but
+        falls short of its full order).
     time_step : float, optional
         Spacing $h$ between consecutive sample times. Must be positive.
         Default is 1.0.
@@ -937,7 +991,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     (soln_values, solution) : tuple
         Returned when ``return_function=True``. ``soln_values`` is as above.
         ``solution`` is callable -- ``solution(t)`` evaluates the piecewise
-        polynomial solution at scalar or array ``t`` -- and also behaves like
+        polynomial solution at scalar or array ``t`` (NaN for ``t`` outside
+        the solved interval) -- and also behaves like
         the previous list of per-interval polynomials: ``len(solution)``,
         ``solution[n]``, and iteration operate on ``solution.polynomials``.
         For scalar equations each polynomial is a
@@ -1002,6 +1057,18 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     $\{0, c_1, \ldots, c_m\}$ for the continuous one ([1], Section 2.4.5);
     for ``coll_divs=1``, ``coll_choices=[1]`` the continuous method is the
     product trapezoidal rule.
+
+    The equation forces $g(0) = 0$; for $g(0) \ne 0$ there is no bounded
+    solution, and a warning is printed.
+
+    The theory above assumes $K(0) \ne 0$ ($K(0)$ nonsingular for vector
+    equations). With the default quadrature the scheme is also unstable when
+    $K(0)$ is small next to the kernel's change over one mesh interval $H$
+    (divergence was observed once $H |K'(0)| / |K(0)| \gtrsim 5$), and when
+    $K(0) = 0$ it diverges without bound as the mesh is refined. A warning is
+    printed when $|K(H) - K(0)| > 2 |K(0)|$ (vector: $\|K(0)^{-1}(K(H) -
+    K(0))\|_2 > 2$ or $K(0)$ singular). ``quadrature="product"`` does not
+    have this restriction.
 
     With ``quadrature="product"`` the scheme is exact collocation for the
     interpolated kernel $K_h$, so its error is the collocation error plus a
@@ -1069,6 +1136,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         raise ValueError(
             f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
 
+    _warn_vie1_g_start(g_values, show_warnings)
     if _use_product_quadrature(quadrature, mesh_samples, kernel_interp_degree, coll_divs):
         return _solve_vie1_product_path(
             kernel_values_, g_values, soln_init_value, time_step, coll_divs,
@@ -1083,6 +1151,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
 
     N_orig = len(kernel_values_)
     N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
+    if kernel_values_.ndim == 1 or kernel_values_.shape[1] == kernel_values_.shape[2]:
+        _warn_vie1_kernel_start(kernel_values_, coll_divs ** 2, show_warnings)
 
     # ------------------------------------------------------------------ vector path
     if ndim == 3:
@@ -1121,18 +1191,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                 with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                     results = list(ex.map(_col_vie1, range(m_cols)))
                 if return_function:
-                    col_solns = [r[0] for r in results]
-                    col_polys = [r[1] for r in results]
-                    soln = np.stack(col_solns, axis=2)
-                    mesh_divs = len(col_polys[0])
-                    mat_polys = []
-                    for n in range(mesh_divs):
-                        arr = np.empty((d, m_cols), dtype=object)
-                        for j in range(m_cols):
-                            arr[:, j] = col_polys[j][n]
-                        mat_polys.append(arr)
-                    return (soln, _wrap_polys(mat_polys, time_step, coll_divs,
-                                              d=d, m=m_cols))
+                    soln = np.stack([r[0] for r in results], axis=2)
+                    return (soln, _stack_column_solutions([r[1] for r in results], d, m_cols))
                 return np.stack(results, axis=2)
             else:
                 if g_values_.shape != (N_orig, d):
@@ -1171,9 +1231,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             g_c, k_c, soln_init_value_, time_step,
             coll_divs, coll_choices, return_function, force_continuous)
         if return_function:
-            return (soln_vals, _wrap_polys(
-                _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step),
-                time_step, coll_divs, d=d))
+            return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=d))
         return soln_vals
 
     # ------------------------------------------------------------------ scalar path
@@ -1193,7 +1251,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                   "force_continuous is set to false.")
             soln_init_value_ = 0.0
         else:
-            soln_init_value_ = float(soln_init_value)
+            soln_init_value_ = _scalar_init(soln_init_value)
 
     if (coll_divs, coll_choices) in _fast_settings_VIE_1:
         soln_vals, poly_coefs = _dlang_module.solve_vie1_d(
@@ -1213,13 +1271,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         )
 
     if return_function:
-        polys = []
-        for i, coefs in enumerate(poly_coefs):
-            domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
-            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
-            poly = poly.convert(domain=domain, window=domain)
-            polys.append(poly.trim())
-        return (soln_vals, _wrap_polys(polys, time_step, coll_divs, d=0))
+        return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=0))
     else:
         return soln_vals
 
@@ -1299,7 +1351,8 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     (soln_values, solution) : tuple
         Returned when ``return_function=True``. ``soln_values`` is as above.
         ``solution`` is callable -- ``solution(t)`` evaluates the piecewise
-        polynomial solution at scalar or array ``t`` -- and also behaves like
+        polynomial solution at scalar or array ``t`` (NaN for ``t`` outside
+        the solved interval) -- and also behaves like
         the previous list of per-interval polynomials: ``len(solution)``,
         ``solution[n]``, and iteration operate on ``solution.polynomials``.
         For scalar equations each polynomial is a
@@ -1419,18 +1472,8 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                 with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                     results = list(ex.map(_col_vie2, range(m_cols)))
                 if return_function:
-                    col_solns = [r[0] for r in results]
-                    col_polys = [r[1] for r in results]
-                    soln = np.stack(col_solns, axis=2)
-                    mesh_divs = len(col_polys[0])
-                    mat_polys = []
-                    for n in range(mesh_divs):
-                        arr = np.empty((d, m_cols), dtype=object)
-                        for j in range(m_cols):
-                            arr[:, j] = col_polys[j][n]
-                        mat_polys.append(arr)
-                    return (soln, _wrap_polys(mat_polys, time_step, coll_divs,
-                                              d=d, m=m_cols))
+                    soln = np.stack([r[0] for r in results], axis=2)
+                    return (soln, _stack_column_solutions([r[1] for r in results], d, m_cols))
                 return np.stack(results, axis=2)
             else:
                 g_values_ = _check_series("g_values", g_values_, N_orig, (N_orig, d, d),
@@ -1453,9 +1496,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         soln_vals, poly_coefs = _dlang_module.solve_vie2_vec_d(
             g_c, k_c, time_step, coll_divs, coll_choices, return_function)
         if return_function:
-            return (soln_vals, _wrap_polys(
-                _build_vec_polys(poly_coefs, mesh_divs, coll_divs, time_step),
-                time_step, coll_divs, d=d))
+            return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=d))
         return soln_vals
 
     # ------------------------------------------------------------------ scalar path
@@ -1481,12 +1522,6 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         )
 
     if return_function:
-        polys = []
-        for i, coefs in enumerate(poly_coefs):
-            domain = (i * coll_divs**2 * time_step, (i+1) * coll_divs**2 * time_step)
-            poly = np.polynomial.Polynomial(coefs, domain=domain, window=(0.0, 1.0), symbol='t')
-            poly = poly.convert(domain=domain, window=domain)
-            polys.append(poly.trim())
-        return (soln_vals, _wrap_polys(polys, time_step, coll_divs, d=0))
+        return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=0))
     else:
         return soln_vals
