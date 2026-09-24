@@ -15,7 +15,7 @@ The Volterra Equation Solvers (VOLES) package is a collection of fast collocatio
 
 > Brunner H. *Collocation Methods for Volterra Integral and Related Functional Differential Equations.* Cambridge University Press; 2004.
 
-The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code. All solvers support real-valued and complex-valued data, scalar-, vector-, and matrix-valued equations, and singular kernels. Currently, only convolution type kernels are supported, but this restriction is likely to be lifted in a future version.
+The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code. All solvers support real- and complex-valued data, scalar-, vector-, and matrix-valued equations, and singular kernels. Currently, only convolution type kernels are supported, but this restriction is likely to be lifted in a future version.
 
 ## Solvers
 
@@ -121,7 +121,7 @@ The solvers require input arrays to satisfy an internal size constraint. Any len
 
 ## Vector and Matrix Valued Equations
 
-All solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ is a $d$-dimensional vector, $g(t)$ is also a $d$-dimensional vector and $K(t)$ and $a(t)$ are $d \times d$ matrices. When $y(t)$ is a $d \times m$ matrix, $g(t)$ is also a $d \times m$ matrix and $K(t)$ and $a(t)$ are $d \times d$ matrices. The case is detected automatically: for the array-based family from the shapes of the input arrays, and for the callable family from the shape returned by `g(t)` (a `(d, m)` return — or a `(d, m)` `soln_init_value` for VIDE — selects the matrix case). The callable family builds the kernel weight tensor once and shares it across the $m$ columns, so a matrix solve is much cheaper than $m$ separate calls.
+All solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ is a $d$-dimensional vector, $g(t)$ is also a $d$-dimensional vector and $K(t)$ and $a(t)$ are $d \times d$ matrices. When $y(t)$ is a $d \times m$ matrix, $g(t)$ is also a $d \times m$ matrix and $K(t)$ and $a(t)$ are $d \times d$ matrices. The solvers detect which case is appropriate automatically: for the array-based family from the shapes of the input arrays, and for the callable family from the shape returned by `g(t)`.
 
 See the worked examples: [vector- and matrix-valued equations](https://trout314.github.io/voles/examples/matrix_vector/), and the [callable-solver examples](https://trout314.github.io/voles/examples/function_solvers/) for the matrix-valued callable case.
 
