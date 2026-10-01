@@ -1541,15 +1541,7 @@ tracked boundary values).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1835</span>
-<span class="normal">1836</span>
-<span class="normal">1837</span>
-<span class="normal">1838</span>
-<span class="normal">1839</span>
-<span class="normal">1840</span>
-<span class="normal">1841</span>
-<span class="normal">1842</span>
-<span class="normal">1843</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1843</span>
 <span class="normal">1844</span>
 <span class="normal">1845</span>
 <span class="normal">1846</span>
@@ -1801,7 +1793,16 @@ tracked boundary values).</p>
 <span class="normal">2092</span>
 <span class="normal">2093</span>
 <span class="normal">2094</span>
-<span class="normal">2095</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">2095</span>
+<span class="normal">2096</span>
+<span class="normal">2097</span>
+<span class="normal">2098</span>
+<span class="normal">2099</span>
+<span class="normal">2100</span>
+<span class="normal">2101</span>
+<span class="normal">2102</span>
+<span class="normal">2103</span>
+<span class="normal">2104</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span>
                          <span class="n">mesh_breakpoints</span><span class="p">,</span>
                          <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1951,7 +1952,7 @@ tracked boundary values).</p>
                      <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
 
     <span class="c1"># Sample g and a at collocation points</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_sample_callable_scalar</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_sample_callable_scalar</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
         <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">f</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">out</span>
@@ -1959,7 +1960,8 @@ tracked boundary values).</p>
             <span class="n">t_n</span> <span class="o">=</span> <span class="n">mesh_breakpoints</span><span class="p">[</span><span class="n">n</span><span class="p">]</span>
             <span class="n">h_n</span> <span class="o">=</span> <span class="n">widths</span><span class="p">[</span><span class="n">n</span><span class="p">]</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
-                <span class="n">out</span><span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="n">t_n</span> <span class="o">+</span> <span class="n">node_pos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">h_n</span><span class="p">))</span>
+                <span class="n">t_ni</span> <span class="o">=</span> <span class="n">t_n</span> <span class="o">+</span> <span class="n">node_pos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">h_n</span>
+                <span class="n">out</span><span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">_scalar_callable_value</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="n">t_ni</span><span class="p">),</span> <span class="n">t_ni</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">out</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">is_vector</span><span class="p">:</span>
@@ -1968,8 +1970,8 @@ tracked boundary values).</p>
             <span class="n">kernel</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span>
             <span class="n">kernel_singularity</span><span class="p">,</span> <span class="n">_smooth_gl_order</span><span class="p">,</span> <span class="n">vide_basis</span><span class="p">,</span>
             <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">)</span>
-        <span class="n">g_arr</span> <span class="o">=</span> <span class="n">_sample_callable_scalar</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
-        <span class="n">a_arr</span> <span class="o">=</span> <span class="n">_sample_callable_scalar</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+        <span class="n">g_arr</span> <span class="o">=</span> <span class="n">_sample_callable_scalar</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="s2">"g"</span><span class="p">)</span>
+        <span class="n">a_arr</span> <span class="o">=</span> <span class="n">_sample_callable_scalar</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="s2">"a"</span><span class="p">)</span>
         <span class="n">y_prime</span><span class="p">,</span> <span class="n">y_boundary</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vide_d</span><span class="p">(</span>
             <span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">,</span> <span class="n">a_arr</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">w_vec</span><span class="p">,</span> <span class="n">widths</span><span class="p">,</span> <span class="n">_scalar_init</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">))</span>
 

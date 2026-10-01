@@ -1709,17 +1709,7 @@ supported settings (with the non-convergent ones excluded) are listed in
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 921</span>
-<span class="normal"> 922</span>
-<span class="normal"> 923</span>
-<span class="normal"> 924</span>
-<span class="normal"> 925</span>
-<span class="normal"> 926</span>
-<span class="normal"> 927</span>
-<span class="normal"> 928</span>
-<span class="normal"> 929</span>
-<span class="normal"> 930</span>
-<span class="normal"> 931</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 931</span>
 <span class="normal"> 932</span>
 <span class="normal"> 933</span>
 <span class="normal"> 934</span>
@@ -2114,7 +2104,15 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="normal">1323</span>
 <span class="normal">1324</span>
 <span class="normal">1325</span>
-<span class="normal">1326</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="normal">1326</span>
+<span class="normal">1327</span>
+<span class="normal">1328</span>
+<span class="normal">1329</span>
+<span class="normal">1330</span>
+<span class="normal">1331</span>
+<span class="normal">1332</span>
+<span class="normal">1333</span>
+<span class="normal">1334</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
                 <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                 <span class="n">force_continuous</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                 <span class="n">quadrature</span><span class="o">=</span><span class="s2">"collocation"</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -2364,7 +2362,9 @@ supported settings (with the non-convergent ones excluded) are listed in
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
-    <span class="n">_warn_vie1_g_start</span><span class="p">(</span><span class="n">g_values</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span> <span class="ow">and</span> <span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"kernel_values must have shape (N, d, d), got </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">_warn_vie1_g_start</span><span class="p">(</span><span class="n">g_values</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">_use_product_quadrature</span><span class="p">(</span><span class="n">quadrature</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">_solve_vie1_product_path</span><span class="p">(</span>
             <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">g_values</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span>
@@ -2379,15 +2379,11 @@ supported settings (with the non-convergent ones excluded) are listed in
 
     <span class="n">N_orig</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">)</span>
     <span class="n">N</span><span class="p">,</span> <span class="n">kernel_values_</span> <span class="o">=</span> <span class="n">_truncate_N</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">kernel_values_</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span>
-        <span class="n">_warn_vie1_kernel_start</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">coll_divs</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
+    <span class="n">_warn_vie1_kernel_start</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">coll_divs</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
 
     <span class="c1"># ------------------------------------------------------------------ vector path</span>
     <span class="k">if</span> <span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">d1</span><span class="p">,</span> <span class="n">d2</span> <span class="o">=</span> <span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span>
-        <span class="k">if</span> <span class="n">d1</span> <span class="o">!=</span> <span class="n">d2</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"kernel_values must have shape (N, d, d), got </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-        <span class="n">d</span> <span class="o">=</span> <span class="n">d1</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
 
         <span class="k">if</span> <span class="n">g_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">g_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>

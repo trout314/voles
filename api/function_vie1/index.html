@@ -1583,25 +1583,7 @@ skipped.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2539</span>
-<span class="normal">2540</span>
-<span class="normal">2541</span>
-<span class="normal">2542</span>
-<span class="normal">2543</span>
-<span class="normal">2544</span>
-<span class="normal">2545</span>
-<span class="normal">2546</span>
-<span class="normal">2547</span>
-<span class="normal">2548</span>
-<span class="normal">2549</span>
-<span class="normal">2550</span>
-<span class="normal">2551</span>
-<span class="normal">2552</span>
-<span class="normal">2553</span>
-<span class="normal">2554</span>
-<span class="normal">2555</span>
-<span class="normal">2556</span>
-<span class="normal">2557</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2557</span>
 <span class="normal">2558</span>
 <span class="normal">2559</span>
 <span class="normal">2560</span>
@@ -1939,7 +1921,26 @@ skipped.</p>
 <span class="normal">2892</span>
 <span class="normal">2893</span>
 <span class="normal">2894</span>
-<span class="normal">2895</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">2895</span>
+<span class="normal">2896</span>
+<span class="normal">2897</span>
+<span class="normal">2898</span>
+<span class="normal">2899</span>
+<span class="normal">2900</span>
+<span class="normal">2901</span>
+<span class="normal">2902</span>
+<span class="normal">2903</span>
+<span class="normal">2904</span>
+<span class="normal">2905</span>
+<span class="normal">2906</span>
+<span class="normal">2907</span>
+<span class="normal">2908</span>
+<span class="normal">2909</span>
+<span class="normal">2910</span>
+<span class="normal">2911</span>
+<span class="normal">2912</span>
+<span class="normal">2913</span>
+<span class="normal">2914</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">mesh_breakpoints</span><span class="p">,</span>
                           <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2150,8 +2151,6 @@ skipped.</p>
                     <span class="n">_ComplexSolutionFunction</span><span class="p">(</span><span class="n">y_func_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">_recombine_complex_y</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">)</span>
 
-    <span class="n">_warn_vie1_g_start_callable</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
-
     <span class="n">M</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
     <span class="n">p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
     <span class="n">widths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span>
@@ -2178,6 +2177,7 @@ skipped.</p>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
                     <span class="n">t_ni</span> <span class="o">=</span> <span class="n">t_n</span> <span class="o">+</span> <span class="n">node_pos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">h_n</span>
                     <span class="n">g_arr</span><span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">_scalar_g_value</span><span class="p">(</span><span class="n">g</span><span class="p">(</span><span class="n">t_ni</span><span class="p">),</span> <span class="n">t_ni</span><span class="p">)</span>
+        <span class="n">_warn_vie1_g_start_callable</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
             <span class="c1"># Brunner S_m^(0): degree-m polynomial on {0} ∪ node_pos, with the</span>
             <span class="c1"># boundary value carried forward for continuity. Extended weight</span>
@@ -2242,6 +2242,7 @@ skipped.</p>
 
         <span class="n">G</span> <span class="o">=</span> <span class="n">_sample_g_at_coll_matrix</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">widths</span><span class="p">,</span>
                                      <span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
+        <span class="n">_warn_vie1_g_start_callable</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">G</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
             <span class="k">def</span><span class="w"> </span><span class="nf">_col_solve</span><span class="p">(</span><span class="n">j</span><span class="p">):</span>
@@ -2274,6 +2275,7 @@ skipped.</p>
         <span class="k">return</span> <span class="n">y</span>
 
     <span class="n">g_arr</span> <span class="o">=</span> <span class="n">_sample_g_at_coll_vec</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">,</span> <span class="n">widths</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+    <span class="n">_warn_vie1_g_start_callable</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
         <span class="n">init_vec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
