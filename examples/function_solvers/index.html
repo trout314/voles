@@ -1462,7 +1462,11 @@ from voles import function_solve_VIE_2
 
 d = 2
 identity = np.eye(d)
-kernel = lambda u: np.exp(-u) * identity
+# np.multiply.outer gives a (d, d) matrix for scalar u and an (n, d, d) stack
+# for an array of u values; the solver then assembles the weights of a whole
+# mesh row in one call. (np.exp(-u) * identity would only accept scalars and
+# runs several times slower.)
+kernel = lambda u: np.multiply.outer(np.exp(-u), identity)
 g_s = lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t))
 g = lambda t: np.array([g_s(t), g_s(t)])
 
@@ -1488,7 +1492,7 @@ from voles import function_solve_VIE_2
 
 d = 2
 identity = np.eye(d)
-kernel = lambda u: np.exp(-u) * identity
+kernel = lambda u: np.multiply.outer(np.exp(-u), identity)   # vectorized, see above
 
 # Two right-hand sides (m = 2), stacked column-wise into a (d, m) array.
 def g(t):
