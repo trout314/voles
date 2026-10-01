@@ -42,18 +42,21 @@ except AttributeError:  # numpy < 1.25
     _ComplexWarning = np.ComplexWarning
 
 
-def _scalar_g_value(value, t):
-    """g(t) for a scalar equation as a 0-d array. A non-scalar return (e.g. a
-    (d,) vector with a scalar kernel) gets a ValueError naming the shapes
-    instead of float()'s TypeError; a complex value is left for the float64
-    assignment, whose ComplexWarning _escalate_complex_warning turns into
-    its clear error."""
+def _scalar_callable_value(value, t, name="g"):
+    """``name(t)`` (g or a) for a scalar equation as a 0-d array. A non-scalar
+    return (e.g. a (d,) vector with a scalar kernel) gets a ValueError naming
+    the shapes instead of float()'s TypeError; a complex value is left for
+    the float64 assignment, whose ComplexWarning _escalate_complex_warning
+    turns into its clear error."""
     arr = np.asarray(value)
     if arr.size != 1:
         raise ValueError(
-            f"g(t) returned shape {arr.shape} at t={t:.6g}, but kernel(u) returns a "
+            f"{name}(t) returned shape {arr.shape} at t={t:.6g}, but kernel(u) returns a "
             f"scalar: for a vector equation kernel(u) must return a (d, d) matrix.")
     return arr.reshape(())
+
+
+_scalar_g_value = _scalar_callable_value
 
 
 def _escalate_complex_warning(fn):
@@ -133,6 +136,11 @@ _QUAD_OPTS_REUSE = {'limit': 200, 'epsabs': 0.0, 'epsrel': 1e-12}
 # convergence). Keep that epsabs so small-magnitude blocks are never computed
 # *less* accurately than the per-row defaults; tighten only epsrel.
 _QUAD_VEC_OPTS_REUSE = {'limit': 200, 'epsabs': 1e-200, 'epsrel': 1e-12}
+# quad_vec's convergence test is strict (err < max(epsabs, epsrel*norm)), so
+# with epsabs=0 an identically zero block never converges and runs to the
+# subdivision limit; the vector builder therefore keeps the 1e-200 floor in
+# its default options too.
+_QUAD_VEC_OPTS_DEFAULT = {'limit': 100, 'epsabs': 1e-200, 'epsrel': 1.49e-8}
 
 
 @contextlib.contextmanager
@@ -994,11 +1002,11 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
     singular_locs, is_convolution = _normalize_kernel_singularity(kernel_singularity)
 
     # Same Toeplitz / adaptive-reuse setup as the scalar builder, except that
-    # the tightened options keep quad_vec's default epsabs (see the
-    # module-level _QUAD_VEC_OPTS_REUSE note).
+    # both option sets keep quad_vec's tiny absolute floor (see the
+    # module-level _QUAD_VEC_OPTS_DEFAULT note).
     toeplitz = _toeplitz_W_rows(widths, is_convolution)
     reuse_sing = reuse_adaptive_blocks and toeplitz
-    sing_quad_opts = _QUAD_VEC_OPTS_REUSE if reuse_sing else _QUAD_OPTS_DEFAULT
+    sing_quad_opts = _QUAD_VEC_OPTS_REUSE if reuse_sing else _QUAD_VEC_OPTS_DEFAULT
 
     sample_u = float(widths[0]) * 0.5
     kernel_vec = _detect_kernel_vectorized(kernel, sample_u, is_vector=True, d=d)
@@ -1159,7 +1167,7 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         ref = np.maximum(1.0, np.max(np.abs(v2), axis=(1, 2)))
         ok = err <= smooth_check_tol * ref
         for k in np.nonzero(~ok)[0]:
-            kwargs = dict(_QUAD_OPTS_DEFAULT)
+            kwargs = dict(_QUAD_VEC_OPTS_DEFAULT)
             if interior_sing:
                 kwargs['points'] = interior_sing
             val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, int(k),
@@ -1180,7 +1188,7 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         ok = err <= smooth_check_tol * ref
         for k in np.nonzero(~ok)[0]:
             val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, int(k)),
-                                       a_int, b_int, **_QUAD_OPTS_DEFAULT)
+                                       a_int, b_int, **_QUAD_VEC_OPTS_DEFAULT)
             W[n, i, l, int(k), :, :] = val
         return bool(ok.all())
 
@@ -1196,7 +1204,7 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         bad_i, bad_k = np.nonzero(~(err <= smooth_check_tol * ref))
         for bi, bk in zip(bad_i.tolist(), bad_k.tolist()):
             val, _err = get_quad_vec()(make_integrand(taus[bi], t_l, h_l, bk),
-                                       a_int, b_int, **_QUAD_OPTS_DEFAULT)
+                                       a_int, b_int, **_QUAD_VEC_OPTS_DEFAULT)
             W[n, smooth_is[bi], l, bk, :, :] = val
         return {smooth_is[bi] for bi in set(bad_i.tolist())}
 
@@ -2062,7 +2070,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
                      dtype=np.float64)
 
     # Sample g and a at collocation points
-    def _sample_callable_scalar(f):
+    def _sample_callable_scalar(f, name):
         out = np.zeros((M, p), dtype=np.float64)
         if f is None:
             return out
@@ -2070,7 +2078,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
             t_n = mesh_breakpoints[n]
             h_n = widths[n]
             for i in range(p):
-                out[n, i] = float(f(t_n + node_pos[i] * h_n))
+                t_ni = t_n + node_pos[i] * h_n
+                out[n, i] = _scalar_callable_value(f(t_ni), t_ni, name)
         return out
 
     if not is_vector:
@@ -2079,8 +2088,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
             kernel, mesh_breakpoints, node_pos,
             kernel_singularity, _smooth_gl_order, vide_basis,
             reuse_adaptive_blocks=reuse_adaptive_blocks)
-        g_arr = _sample_callable_scalar(g)
-        a_arr = _sample_callable_scalar(a)
+        g_arr = _sample_callable_scalar(g, "g")
+        a_arr = _sample_callable_scalar(a, "a")
         y_prime, y_boundary = _dlang_module.function_solve_vide_d(
             W, g_arr, a_arr, alpha, w_vec, widths, _scalar_init(soln_init_value))
 
@@ -2367,11 +2376,18 @@ def _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints: np.ndarray,
     if not show_warnings or kernel_singularity is None:
         return
     if not callable(kernel_singularity):
-        locs = (list(kernel_singularity.keys()) if isinstance(kernel_singularity, dict)
-                else list(np.atleast_1d(np.asarray(kernel_singularity, dtype=float))))
+        # Parse the declared locations leniently: anything that does not
+        # convert is left to _normalize_kernel_singularity, whose error
+        # names the offending entry.
+        try:
+            raw = (list(kernel_singularity.keys()) if isinstance(kernel_singularity, dict)
+                   else list(np.atleast_1d(kernel_singularity)))
+            locs = [float(u) for u in raw]
+        except (TypeError, ValueError):
+            return
         T = float(mesh_breakpoints[-1])
         tol = 1e-12 * max(1.0, T)
-        outside = [float(u) for u in locs if not (-tol <= float(u) <= T + tol)]
+        outside = [u for u in locs if not (-tol <= u <= T + tol)]
         if outside:
             print(f"warning: kernel_singularity location(s) {outside} lie outside "
                   f"[0, T] = [0, {T:.6g}]; the kernel is only evaluated at u in "
@@ -2476,18 +2492,20 @@ def _vie1_cont_solution(U, boundary, mesh_breakpoints, node_pos, d=0, m=0):
     return _SolutionFunction.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
 
 
-def _warn_vie1_g_start_callable(g, mesh_breakpoints, show_warnings):
+def _warn_vie1_g_start_callable(g, g_samples, show_warnings):
     """Callable-input analogue of solvers._warn_vie1_g_start: warn when g(0)
-    is not negligible next to the scale of g (sampled at the mesh
-    breakpoints). A first-kind equation forces g(0) = 0. Any failure to
-    evaluate g here is left to the solver's own sampling to report."""
+    is not negligible next to the scale of g. A first-kind equation forces
+    g(0) = 0. The scale comes from ``g_samples``, the values the solver has
+    already taken at its collocation nodes ((M, p), (M, p, d) or
+    (M, p, d, m)); the VIE-1 nodes exclude t = 0, so g is evaluated once
+    more there. A failure of that call is left to the user to see later."""
     if not show_warnings or g is None:
         return
     try:
-        a = np.abs(np.asarray([np.asarray(g(float(t))) for t in mesh_breakpoints]))
-        g0 = np.abs(np.asarray(g(0.0)))
-        if g0.ndim == 2:                          # (d, m) matrix problem: per column
-            g0, scale = g0.max(axis=0), a.max(axis=(0, 1))
+        a = np.abs(np.asarray(g_samples, dtype=float))
+        g0 = np.abs(np.asarray(g(0.0), dtype=float))
+        if a.ndim == 4:                           # (M, p, d, m) matrix problem: per column
+            g0, scale = g0.reshape(a.shape[2:]).max(axis=0), a.max(axis=(0, 1, 2))
         else:
             g0, scale = g0.max(), a.max()
     except Exception:
@@ -2712,8 +2730,6 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                     _ComplexSolutionFunction(y_func_real, d_orig))
         return _recombine_complex_y(result, d_orig)
 
-    _warn_vie1_g_start_callable(g, mesh_breakpoints, show_warnings)
-
     M = len(mesh_breakpoints) - 1
     p = len(node_pos)
     widths = np.diff(mesh_breakpoints)
@@ -2740,6 +2756,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                 for i in range(p):
                     t_ni = t_n + node_pos[i] * h_n
                     g_arr[n, i] = _scalar_g_value(g(t_ni), t_ni)
+        _warn_vie1_g_start_callable(g, g_arr, show_warnings)
         if force_continuous:
             # Brunner S_m^(0): degree-m polynomial on {0} ∪ node_pos, with the
             # boundary value carried forward for continuity. Extended weight
@@ -2800,6 +2817,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
 
         G = _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths,
                                      M, p, d, m)
+        _warn_vie1_g_start_callable(g, G, show_warnings)
 
         if force_continuous:
             def _col_solve(j):
@@ -2829,6 +2847,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         return y
 
     g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
+    _warn_vie1_g_start_callable(g, g_arr, show_warnings)
 
     if force_continuous:
         init_vec = np.asarray(soln_init_value, dtype=np.float64)

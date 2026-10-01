@@ -2,6 +2,47 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Matrix-valued solves with `quadrature="product"` could crash, abort, or
+  raise a spurious `LinAlgError`.** The block drivers build a delegate that
+  captures locals, so D allocated its closure at function entry, before the
+  calling thread was registered with the garbage collector; a collection in
+  that window freed the live closure. Each driver is now a thin shim that
+  attaches the thread and then calls a private body. Regression test under
+  forced collection on fresh threads.
+- **Adaptive singular quadrature lost accuracy under mesh refinement** on
+  graded meshes: `scipy.integrate.quad`'s default absolute tolerance floor
+  left the tiny leading-interval weights percent-level wrong (VIE-1 Abel
+  error 5e-7 to 3e-5 from M = 32 to 128). The scalar builder now converges
+  on relative error only; the vector builder keeps `quad_vec`'s tiny
+  absolute floor, since its stricter convergence test never terminates on
+  an identically zero block without one.
+- **`solve_VIE_1` and `function_solve_VIE_1` warn about data with no
+  bounded solution**: g(0) ≠ 0 (reported per column for matrix problems),
+  and, for the sampled collocation quadrature, a K(0) that is small next to
+  the kernel's change over one mesh interval (the scheme diverges; product
+  quadrature does not). Both docstrings also say that an imposed y(0) with
+  `force_continuous=True` must satisfy g′(0) = K(0) y(0). The warnings are
+  issued only for inputs that pass shape validation, from values the solver
+  has already sampled (one extra call of g, at t = 0, in function mode).
+- Validation: `time_step` and `mesh_breakpoints` must be finite; a scalar
+  equation accepts a one-element `soln_init_value`; the vector `solve_VIDE`
+  initial-value error states the accepted shapes; a declared
+  `kernel_singularity` outside [0, T] warns (and an invalid declaration gets
+  its descriptive `ValueError` whether or not warnings are on); too-short
+  input is reported before truncation; a vector-valued g or a with a scalar
+  kernel gets a clear `ValueError` in all three callable solvers.
+- Several VIE-1 tests used data with no meaningful solution and only
+  compared two computations with each other; they now check every column
+  against a closed-form solution.
+
+### Changed
+- **`solution(t)` returns NaN outside the solved interval [0, T]** instead
+  of silently extrapolating the end polynomials. The tolerance at the ends
+  is relative to the interval length (with a few-ulp floor), so `f(T)`
+  works when T comes from floating-point arithmetic, on intervals of any
+  scale. The `Polynomial` objects from `solution[n]` are unchanged.
+
 ## [0.9.0] - 2026-09-22
 
 ### Added

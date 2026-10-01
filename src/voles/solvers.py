@@ -198,21 +198,31 @@ def _warn_g_start_columns(g0, scale):
               f"worst column {j}: max |g(0)| = {g0[j]:.3g}, max |g| = {scale[j]:.3g}." + rule)
 
 
-def _warn_vie1_g_start(g_values, show_warnings):
+def _warn_vie1_g_start(g_values, kernel_values_, show_warnings):
     """A first-kind equation forces g(0) = 0 (the integral vanishes at t = 0);
     with g(0) != 0 there is no bounded solution and the solver returns
     meaningless values near t = 0. Warn when g(0) is not negligible next to
-    the scale of g. Shape problems are left to the solver's own validation."""
+    the scale of g. Only a g whose shape fits the kernel is diagnosed: a
+    shape the solver is about to reject gets its ValueError without a
+    misleading warning first."""
     if not show_warnings or g_values is None:
         return
     try:
-        g = np.abs(np.asarray(g_values))
-        if g.ndim == 3:                                   # (N, d, m): per column
-            g0, scale = g[0].max(axis=0), g.max(axis=(0, 1))
-        else:
-            g0, scale = g[0].max(), g.max()
-    except (TypeError, ValueError, IndexError):
+        g = np.abs(np.asarray(g_values, dtype=float))
+    except (TypeError, ValueError):
         return
+    N = len(kernel_values_)
+    if kernel_values_.ndim == 1:
+        fits = g.shape == (N,)
+    else:
+        d = kernel_values_.shape[1]
+        fits = g.ndim in (2, 3) and g.shape[:2] == (N, d)
+    if not fits:
+        return
+    if g.ndim == 3:                                       # (N, d, m): per column
+        g0, scale = g[0].max(axis=0), g.max(axis=(0, 1))
+    else:
+        g0, scale = g[0].max(), g.max()
     _warn_g_start_columns(g0, scale)
 
 
@@ -1130,7 +1140,9 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         raise ValueError(
             f"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape {kernel_values_.shape}")
 
-    _warn_vie1_g_start(g_values, show_warnings)
+    if ndim == 3 and kernel_values_.shape[1] != kernel_values_.shape[2]:
+        raise ValueError(f"kernel_values must have shape (N, d, d), got {kernel_values_.shape}")
+    _warn_vie1_g_start(g_values, kernel_values_, show_warnings)
     if _use_product_quadrature(quadrature, mesh_samples, kernel_interp_degree, coll_divs):
         return _solve_vie1_product_path(
             kernel_values_, g_values, soln_init_value, time_step, coll_divs,
@@ -1145,15 +1157,11 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
 
     N_orig = len(kernel_values_)
     N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
-    if kernel_values_.ndim == 1 or kernel_values_.shape[1] == kernel_values_.shape[2]:
-        _warn_vie1_kernel_start(kernel_values_, coll_divs ** 2, show_warnings)
+    _warn_vie1_kernel_start(kernel_values_, coll_divs ** 2, show_warnings)
 
     # ------------------------------------------------------------------ vector path
     if ndim == 3:
-        _, d1, d2 = kernel_values_.shape
-        if d1 != d2:
-            raise ValueError(f"kernel_values must have shape (N, d, d), got {kernel_values_.shape}")
-        d = d1
+        d = kernel_values_.shape[1]
 
         if g_values is not None:
             g_values_ = np.asarray(g_values, dtype=float)

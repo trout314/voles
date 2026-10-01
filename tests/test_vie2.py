@@ -258,3 +258,16 @@ def test_solution_function_direct_construction_is_complete():
         _SolutionFunction([np.polynomial.Polynomial([1.0, 2.0])], bps)
     with pytest.raises(ValueError, match="coefficient blocks"):
         _SolutionFunction(unit[:1], bps)
+
+def test_solution_function_nan_tolerance_scales_with_the_interval():
+    """The out-of-range tolerance used to have an absolute 1e-12 floor, which
+    on a nanosecond-scale interval is 0.1% of T: points just past T were
+    silently extrapolated. It is now relative to the interval length."""
+    dt = 1e-11
+    t = np.arange(101) * dt                                  # T = 1e-9
+    y, f = solve_VIE_2(kernel_values=np.exp(-t), g_values=np.sin(1e9 * t) + 1.0,
+                       time_step=dt, return_function=True)
+    T = t[-1]
+    assert np.isfinite(f(T)) and np.isfinite(f(T * (1 - 1e-13)))
+    assert np.isnan(f(T * (1 + 1e-4)))                       # 0.01% past T: outside
+    assert np.isnan(f(-1e-13))

@@ -420,3 +420,16 @@ def test_g_start_warning_names_worst_column_for_matrix(capsys):
     solve_VIE_1(kernel_values=K, g_values=G, time_step=0.01)
     out = capsys.readouterr().out
     assert "g(0) is not zero in 1 of 3 columns; worst column 1" in out
+
+
+def test_rejected_g_shape_gets_no_g_start_warning(capsys):
+    """A g the solver is about to reject used to print the g(0) warning
+    first; now only a g whose shape fits the kernel is diagnosed."""
+    t = np.arange(37) * 0.01
+    with pytest.raises(ValueError, match="g_values shape"):
+        solve_VIE_1(kernel_values=np.exp(-t), g_values=np.ones((3, 3)), time_step=0.01)
+    assert "g(0) is not zero" not in capsys.readouterr().out
+    # a non-square kernel is rejected before any warning as well
+    with pytest.raises(ValueError, match=r"\(N, d, d\)"):
+        solve_VIE_1(kernel_values=np.ones((37, 2, 3)), g_values=np.ones((37, 2)), time_step=0.01)
+    assert capsys.readouterr().out == ""

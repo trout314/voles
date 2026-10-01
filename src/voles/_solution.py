@@ -131,7 +131,11 @@ class _SolutionFunction(_SolutionListMixin):
         # polynomials gave plausible-looking but meaningless values, so
         # points outside (beyond a rounding-level tolerance) evaluate to NaN.
         bps = self.mesh_breakpoints
-        tol = 1e-12 * max(1.0, float(np.max(np.abs(bps))))
+        # Tolerance relative to the solved interval (not an absolute floor,
+        # which would swamp a short interval such as [0, 1e-9]), but never
+        # below a few ulps of the endpoints so an exactly computed T passes.
+        tol = max(1e-12 * float(bps[-1] - bps[0]),
+                  4.0 * float(np.spacing(np.max(np.abs(bps)))))
         outside = (t_arr < bps[0] - tol) | (t_arr > bps[-1] + tol)
         if outside.any():
             out[outside] = np.nan
