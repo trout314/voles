@@ -317,7 +317,32 @@ auto matrix_vec_multiply(int m, int n)(
 // Lagrange basis functions
 // ---------------------------------------------------------------------------
 
+// Monomial coefficients (in rel_x on [0, 1]) of the basis_index-th Lagrange
+// basis polynomial. They depend only on the compile-time node set, so all
+// num_nodes rows are built once by CTFE and looked up here: the runtime
+// helpers below (lagrange_integ_f, poly_piece_VIDE_f, ...) are called per
+// mesh interval and per output sample, and rebuilding the coefficients by
+// subset enumeration on every call dominated the scalar VIDE solve.
 auto lagrange_coefs(int coll_divs, int[] coll_choices)(
+    int basis_index)
+{
+    enum int num_nodes = coll_choices.length;
+    static immutable double[num_nodes][num_nodes] table
+        = lagrange_coefs_table!(coll_divs, coll_choices)();
+    double[num_nodes] returned_coefs = table[basis_index];
+    return returned_coefs;
+}
+
+private auto lagrange_coefs_table(int coll_divs, int[] coll_choices)()
+{
+    enum int num_nodes = coll_choices.length;
+    double[num_nodes][num_nodes] table;
+    foreach (basis_index; 0 .. num_nodes)
+        table[basis_index] = lagrange_coefs_compute!(coll_divs, coll_choices)(basis_index);
+    return table;
+}
+
+private auto lagrange_coefs_compute(int coll_divs, int[] coll_choices)(
     int basis_index)
 {
     enum int num_nodes = coll_choices.length;
@@ -473,7 +498,8 @@ auto An(int coll_divs, int[] coll_choices)(
     alias coll_info = AliasSeq!(coll_divs, coll_choices);
 
     auto a_vec = a!coll_info(mesh_index, a_data);
-    auto A_mat = A!coll_info();
+    static immutable double[num_c_params][num_c_params] A_integ = A!coll_info();
+    double[num_c_params][num_c_params] A_mat = A_integ;
 
     foreach (i; 0 .. num_c_params)
     {

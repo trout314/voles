@@ -13,6 +13,41 @@ from __future__ import annotations
 import numpy as np
 
 
+def _polys_from_unit_coefs(unit_coefs, bps, trim):
+    """Per-interval ``numpy.polynomial.Polynomial`` objects on the time axis.
+
+    ``unit_coefs[n]`` has shape ``(P,)``, ``(P, d)`` or ``(P, d, m)``: monomial
+    coefficients in the local variable ``x = (t - bps[n]) / (bps[n+1] -
+    bps[n])`` on interval n, for each component. Returns a list of M
+    Polynomials (scalar) or ``(d,)`` / ``(d, m)`` object arrays of them.
+
+    Building these costs one ``Polynomial.convert`` per interval and
+    component -- orders of magnitude more than the solve itself -- so
+    ``_SolutionFunction`` calls this only when ``.polynomials`` is first
+    accessed; evaluation does not need it.
+    """
+    unit_coefs = np.asarray(unit_coefs)
+    comp_shape = unit_coefs.shape[2:]
+    polys = []
+    for n in range(unit_coefs.shape[0]):
+        domain = (bps[n], bps[n + 1])
+        if not comp_shape:
+            poly = np.polynomial.Polynomial(unit_coefs[n], domain=domain,
+                                            window=(0.0, 1.0), symbol='t')
+            poly = poly.convert(domain=domain, window=domain)
+            polys.append(poly.trim() if trim else poly)
+            continue
+        arr = np.empty(comp_shape, dtype=object)
+        for idx in np.ndindex(comp_shape):
+            poly = np.polynomial.Polynomial(unit_coefs[(n, slice(None)) + idx],
+                                            domain=domain, window=(0.0, 1.0),
+                                            symbol='t')
+            poly = poly.convert(domain=domain, window=domain)
+            arr[idx] = poly.trim() if trim else poly
+        polys.append(arr)
+    return polys
+
+
 class _SolutionListMixin:
     """List-like access delegating to ``.polynomials``.
 
@@ -36,6 +71,9 @@ class _SolutionFunction(_SolutionListMixin):
 
     `y(t)` evaluates the piecewise polynomial at scalar or array `t`; points
     outside ``[mesh_breakpoints[0], mesh_breakpoints[-1]]`` give NaN.
+    Constructed from per-interval local monomial coefficients (see
+    `_polys_from_unit_coefs`); the `polynomials` list described below is
+    built lazily on first access.
 
     For scalar problems, `polynomials` is a list of `numpy.polynomial.Polynomial`
     objects, one per mesh interval. For vector problems with d components,
@@ -45,13 +83,45 @@ class _SolutionFunction(_SolutionListMixin):
     arrays.
     """
 
-    def __init__(self, polynomials, mesh_breakpoints, d: int = 0, m: int = 0):
-        self.polynomials = polynomials
-        self.mesh_breakpoints = np.asarray(mesh_breakpoints)
+    def __init__(self, unit_coefs, mesh_breakpoints, d: int = 0, m: int = 0,
+                 trim: bool = True):
+        """``unit_coefs[n]`` holds the local monomial coefficients of
+        interval n (shape ``(P,)``, ``(P, d)`` or ``(P, d, m)``) in the local
+        variable ``(t - mesh_breakpoints[n]) / (mesh_breakpoints[n+1] -
+        mesh_breakpoints[n])``.
+
+        ``__call__`` evaluates straight from these coefficients, vectorized
+        over ``t``; the ``Polynomial`` list is built only if ``.polynomials``
+        (or indexing / iteration) is used.
+        """
+        self._unit = np.asarray(unit_coefs, dtype=float)
+        if self._unit.ndim < 2:
+            raise TypeError(
+                "_SolutionFunction takes per-interval coefficient arrays "
+                f"(M, P[, d[, m]]), got shape {self._unit.shape}")
+        self.mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
+        if len(self._unit) != len(self.mesh_breakpoints) - 1:
+            raise ValueError(
+                f"{len(self._unit)} coefficient blocks for "
+                f"{len(self.mesh_breakpoints) - 1} mesh intervals")
+        self._trim = trim
+        self._polys = None
         # d == 0 marks a scalar problem; d >= 1 marks a vector problem.
         # m >= 1 marks a matrix problem (m right-hand sides); m == 0 otherwise.
         self._d = d
         self._m = m
+
+    # Kept as the name the call sites use; same signature as __init__.
+    from_unit_coefs = classmethod(lambda cls, *a, **k: cls(*a, **k))
+
+    @property
+    def polynomials(self):
+        if self._polys is None:
+            self._polys = _polys_from_unit_coefs(self._unit, self.mesh_breakpoints, self._trim)
+        return self._polys
+
+    def __len__(self):
+        return len(self._unit)
 
     def __call__(self, t):
         scalar_input = (np.isscalar(t) or np.ndim(t) == 0)
@@ -76,30 +146,18 @@ class _SolutionFunction(_SolutionListMixin):
     def _evaluate(self, t_arr):
         bps = self.mesh_breakpoints
         idx = np.searchsorted(bps, t_arr, side='right') - 1
-        idx = np.clip(idx, 0, len(self.polynomials) - 1)
+        idx = np.clip(idx, 0, len(self) - 1)
 
-        if self._m:
-            # Matrix case: each interval has a (d, m) array of polynomials.
-            out = np.empty((len(t_arr), self._d, self._m), dtype=float)
-            for j, (ti, ii) in enumerate(zip(t_arr, idx)):
-                polys_n = self.polynomials[int(ii)]
-                for r in range(self._d):
-                    for c in range(self._m):
-                        out[j, r, c] = polys_n[r, c](ti)
-            return out
-
-        if self._d == 0:
-            out = np.empty(t_arr.shape, dtype=float)
-            for j, (ti, ii) in enumerate(zip(t_arr, idx)):
-                out[j] = self.polynomials[int(ii)](ti)
-            return out
-
-        # Vector case: each interval has d component polynomials
-        out = np.empty((len(t_arr), self._d), dtype=float)
-        for j, (ti, ii) in enumerate(zip(t_arr, idx)):
-            polys_n = self.polynomials[int(ii)]
-            for r in range(self._d):
-                out[j, r] = polys_n[r](ti)
+        # Horner in the local variable of each point's interval, all points
+        # at once. Evaluating in the local variable also avoids the
+        # cancellation of the absolute-time monomial form, whose coefficients
+        # grow like (t / h)^degree.
+        x = (t_arr - bps[idx]) / (bps[idx + 1] - bps[idx])
+        c = self._unit[idx]                  # (T, P, *comp), a copy
+        x = x.reshape(x.shape + (1,) * (c.ndim - 2))
+        out = c[:, -1]
+        for k in range(c.shape[1] - 2, -1, -1):
+            out = out * x + c[:, k]
         return out
 
 
@@ -112,9 +170,19 @@ class _ComplexSolutionFunction(_SolutionListMixin):
         # m >= 1 marks a matrix problem; inherited from the real wrapper.
         self._m = getattr(real_y_func, "_m", 0)
         self.mesh_breakpoints = real_y_func.mesh_breakpoints
-        # Convert the per-interval (2d,) or (2d, m) polynomial arrays to complex.
-        from ._complex import _recombine_polys
-        self.polynomials = _recombine_polys(real_y_func.polynomials, d_orig)
+        self._polys = None
+
+    @property
+    def polynomials(self):
+        # Convert the per-interval (2d,) or (2d, m) polynomial arrays to
+        # complex, on first use (see _SolutionFunction.polynomials).
+        if self._polys is None:
+            from ._complex import _recombine_polys
+            self._polys = _recombine_polys(self._real.polynomials, self._d_orig)
+        return self._polys
+
+    def __len__(self):
+        return len(self._real)
 
     def __call__(self, t):
         val = self._real(t)
