@@ -240,3 +240,17 @@ def test_solution_function_nan_outside_domain(shape):
     assert np.all(np.isnan(scalar_out))
     if shape == "scalar":
         assert isinstance(scalar_out, float)
+
+
+def test_solution_function_nan_tolerance_scales_with_the_interval():
+    """The out-of-range tolerance used to have an absolute 1e-12 floor, which
+    on a nanosecond-scale interval is 0.1% of T: points just past T were
+    silently extrapolated. It is now relative to the interval length."""
+    dt = 1e-11
+    t = np.arange(101) * dt                                  # T = 1e-9
+    y, f = solve_VIE_2(kernel_values=np.exp(-t), g_values=np.sin(1e9 * t) + 1.0,
+                       time_step=dt, return_function=True)
+    T = t[-1]
+    assert np.isfinite(f(T)) and np.isfinite(f(T * (1 - 1e-13)))
+    assert np.isnan(f(T * (1 + 1e-4)))                       # 0.01% past T: outside
+    assert np.isnan(f(-1e-13))

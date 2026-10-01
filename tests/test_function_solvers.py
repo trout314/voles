@@ -2939,3 +2939,74 @@ def test_late_complex_g_gets_clear_error(monkeypatch):
     with pytest.raises(ValueError, match="multi-point sampling"):
         function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=lambda t: t + 0.5j,
                              mesh_breakpoints=np.linspace(0, 1, 5))
+
+
+# ---------------------------------------------------------------------------
+# Follow-ups to the pre-release fixes review
+# ---------------------------------------------------------------------------
+
+def test_vide_callable_rejects_vector_g_with_scalar_kernel():
+    """The descriptive error for a vector-valued g with a scalar kernel used
+    to cover VIE-1 and VIE-2 only; the VIDE callable fell through to
+    float()'s TypeError. Same for a(t)."""
+    mesh = np.linspace(0, 1, 5)
+    with pytest.raises(ValueError, match=r"g\(t\) returned shape \(2,\)"):
+        function_solve_VIDE(kernel=lambda u: np.exp(-u), g=lambda s: np.array([s, 2 * s]),
+                            soln_init_value=1.0, mesh_breakpoints=mesh)
+    with pytest.raises(ValueError, match=r"a\(t\) returned shape \(2,\)"):
+        function_solve_VIDE(kernel=lambda u: np.exp(-u), a=lambda s: np.array([s, 2 * s]),
+                            soln_init_value=1.0, mesh_breakpoints=mesh)
+
+
+@pytest.mark.parametrize("bad", [["abc"], [[0.0, 0.5]]])
+def test_invalid_singularity_declaration_gets_the_descriptive_error(bad, capsys):
+    """With show_warnings=True the outside-[0, T] warning used to coerce the
+    declaration first and raise numpy's own error (or an uncaught TypeError
+    for a nested list)."""
+    with pytest.raises(ValueError, match="kernel_singularity locations must be real numbers"):
+        function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=np.cos, kernel_singularity=bad,
+                             mesh_breakpoints=np.linspace(0, 1, 5), show_warnings=True)
+
+
+def test_vector_builder_quad_vec_fallback_converges_on_zero_block():
+    """quad_vec's convergence test is strict, so epsabs=0 made an identically
+    zero block run to the subdivision limit (thousands of evaluations) and
+    end with status 1; the vector builder keeps a 1e-200 floor instead."""
+    from voles._callable_solvers import (_QUAD_VEC_OPTS_DEFAULT, _QUAD_OPTS_DEFAULT,
+                                         _import_scipy_quad_vec)
+    calls = []
+    def zero_block(s):
+        calls.append(1)
+        return np.zeros((2, 2))
+    _import_scipy_quad_vec()(zero_block, 0.0, 1.0, **_QUAD_VEC_OPTS_DEFAULT)
+    assert len(calls) < 200
+    assert _QUAD_OPTS_DEFAULT["epsabs"] == 0.0          # the scalar quad path is unchanged
+
+
+def test_vie1_callable_g_start_warning_counts_g_calls(capsys):
+    """The warning draws its scale from the solver's own samples and calls g
+    once more, at t = 0, rather than at every breakpoint."""
+    mesh = np.linspace(0, 2, 11)
+    calls = []
+    def g(s):
+        calls.append(float(s))
+        return np.sin(s) + 0.5
+    kw = dict(kernel=lambda u: np.exp(-u), g=g, mesh_breakpoints=mesh,
+              coll_divs=3, coll_choices=[1, 2, 3])
+    function_solve_VIE_1(show_warnings=False, **kw)
+    n_silent = len(calls)
+    calls.clear()
+    function_solve_VIE_1(**kw)
+    assert "g(0) is not zero" in capsys.readouterr().out
+    assert calls.count(0.0) == 1
+    assert len(calls) == n_silent + 1
+
+
+def test_vie1_callable_matrix_g_start_warning_names_column(capsys):
+    mesh = np.linspace(0, 2, 11)
+    A = np.eye(2)
+    def g(s):
+        return np.array([[np.sin(s), np.sin(s) + 0.3, np.sin(s)],
+                         [2 * np.sin(s), 2 * np.sin(s), 2 * np.sin(s)]])
+    function_solve_VIE_1(kernel=lambda u: np.exp(-u) * A, g=g, mesh_breakpoints=mesh)
+    assert "g(0) is not zero in 1 of 3 columns; worst column 1" in capsys.readouterr().out

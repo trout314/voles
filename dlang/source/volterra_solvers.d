@@ -3397,17 +3397,19 @@ private int volterra_solve_vide_blocks_impl(
 // History accumulation goes through ToeplitzHistoryRT, so the cost is
 // O(M log^2 M) block operations.  Return codes as for volterra_solve_vie1_vec:
 // 0 ok, 1 invalid sizes, 2 singular diagonal block, 3 buffer overflow.
+//
+// Each extern(C) entry point below is a thin shim: it attaches the calling
+// thread and only then calls its private ..._impl. The body's lag-filler
+// delegate captures locals, so its heap closure is allocated at the body's
+// entry; allocated in the shim itself, it would precede the attach, and a
+// collection in that window (not scanning the still-unregistered thread)
+// would free the live closure -- see ensureThreadAttached.
 // ---------------------------------------------------------------------------
 
 int volterra_solve_vie1_blocks(
     double* lagB, double* g, int M, int Db, double* out_U)
 {
-    // Attach BEFORE entering the body: the body's lag-filler delegate
-    // captures locals, so its heap closure is allocated at the body's
-    // entry. Allocated here, it would precede the attach, and a
-    // collection in that window (not scanning this still-unregistered
-    // thread) frees the live closure -- see ensureThreadAttached.
-    ensureThreadAttached();
+    ensureThreadAttached();   // before the body allocates its closure (see above)
     return volterra_solve_vie1_blocks_impl(lagB, g, M, Db, out_U);
 }
 
@@ -3415,12 +3417,7 @@ int volterra_solve_vie1_cont_blocks(
     double* lagB, double* g, double* adv_U, double adv_0, double* y0,
     int M, int m, int d, double* out_U, double* out_y)
 {
-    // Attach BEFORE entering the body: the body's lag-filler delegate
-    // captures locals, so its heap closure is allocated at the body's
-    // entry. Allocated here, it would precede the attach, and a
-    // collection in that window (not scanning this still-unregistered
-    // thread) frees the live closure -- see ensureThreadAttached.
-    ensureThreadAttached();
+    ensureThreadAttached();   // before the body allocates its closure (see above)
     return volterra_solve_vie1_cont_blocks_impl(lagB, g, adv_U, adv_0, y0, M, m, d, out_U, out_y);
 }
 
@@ -3436,11 +3433,6 @@ int volterra_solve_vide_blocks(
     double* lagB, double* g, double* a_coll, double* betaC, double* beta1, double* y0,
     int M, int m, int d, double* out_Y, double* out_y)
 {
-    // Attach BEFORE entering the body: the body's lag-filler delegate
-    // captures locals, so its heap closure is allocated at the body's
-    // entry. Allocated here, it would precede the attach, and a
-    // collection in that window (not scanning this still-unregistered
-    // thread) frees the live closure -- see ensureThreadAttached.
-    ensureThreadAttached();
+    ensureThreadAttached();   // before the body allocates its closure (see above)
     return volterra_solve_vide_blocks_impl(lagB, g, a_coll, betaC, beta1, y0, M, m, d, out_Y, out_y);
 }
