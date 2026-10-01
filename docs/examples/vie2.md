@@ -31,7 +31,7 @@ exact = np.sin(times)
 print(f"Max error: {np.max(np.abs(soln_vals - exact)):.2e}")
 assert np.max(np.abs(soln_vals - exact)) < 1e-3
 
-# `solution` is callable at any time, and also indexes/iterates like the
+# `solution` is callable at any time in [0, T], and also indexes/iterates like the
 # per-interval polynomials (solution[n], for poly in solution, ...).
 print(f"y(0.5) = {solution(0.5):.6f}  (exact {np.sin(0.5):.6f})")
 ```

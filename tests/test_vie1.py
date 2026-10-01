@@ -334,3 +334,89 @@ def test_vie1_force_continuous(vie1_data):
         force_continuous=True,
     )
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+
+
+# ---------------------------------------------------------------------------
+# Warning for kernels the collocation-quadrature scheme cannot handle
+# ---------------------------------------------------------------------------
+
+_K0_MSG = "first-kind collocation scheme is unstable"
+
+
+def _k0_problem(K0, dt=0.01, d=0):
+    """K(u) = u + K0, y = cos t: g = 1 - cos t + K0 sin t."""
+    t = np.arange(4 * 9 * 10 + 1) * dt
+    K = t + K0
+    g = 1.0 - np.cos(t) + K0 * np.sin(t)
+    if d:
+        K = K[:, None, None] * np.eye(d)
+        g = np.outer(g, np.ones(d))
+    return dict(kernel_values=K, g_values=g, time_step=dt)
+
+
+@pytest.mark.parametrize("K0", [0.0, 1e-3])
+def test_warns_when_kernel_start_unresolved(K0, capsys):
+    """K(0) = 0 diverges without bound under refinement (1e18 -> 1e83 as dt
+    halves); K(0) small next to H*K'(0) diverges too."""
+    solve_VIE_1(**_k0_problem(K0))
+    assert _K0_MSG in capsys.readouterr().out
+
+
+def test_warns_for_singular_matrix_kernel_start(capsys):
+    solve_VIE_1(**_k0_problem(0.0, d=2))
+    assert _K0_MSG in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("kw", [dict(quadrature="product"), dict(show_warnings=False)])
+def test_no_kernel_start_warning_for_product_or_when_silenced(kw, capsys):
+    solve_VIE_1(**_k0_problem(0.0), **kw)
+    assert _K0_MSG not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("d", [0, 3])
+def test_no_kernel_start_warning_for_resolved_kernel(d, capsys):
+    """K(0) = 1 with the same slope: ratio H*K'(0)/K(0) = 0.09, stable."""
+    y = solve_VIE_1(**_k0_problem(1.0, d=d))
+    assert _K0_MSG not in capsys.readouterr().out
+    assert np.all(np.isfinite(y))
+
+
+# ---------------------------------------------------------------------------
+# Warning for g(0) != 0 (no bounded solution exists)
+# ---------------------------------------------------------------------------
+
+_G0_MSG = "g(0) is not zero"
+
+
+def _g0_problem(g0_offset):
+    t = np.arange(4 * 9 * 10 + 1) * 0.01
+    return dict(kernel_values=np.exp(-t), g_values=np.sin(t) + g0_offset, time_step=0.01)
+
+
+@pytest.mark.parametrize("quad", ["collocation", "product"])
+def test_warns_when_g_start_nonzero(quad, capsys):
+    solve_VIE_1(**_g0_problem(0.5), quadrature=quad)
+    assert _G0_MSG in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("offset", [0.0, 1e-15])
+def test_no_g_start_warning_for_zero_or_rounding(offset, capsys):
+    solve_VIE_1(**_g0_problem(offset))
+    assert _G0_MSG not in capsys.readouterr().out
+
+
+def test_no_g_start_warning_when_silenced(capsys):
+    solve_VIE_1(**_g0_problem(0.5), show_warnings=False)
+    assert _G0_MSG not in capsys.readouterr().out
+
+
+def test_g_start_warning_names_worst_column_for_matrix(capsys):
+    """Matrix problems report how many right-hand sides have g(0) != 0 and
+    the worst one, not a pooled maximum."""
+    t = np.arange(4 * 9 * 10 + 1) * 0.01
+    K = np.exp(-t)[:, None, None] * np.eye(2)
+    g = np.outer(np.sin(t), [1.0, 2.0])
+    G = np.stack([g, g + [0.0, 0.3], g], axis=2)        # only column 1 has g(0) != 0
+    solve_VIE_1(kernel_values=K, g_values=G, time_step=0.01)
+    out = capsys.readouterr().out
+    assert "g(0) is not zero in 1 of 3 columns; worst column 1" in out

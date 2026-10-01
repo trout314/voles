@@ -88,3 +88,34 @@ def test_independent_solves_from_user_threads_under_forced_gc():
                 results = list(ex.map(lambda g: _solve(d, g), g_cols))
                 for r, q in zip(results, quiet):
                     assert np.array_equal(r, q)
+
+
+def test_product_block_drivers_on_fresh_threads_under_forced_gc():
+    """The product-quadrature block drivers under forced collections, each
+    solve from brand-new threads (the matrix fan-out creates a fresh pool per
+    call). A driver's first call on a thread allocates before attaching
+    unless its body runs after the attach; a collection in that window freed
+    the live closure and crashed or corrupted the solve."""
+    from voles import solve_VIE_1, solve_VIDE
+    rng = np.random.default_rng(0)
+    N, d, m = 161, 2, 4
+    t = np.arange(N) * 0.01
+    K = np.exp(-t)[:, None, None] * rng.standard_normal((d, d)) * 0.3 + np.eye(d)
+    G = rng.standard_normal((N, d, m))
+    G1 = G - G[0]
+    calls = [
+        lambda: solve_VIE_2(kernel_values=K, g_values=G, time_step=0.01,
+                            quadrature="product", show_warnings=False),
+        lambda: solve_VIE_1(kernel_values=K, g_values=G1, time_step=0.01,
+                            quadrature="product", show_warnings=False),
+        lambda: solve_VIE_1(kernel_values=K, g_values=G1, time_step=0.01,
+                            soln_init_value=np.zeros((d, m)), force_continuous=True,
+                            quadrature="product", show_warnings=False),
+        lambda: solve_VIDE(kernel_values=K, g_values=G, soln_init_value=np.ones((d, m)),
+                           time_step=0.01, quadrature="product", show_warnings=False),
+    ]
+    quiet = [c() for c in calls]
+    with _GCHammer():
+        for _ in range(8):
+            for c, q in zip(calls, quiet):
+                assert np.array_equal(c(), q)

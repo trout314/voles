@@ -8,7 +8,8 @@ of collocation points within that interval.
 Because the solution on each interval is an explicit polynomial, the solver can
 return it. Passing `return_function=True` to any solver returns a
 `(soln_values, solution)` tuple (`return_polys=True` is a deprecated alias).
-`solution(t)` evaluates the piecewise polynomial at any time, and `solution`
+`solution(t)` evaluates the piecewise polynomial at any time in $[0, T]$
+(NaN outside), and `solution`
 also indexes/iterates like a list of `numpy.polynomial.Polynomial` objects
 covering successive mesh intervals — these can be evaluated at any point,
 differentiated, integrated, and so on.

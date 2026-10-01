@@ -3184,27 +3184,12 @@ void volterra_get_supported_settings(int* out_data)
     }
 }
 
-// ---------------------------------------------------------------------------
-// Block drivers for precomputed lag blocks (product-integration quadrature;
-// the blocks are built in src/voles/_product.py).  Runtime block dimension.
-//
-//   lagB : flat (M, Db, Ds) row-major.  Lag 0 holds the diagonal block of the
-//          current interval, lag L >= 1 the block that multiplies the source
-//          vector of interval n - L.  All scaling is folded in.
-//   Per step n:   A U_n = g_n - sum_{L=1..n} lagB[L] s_{n-L}
-//   where s_l is the source vector of interval l: U_l for the discontinuous
-//   method (Ds = Db) and [U_l; y_l] for the continuous one (Ds = Db + d, the
-//   boundary value y_l carried by y_{l+1} = adv_0 y_l + sum_k adv_U[k] U_{l,k}).
-//
-// History accumulation goes through ToeplitzHistoryRT, so the cost is
-// O(M log^2 M) block operations.  Return codes as for volterra_solve_vie1_vec:
-// 0 ok, 1 invalid sizes, 2 singular diagonal block, 3 buffer overflow.
-// ---------------------------------------------------------------------------
-
-int volterra_solve_vie1_blocks(
+// Bodies of the block drivers below; each is entered only after its
+// extern(C) shim has attached the calling thread.
+extern(D) pragma(inline, false)
+private int volterra_solve_vie1_blocks_impl(
     double* lagB, double* g, int M, int Db, double* out_U)
 {
-    ensureThreadAttached();
     if (M < 1 || Db < 1) return 1;
     if (cast(long) M * Db * Db >= (cast(long) 1 << 31)) return 3;
     immutable size_t Dsz = cast(size_t) Db;
@@ -3243,11 +3228,11 @@ int volterra_solve_vie1_blocks(
     return 0;
 }
 
-int volterra_solve_vie1_cont_blocks(
+extern(D) pragma(inline, false)
+private int volterra_solve_vie1_cont_blocks_impl(
     double* lagB, double* g, double* adv_U, double adv_0, double* y0,
     int M, int m, int d, double* out_U, double* out_y)
 {
-    ensureThreadAttached();
     if (M < 1 || m < 1 || d < 1) return 1;
     immutable int Db = m * d;
     immutable int Ds = Db + d;
@@ -3314,19 +3299,11 @@ int volterra_solve_vie1_cont_blocks(
     return 0;
 }
 
-// VIDE block driver: y' = a y + g + int K y with the solution represented on
-// interval n as y_n + H sum_k Y_{n,k} beta_k(v) (beta_k = int_0^v ell_k), so
-// the lag blocks are rectangular (Db x (Db + d)) with the boundary column
-// last, and the source vector of interval l is [Y_l; y_l].  Per step
-//     (I - betaC (x) a_n - P_val) Y_n = g_n + history + (a_n + P_bnd) y_n
-//     y_{n+1} = y_n + sum_k beta1[k] Y_{n,k}
-// where a_coll holds a(t_{n,i}) as (M, m, d, d), betaC[i][k] = H beta_k(c_i),
-// beta1[k] = H beta_k(1), and P is lag block 0 (history is ADDED here).
-int volterra_solve_vide_blocks(
+extern(D) pragma(inline, false)
+private int volterra_solve_vide_blocks_impl(
     double* lagB, double* g, double* a_coll, double* betaC, double* beta1, double* y0,
     int M, int m, int d, double* out_Y, double* out_y)
 {
-    ensureThreadAttached();
     if (M < 1 || m < 1 || d < 1) return 1;
     immutable int Db = m * d;
     immutable int Ds = Db + d;
@@ -3403,4 +3380,67 @@ int volterra_solve_vide_blocks(
         }
     }
     return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Block drivers for precomputed lag blocks (product-integration quadrature;
+// the blocks are built in src/voles/_product.py).  Runtime block dimension.
+//
+//   lagB : flat (M, Db, Ds) row-major.  Lag 0 holds the diagonal block of the
+//          current interval, lag L >= 1 the block that multiplies the source
+//          vector of interval n - L.  All scaling is folded in.
+//   Per step n:   A U_n = g_n - sum_{L=1..n} lagB[L] s_{n-L}
+//   where s_l is the source vector of interval l: U_l for the discontinuous
+//   method (Ds = Db) and [U_l; y_l] for the continuous one (Ds = Db + d, the
+//   boundary value y_l carried by y_{l+1} = adv_0 y_l + sum_k adv_U[k] U_{l,k}).
+//
+// History accumulation goes through ToeplitzHistoryRT, so the cost is
+// O(M log^2 M) block operations.  Return codes as for volterra_solve_vie1_vec:
+// 0 ok, 1 invalid sizes, 2 singular diagonal block, 3 buffer overflow.
+// ---------------------------------------------------------------------------
+
+int volterra_solve_vie1_blocks(
+    double* lagB, double* g, int M, int Db, double* out_U)
+{
+    // Attach BEFORE entering the body: the body's lag-filler delegate
+    // captures locals, so its heap closure is allocated at the body's
+    // entry. Allocated here, it would precede the attach, and a
+    // collection in that window (not scanning this still-unregistered
+    // thread) frees the live closure -- see ensureThreadAttached.
+    ensureThreadAttached();
+    return volterra_solve_vie1_blocks_impl(lagB, g, M, Db, out_U);
+}
+
+int volterra_solve_vie1_cont_blocks(
+    double* lagB, double* g, double* adv_U, double adv_0, double* y0,
+    int M, int m, int d, double* out_U, double* out_y)
+{
+    // Attach BEFORE entering the body: the body's lag-filler delegate
+    // captures locals, so its heap closure is allocated at the body's
+    // entry. Allocated here, it would precede the attach, and a
+    // collection in that window (not scanning this still-unregistered
+    // thread) frees the live closure -- see ensureThreadAttached.
+    ensureThreadAttached();
+    return volterra_solve_vie1_cont_blocks_impl(lagB, g, adv_U, adv_0, y0, M, m, d, out_U, out_y);
+}
+
+// VIDE block driver: y' = a y + g + int K y with the solution represented on
+// interval n as y_n + H sum_k Y_{n,k} beta_k(v) (beta_k = int_0^v ell_k), so
+// the lag blocks are rectangular (Db x (Db + d)) with the boundary column
+// last, and the source vector of interval l is [Y_l; y_l].  Per step
+//     (I - betaC (x) a_n - P_val) Y_n = g_n + history + (a_n + P_bnd) y_n
+//     y_{n+1} = y_n + sum_k beta1[k] Y_{n,k}
+// where a_coll holds a(t_{n,i}) as (M, m, d, d), betaC[i][k] = H beta_k(c_i),
+// beta1[k] = H beta_k(1), and P is lag block 0 (history is ADDED here).
+int volterra_solve_vide_blocks(
+    double* lagB, double* g, double* a_coll, double* betaC, double* beta1, double* y0,
+    int M, int m, int d, double* out_Y, double* out_y)
+{
+    // Attach BEFORE entering the body: the body's lag-filler delegate
+    // captures locals, so its heap closure is allocated at the body's
+    // entry. Allocated here, it would precede the attach, and a
+    // collection in that window (not scanning this still-unregistered
+    // thread) frees the live closure -- see ensureThreadAttached.
+    ensureThreadAttached();
+    return volterra_solve_vide_blocks_impl(lagB, g, a_coll, betaC, beta1, y0, M, m, d, out_Y, out_y);
 }

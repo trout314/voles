@@ -761,7 +761,7 @@ def test_complex_late_detection_raises_for_vie1(monkeypatch):
     monkeypatch.setattr(cs, "_samples_indicate_complex",
                         lambda *args, **kwargs: False)
     K = lambda u: 1.0 + 0.001j
-    g = lambda t: 1.0
+    g = lambda t: t      # VIE-1 needs g(0) = 0
     with pytest.raises(ValueError, match="multi-point sampling"):
         function_solve_VIE_1(kernel=K, g=g, mesh_breakpoints=np.linspace(0, 2, 21),
                              coll_divs=3, coll_choices=[1, 2, 3])
@@ -1564,6 +1564,14 @@ def test_stress_t_large_via_mesh():
 # column-by-column equality with m independent vector solves.
 # ---------------------------------------------------------------------------
 
+def _matrix_g_vie1(vector_g, shifts):
+    """(d, m) forcing for first-kind tests: column j is vector_g(t) +
+    shifts[:, j] * t, so every column keeps g(0) = 0 (constant shifts would
+    give a problem with no bounded solution)."""
+    return lambda t: np.stack([np.asarray(vector_g(t)) + shifts[:, j] * t
+                               for j in range(shifts.shape[1])], axis=1)
+
+
 def _matrix_g(vector_g, shifts):
     """Build a (d, m) forcing callable: column j is vector_g(t) + shifts[:, j]."""
     return lambda t: np.stack([np.asarray(vector_g(t)) + shifts[:, j]
@@ -1766,7 +1774,7 @@ def test_matrix_vie1_matches_per_column_vector(vie1_callable_vec_diagonal):
     d = p["d"]
     mesh = np.linspace(0, 1, 19)
     shifts = np.array([[0.0, 0.2, -0.1], [0.0, -0.15, 0.25]])
-    g_mat = _matrix_g(p["g"], shifts)
+    g_mat = _matrix_g_vie1(p["g"], shifts)
 
     y_mat = function_solve_VIE_1(
         kernel=p["kernel"], g=g_mat, mesh_breakpoints=mesh,
@@ -1774,7 +1782,12 @@ def test_matrix_vie1_matches_per_column_vector(vie1_callable_vec_diagonal):
     assert y_mat.shape == (len(mesh) - 1, len(p["coll_choices"]), d, shifts.shape[1])
 
     for j in range(shifts.shape[1]):
-        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        # K = e^u, so y = g' - g: the shift s t adds s (1 - t) to the solution.
+        err = _collect_node_values(
+            y_mat[..., j], mesh, p["coll_divs"], p["coll_choices"],
+            lambda t, j=j: p["y_exact"](t) + shifts[:, j] * (1 - t))
+        assert err < 1e-5     # discretization error (~2e-6 here)
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j] * t
         y_col = function_solve_VIE_1(
             kernel=p["kernel"], g=g_col, mesh_breakpoints=mesh,
             coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
@@ -1786,16 +1799,22 @@ def test_matrix_vie1_force_continuous(vie1_callable_vec_diagonal):
     d = p["d"]
     mesh = np.linspace(0, 1, 19)
     m = 2
-    init = np.array([[1.0, 0.5], [1.0, -0.3]])  # (d, m); y(0)=cos(0)-sin(0)=1
     shifts = np.array([[0.0, 0.2], [0.0, -0.15]])
-    g_mat = _matrix_g(p["g"], shifts)
+    # Consistent y(0) per column: g'(0) = K(0) y(0) with K(0) = I gives
+    # y(0) = 1 + s (y = cos t - sin t + s (1 - t)).
+    init = 1.0 + shifts
+    g_mat = _matrix_g_vie1(p["g"], shifts)
 
     y_mat = function_solve_VIE_1(
         kernel=p["kernel"], g=g_mat, soln_init_value=init,
         mesh_breakpoints=mesh, coll_divs=p["coll_divs"],
         coll_choices=p["coll_choices"], force_continuous=True)
     for j in range(m):
-        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        err = _collect_node_values(
+            y_mat[..., j], mesh, p["coll_divs"], p["coll_choices"],
+            lambda t, j=j: p["y_exact"](t) + shifts[:, j] * (1 - t))
+        assert err < 1e-5     # discretization error (~2e-6 here)
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j] * t
         y_col = function_solve_VIE_1(
             kernel=p["kernel"], g=g_col, soln_init_value=init[:, j],
             mesh_breakpoints=mesh, coll_divs=p["coll_divs"],
@@ -1928,26 +1947,26 @@ def test_vide_vec_coupled_non_uniform_mesh(vide_callable_vec_coupled):
 
 
 def test_matrix_vie1_coupled_matches_exact_and_columns(vie1_callable_vec_coupled):
-    """Coupled-kernel matrix VIE-1: column 0 (unshifted) hits the analytic
-    solution, and every column matches an independent vector solve."""
+    """Coupled-kernel matrix VIE-1: every column hits its analytic solution
+    and matches an independent vector solve."""
     p = vie1_callable_vec_coupled
     d = p["d"]
     mesh = np.linspace(0, 1, 21)
     shifts = np.array([[0.0, 0.4, -0.2], [0.0, -0.3, 0.5]])  # column 0 is unshifted
-    g_mat = _matrix_g(p["g"], shifts)
+    g_mat = _matrix_g_vie1(p["g"], shifts)
+    # Constant kernel M: the shift s t adds the constant M^-1 s to y.
+    y_shift = np.linalg.solve(p["kernel"](0.0), shifts)
 
     y_mat = function_solve_VIE_1(
         kernel=p["kernel"], g=g_mat, mesh_breakpoints=mesh,
         coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
     assert y_mat.shape == (len(mesh) - 1, len(p["coll_choices"]), d, shifts.shape[1])
 
-    # Column 0 reproduces the analytic coupled solution.
-    err0 = _collect_node_values(y_mat[..., 0], mesh, p["coll_divs"],
-                                p["coll_choices"], p["y_exact"])
-    assert err0 < 1e-6
-
     for j in range(shifts.shape[1]):
-        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        err = _collect_node_values(y_mat[..., j], mesh, p["coll_divs"], p["coll_choices"],
+                                   lambda t, j=j: p["y_exact"](t) + y_shift[:, j])
+        assert err < 1e-6
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j] * t
         y_col = function_solve_VIE_1(
             kernel=p["kernel"], g=g_col, mesh_breakpoints=mesh,
             coll_divs=p["coll_divs"], coll_choices=p["coll_choices"])
@@ -1994,7 +2013,8 @@ def test_matrix_vie1_return_function(vie1_callable_vec_coupled):
     mesh = np.linspace(0, 1, 21)
     shifts = np.array([[0.0, 0.4], [0.0, -0.3]])
     m = shifts.shape[1]
-    g_mat = _matrix_g(p["g"], shifts)
+    g_mat = _matrix_g_vie1(p["g"], shifts)
+    y_shift = np.linalg.solve(p["kernel"](0.0), shifts)   # constant kernel
 
     y_arr, y_func = function_solve_VIE_1(
         kernel=p["kernel"], g=g_mat, mesh_breakpoints=mesh,
@@ -2009,11 +2029,13 @@ def test_matrix_vie1_return_function(vie1_callable_vec_coupled):
     assert len(y_func.polynomials) == len(mesh) - 1
     assert y_func.polynomials[0].shape == (d, m)
 
-    # Column 0 (unshifted) matches the analytic solution off the mesh nodes.
-    assert np.allclose(vals[..., 0], np.stack([p["y_exact"](t) for t in ts]),
-                       atol=1e-5)
+    # Every column matches its analytic solution off the mesh nodes.
     for j in range(m):
-        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
+        assert np.allclose(vals[..., j],
+                           np.stack([p["y_exact"](t) + y_shift[:, j] for t in ts]),
+                           atol=1e-5)
+    for j in range(m):
+        g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j] * t
         _, f_col = function_solve_VIE_1(
             kernel=p["kernel"], g=g_col, mesh_breakpoints=mesh,
             coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
@@ -2096,8 +2118,9 @@ def test_matrix_complex_vie1_matches_per_column():
             kernel=kernel, g=(lambda t, j=j: g_col(t, j)), mesh_breakpoints=mesh)
         assert np.allclose(y_mat[..., j], y_col, atol=1e-10)
 
-    # force_continuous mode with a complex (d, m) initial value.
-    init = rng.standard_normal((d, m)) + 1j * rng.standard_normal((d, m))
+    # force_continuous mode with a complex (d, m) initial value, consistent
+    # with the data: g'(0) = K(0) y(0), and g_col is linear in t.
+    init = np.linalg.solve(kernel(0.0), np.stack([g_col(1.0, j) for j in range(m)], axis=1))
     y_mat_fc, f_mat = function_solve_VIE_1(
         kernel=kernel, g=g_mat, soln_init_value=init, mesh_breakpoints=mesh,
         force_continuous=True, return_function=True)
@@ -2849,3 +2872,70 @@ def test_vie1_force_continuous_singular_kernel_requires_right_endpoint():
             mesh_breakpoints=_uniform_mesh(10), coll_nodes=[0.3, 0.7],
             force_continuous=True, soln_init_value=0.0,
             kernel_singularity=p["kernel_singularity"], show_warnings=False)
+
+
+def test_adaptive_singular_blocks_accurate_on_fine_graded_mesh():
+    """Adaptive (location-only) singular quadrature must stay accurate as a
+    graded mesh is refined. Its leading intervals get tiny (width ~1e-11 at
+    M=64 here), so the block weights are ~1e-5: an absolute quad tolerance
+    (scipy's default 1.49e-8) left them percent-level wrong and the VIE-1
+    error grew with refinement (1.8e-6 at M=64). Relative-only convergence
+    keeps it at the rounding floor. Exact solution y = 1 for g = 2 sqrt(t)."""
+    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=64, order=3)
+    y = function_solve_VIE_1(
+        kernel=lambda u: 1.0 / np.sqrt(np.maximum(u, 1e-300)),
+        g=lambda s: 2.0 * np.sqrt(s), mesh_breakpoints=mesh,
+        kernel_singularity=0.0, show_warnings=False)
+    assert np.max(np.abs(y - 1.0)) < 1e-8
+
+
+@pytest.mark.parametrize("offset, warns", [(0.5, True), (0.0, False), (1e-15, False)])
+def test_vie1_callable_warns_when_g_start_nonzero(offset, warns, capsys):
+    """A first-kind equation needs g(0) = 0; otherwise warn."""
+    function_solve_VIE_1(kernel=lambda u: np.exp(-u), g=lambda s: np.sin(s) + offset,
+                         mesh_breakpoints=np.linspace(0, 2, 11))
+    assert ("g(0) is not zero" in capsys.readouterr().out) == warns
+
+
+@pytest.mark.parametrize("bad", [np.inf, np.nan])
+def test_mesh_breakpoints_must_be_finite(bad):
+    """An inf breakpoint used to surface as 'your kernel appears to be
+    singular'; NaN as 'must be strictly increasing'."""
+    with pytest.raises(ValueError, match="mesh_breakpoints must be finite"):
+        function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=np.sin,
+                             mesh_breakpoints=[0.0, 0.5, 1.0, bad])
+
+
+@pytest.mark.parametrize("sing, n_outside", [(5.0, 1), (-1.0, 1), ([0.0, 5.0], 1),
+                                             ({0.0: 0.5, 9.0: 0.5}, 1)])
+def test_singularity_outside_mesh_warns(sing, n_outside, capsys):
+    kernel = lambda u: 1.0 / np.sqrt(np.maximum(np.abs(u), 1e-300))
+    function_solve_VIE_2(kernel=kernel, g=np.cos, kernel_singularity=sing,
+                         mesh_breakpoints=optimal_graded_mesh(alpha=0.5, T=1.0, M=8, order=3))
+    out = capsys.readouterr().out
+    assert "lie outside [0, T]" in out
+
+
+def test_singularity_inside_mesh_no_outside_warning(capsys):
+    function_solve_VIE_2(kernel=lambda u: 1.0 / np.sqrt(np.maximum(u, 1e-300)), g=np.cos,
+                         kernel_singularity={0.0: 0.5},
+                         mesh_breakpoints=optimal_graded_mesh(alpha=0.5, T=1.0, M=8, order=3))
+    assert "lie outside" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("solver", [function_solve_VIE_2, function_solve_VIE_1])
+def test_vector_g_with_scalar_kernel_message(solver):
+    """Used to fail with float()'s TypeError."""
+    with pytest.raises(ValueError, match=r"g\(t\) returned shape \(2,\) .* kernel\(u\) returns a scalar"):
+        solver(kernel=lambda u: np.exp(-u), g=lambda t: np.array([t, 2 * t]),
+               mesh_breakpoints=np.linspace(0, 1, 5))
+
+
+def test_late_complex_g_gets_clear_error(monkeypatch):
+    """A complex g that sampling missed now reaches the complex-escalation
+    error instead of float()'s TypeError."""
+    import voles._callable_solvers as cs
+    monkeypatch.setattr(cs, "_samples_indicate_complex", lambda *a, **k: False)
+    with pytest.raises(ValueError, match="multi-point sampling"):
+        function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=lambda t: t + 0.5j,
+                             mesh_breakpoints=np.linspace(0, 1, 5))

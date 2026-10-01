@@ -27,7 +27,8 @@ import functools
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 
-from .solvers import _column_workers, _check_vie1_setting
+from .solvers import (_column_workers, _check_vie1_setting, _warn_g_start_columns,
+                      _scalar_init)
 
 import numpy as np
 from numpy.polynomial import polynomial as npp
@@ -39,6 +40,20 @@ try:
     _ComplexWarning = np.exceptions.ComplexWarning
 except AttributeError:  # numpy < 1.25
     _ComplexWarning = np.ComplexWarning
+
+
+def _scalar_g_value(value, t):
+    """g(t) for a scalar equation as a 0-d array. A non-scalar return (e.g. a
+    (d,) vector with a scalar kernel) gets a ValueError naming the shapes
+    instead of float()'s TypeError; a complex value is left for the float64
+    assignment, whose ComplexWarning _escalate_complex_warning turns into
+    its clear error."""
+    arr = np.asarray(value)
+    if arr.size != 1:
+        raise ValueError(
+            f"g(t) returned shape {arr.shape} at t={t:.6g}, but kernel(u) returns a "
+            f"scalar: for a vector equation kernel(u) must return a (d, d) matrix.")
+    return arr.reshape(())
 
 
 def _escalate_complex_warning(fn):
@@ -104,10 +119,16 @@ def _import_scipy_quad_vec():
 # tolerance than the per-row defaults it replaces. Two-order-check fallback
 # quadratures always use the defaults and stay on the per-row repair path, so
 # the flag is a strict no-op for kernels with no declared singularity.
-_QUAD_OPTS_DEFAULT = {'limit': 100}
-# scipy.integrate.quad converges when err <= max(epsabs, epsrel*|result|) with
-# default epsabs=1.49e-8, so 1e-12/1e-12 is strictly tighter.
-_QUAD_OPTS_REUSE = {'limit': 200, 'epsabs': 1e-12, 'epsrel': 1e-12}
+# scipy.integrate.quad converges when err <= max(epsabs, epsrel*|result|).
+# Its default epsabs=1.49e-8 is an ABSOLUTE floor, which on the tiny leading
+# intervals of a graded mesh exceeds the block weights themselves (a weight
+# of an Abel kernel over width h is ~2 sqrt(h) ~ 1e-5 at h ~ 1e-11), letting
+# first-kind solves lose accuracy as the mesh is refined. Relative-only
+# convergence (epsabs=0) keeps every block at its own scale, matching the
+# vector path's quad_vec options below.
+_QUAD_OPTS_DEFAULT = {'limit': 100, 'epsabs': 0.0, 'epsrel': 1.49e-8}
+# Strictly tighter than the defaults in relative terms.
+_QUAD_OPTS_REUSE = {'limit': 200, 'epsabs': 0.0, 'epsrel': 1e-12}
 # scipy.integrate.quad_vec defaults to epsabs=1e-200 (pure-relative 1e-8
 # convergence). Keep that epsabs so small-magnitude blocks are never computed
 # *less* accurately than the per-row defaults; tighten only epsrel.
@@ -1630,7 +1651,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         ``(M, p, d, m)`` for matrix-valued equations.
     (soln_values, y_callable) : tuple
         When ``return_function=True``. ``y_callable(t)`` evaluates the
-        piecewise polynomial at any time t, returning a scalar / ``(d,)`` /
+        piecewise polynomial at any time t in the mesh (NaN outside it), returning a scalar / ``(d,)`` /
         ``(d, m)`` value for scalar t (with a leading time axis for array t).
 
     Raises
@@ -1662,6 +1683,8 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
         raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
+    if not np.all(np.isfinite(mesh_breakpoints)):
+        raise ValueError("mesh_breakpoints must be finite (no inf or NaN)")
     if not np.all(np.diff(mesh_breakpoints) > 0):
         raise ValueError("mesh_breakpoints must be strictly increasing")
     if mesh_breakpoints[0] != 0.0:
@@ -1724,7 +1747,8 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
                 t_n = mesh_breakpoints[n]
                 h_n = widths[n]
                 for i in range(p):
-                    g_arr[n, i] = float(g(t_n + node_pos[i] * h_n))
+                    t_ni = t_n + node_pos[i] * h_n
+                    g_arr[n, i] = _scalar_g_value(g(t_ni), t_ni)
         y = _dlang_module.function_solve_vie2_d(W, g_arr)
 
         if return_function:
@@ -1890,6 +1914,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
         raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
+    if not np.all(np.isfinite(mesh_breakpoints)):
+        raise ValueError("mesh_breakpoints must be finite (no inf or NaN)")
     if not np.all(np.diff(mesh_breakpoints) > 0):
         raise ValueError("mesh_breakpoints must be strictly increasing")
     if mesh_breakpoints[0] != 0.0:
@@ -1976,7 +2002,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         g_arr = _sample_callable_scalar(g)
         a_arr = _sample_callable_scalar(a)
         y_prime, y_boundary = _dlang_module.function_solve_vide_d(
-            W, g_arr, a_arr, alpha, w_vec, widths, float(soln_init_value))
+            W, g_arr, a_arr, alpha, w_vec, widths, _scalar_init(soln_init_value))
 
         # Reconstruct y at collocation nodes: y_{n,i} = y_n + h_n * sum_k Y'_{n,k} alpha[i,k]
         y_at_coll = np.zeros((M, p), dtype=np.float64)
@@ -2319,10 +2345,24 @@ def _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints: np.ndarray,
                                               kernel_singularity,
                                               show_warnings: bool) -> None:
     """If a singularity is declared but the mesh appears uniform (max/min
-    interval ratio < 1.5), suggest `optimal_graded_mesh`.
+    interval ratio < 1.5), suggest `optimal_graded_mesh`. Also warn about
+    declared locations outside [0, T]: the kernel is only evaluated at
+    u = t - s in [0, T], so such a declaration has no effect.
     """
     if not show_warnings or kernel_singularity is None:
         return
+    if not callable(kernel_singularity):
+        locs = (list(kernel_singularity.keys()) if isinstance(kernel_singularity, dict)
+                else list(np.atleast_1d(np.asarray(kernel_singularity, dtype=float))))
+        T = float(mesh_breakpoints[-1])
+        tol = 1e-12 * max(1.0, T)
+        outside = [float(u) for u in locs if not (-tol <= float(u) <= T + tol)]
+        if outside:
+            print(f"warning: kernel_singularity location(s) {outside} lie outside "
+                  f"[0, T] = [0, {T:.6g}]; the kernel is only evaluated at u in "
+                  f"[0, T], so they have no effect.")
+            if len(outside) == len(locs):
+                return
     widths = np.diff(mesh_breakpoints)
     ratio = float(widths.max() / widths.min())
     if ratio < 1.5:
@@ -2477,6 +2517,25 @@ def _build_vie1_cont_polynomials_matrix(U, boundary, mesh_breakpoints, node_pos,
     return polys
 
 
+def _warn_vie1_g_start_callable(g, mesh_breakpoints, show_warnings):
+    """Callable-input analogue of solvers._warn_vie1_g_start: warn when g(0)
+    is not negligible next to the scale of g (sampled at the mesh
+    breakpoints). A first-kind equation forces g(0) = 0. Any failure to
+    evaluate g here is left to the solver's own sampling to report."""
+    if not show_warnings or g is None:
+        return
+    try:
+        a = np.abs(np.asarray([np.asarray(g(float(t))) for t in mesh_breakpoints]))
+        g0 = np.abs(np.asarray(g(0.0)))
+        if g0.ndim == 2:                          # (d, m) matrix problem: per column
+            g0, scale = g0.max(axis=0), a.max(axis=(0, 1))
+        else:
+            g0, scale = g0.max(), a.max()
+    except Exception:
+        return
+    _warn_g_start_columns(g0, scale)
+
+
 @_escalate_complex_warning
 def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                           mesh_breakpoints,
@@ -2509,6 +2568,14 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         otherwise. A warning is emitted if a value is passed when it has no
         effect. For a matrix-valued problem with ``force_continuous=True`` it
         must have shape $(d, m)$.
+        It must be the value the equation implies: differentiating at
+        $t = 0$ gives $g'(0) = K(0)\,y(0)$. Any other value gives a wrong
+        solution on the whole interval, not only near $t = 0$, and is not
+        detected. If $y(0)$ is not known independently, use the default
+        method, or estimate it by solving with ``force_continuous=False,
+        return_function=True`` and evaluating the solution at $t = 0$ (the
+        continuous solve is then more accurate than the default method but
+        falls short of its full order).
     mesh_breakpoints : array_like
         Strictly-increasing 1-D array starting at 0.
     coll_divs, coll_choices : int, list of int, optional
@@ -2562,6 +2629,9 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
 
     Notes
     -----
+    The equation forces $g(0) = 0$; for $g(0) \ne 0$ there is no bounded
+    solution, and a warning is printed.
+
     Whether a given node set yields a convergent method depends on the nodes
     (Brunner 2004, smooth-kernel chapter). For a smooth kernel with
     $|K(t, t)| \ge k_0 > 0$, writing $c_1 < \dots < c_m$ for the nodes:
@@ -2593,6 +2663,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
         raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
+    if not np.all(np.isfinite(mesh_breakpoints)):
+        raise ValueError("mesh_breakpoints must be finite (no inf or NaN)")
     if not np.all(np.diff(mesh_breakpoints) > 0):
         raise ValueError("mesh_breakpoints must be strictly increasing")
     if mesh_breakpoints[0] != 0.0:
@@ -2675,6 +2747,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                     _ComplexSolutionFunction(y_func_real, d_orig))
         return _recombine_complex_y(result, d_orig)
 
+    _warn_vie1_g_start_callable(g, mesh_breakpoints, show_warnings)
+
     M = len(mesh_breakpoints) - 1
     p = len(node_pos)
     widths = np.diff(mesh_breakpoints)
@@ -2699,7 +2773,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                 t_n = mesh_breakpoints[n]
                 h_n = widths[n]
                 for i in range(p):
-                    g_arr[n, i] = float(g(t_n + node_pos[i] * h_n))
+                    t_ni = t_n + node_pos[i] * h_n
+                    g_arr[n, i] = _scalar_g_value(g(t_ni), t_ni)
         if force_continuous:
             # Brunner S_m^(0): degree-m polynomial on {0} ∪ node_pos, with the
             # boundary value carried forward for continuity. Extended weight
@@ -2711,7 +2786,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                 reuse_adaptive_blocks=reuse_adaptive_blocks)
             adv_U, adv_0 = _vie1_cont_advance(node_pos)
             y, boundary = _dlang_module.function_solve_vie1_cont_d(
-                W, g_arr, adv_U, adv_0, float(soln_init_value))
+                W, g_arr, adv_U, adv_0, _scalar_init(soln_init_value))
             if return_function:
                 polys = _build_vie1_cont_polynomials_scalar(
                     y, boundary, mesh_breakpoints, node_pos)

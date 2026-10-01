@@ -93,7 +93,7 @@ soln = solve_VIDE(
 
 ## Returning a callable solution
 
-Pass `return_function=True` to also get a callable solution object. Call it at any time to evaluate the piecewise polynomial; it also indexes and iterates like a list of per-interval `numpy.polynomial.Polynomial` objects (matching the callable-input solvers' `return_function`):
+Pass `return_function=True` to also get a callable solution object. Call it at any time in the solved interval $[0, T]$ to evaluate the piecewise polynomial (times outside give NaN); it also indexes and iterates like a list of per-interval `numpy.polynomial.Polynomial` objects (matching the callable-input solvers' `return_function`):
 
 ```python
 import numpy as np
@@ -110,7 +110,7 @@ soln_values, solution = solve_VIE_2(
     return_function=True,
 )
 
-solution(0.42)             # evaluate the piecewise polynomial at any time
+solution(0.42)             # evaluate the piecewise polynomial at any time in [0, T]
 first_interval = solution[0]   # indexes/iterates like the per-interval polynomials
 for poly in solution:          # each is a numpy.polynomial.Polynomial
     pass

@@ -34,7 +34,8 @@ class _SolutionListMixin:
 class _SolutionFunction(_SolutionListMixin):
     """Callable wrapping the per-interval Lagrange polynomials.
 
-    `y(t)` evaluates the piecewise polynomial at scalar or array `t`.
+    `y(t)` evaluates the piecewise polynomial at scalar or array `t`; points
+    outside ``[mesh_breakpoints[0], mesh_breakpoints[-1]]`` give NaN.
 
     For scalar problems, `polynomials` is a list of `numpy.polynomial.Polynomial`
     objects, one per mesh interval. For vector problems with d components,
@@ -55,6 +56,20 @@ class _SolutionFunction(_SolutionListMixin):
     def __call__(self, t):
         scalar_input = (np.isscalar(t) or np.ndim(t) == 0)
         t_arr = np.atleast_1d(np.asarray(t, dtype=float))
+        out = self._evaluate(t_arr)
+        # The solution is only defined on [t_0, t_M]: extrapolating the end
+        # polynomials gave plausible-looking but meaningless values, so
+        # points outside (beyond a rounding-level tolerance) evaluate to NaN.
+        bps = self.mesh_breakpoints
+        tol = 1e-12 * max(1.0, float(np.max(np.abs(bps))))
+        outside = (t_arr < bps[0] - tol) | (t_arr > bps[-1] + tol)
+        if outside.any():
+            out[outside] = np.nan
+        if scalar_input:
+            return float(out[0]) if self._d == 0 else out[0]
+        return out
+
+    def _evaluate(self, t_arr):
         bps = self.mesh_breakpoints
         idx = np.searchsorted(bps, t_arr, side='right') - 1
         idx = np.clip(idx, 0, len(self.polynomials) - 1)
@@ -67,13 +82,13 @@ class _SolutionFunction(_SolutionListMixin):
                 for r in range(self._d):
                     for c in range(self._m):
                         out[j, r, c] = polys_n[r, c](ti)
-            return out[0] if scalar_input else out
+            return out
 
         if self._d == 0:
             out = np.empty(t_arr.shape, dtype=float)
             for j, (ti, ii) in enumerate(zip(t_arr, idx)):
                 out[j] = self.polynomials[int(ii)](ti)
-            return float(out[0]) if scalar_input else out
+            return out
 
         # Vector case: each interval has d component polynomials
         out = np.empty((len(t_arr), self._d), dtype=float)
@@ -81,7 +96,7 @@ class _SolutionFunction(_SolutionListMixin):
             polys_n = self.polynomials[int(ii)]
             for r in range(self._d):
                 out[j, r] = polys_n[r](ti)
-        return out[0] if scalar_input else out
+        return out
 
 
 class _ComplexSolutionFunction(_SolutionListMixin):
