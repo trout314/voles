@@ -109,6 +109,21 @@ def _recombine(soln, d_orig):
         return soln[:, :d_orig, :] + 1j * soln[:, d_orig:, :]
 
 
+def _complex_poly(p_r, p_i):
+    """``p_r + 1j * p_i`` as one complex Polynomial on ``p_r``'s domain.
+
+    The two coefficient arrays can have different lengths: each real
+    polynomial is trimmed of exact trailing zeros independently, and a
+    trailing coefficient that rounds to exactly zero on one platform (seen
+    on the Linux builds) need not on another. Pad to the longer one."""
+    cr, ci = np.asarray(p_r.coef, dtype=float), np.asarray(p_i.coef, dtype=float)
+    coefs = np.zeros(max(len(cr), len(ci)), dtype=complex)
+    coefs[:len(cr)] += cr
+    coefs[:len(ci)] += 1j * ci
+    return np.polynomial.Polynomial(coefs, domain=p_r.domain, window=p_r.window,
+                                    symbol='t')
+
+
 def _recombine_polys(polys, d_orig):
     """Recombine real polynomial pairs into complex polynomials.
 
@@ -126,24 +141,14 @@ def _recombine_polys(polys, d_orig):
         poly_arr = np.asarray(poly_arr, dtype=object)
         if d_orig == 0:
             # (2,) → scalar complex polynomial
-            p_r = poly_arr[0]
-            p_i = poly_arr[1]
-            # Build complex polynomial from real/imag coefficient arrays
-            coefs = np.array(p_r.coef) + 1j * np.array(p_i.coef)
-            cp = np.polynomial.Polynomial(coefs, domain=p_r.domain,
-                                          window=p_r.window, symbol='t')
-            out.append(cp)
+            out.append(_complex_poly(poly_arr[0], poly_arr[1]))
         elif poly_arr.ndim == 1:
             # (2d,) → (d,)
             d2 = len(poly_arr)
             d = d_orig
             arr = np.empty(d, dtype=object)
             for r in range(d):
-                p_r = poly_arr[r]
-                p_i = poly_arr[d + r]
-                coefs = np.array(p_r.coef) + 1j * np.array(p_i.coef)
-                arr[r] = np.polynomial.Polynomial(coefs, domain=p_r.domain,
-                                                  window=p_r.window, symbol='t')
+                arr[r] = _complex_poly(poly_arr[r], poly_arr[d + r])
             out.append(arr)
         else:
             # (2d, m) → (d, m)
@@ -152,10 +157,6 @@ def _recombine_polys(polys, d_orig):
             arr = np.empty((d, m), dtype=object)
             for r in range(d):
                 for j in range(m):
-                    p_r = poly_arr[r, j]
-                    p_i = poly_arr[d + r, j]
-                    coefs = np.array(p_r.coef) + 1j * np.array(p_i.coef)
-                    arr[r, j] = np.polynomial.Polynomial(
-                        coefs, domain=p_r.domain, window=p_r.window, symbol='t')
+                    arr[r, j] = _complex_poly(poly_arr[r, j], poly_arr[d + r, j])
             out.append(arr)
     return out

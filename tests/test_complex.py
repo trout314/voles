@@ -550,3 +550,25 @@ def test_complex_vector_d5_runtime_return_function_matches_scalar():
             v_vec = np.asarray(f_vec(tt)).ravel()[i]
             v_s = np.asarray(f_s(tt)).ravel()[0]
             assert abs(v_vec - v_s) < 1e-9
+
+
+def test_recombine_polys_pads_trimmed_coefficients():
+    """Real and imaginary parts are trimmed of exact trailing zeros
+    independently, so their coefficient arrays can differ in length (this
+    happened on the Linux CI builds for a complex matrix VIE-1 with
+    return_function=True); the recombination must pad, not broadcast."""
+    from voles._complex import _recombine_polys
+    P = np.polynomial.Polynomial
+    dom = (0.0, 0.5)
+    p_r = P([1.0, 2.0, 0.0, 3.0], domain=dom, window=dom)        # degree 3
+    p_i = P([4.0, 5.0], domain=dom, window=dom)                   # degree 1 after trimming
+    (cp,) = _recombine_polys([np.array([p_r, p_i], dtype=object)], 0)
+    np.testing.assert_allclose(cp.coef, [1 + 4j, 2 + 5j, 0.0, 3.0])
+    assert tuple(cp.domain) == dom
+    # vector and matrix layouts, with the shorter array on the real side
+    (vec,) = _recombine_polys([np.array([p_i, p_r, p_r, p_i], dtype=object)], 2)
+    np.testing.assert_allclose(vec[0].coef, [4 + 1j, 5 + 2j, 0.0, 3j])
+    mat_in = np.empty((4, 1), dtype=object)
+    mat_in[:, 0] = [p_i, p_r, p_r, p_i]
+    (mat,) = _recombine_polys([mat_in], 2)
+    np.testing.assert_allclose(mat[1, 0].coef, [1 + 4j, 2 + 5j, 0.0, 3.0])

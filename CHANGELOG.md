@@ -32,6 +32,12 @@
   its descriptive `ValueError` whether or not warnings are on); too-short
   input is reported before truncation; a vector-valued g or a with a scalar
   kernel gets a clear `ValueError` in all three callable solvers.
+- **Complex-valued solutions with `return_function=True` could fail to
+  build their polynomials** with a broadcasting error: the real and
+  imaginary parts are trimmed of exact trailing zeros independently, so
+  their coefficient arrays can differ in length when a coefficient rounds
+  to exactly zero on one platform (seen on the Linux builds for a complex
+  matrix VIE-1). The recombination now pads to the longer array.
 - Several VIE-1 tests used data with no meaningful solution and only
   compared two computations with each other; they now check every column
   against a closed-form solution.
