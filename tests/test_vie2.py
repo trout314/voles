@@ -240,3 +240,21 @@ def test_solution_function_nan_outside_domain(shape):
     assert np.all(np.isnan(scalar_out))
     if shape == "scalar":
         assert isinstance(scalar_out, float)
+
+
+def test_solution_function_direct_construction_is_complete():
+    """The constructor takes the per-interval coefficients directly; an
+    object built that way is fully usable (it used to accept a polynomial
+    list and leave the evaluator uninitialised)."""
+    from voles._solution import _SolutionFunction
+    bps = np.array([0.0, 1.0, 3.0])
+    unit = np.array([[1.0, 2.0], [3.0, -1.0]])             # y = 1 + 2x, then 3 - x
+    for sol in (_SolutionFunction(unit, bps), _SolutionFunction.from_unit_coefs(unit, bps)):
+        assert len(sol) == 2
+        np.testing.assert_allclose(sol(np.array([0.5, 2.0])), [2.0, 2.5])
+        assert sol[1](2.0) == pytest.approx(2.5)
+        assert np.isnan(sol(3.5))
+    with pytest.raises(TypeError):
+        _SolutionFunction([np.polynomial.Polynomial([1.0, 2.0])], bps)
+    with pytest.raises(ValueError, match="coefficient blocks"):
+        _SolutionFunction(unit[:1], bps)

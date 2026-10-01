@@ -71,8 +71,9 @@ class _SolutionFunction(_SolutionListMixin):
 
     `y(t)` evaluates the piecewise polynomial at scalar or array `t`; points
     outside ``[mesh_breakpoints[0], mesh_breakpoints[-1]]`` give NaN.
-    Construct via `from_unit_coefs`; the `polynomials` list described below
-    is built lazily on first access.
+    Constructed from per-interval local monomial coefficients (see
+    `_polys_from_unit_coefs`); the `polynomials` list described below is
+    built lazily on first access.
 
     For scalar problems, `polynomials` is a list of `numpy.polynomial.Polynomial`
     objects, one per mesh interval. For vector problems with d components,
@@ -82,32 +83,37 @@ class _SolutionFunction(_SolutionListMixin):
     arrays.
     """
 
-    def __init__(self, polynomials, mesh_breakpoints, d: int = 0, m: int = 0):
-        self._polys = polynomials
-        self._unit = None
-        self.mesh_breakpoints = np.asarray(mesh_breakpoints)
-        # d == 0 marks a scalar problem; d >= 1 marks a vector problem.
-        # m >= 1 marks a matrix problem (m right-hand sides); m == 0 otherwise.
-        self._d = d
-        self._m = m
-
-    @classmethod
-    def from_unit_coefs(cls, unit_coefs, mesh_breakpoints, d: int = 0,
-                        m: int = 0, edges=None, trim: bool = True):
-        """Solution backed by per-interval local monomial coefficients
-        (see `_polys_from_unit_coefs`; ``edges`` are the interval ends the
-        coefficients are relative to, default ``mesh_breakpoints``).
+    def __init__(self, unit_coefs, mesh_breakpoints, d: int = 0, m: int = 0,
+                 edges=None, trim: bool = True):
+        """``unit_coefs[n]`` holds the local monomial coefficients of
+        interval n (shape ``(P,)``, ``(P, d)`` or ``(P, d, m)``), relative to
+        the interval ends ``edges`` (default ``mesh_breakpoints``).
 
         ``__call__`` evaluates straight from these coefficients, vectorized
         over ``t``; the ``Polynomial`` list is built only if ``.polynomials``
         (or indexing / iteration) is used.
         """
-        self = cls(None, mesh_breakpoints, d=d, m=m)
         self._unit = np.asarray(unit_coefs, dtype=float)
+        if self._unit.ndim < 2:
+            raise TypeError(
+                "_SolutionFunction takes per-interval coefficient arrays "
+                f"(M, P[, d[, m]]), got shape {self._unit.shape}")
+        self.mesh_breakpoints = np.asarray(mesh_breakpoints)
+        if len(self._unit) != len(self.mesh_breakpoints) - 1:
+            raise ValueError(
+                f"{len(self._unit)} coefficient blocks for "
+                f"{len(self.mesh_breakpoints) - 1} mesh intervals")
         self._edges = np.asarray(self.mesh_breakpoints if edges is None else edges,
                                  dtype=float)
         self._trim = trim
-        return self
+        self._polys = None
+        # d == 0 marks a scalar problem; d >= 1 marks a vector problem.
+        # m >= 1 marks a matrix problem (m right-hand sides); m == 0 otherwise.
+        self._d = d
+        self._m = m
+
+    # Kept as the name the call sites use; same signature as __init__.
+    from_unit_coefs = classmethod(lambda cls, *a, **k: cls(*a, **k))
 
     @property
     def polynomials(self):
