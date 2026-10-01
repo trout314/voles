@@ -47,15 +47,25 @@ import std.math : PI, cos, sin;
 // Twiddles come from the multiplicative recurrence, re-seeded from direct
 // cos/sin every 32 steps so the compounded drift is bounded by ~32 eps
 // independent of n (unseeded it grows linearly: ~1e-11 by n = 2^21).
-// Each stage's twiddles are generated once into a contiguous thread-local
-// scratch table shared by all of that stage's butterfly blocks (same values
-// as regenerating them per block, ~20% faster). A global strided table of
-// all n twiddles was tried earlier and rejected: with the project's
-// mandatory array bounds checking, its strided loads cost ~10% end-to-end.
-void fft_radix2(double[] re, double[] im, bool inverse)
+// Each stage's twiddles are generated once into a contiguous scratch table
+// (stwr/stwi, length >= n/2, supplied by the caller) shared by all of that
+// stage's butterfly blocks (same values as regenerating them per block,
+// ~20% faster). A global strided table of all n twiddles was tried earlier
+// and rejected: with the project's mandatory array bounds checking, its
+// strided loads cost ~10% end-to-end.
+//
+// The scratch is owned by the calling ToeplitzHistoryRT, not by a
+// thread-local variable: the solvers run on Python worker threads attached
+// to the D runtime after the fact, and on Linux druntime does not scan such
+// a thread's thread-local storage, so a GC array referenced only from TLS
+// can be collected while in use. A struct on the attached thread's stack is
+// scanned.
+void fft_radix2(double[] re, double[] im, bool inverse,
+                double[] stwr, double[] stwi)
 {
     immutable size_t n = re.length;
     assert(n == im.length && (n & (n - 1)) == 0);
+    assert(stwr.length >= n / 2 && stwi.length >= n / 2);
     if (n <= 1)
         return;
 
@@ -112,11 +122,11 @@ void fft_radix2(double[] re, double[] im, bool inverse)
     }
 
     // Remaining stages: the stage's half twiddles are generated once (by
-    // the re-seeded recurrence) into a small scratch table and shared by
-    // every butterfly block of the stage, instead of being regenerated
+    // the re-seeded recurrence) into the caller's scratch table and shared
+    // by every butterfly block of the stage, instead of being regenerated
     // per block.
-    double[] twr = fftTwScratchRe(n / 2);
-    double[] twi = fftTwScratchIm(n / 2);
+    double[] twr = stwr[0 .. n / 2];
+    double[] twi = stwi[0 .. n / 2];
     for (size_t len = 8; len <= n; len <<= 1)
     {
         immutable size_t half = len >> 1;
@@ -166,22 +176,6 @@ void fft_radix2(double[] re, double[] im, bool inverse)
     }
 }
 
-// Thread-local twiddle scratch for fft_radix2 (solves run concurrently in
-// Python worker threads, so this must not be shared).
-private double[] fftTwRe, fftTwIm;
-private double[] fftTwScratchRe(size_t len)
-{
-    if (fftTwRe.length < len)
-        fftTwRe.length = len;
-    return fftTwRe;
-}
-private double[] fftTwScratchIm(size_t len)
-{
-    if (fftTwIm.length < len)
-        fftTwIm.length = len;
-    return fftTwIm;
-}
-
 // Real-input FFT of length L = 2M via one length-M complex FFT.
 //
 // Every signal the history merges transform is real (source columns, kernel
@@ -193,13 +187,15 @@ private double[] fftTwScratchIm(size_t len)
 //
 // rfft_packed: on entry zr/zi (length M) hold the packed input; on return
 // Xr/Xi[0 .. M] hold bins 0 .. M of the length-L DFT of x. zr/zi are
-// overwritten. twr/twi[k] = cos/sin(2 pi k / L) for k = 0 .. M.
+// overwritten. twr/twi[k] = cos/sin(2 pi k / L) for k = 0 .. M; stwr/stwi
+// is fft_radix2's stage-twiddle scratch (length >= M/2).
 void rfft_packed(double[] zr, double[] zi,
                  const(double)[] twr, const(double)[] twi,
+                 double[] stwr, double[] stwi,
                  double[] Xr, double[] Xi)
 {
     immutable size_t M = zr.length;
-    fft_radix2(zr, zi, false);
+    fft_radix2(zr, zi, false, stwr, stwi);
     foreach (k; 0 .. M + 1)
     {
         immutable size_t k1 = (k == M) ? 0 : k;
@@ -221,6 +217,7 @@ void rfft_packed(double[] zr, double[] zi,
 // the real sequence is x[2j] = zr[j] / M, x[2j+1] = zi[j] / M.
 void irfft_packed(const(double)[] Xr, const(double)[] Xi,
                   const(double)[] twr, const(double)[] twi,
+                  double[] stwr, double[] stwi,
                   double[] zr, double[] zi)
 {
     immutable size_t M = zr.length;
@@ -237,7 +234,7 @@ void irfft_packed(const(double)[] Xr, const(double)[] Xi,
         zr[k] = er - oi;
         zi[k] = ei + or;
     }
-    fft_radix2(zr, zi, true);
+    fft_radix2(zr, zi, true, stwr, stwi);
 }
 
 struct ToeplitzHistoryRT
@@ -256,8 +253,10 @@ struct ToeplitzHistoryRT
     double[] srcs;   // flat [ell][b]: pushed source vectors
     int nPushed;
 
-    // scratch buffers, grown on demand and reused across merges
-    double[] xre, xim, kre, kim, accre, accim, zre, zim;
+    // scratch buffers, grown on demand and reused across merges; stwre/stwim
+    // is fft_radix2's stage-twiddle table (see its comment for why it lives
+    // here rather than in thread-local storage)
+    double[] xre, xim, kre, kim, accre, accim, zre, zim, stwre, stwim;
 
     // Per-level real-FFT twiddles cos/sin(2 pi k / 2S), k = 0 .. S.
     private double[][] twCos, twSin;
@@ -441,6 +440,8 @@ struct ToeplitzHistoryRT
         {
             zre.length = sS;
             zim.length = sS;
+            stwre.length = sS / 2;
+            stwim.length = sS / 2;
         }
         auto zr = zre[0 .. sS];
         auto zi = zim[0 .. sS];
@@ -465,7 +466,7 @@ struct ToeplitzHistoryRT
                 zr[j] = srcs[s0 + (2 * j) * sdim];
                 zi[j] = srcs[s0 + (2 * j + 1) * sdim];
             }
-            rfft_packed(zr, zi, twr, twi,
+            rfft_packed(zr, zi, twr, twi, stwre, stwim,
                         xre[c * nb .. (c + 1) * nb], xim[c * nb .. (c + 1) * nb]);
         }
 
@@ -501,7 +502,7 @@ struct ToeplitzHistoryRT
                     Ai[t] += kr[t] * Xi[t] + ki[t] * Xr[t];
                 }
             }
-            irfft_packed(Ar, Ai, twr, twi, zr, zi);
+            irfft_packed(Ar, Ai, twr, twi, stwre, stwim, zr, zi);
             // convolution sample p sits in zr[p/2] (p even) / zi[p/2] (p odd)
             foreach (w; 0 .. tEnd - bnd)
             {
@@ -524,6 +525,8 @@ struct ToeplitzHistoryRT
         {
             zre.length = sS;
             zim.length = sS;
+            stwre.length = sS / 2;
+            stwim.length = sS / 2;
         }
         auto zr = zre[0 .. sS];
         auto zi = zim[0 .. sS];
@@ -540,7 +543,7 @@ struct ToeplitzHistoryRT
             else
                 zr[v >> 1] = val;
         }
-        rfft_packed(zr, zi, twr, twi, kr, ki);
+        rfft_packed(zr, zi, twr, twi, stwre, stwim, kr, ki);
     }
 
     // Level index of merge size S: S = FFT_CUTOFF << levelIndex(S).
