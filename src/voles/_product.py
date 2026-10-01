@@ -307,9 +307,9 @@ def build_polynomials(U, y, basis_coefs, Q, M, d, force_continuous, delta):
     unit = np.einsum('nkr,kj->njr', Ur, basis_coefs[:m])      # (M, P, dd)
     if force_continuous:
         unit = unit + np.asarray(y)[:M, None, :] * basis_coefs[m][None, :, None]
-    edges = np.arange(M + 1) * (Q * delta)
+    mesh_breakpoints = np.arange(M + 1) * (Q * delta)
     return _SolutionFunction.from_unit_coefs(unit[:, :, 0] if d == 0 else unit,
-                                             edges, d=d)
+                                             mesh_breakpoints, d=d)
 
 
 # ---------------------------------------------------------------------------

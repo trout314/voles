@@ -13,12 +13,12 @@ from __future__ import annotations
 import numpy as np
 
 
-def _polys_from_unit_coefs(unit_coefs, edges, trim):
+def _polys_from_unit_coefs(unit_coefs, bps, trim):
     """Per-interval ``numpy.polynomial.Polynomial`` objects on the time axis.
 
     ``unit_coefs[n]`` has shape ``(P,)``, ``(P, d)`` or ``(P, d, m)``: monomial
-    coefficients in the local variable ``x = (t - edges[n]) / (edges[n+1] -
-    edges[n])`` on interval n, for each component. Returns a list of M
+    coefficients in the local variable ``x = (t - bps[n]) / (bps[n+1] -
+    bps[n])`` on interval n, for each component. Returns a list of M
     Polynomials (scalar) or ``(d,)`` / ``(d, m)`` object arrays of them.
 
     Building these costs one ``Polynomial.convert`` per interval and
@@ -30,7 +30,7 @@ def _polys_from_unit_coefs(unit_coefs, edges, trim):
     comp_shape = unit_coefs.shape[2:]
     polys = []
     for n in range(unit_coefs.shape[0]):
-        domain = (edges[n], edges[n + 1])
+        domain = (bps[n], bps[n + 1])
         if not comp_shape:
             poly = np.polynomial.Polynomial(unit_coefs[n], domain=domain,
                                             window=(0.0, 1.0), symbol='t')
@@ -84,10 +84,11 @@ class _SolutionFunction(_SolutionListMixin):
     """
 
     def __init__(self, unit_coefs, mesh_breakpoints, d: int = 0, m: int = 0,
-                 edges=None, trim: bool = True):
+                 trim: bool = True):
         """``unit_coefs[n]`` holds the local monomial coefficients of
-        interval n (shape ``(P,)``, ``(P, d)`` or ``(P, d, m)``), relative to
-        the interval ends ``edges`` (default ``mesh_breakpoints``).
+        interval n (shape ``(P,)``, ``(P, d)`` or ``(P, d, m)``) in the local
+        variable ``(t - mesh_breakpoints[n]) / (mesh_breakpoints[n+1] -
+        mesh_breakpoints[n])``.
 
         ``__call__`` evaluates straight from these coefficients, vectorized
         over ``t``; the ``Polynomial`` list is built only if ``.polynomials``
@@ -98,13 +99,11 @@ class _SolutionFunction(_SolutionListMixin):
             raise TypeError(
                 "_SolutionFunction takes per-interval coefficient arrays "
                 f"(M, P[, d[, m]]), got shape {self._unit.shape}")
-        self.mesh_breakpoints = np.asarray(mesh_breakpoints)
+        self.mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
         if len(self._unit) != len(self.mesh_breakpoints) - 1:
             raise ValueError(
                 f"{len(self._unit)} coefficient blocks for "
                 f"{len(self.mesh_breakpoints) - 1} mesh intervals")
-        self._edges = np.asarray(self.mesh_breakpoints if edges is None else edges,
-                                 dtype=float)
         self._trim = trim
         self._polys = None
         # d == 0 marks a scalar problem; d >= 1 marks a vector problem.
@@ -118,7 +117,7 @@ class _SolutionFunction(_SolutionListMixin):
     @property
     def polynomials(self):
         if self._polys is None:
-            self._polys = _polys_from_unit_coefs(self._unit, self._edges, self._trim)
+            self._polys = _polys_from_unit_coefs(self._unit, self.mesh_breakpoints, self._trim)
         return self._polys
 
     def __len__(self):
@@ -149,8 +148,7 @@ class _SolutionFunction(_SolutionListMixin):
         # at once. Evaluating in the local variable also avoids the
         # cancellation of the absolute-time monomial form, whose coefficients
         # grow like (t / h)^degree.
-        e = self._edges
-        x = (t_arr - e[idx]) / (e[idx + 1] - e[idx])
+        x = (t_arr - bps[idx]) / (bps[idx + 1] - bps[idx])
         c = self._unit[idx]                  # (T, P, *comp), a copy
         x = x.reshape(x.shape + (1,) * (c.ndim - 2))
         out = c[:, -1]

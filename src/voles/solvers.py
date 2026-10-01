@@ -45,18 +45,12 @@ def _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=0, trim=True):
     """`_SolutionFunction` over the D/Numba drivers' per-interval coefficient
     array (``(mesh_divs, P)`` scalar, ``(mesh_divs, P, d)`` vector), in the
     local variable on [0, 1] of each mesh interval. Polynomial objects are
-    built lazily and match what the eager builders produced: the scalar paths
-    use domains ``(i * coll_divs**2) * time_step`` (trimmed except for
-    VIDE), the vector paths ``i * (coll_divs**2 * time_step)``, trimmed."""
+    built lazily; ``trim`` drops trailing zero coefficients from them (the
+    scalar VIDE path keeps them, as its eager builder did)."""
     poly_coefs = np.asarray(poly_coefs)
     M = poly_coefs.shape[0]
-    h = coll_divs ** 2 * time_step
-    mesh_breakpoints = np.arange(M + 1) * h
-    if d == 0:
-        edges = (np.arange(M + 1) * coll_divs ** 2) * time_step
-        return _SolutionFunction.from_unit_coefs(poly_coefs, mesh_breakpoints, d=0,
-                                                 edges=edges, trim=trim)
-    return _SolutionFunction.from_unit_coefs(poly_coefs, mesh_breakpoints, d=d)
+    mesh_breakpoints = np.arange(M + 1) * (coll_divs ** 2 * time_step)
+    return _SolutionFunction.from_unit_coefs(poly_coefs, mesh_breakpoints, d=d, trim=trim)
 
 
 def _stack_column_solutions(col_funcs, d, m_cols):
@@ -65,7 +59,7 @@ def _stack_column_solutions(col_funcs, d, m_cols):
     first = col_funcs[0]
     unit = np.stack([f._unit for f in col_funcs], axis=-1)   # (M, P, d, m)
     return _SolutionFunction.from_unit_coefs(unit, first.mesh_breakpoints, d=d, m=m_cols,
-                                             edges=first._edges, trim=first._trim)
+                                             trim=first._trim)
 
 
 def _vie1_rho(coll_divs, coll_choices, continuous=False):
@@ -657,7 +651,7 @@ def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh
                         kernel_interp_degree, show_warnings):
     """Resolve mesh_samples / kernel_interp_degree and truncate the kernel to
     N = 1 (mod mesh_samples).  ``coll_divs``/``coll_choices`` are already
-    validated.  Returns (Q, p, N_orig, N, K, d, M, breakpoints)."""
+    validated.  Returns (Q, p, N_orig, N, K, d, M)."""
     q = coll_divs
     m = len(coll_choices)
     Q = q if mesh_samples is None else _as_int("mesh_samples", mesh_samples)
@@ -689,7 +683,7 @@ def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh
     if K.ndim == 3 and K.shape[1] != K.shape[2]:
         raise ValueError(f"kernel_values must have shape (N, d, d), got {K.shape}")
     M = (N - 1) // Q
-    return Q, p, N_orig, N, K, d, M, np.arange(M + 1) * (Q * time_step)
+    return Q, p, N_orig, N, K, d, M
 
 
 def _stack_matrix_results(results, return_function, d, m_cols):
@@ -706,7 +700,7 @@ def _solve_vie2_product_path(kernel_values_, g_values, time_step, coll_divs, col
     from . import _product
 
     q, coll_choices = _validate_second_kind_coll_setting(coll_divs, coll_choices)
-    Q, p, N_orig, N, K, d, M, breakpoints = _product_mesh_setup(
+    Q, p, N_orig, N, K, d, M = _product_mesh_setup(
         kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
         show_warnings)
     setup = _product.ProductSetup("vie2", K, time_step, q, coll_choices, Q, p)
@@ -749,7 +743,7 @@ def _solve_vide_product_path(kernel_values_, a_values, g_values, soln_init_value
     from . import _product
 
     q, coll_choices = _validate_second_kind_coll_setting(coll_divs, coll_choices)
-    Q, p, N_orig, N, K, d, M, breakpoints = _product_mesh_setup(
+    Q, p, N_orig, N, K, d, M = _product_mesh_setup(
         kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
         show_warnings)
     init = np.asarray(soln_init_value, dtype=float)
@@ -824,7 +818,7 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
     q, coll_choices = _validate_vie1_coll_setting(coll_divs, coll_choices)
     _check_vie1_setting(q, coll_choices, force_continuous)
     _warn_reduced_order(q, coll_choices, force_continuous, show_warnings)
-    Q, p, N_orig, N, K, d, M, breakpoints = _product_mesh_setup(
+    Q, p, N_orig, N, K, d, M = _product_mesh_setup(
         kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
         show_warnings)
     kind = "vie1_cont" if force_continuous else "vie1"

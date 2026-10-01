@@ -1638,6 +1638,12 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         ``kernel(u)`` returns $K(u)$ for scalar $u > 0$: a scalar for scalar
         equations, or a square $(d, d)$ matrix for $d$-dimensional vector and
         matrix-valued equations.
+        For the fastest weight assembly, make ``kernel`` accept a 1-D array
+        of ``u`` values and return the matching ``(n,)`` or ``(n, d, d)``
+        array (e.g. ``np.multiply.outer(np.exp(-u), A)`` rather than
+        ``np.exp(-u) * A``): the smooth blocks of a whole mesh row are then
+        evaluated in one call. A kernel that only accepts scalars still
+        works, through a per-point path that can be several times slower.
     g : callable, optional
         ``g(t)`` returns the forcing term $g(t)$. Defaults to zero. Return a
         scalar for scalar equations, a $(d,)$ array for vector equations, or a
@@ -1921,6 +1927,12 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     kernel : callable
         ``kernel(u)`` returns $K(u)$: a scalar, or a $(d, d)$ matrix for vector
         and matrix-valued equations.
+        For the fastest weight assembly, make ``kernel`` accept a 1-D array
+        of ``u`` values and return the matching ``(n,)`` or ``(n, d, d)``
+        array (e.g. ``np.multiply.outer(np.exp(-u), A)`` rather than
+        ``np.exp(-u) * A``): the smooth blocks of a whole mesh row are then
+        evaluated in one call. A kernel that only accepts scalars still
+        works, through a per-point path that can be several times slower.
     a : callable, optional
         ``a(t)`` returns the coefficient $a(t)$ (a scalar, or a $(d, d)$ matrix
         for vector/matrix equations). Defaults to zero. ``a`` does not depend on
@@ -2506,6 +2518,12 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     kernel : callable
         ``kernel(u)`` returns $K(u)$: a scalar, or a $(d, d)$ matrix for vector
         and matrix-valued equations.
+        For the fastest weight assembly, make ``kernel`` accept a 1-D array
+        of ``u`` values and return the matching ``(n,)`` or ``(n, d, d)``
+        array (e.g. ``np.multiply.outer(np.exp(-u), A)`` rather than
+        ``np.exp(-u) * A``): the smooth blocks of a whole mesh row are then
+        evaluated in one call. A kernel that only accepts scalars still
+        works, through a per-point path that can be several times slower.
     g : callable, optional
         ``g(t)`` returns the right-hand side: scalar, $(d,)$, or $(d, m)$ for
         the matrix-valued case ($m$ right-hand sides). Defaults to zero
