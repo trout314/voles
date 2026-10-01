@@ -1306,7 +1306,15 @@ the matrix-valued case (<span class="arithmatex">\(m\)</span> right-hand sides).
                 <p><span class="arithmatex">\(y(0)\)</span>. Required only when <code>force_continuous=True</code>; ignored
 otherwise. A warning is emitted if a value is passed when it has no
 effect. For a matrix-valued problem with <code>force_continuous=True</code> it
-must have shape <span class="arithmatex">\((d, m)\)</span>.</p>
+must have shape <span class="arithmatex">\((d, m)\)</span>.
+It must be the value the equation implies: differentiating at
+<span class="arithmatex">\(t = 0\)</span> gives <span class="arithmatex">\(g'(0) = K(0)\,y(0)\)</span>. Any other value gives a wrong
+solution on the whole interval, not only near <span class="arithmatex">\(t = 0\)</span>, and is not
+detected. If <span class="arithmatex">\(y(0)\)</span> is not known independently, use the default
+method, or estimate it by solving with <code>force_continuous=False,
+return_function=True</code> and evaluating the solution at <span class="arithmatex">\(t = 0\)</span> (the
+continuous solve is then more accurate than the default method but
+falls short of its full order).</p>
               </div>
             </td>
             <td>
@@ -1544,7 +1552,9 @@ non-convergent node sets (see Notes), zero in <code>coll_choices</code> /
 
 <details class="note" open>
   <summary>Notes</summary>
-  <p>Whether a given node set yields a convergent method depends on the nodes
+  <p>The equation forces <span class="arithmatex">\(g(0) = 0\)</span>; for <span class="arithmatex">\(g(0) \ne 0\)</span> there is no bounded
+solution, and a warning is printed.</p>
+<p>Whether a given node set yields a convergent method depends on the nodes
 (Brunner 2004, smooth-kernel chapter). For a smooth kernel with
 <span class="arithmatex">\(|K(t, t)| \ge k_0 &gt; 0\)</span>, writing <span class="arithmatex">\(c_1 &lt; \dots &lt; c_m\)</span> for the nodes:</p>
 <ul>
@@ -1573,66 +1583,7 @@ skipped.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2480</span>
-<span class="normal">2481</span>
-<span class="normal">2482</span>
-<span class="normal">2483</span>
-<span class="normal">2484</span>
-<span class="normal">2485</span>
-<span class="normal">2486</span>
-<span class="normal">2487</span>
-<span class="normal">2488</span>
-<span class="normal">2489</span>
-<span class="normal">2490</span>
-<span class="normal">2491</span>
-<span class="normal">2492</span>
-<span class="normal">2493</span>
-<span class="normal">2494</span>
-<span class="normal">2495</span>
-<span class="normal">2496</span>
-<span class="normal">2497</span>
-<span class="normal">2498</span>
-<span class="normal">2499</span>
-<span class="normal">2500</span>
-<span class="normal">2501</span>
-<span class="normal">2502</span>
-<span class="normal">2503</span>
-<span class="normal">2504</span>
-<span class="normal">2505</span>
-<span class="normal">2506</span>
-<span class="normal">2507</span>
-<span class="normal">2508</span>
-<span class="normal">2509</span>
-<span class="normal">2510</span>
-<span class="normal">2511</span>
-<span class="normal">2512</span>
-<span class="normal">2513</span>
-<span class="normal">2514</span>
-<span class="normal">2515</span>
-<span class="normal">2516</span>
-<span class="normal">2517</span>
-<span class="normal">2518</span>
-<span class="normal">2519</span>
-<span class="normal">2520</span>
-<span class="normal">2521</span>
-<span class="normal">2522</span>
-<span class="normal">2523</span>
-<span class="normal">2524</span>
-<span class="normal">2525</span>
-<span class="normal">2526</span>
-<span class="normal">2527</span>
-<span class="normal">2528</span>
-<span class="normal">2529</span>
-<span class="normal">2530</span>
-<span class="normal">2531</span>
-<span class="normal">2532</span>
-<span class="normal">2533</span>
-<span class="normal">2534</span>
-<span class="normal">2535</span>
-<span class="normal">2536</span>
-<span class="normal">2537</span>
-<span class="normal">2538</span>
-<span class="normal">2539</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2539</span>
 <span class="normal">2540</span>
 <span class="normal">2541</span>
 <span class="normal">2542</span>
@@ -1913,7 +1864,82 @@ skipped.</p>
 <span class="normal">2817</span>
 <span class="normal">2818</span>
 <span class="normal">2819</span>
-<span class="normal">2820</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">2820</span>
+<span class="normal">2821</span>
+<span class="normal">2822</span>
+<span class="normal">2823</span>
+<span class="normal">2824</span>
+<span class="normal">2825</span>
+<span class="normal">2826</span>
+<span class="normal">2827</span>
+<span class="normal">2828</span>
+<span class="normal">2829</span>
+<span class="normal">2830</span>
+<span class="normal">2831</span>
+<span class="normal">2832</span>
+<span class="normal">2833</span>
+<span class="normal">2834</span>
+<span class="normal">2835</span>
+<span class="normal">2836</span>
+<span class="normal">2837</span>
+<span class="normal">2838</span>
+<span class="normal">2839</span>
+<span class="normal">2840</span>
+<span class="normal">2841</span>
+<span class="normal">2842</span>
+<span class="normal">2843</span>
+<span class="normal">2844</span>
+<span class="normal">2845</span>
+<span class="normal">2846</span>
+<span class="normal">2847</span>
+<span class="normal">2848</span>
+<span class="normal">2849</span>
+<span class="normal">2850</span>
+<span class="normal">2851</span>
+<span class="normal">2852</span>
+<span class="normal">2853</span>
+<span class="normal">2854</span>
+<span class="normal">2855</span>
+<span class="normal">2856</span>
+<span class="normal">2857</span>
+<span class="normal">2858</span>
+<span class="normal">2859</span>
+<span class="normal">2860</span>
+<span class="normal">2861</span>
+<span class="normal">2862</span>
+<span class="normal">2863</span>
+<span class="normal">2864</span>
+<span class="normal">2865</span>
+<span class="normal">2866</span>
+<span class="normal">2867</span>
+<span class="normal">2868</span>
+<span class="normal">2869</span>
+<span class="normal">2870</span>
+<span class="normal">2871</span>
+<span class="normal">2872</span>
+<span class="normal">2873</span>
+<span class="normal">2874</span>
+<span class="normal">2875</span>
+<span class="normal">2876</span>
+<span class="normal">2877</span>
+<span class="normal">2878</span>
+<span class="normal">2879</span>
+<span class="normal">2880</span>
+<span class="normal">2881</span>
+<span class="normal">2882</span>
+<span class="normal">2883</span>
+<span class="normal">2884</span>
+<span class="normal">2885</span>
+<span class="normal">2886</span>
+<span class="normal">2887</span>
+<span class="normal">2888</span>
+<span class="normal">2889</span>
+<span class="normal">2890</span>
+<span class="normal">2891</span>
+<span class="normal">2892</span>
+<span class="normal">2893</span>
+<span class="normal">2894</span>
+<span class="normal">2895</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">mesh_breakpoints</span><span class="p">,</span>
                           <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1945,6 +1971,14 @@ skipped.</p>
 <span class="sd">        otherwise. A warning is emitted if a value is passed when it has no</span>
 <span class="sd">        effect. For a matrix-valued problem with ``force_continuous=True`` it</span>
 <span class="sd">        must have shape $(d, m)$.</span>
+<span class="sd">        It must be the value the equation implies: differentiating at</span>
+<span class="sd">        $t = 0$ gives $g'(0) = K(0)\,y(0)$. Any other value gives a wrong</span>
+<span class="sd">        solution on the whole interval, not only near $t = 0$, and is not</span>
+<span class="sd">        detected. If $y(0)$ is not known independently, use the default</span>
+<span class="sd">        method, or estimate it by solving with ``force_continuous=False,</span>
+<span class="sd">        return_function=True`` and evaluating the solution at $t = 0$ (the</span>
+<span class="sd">        continuous solve is then more accurate than the default method but</span>
+<span class="sd">        falls short of its full order).</span>
 <span class="sd">    mesh_breakpoints : array_like</span>
 <span class="sd">        Strictly-increasing 1-D array starting at 0.</span>
 <span class="sd">    coll_divs, coll_choices : int, list of int, optional</span>
@@ -1998,6 +2032,9 @@ skipped.</p>
 
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
+<span class="sd">    The equation forces $g(0) = 0$; for $g(0) \ne 0$ there is no bounded</span>
+<span class="sd">    solution, and a warning is printed.</span>
+
 <span class="sd">    Whether a given node set yields a convergent method depends on the nodes</span>
 <span class="sd">    (Brunner 2004, smooth-kernel chapter). For a smooth kernel with</span>
 <span class="sd">    $|K(t, t)| \ge k_0 &gt; 0$, writing $c_1 &lt; \dots &lt; c_m$ for the nodes:</span>
@@ -2029,6 +2066,8 @@ skipped.</p>
     <span class="n">mesh_breakpoints</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">mesh_breakpoints</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"mesh_breakpoints must be 1-D with at least two entries"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"mesh_breakpoints must be finite (no inf or NaN)"</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"mesh_breakpoints must be strictly increasing"</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">mesh_breakpoints</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">:</span>
@@ -2111,6 +2150,8 @@ skipped.</p>
                     <span class="n">_ComplexSolutionFunction</span><span class="p">(</span><span class="n">y_func_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">_recombine_complex_y</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">)</span>
 
+    <span class="n">_warn_vie1_g_start_callable</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
+
     <span class="n">M</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
     <span class="n">p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
     <span class="n">widths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span>
@@ -2135,7 +2176,8 @@ skipped.</p>
                 <span class="n">t_n</span> <span class="o">=</span> <span class="n">mesh_breakpoints</span><span class="p">[</span><span class="n">n</span><span class="p">]</span>
                 <span class="n">h_n</span> <span class="o">=</span> <span class="n">widths</span><span class="p">[</span><span class="n">n</span><span class="p">]</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
-                    <span class="n">g_arr</span><span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">g</span><span class="p">(</span><span class="n">t_n</span> <span class="o">+</span> <span class="n">node_pos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">h_n</span><span class="p">))</span>
+                    <span class="n">t_ni</span> <span class="o">=</span> <span class="n">t_n</span> <span class="o">+</span> <span class="n">node_pos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">h_n</span>
+                    <span class="n">g_arr</span><span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">_scalar_g_value</span><span class="p">(</span><span class="n">g</span><span class="p">(</span><span class="n">t_ni</span><span class="p">),</span> <span class="n">t_ni</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">force_continuous</span><span class="p">:</span>
             <span class="c1"># Brunner S_m^(0): degree-m polynomial on {0} ∪ node_pos, with the</span>
             <span class="c1"># boundary value carried forward for continuity. Extended weight</span>
@@ -2147,7 +2189,7 @@ skipped.</p>
                 <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">)</span>
             <span class="n">adv_U</span><span class="p">,</span> <span class="n">adv_0</span> <span class="o">=</span> <span class="n">_vie1_cont_advance</span><span class="p">(</span><span class="n">node_pos</span><span class="p">)</span>
             <span class="n">y</span><span class="p">,</span> <span class="n">boundary</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie1_cont_d</span><span class="p">(</span>
-                <span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">,</span> <span class="n">adv_U</span><span class="p">,</span> <span class="n">adv_0</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">))</span>
+                <span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">,</span> <span class="n">adv_U</span><span class="p">,</span> <span class="n">adv_0</span><span class="p">,</span> <span class="n">_scalar_init</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">))</span>
             <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
                 <span class="n">polys</span> <span class="o">=</span> <span class="n">_build_vie1_cont_polynomials_scalar</span><span class="p">(</span>
                     <span class="n">y</span><span class="p">,</span> <span class="n">boundary</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">node_pos</span><span class="p">)</span>

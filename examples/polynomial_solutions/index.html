@@ -1163,7 +1163,8 @@ of collocation points within that interval.</p>
 <p>Because the solution on each interval is an explicit polynomial, the solver can
 return it. Passing <code>return_function=True</code> to any solver returns a
 <code>(soln_values, solution)</code> tuple (<code>return_polys=True</code> is a deprecated alias).
-<code>solution(t)</code> evaluates the piecewise polynomial at any time, and <code>solution</code>
+<code>solution(t)</code> evaluates the piecewise polynomial at any time in <span class="arithmatex">\([0, T]\)</span>
+(NaN outside), and <code>solution</code>
 also indexes/iterates like a list of <code>numpy.polynomial.Polynomial</code> objects
 covering successive mesh intervals — these can be evaluated at any point,
 differentiated, integrated, and so on.</p>

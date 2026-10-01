@@ -1524,7 +1524,7 @@ scalar equations, <code>(M, p, d)</code> for vector equations, and
             <td>
               <div class="doc-md-description">
                 <p>When <code>return_function=True</code>. <code>y_callable(t)</code> evaluates the
-piecewise polynomial at any time t, returning a scalar / <code>(d,)</code> /
+piecewise polynomial at any time t in the mesh (NaN outside it), returning a scalar / <code>(d,)</code> /
 <code>(d, m)</code> value for scalar t (with a leading time axis for array t).</p>
               </div>
             </td>
@@ -1602,28 +1602,7 @@ CPU count).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1519</span>
-<span class="normal">1520</span>
-<span class="normal">1521</span>
-<span class="normal">1522</span>
-<span class="normal">1523</span>
-<span class="normal">1524</span>
-<span class="normal">1525</span>
-<span class="normal">1526</span>
-<span class="normal">1527</span>
-<span class="normal">1528</span>
-<span class="normal">1529</span>
-<span class="normal">1530</span>
-<span class="normal">1531</span>
-<span class="normal">1532</span>
-<span class="normal">1533</span>
-<span class="normal">1534</span>
-<span class="normal">1535</span>
-<span class="normal">1536</span>
-<span class="normal">1537</span>
-<span class="normal">1538</span>
-<span class="normal">1539</span>
-<span class="normal">1540</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1540</span>
 <span class="normal">1541</span>
 <span class="normal">1542</span>
 <span class="normal">1543</span>
@@ -1861,7 +1840,31 @@ CPU count).</p>
 <span class="normal">1775</span>
 <span class="normal">1776</span>
 <span class="normal">1777</span>
-<span class="normal">1778</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">1778</span>
+<span class="normal">1779</span>
+<span class="normal">1780</span>
+<span class="normal">1781</span>
+<span class="normal">1782</span>
+<span class="normal">1783</span>
+<span class="normal">1784</span>
+<span class="normal">1785</span>
+<span class="normal">1786</span>
+<span class="normal">1787</span>
+<span class="normal">1788</span>
+<span class="normal">1789</span>
+<span class="normal">1790</span>
+<span class="normal">1791</span>
+<span class="normal">1792</span>
+<span class="normal">1793</span>
+<span class="normal">1794</span>
+<span class="normal">1795</span>
+<span class="normal">1796</span>
+<span class="normal">1797</span>
+<span class="normal">1798</span>
+<span class="normal">1799</span>
+<span class="normal">1800</span>
+<span class="normal">1801</span>
+<span class="normal">1802</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIE_2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span>
                           <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                           <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -1975,7 +1978,7 @@ CPU count).</p>
 <span class="sd">        ``(M, p, d, m)`` for matrix-valued equations.</span>
 <span class="sd">    (soln_values, y_callable) : tuple</span>
 <span class="sd">        When ``return_function=True``. ``y_callable(t)`` evaluates the</span>
-<span class="sd">        piecewise polynomial at any time t, returning a scalar / ``(d,)`` /</span>
+<span class="sd">        piecewise polynomial at any time t in the mesh (NaN outside it), returning a scalar / ``(d,)`` /</span>
 <span class="sd">        ``(d, m)`` value for scalar t (with a leading time axis for array t).</span>
 
 <span class="sd">    Raises</span>
@@ -2007,6 +2010,8 @@ CPU count).</p>
     <span class="n">mesh_breakpoints</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">mesh_breakpoints</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"mesh_breakpoints must be 1-D with at least two entries"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"mesh_breakpoints must be finite (no inf or NaN)"</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"mesh_breakpoints must be strictly increasing"</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">mesh_breakpoints</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">:</span>
@@ -2069,7 +2074,8 @@ CPU count).</p>
                 <span class="n">t_n</span> <span class="o">=</span> <span class="n">mesh_breakpoints</span><span class="p">[</span><span class="n">n</span><span class="p">]</span>
                 <span class="n">h_n</span> <span class="o">=</span> <span class="n">widths</span><span class="p">[</span><span class="n">n</span><span class="p">]</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
-                    <span class="n">g_arr</span><span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">g</span><span class="p">(</span><span class="n">t_n</span> <span class="o">+</span> <span class="n">node_pos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">h_n</span><span class="p">))</span>
+                    <span class="n">t_ni</span> <span class="o">=</span> <span class="n">t_n</span> <span class="o">+</span> <span class="n">node_pos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">h_n</span>
+                    <span class="n">g_arr</span><span class="p">[</span><span class="n">n</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">_scalar_g_value</span><span class="p">(</span><span class="n">g</span><span class="p">(</span><span class="n">t_ni</span><span class="p">),</span> <span class="n">t_ni</span><span class="p">)</span>
         <span class="n">y</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">function_solve_vie2_d</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">g_arr</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
