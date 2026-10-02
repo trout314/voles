@@ -6,7 +6,7 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from . import _dlang as _dlang_module
 from . import _complex as _cplx
-from ._solution import _SolutionFunction, _ComplexSolutionFunction
+from ._solution import _SolutionFunction, _complex_solution
 
 
 def _column_workers(m_cols):
@@ -513,7 +513,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         if return_function:
             soln_real, sf_real = result
             return (_cplx._recombine(soln_real, d_orig),
-                    _ComplexSolutionFunction(sf_real, d_orig))
+                    _complex_solution(sf_real, d_orig))
         return _cplx._recombine(result, d_orig)
 
     kernel_values_ = np.asarray(kernel_values, dtype=float)
@@ -1130,7 +1130,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         if return_function:
             soln_real, sf_real = result
             return (_cplx._recombine(soln_real, d_orig),
-                    _ComplexSolutionFunction(sf_real, d_orig))
+                    _complex_solution(sf_real, d_orig))
         return _cplx._recombine(result, d_orig)
 
     kernel_values_ = np.asarray(kernel_values, dtype=float)
@@ -1426,7 +1426,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         if return_function:
             soln_real, sf_real = result
             return (_cplx._recombine(soln_real, d_orig),
-                    _ComplexSolutionFunction(sf_real, d_orig))
+                    _complex_solution(sf_real, d_orig))
         return _cplx._recombine(result, d_orig)
 
     kernel_values_ = np.asarray(kernel_values, dtype=float)

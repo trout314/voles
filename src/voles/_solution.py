@@ -48,32 +48,15 @@ def _polys_from_unit_coefs(unit_coefs, bps, trim):
     return polys
 
 
-class _SolutionListMixin:
-    """List-like access delegating to ``.polynomials``.
-
-    Preserves backward compatibility with the previous return value, which was a
-    plain list of per-interval polynomials: ``len(sol)``, ``sol[n]``, and
-    iteration all operate on ``self.polynomials``.
-    """
-
-    def __len__(self):
-        return len(self.polynomials)
-
-    def __getitem__(self, index):
-        return self.polynomials[index]
-
-    def __iter__(self):
-        return iter(self.polynomials)
-
-
-class _SolutionFunction(_SolutionListMixin):
+class _SolutionFunction:
     """Callable wrapping the per-interval Lagrange polynomials.
 
     `y(t)` evaluates the piecewise polynomial at scalar or array `t`; points
     outside ``[mesh_breakpoints[0], mesh_breakpoints[-1]]`` give NaN.
-    Constructed from per-interval local monomial coefficients (see
-    `_polys_from_unit_coefs`); the `polynomials` list described below is
-    built lazily on first access.
+    Constructed from per-interval local monomial coefficients, real or
+    complex (see `_polys_from_unit_coefs`); the `polynomials` list described
+    below is built lazily on first access. ``len(sol)``, ``sol[n]`` and
+    iteration operate on that list, as the previous plain-list return did.
 
     For scalar problems, `polynomials` is a list of `numpy.polynomial.Polynomial`
     objects, one per mesh interval. For vector problems with d components,
@@ -94,7 +77,13 @@ class _SolutionFunction(_SolutionListMixin):
         over ``t``; the ``Polynomial`` list is built only if ``.polynomials``
         (or indexing / iteration) is used.
         """
-        self._unit = np.asarray(unit_coefs, dtype=float)
+        self._unit = np.asarray(unit_coefs)
+        if not np.issubdtype(self._unit.dtype, np.number):
+            raise TypeError(
+                "_SolutionFunction takes a numeric coefficient array, got dtype "
+                f"{self._unit.dtype}")
+        if not np.issubdtype(self._unit.dtype, np.complexfloating):
+            self._unit = self._unit.astype(float)
         if self._unit.ndim < 2:
             raise TypeError(
                 "_SolutionFunction takes per-interval coefficient arrays "
@@ -123,6 +112,12 @@ class _SolutionFunction(_SolutionListMixin):
     def __len__(self):
         return len(self._unit)
 
+    def __getitem__(self, index):
+        return self.polynomials[index]
+
+    def __iter__(self):
+        return iter(self.polynomials)
+
     def __call__(self, t):
         scalar_input = (np.isscalar(t) or np.ndim(t) == 0)
         t_arr = np.atleast_1d(np.asarray(t, dtype=float))
@@ -140,7 +135,7 @@ class _SolutionFunction(_SolutionListMixin):
         if outside.any():
             out[outside] = np.nan
         if scalar_input:
-            return float(out[0]) if self._d == 0 else out[0]
+            return out[0].item() if self._d == 0 else out[0]   # Python float / complex
         return out
 
     def _evaluate(self, t_arr):
@@ -161,45 +156,20 @@ class _SolutionFunction(_SolutionListMixin):
         return out
 
 
-class _ComplexSolutionFunction(_SolutionListMixin):
-    """Wraps a real-block SolutionFunction so the user sees complex outputs."""
+def _complex_solution(real, d_orig: int):
+    """The complex-valued solution behind a real-block one.
 
-    def __init__(self, real_y_func, d_orig: int):
-        self._real = real_y_func
-        self._d_orig = d_orig
-        # m >= 1 marks a matrix problem; inherited from the real wrapper.
-        self._m = getattr(real_y_func, "_m", 0)
-        self.mesh_breakpoints = real_y_func.mesh_breakpoints
-        self._polys = None
-
-    @property
-    def polynomials(self):
-        # Convert the per-interval (2d,) or (2d, m) polynomial arrays to
-        # complex, on first use (see _SolutionFunction.polynomials).
-        if self._polys is None:
-            from ._complex import _recombine_polys
-            self._polys = _recombine_polys(self._real.polynomials, self._d_orig)
-        return self._polys
-
-    def __len__(self):
-        return len(self._real)
-
-    def __call__(self, t):
-        val = self._real(t)
-        scalar_input = (np.isscalar(t) or np.ndim(t) == 0)
-        if self._d_orig == 0:
-            # real returns shape (2,) for scalar t or (n, 2) for array t
-            if scalar_input:
-                return complex(val[0], val[1])
-            return val[..., 0] + 1j * val[..., 1]
-        d = self._d_orig
-        if self._m:
-            # matrix: real returns (2d, m) for scalar t or (n, 2d, m) for array t;
-            # the component axis is -2.
-            if scalar_input:
-                return val[:d, :] + 1j * val[d:, :]
-            return val[..., :d, :] + 1j * val[..., d:, :]
-        # vector: real returns (2*d,) for scalar t or (n, 2*d) for array t
-        if scalar_input:
-            return val[:d] + 1j * val[d:]
-        return val[..., :d] + 1j * val[..., d:]
+    The complex solvers run the real solvers on the block form of the
+    problem (real and imaginary parts stacked along the component axis), so
+    ``real`` has 2 components for a complex scalar problem and 2d for a
+    complex d-vector one. Recombining its coefficients gives an ordinary
+    `_SolutionFunction` with complex coefficients: the Horner evaluation,
+    the lazy Polynomial objects and the list protocol all work unchanged
+    on complex arrays, and a scalar ``t`` returns a Python complex."""
+    unit = real._unit
+    if d_orig == 0:
+        unit_c = unit[:, :, 0] + 1j * unit[:, :, 1]
+    else:
+        unit_c = unit[:, :, :d_orig] + 1j * unit[:, :, d_orig:]
+    return _SolutionFunction(unit_c, real.mesh_breakpoints, d=d_orig, m=real._m,
+                             trim=real._trim)

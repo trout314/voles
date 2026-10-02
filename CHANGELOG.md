@@ -32,17 +32,46 @@
   its descriptive `ValueError` whether or not warnings are on); too-short
   input is reported before truncation; a vector-valued g or a with a scalar
   kernel gets a clear `ValueError` in all three callable solvers.
-- **Complex-valued solutions with `return_function=True` could fail to
-  build their polynomials** with a broadcasting error: the real and
-  imaginary parts are trimmed of exact trailing zeros independently, so
-  their coefficient arrays can differ in length when a coefficient rounds
-  to exactly zero on one platform (seen on the Linux builds for a complex
-  matrix VIE-1). The recombination now pads to the longer array.
+- **Complex-valued solutions with `return_function=True` are built from
+  complex coefficients directly.** They used to be wrapped around the real
+  block solve and recombined its trimmed real polynomials, which could fail
+  with a broadcasting error when a trailing coefficient rounded to exactly
+  zero on one platform (seen on the Linux builds for a complex matrix
+  VIE-1). The wrapper class is gone; a complex solution is an ordinary
+  solution object whose `polynomials` have complex coefficients.
 - Several VIE-1 tests used data with no meaningful solution and only
   compared two computations with each other; they now check every column
   against a closed-form solution.
 
 ### Changed
+- **Faster solves across the board** (measured on an Apple M1 against the
+  previous release):
+    - The Toeplitz history sums use a real-input FFT: each length-2S
+      transform is one length-S complex FFT plus an O(S) untangling pass,
+      which halves the FFT work and the spectrum cache. Sampled solves run
+      2.0–2.4x faster (VIE-1, VIE-2, VIDE; scalar up to d = 12), scalar
+      VIDE 3.0–3.4x (69 ms to 21 ms at N = 64,001), with results changed
+      only at the rounding level (~1e-12 relative).
+    - The Lagrange coefficient tables of the D drivers are built at compile
+      time instead of on every call (about half of scalar VIDE's time).
+    - `return_function=True` is 90–190x cheaper and `solution(t)` 65–70x:
+      the solution object keeps the local coefficients the solvers already
+      produce, evaluates by a vectorized Horner pass in each interval's
+      local variable (more accurate than the absolute-time monomials, 8e-16
+      vs 1e-8 against exact arithmetic on a continuous VIE-1 case), and
+      builds the `Polynomial` objects only when `.polynomials`, indexing
+      or iteration is used.
+    - The callable solvers assemble all fully smooth off-diagonal blocks of
+      a mesh row in one kernel call and one contraction per quadrature
+      order, with the same two-order acceptance and adaptive fallback:
+      up to 12x faster on non-uniform meshes, 6–9x with Gauss–Jacobi
+      singular kernels. This needs a kernel that accepts an array of
+      `u` values (e.g. `np.multiply.outer(np.exp(-u), A)`); a scalar-only
+      kernel keeps the per-point path. The docs say so.
+- The callable solvers' two-order acceptance rule (store the higher-order
+  estimate, fall back to adaptive quadrature for the entries that fail the
+  check) has one implementation shared by the smooth, batched, diagonal and
+  Gauss–Jacobi paths of both the scalar and the vector builder.
 - **`solution(t)` returns NaN outside the solved interval [0, T]** instead
   of silently extrapolating the end polynomials. The tolerance at the ends
   is relative to the interval length (with a few-ulp floor), so `f(T)`

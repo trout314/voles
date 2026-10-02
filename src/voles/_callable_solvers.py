@@ -33,7 +33,7 @@ from .solvers import (_column_workers, _check_vie1_setting, _warn_g_start_column
 import numpy as np
 from numpy.polynomial import polynomial as npp
 
-from ._solution import _SolutionFunction, _ComplexSolutionFunction
+from ._solution import _SolutionFunction, _complex_solution
 
 
 try:
@@ -423,34 +423,54 @@ def _smooth_offdiag_batch_vals(kernel, ls, taus, mesh_breakpoints, orders, gl,
     return est[0], est[1]
 
 
+def _store_two_order(W, n, is_, ls, v1, v2, tol, fallback):
+    """The W builders' one acceptance rule for fixed-order block estimates.
+
+    Store the higher-order estimate ``v2`` for blocks ``ls`` of row n at
+    nodes ``is_`` (``v1``, ``v2``: ``(L, n_i, n_basis, *tail)``, ``tail`` the
+    kernel value shape), then accept each (block, node, basis) iff
+    ``max|v1 - v2| <= tol * max(1, max|v2|)`` over the ``tail`` entries. The
+    negation (which also catches NaN) sends the entry to ``fallback(bj, bi,
+    bk)``, which returns the adaptively integrated value to store instead.
+    Returns the ``(L, n_i, n_basis)`` acceptance mask. Used for the batched
+    and per-block smooth paths, the diagonal blocks and the Gauss-Jacobi
+    blocks of both the scalar and the vector builder."""
+    is_ = np.asarray(is_, dtype=np.intp)
+    ls = np.asarray(ls, dtype=np.intp)
+    W[n][is_[:, None], ls[None, :]] = np.swapaxes(v2, 0, 1)
+    tail_axes = tuple(range(3, v2.ndim))
+    err = np.max(np.abs(v1 - v2), axis=tail_axes)               # (L, n_i, n_basis)
+    ref = np.maximum(1.0, np.max(np.abs(v2), axis=tail_axes))
+    ok = err <= tol * ref
+    for bj, bi, bk in zip(*(ix.tolist() for ix in np.nonzero(~ok))):
+        W[n, is_[bi], ls[bj], bk] = fallback(bj, bi, bk)
+    return ok
+
+
 def _integrate_smooth_batch(W, n, ls, tau_n, ok_off, *, kernel, mesh_breakpoints,
                             widths, orders, gl, B_off, tol, get_quad,
                             make_integrand):
     """Off-diagonal blocks ``ls`` of row n of W whose nodes are all smooth:
-    batched two-order values, stored, then checked. Accept (node, basis) iff
-    max|v1 - v2| <= tol * max(1, max|v2|) over any trailing (d, d) entries;
-    the negation (which also catches NaN) falls back to adaptive quadrature
-    via ``get_quad()``. When ``ok_off`` is given, records per-(node, lag)
-    acceptance. Shared by the scalar and vector W builders; the kernel value
-    shape is W.shape[4:]."""
+    batched two-order values, stored and checked by `_store_two_order`
+    (fallback: adaptive quadrature via ``get_quad()``). When ``ok_off`` is
+    given, records per-(node, lag) acceptance. Shared by the scalar and
+    vector W builders; the kernel value shape is W.shape[4:]."""
     tail = W.shape[4:]
-    tail_axes = tuple(range(3, 3 + len(tail)))
+    p = W.shape[1]
     for c0 in range(0, len(ls), _SMOOTH_BATCH):
         lb = np.asarray(ls[c0:c0 + _SMOOTH_BATCH])
         v1, v2 = _smooth_offdiag_batch_vals(kernel, lb, tau_n, mesh_breakpoints,
                                             orders, gl, B_off, tail)
-        W[n][:, lb] = np.swapaxes(v2, 0, 1)
-        err = np.max(np.abs(v1 - v2), axis=tail_axes)           # (L, p, n_basis)
-        ref = np.maximum(1.0, np.max(np.abs(v2), axis=tail_axes))
-        ok = err <= tol * ref
-        if ok_off is not None:
-            ok_off[:, n - lb] = ok.all(axis=2).T
-        for bj, bi, bk in zip(*(ix.tolist() for ix in np.nonzero(~ok))):
+
+        def fallback(bj, bi, bk, lb=lb):
             l = int(lb[bj])
             val, _err = get_quad()(
                 make_integrand(tau_n[bi], mesh_breakpoints[l], widths[l], bk),
                 mesh_breakpoints[l], mesh_breakpoints[l + 1], **_QUAD_OPTS_DEFAULT)
-            W[n, bi, l, bk] = val
+            return val
+        ok = _store_two_order(W, n, np.arange(p), lb, v1, v2, tol, fallback)
+        if ok_off is not None:
+            ok_off[:, n - lb] = ok.all(axis=2).T
 
 
 def _classify_sing_block(sing, a_int, b_int):
@@ -798,44 +818,42 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         log factor) falls back to adaptive quadrature at default tolerance
         and stays on the per-row repair path. Returns True iff all passed."""
         v1, v2 = jacobi_vals(tau, t_l, h_l, a_int, b_int, s0, alpha)
-        W[n, i, l, :] = v2
-        ok = np.abs(v1 - v2) <= smooth_check_tol * np.maximum(1.0, np.abs(v2))
-        for k in np.nonzero(~ok)[0]:
-            kwargs = dict(_QUAD_OPTS_DEFAULT)
-            if interior_sing:
-                kwargs['points'] = interior_sing
-            val, _err = get_quad()(make_integrand(tau, t_l, h_l, int(k), sing_pts),
+        kwargs = dict(_QUAD_OPTS_DEFAULT)
+        if interior_sing:
+            kwargs['points'] = interior_sing
+
+        def fallback(bj, bi, bk):
+            val, _err = get_quad()(make_integrand(tau, t_l, h_l, bk, sing_pts),
                                    a_int, b_int, **kwargs)
-            W[n, i, l, int(k)] = val
+            return val
+        ok = _store_two_order(W, n, [i], [l], v1[None, None], v2[None, None],
+                              smooth_check_tol, fallback)
         return bool(ok.all())
 
     def store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2):
-        """Store the order-(ord+2) estimate v2 for every basis function, then fall
-        back to adaptive quadrature for any that fails the two-order check. Accept
-        basis k iff |v1 - v2| <= tol * max(1, |v2|); the negation (which also
-        catches NaN) triggers the fallback. Returns True iff no fallback ran."""
-        W[n, i, l, :] = v2
-        ok = np.abs(v1 - v2) <= smooth_check_tol * np.maximum(1.0, np.abs(v2))
-        for k in np.nonzero(~ok)[0]:
-            val, _err = get_quad()(make_integrand(tau, t_l, h_l, int(k)),
+        """Diagonal block of node i: store the order-(ord+2) estimate v2 under
+        the two-order acceptance rule, adaptive quadrature for the failing
+        basis functions. Returns True iff no fallback ran."""
+        def fallback(bj, bi, bk):
+            val, _err = get_quad()(make_integrand(tau, t_l, h_l, bk),
                                    a_int, b_int, **_QUAD_OPTS_DEFAULT)
-            W[n, i, l, int(k)] = val
+            return val
+        ok = _store_two_order(W, n, [i], [l], v1[None, None], v2[None, None],
+                              smooth_check_tol, fallback)
         return bool(ok.all())
 
     def store_smooth_offdiag(n, l, smooth_is, taus, t_l, h_l, a_int, b_int, v1, v2):
-        """Vectorized store + two-order check for a full off-diagonal block across
-        all its smooth collocation nodes at once. v1, v2: (n_i, n_basis). The
-        accepted estimate is written for every (node, basis) in one indexed assign;
-        only the rare failing pairs fall back to per-node adaptive quadrature.
-        Returns the set of nodes (entries of smooth_is) that needed a fallback."""
-        W[n, np.asarray(smooth_is), l, :] = v2
-        ok = np.abs(v1 - v2) <= smooth_check_tol * np.maximum(1.0, np.abs(v2))
-        bad_i, bad_k = np.nonzero(~ok)
-        for bi, bk in zip(bad_i.tolist(), bad_k.tolist()):
+        """Full off-diagonal block across all its smooth collocation nodes at
+        once (v1, v2: (n_i, n_basis)); the rare failing pairs fall back to
+        per-node adaptive quadrature. Returns the set of nodes (entries of
+        smooth_is) that needed a fallback."""
+        def fallback(bj, bi, bk):
             val, _err = get_quad()(make_integrand(taus[bi], t_l, h_l, bk),
                                    a_int, b_int, **_QUAD_OPTS_DEFAULT)
-            W[n, smooth_is[bi], l, bk] = val
-        return {smooth_is[bi] for bi in set(bad_i.tolist())}
+            return val
+        ok = _store_two_order(W, n, smooth_is, [l], v1[None], v2[None],
+                              smooth_check_tol, fallback)
+        return {smooth_is[bi] for bi in np.nonzero(~ok[0].all(axis=1))[0].tolist()}
 
     def integrate_smooth_batch(n, ls, tau_n, ok_off):
         _integrate_smooth_batch(
@@ -1162,51 +1180,43 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         acceptance over the (d, d) entries, adaptive fallback at default
         tolerance for failing basis functions. Returns True iff all passed."""
         v1, v2 = jacobi_vals(tau, t_l, h_l, a_int, b_int, s0, alpha)
-        W[n, i, l, :, :, :] = v2
-        err = np.max(np.abs(v1 - v2), axis=(1, 2))
-        ref = np.maximum(1.0, np.max(np.abs(v2), axis=(1, 2)))
-        ok = err <= smooth_check_tol * ref
-        for k in np.nonzero(~ok)[0]:
-            kwargs = dict(_QUAD_VEC_OPTS_DEFAULT)
-            if interior_sing:
-                kwargs['points'] = interior_sing
-            val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, int(k),
-                                                      sing_pts),
+        kwargs = dict(_QUAD_VEC_OPTS_DEFAULT)
+        if interior_sing:
+            kwargs['points'] = interior_sing
+
+        def fallback(bj, bi, bk):
+            val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, bk, sing_pts),
                                        a_int, b_int, **kwargs)
-            W[n, i, l, int(k), :, :] = val
+            return val
+        ok = _store_two_order(W, n, [i], [l], v1[None, None], v2[None, None],
+                              smooth_check_tol, fallback)
         return bool(ok.all())
 
     def store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2):
-        """Store the order-(ord+2) estimate v2 for every basis function, then
-        fall back to adaptive quadrature for any that fails the two-order check.
-        Accept basis k iff max|v1 - v2| <= tol * max(1, max|v2|) over the (d, d)
-        entries; the negation (which also catches NaN) triggers the fallback.
-        Returns True iff no fallback ran."""
-        W[n, i, l, :, :, :] = v2
-        err = np.max(np.abs(v1 - v2), axis=(1, 2))  # (n_basis,)
-        ref = np.maximum(1.0, np.max(np.abs(v2), axis=(1, 2)))
-        ok = err <= smooth_check_tol * ref
-        for k in np.nonzero(~ok)[0]:
-            val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, int(k)),
+        """Diagonal block of node i: store the order-(ord+2) estimate v2 under
+        the two-order acceptance rule (over the (d, d) entries), adaptive
+        quadrature for the failing basis functions. Returns True iff no
+        fallback ran."""
+        def fallback(bj, bi, bk):
+            val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, bk),
                                        a_int, b_int, **_QUAD_VEC_OPTS_DEFAULT)
-            W[n, i, l, int(k), :, :] = val
+            return val
+        ok = _store_two_order(W, n, [i], [l], v1[None, None], v2[None, None],
+                              smooth_check_tol, fallback)
         return bool(ok.all())
 
     def store_smooth_offdiag(n, l, smooth_is, taus, t_l, h_l, a_int, b_int, v1, v2):
-        """Vectorized store + two-order check for a full off-diagonal block across
-        all its smooth collocation nodes at once. v1, v2: (n_i, n_basis, d, d). The
-        accepted estimate is written for every (node, basis) in one indexed assign;
-        only the rare failing pairs fall back to per-node adaptive quadrature.
-        Returns the set of nodes (entries of smooth_is) that needed a fallback."""
-        W[n, np.asarray(smooth_is), l, :, :, :] = v2
-        err = np.max(np.abs(v1 - v2), axis=(2, 3))  # (n_i, n_basis)
-        ref = np.maximum(1.0, np.max(np.abs(v2), axis=(2, 3)))
-        bad_i, bad_k = np.nonzero(~(err <= smooth_check_tol * ref))
-        for bi, bk in zip(bad_i.tolist(), bad_k.tolist()):
+        """Full off-diagonal block across all its smooth collocation nodes at
+        once (v1, v2: (n_i, n_basis, d, d)); the rare failing pairs fall back
+        to per-node adaptive quadrature. Returns the set of nodes (entries of
+        smooth_is) that needed a fallback."""
+        def fallback(bj, bi, bk):
             val, _err = get_quad_vec()(make_integrand(taus[bi], t_l, h_l, bk),
                                        a_int, b_int, **_QUAD_VEC_OPTS_DEFAULT)
-            W[n, smooth_is[bi], l, bk, :, :] = val
-        return {smooth_is[bi] for bi in set(bad_i.tolist())}
+            return val
+        ok = _store_two_order(W, n, smooth_is, [l], v1[None], v2[None],
+                              smooth_check_tol, fallback)
+        return {smooth_is[bi] for bi in np.nonzero(~ok[0].all(axis=1))[0].tolist()}
 
     def integrate_smooth_batch(n, ls, tau_n, ok_off):
         _integrate_smooth_batch(
@@ -1810,7 +1820,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         if return_function:
             y_real, y_func_real = result
             return (_recombine_complex_y(y_real, d_orig),
-                    _ComplexSolutionFunction(y_func_real, d_orig))
+                    _complex_solution(y_func_real, d_orig))
         return _recombine_complex_y(result, d_orig)
 
     M = len(mesh_breakpoints) - 1
@@ -2039,7 +2049,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         if return_function:
             y_real, y_func_real = result
             return (_recombine_complex_y(y_real, d_orig),
-                    _ComplexSolutionFunction(y_func_real, d_orig))
+                    _complex_solution(y_func_real, d_orig))
         return _recombine_complex_y(result, d_orig)
 
     M = len(mesh_breakpoints) - 1
@@ -2727,7 +2737,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         if return_function:
             y_real, y_func_real = result
             return (_recombine_complex_y(y_real, d_orig),
-                    _ComplexSolutionFunction(y_func_real, d_orig))
+                    _complex_solution(y_func_real, d_orig))
         return _recombine_complex_y(result, d_orig)
 
     M = len(mesh_breakpoints) - 1

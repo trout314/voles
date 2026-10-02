@@ -552,23 +552,28 @@ def test_complex_vector_d5_runtime_return_function_matches_scalar():
             assert abs(v_vec - v_s) < 1e-9
 
 
-def test_recombine_polys_pads_trimmed_coefficients():
-    """Real and imaginary parts are trimmed of exact trailing zeros
-    independently, so their coefficient arrays can differ in length (this
-    happened on the Linux CI builds for a complex matrix VIE-1 with
-    return_function=True); the recombination must pad, not broadcast."""
-    from voles._complex import _recombine_polys
-    P = np.polynomial.Polynomial
-    dom = (0.0, 0.5)
-    p_r = P([1.0, 2.0, 0.0, 3.0], domain=dom, window=dom)        # degree 3
-    p_i = P([4.0, 5.0], domain=dom, window=dom)                   # degree 1 after trimming
-    (cp,) = _recombine_polys([np.array([p_r, p_i], dtype=object)], 0)
-    np.testing.assert_allclose(cp.coef, [1 + 4j, 2 + 5j, 0.0, 3.0])
-    assert tuple(cp.domain) == dom
-    # vector and matrix layouts, with the shorter array on the real side
-    (vec,) = _recombine_polys([np.array([p_i, p_r, p_r, p_i], dtype=object)], 2)
-    np.testing.assert_allclose(vec[0].coef, [4 + 1j, 5 + 2j, 0.0, 3j])
-    mat_in = np.empty((4, 1), dtype=object)
-    mat_in[:, 0] = [p_i, p_r, p_r, p_i]
-    (mat,) = _recombine_polys([mat_in], 2)
-    np.testing.assert_allclose(mat[1, 0].coef, [1 + 4j, 2 + 5j, 0.0, 3.0])
+def test_complex_solution_object_is_built_from_complex_coefficients():
+    """A complex solution object is an ordinary _SolutionFunction with
+    complex coefficients: evaluation, lazy Polynomial objects and the list
+    protocol all agree with the real block solve it came from. (The former
+    wrapper recombined trimmed real polynomials and could fail when their
+    coefficient arrays differed in length.)"""
+    from voles._solution import _SolutionFunction
+    t = np.arange(201) * 0.01
+    A = np.array([[1.0, 0.3], [0.1, 0.8]]) * (1 + 0.4j)
+    K = np.exp(-t)[:, None, None] * A
+    g = np.outer(np.sin(t), [1.0, 1j])
+    y, f = solve_VIE_2(kernel_values=K, g_values=g, time_step=0.01, return_function=True)
+    assert type(f) is _SolutionFunction and f._unit.dtype == np.complex128
+    assert len(f) == 50 and f[3].shape == (2,)
+    assert f[3][1].coef.dtype == np.complex128
+    assert isinstance(f(0.37), np.ndarray) and f(0.37).shape == (2,)
+    np.testing.assert_allclose(f(t[::25]), y[::25], rtol=0, atol=1e-10)
+    # the Polynomial objects and the Horner evaluation agree
+    n = int(np.searchsorted(f.mesh_breakpoints, 0.37, side="right") - 1)
+    np.testing.assert_allclose([p(0.37) for p in f[n]], f(0.37), rtol=0, atol=1e-12)
+    # scalar complex problem: a scalar t gives a Python complex
+    ys, fs = solve_VIE_2(kernel_values=np.exp(-t) * (1 + 0.5j), g_values=np.sin(t) + 0j,
+                         time_step=0.01, return_function=True)
+    assert type(fs(0.37)) is complex
+    assert fs(0.0) == pytest.approx(ys[0])
