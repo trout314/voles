@@ -1353,7 +1353,10 @@ falls short of its full order).</p>
             <td>
               <div class="doc-md-description">
                 <p>Collocation nodes lie at <code>coll_choices[k] / coll_divs</code> in (0, 1].
-Zero is excluded from <code>coll_choices</code>. Defaults to
+Zero is excluded from <code>coll_choices</code>. <code>coll_divs</code> alone selects
+<code>coll_choices = [1, ..., coll_divs]</code> (the right endpoint included,
+so <span class="arithmatex">\(\rho_m = 0\)</span> and the method has its full order), <code>coll_choices</code>
+alone sets <code>coll_divs</code> to its largest entry, and neither gives
 <code>coll_divs=3, coll_choices=[1, 2, 3]</code>. Mutually exclusive with
 <code>coll_nodes</code>.</p>
               </div>
@@ -1372,7 +1375,10 @@ Zero is excluded from <code>coll_choices</code>. Defaults to
             <td>
               <div class="doc-md-description">
                 <p>Collocation nodes lie at <code>coll_choices[k] / coll_divs</code> in (0, 1].
-Zero is excluded from <code>coll_choices</code>. Defaults to
+Zero is excluded from <code>coll_choices</code>. <code>coll_divs</code> alone selects
+<code>coll_choices = [1, ..., coll_divs]</code> (the right endpoint included,
+so <span class="arithmatex">\(\rho_m = 0\)</span> and the method has its full order), <code>coll_choices</code>
+alone sets <code>coll_divs</code> to its largest entry, and neither gives
 <code>coll_divs=3, coll_choices=[1, 2, 3]</code>. Mutually exclusive with
 <code>coll_nodes</code>.</p>
               </div>
@@ -1469,7 +1475,7 @@ and is generally the better default.</p>
               </div>
             </td>
             <td>
-                  <code>False</code>
+                  <code>True</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1589,22 +1595,7 @@ skipped.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2526</span>
-<span class="normal">2527</span>
-<span class="normal">2528</span>
-<span class="normal">2529</span>
-<span class="normal">2530</span>
-<span class="normal">2531</span>
-<span class="normal">2532</span>
-<span class="normal">2533</span>
-<span class="normal">2534</span>
-<span class="normal">2535</span>
-<span class="normal">2536</span>
-<span class="normal">2537</span>
-<span class="normal">2538</span>
-<span class="normal">2539</span>
-<span class="normal">2540</span>
-<span class="normal">2541</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2541</span>
 <span class="normal">2542</span>
 <span class="normal">2543</span>
 <span class="normal">2544</span>
@@ -1942,7 +1933,25 @@ skipped.</p>
 <span class="normal">2876</span>
 <span class="normal">2877</span>
 <span class="normal">2878</span>
-<span class="normal">2879</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">2879</span>
+<span class="normal">2880</span>
+<span class="normal">2881</span>
+<span class="normal">2882</span>
+<span class="normal">2883</span>
+<span class="normal">2884</span>
+<span class="normal">2885</span>
+<span class="normal">2886</span>
+<span class="normal">2887</span>
+<span class="normal">2888</span>
+<span class="normal">2889</span>
+<span class="normal">2890</span>
+<span class="normal">2891</span>
+<span class="normal">2892</span>
+<span class="normal">2893</span>
+<span class="normal">2894</span>
+<span class="normal">2895</span>
+<span class="normal">2896</span>
+<span class="normal">2897</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">mesh_breakpoints</span><span class="p">,</span>
                           <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1950,7 +1959,7 @@ skipped.</p>
                           <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">return_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                           <span class="n">force_continuous</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-                          <span class="n">reuse_adaptive_blocks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+                          <span class="n">reuse_adaptive_blocks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
                           <span class="n">show_warnings</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
                           <span class="n">_smooth_gl_order</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Solve the Volterra integral equation of the first kind</span>
@@ -1992,7 +2001,10 @@ skipped.</p>
 <span class="sd">        Strictly-increasing 1-D array starting at 0.</span>
 <span class="sd">    coll_divs, coll_choices : int, list of int, optional</span>
 <span class="sd">        Collocation nodes lie at ``coll_choices[k] / coll_divs`` in (0, 1].</span>
-<span class="sd">        Zero is excluded from ``coll_choices``. Defaults to</span>
+<span class="sd">        Zero is excluded from ``coll_choices``. ``coll_divs`` alone selects</span>
+<span class="sd">        ``coll_choices = [1, ..., coll_divs]`` (the right endpoint included,</span>
+<span class="sd">        so $\rho_m = 0$ and the method has its full order), ``coll_choices``</span>
+<span class="sd">        alone sets ``coll_divs`` to its largest entry, and neither gives</span>
 <span class="sd">        ``coll_divs=3, coll_choices=[1, 2, 3]``. Mutually exclusive with</span>
 <span class="sd">        ``coll_nodes``.</span>
 <span class="sd">    coll_nodes : array_like, optional</span>

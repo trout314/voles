@@ -1246,7 +1246,7 @@
 
 <h1 id="example-product-integration-for-sampled-kernels">Example: Product integration for sampled kernels</h1>
 <p>The array-based solvers take the kernel as samples <code>K(u)</code> on a grid of spacing
-<code>time_step</code>. By default (<code>quadrature="collocation"</code>) every integral in the
+<code>time_step</code>. With <code>quadrature="collocation"</code> every integral in the
 collocation equations is evaluated with the interpolatory rule on the
 collocation nodes themselves (Brunner 2004, Section 2.4.5). That rule needs the
 kernel at the <em>scaled</em> nodes of each partial interval, which fall on samples
@@ -1262,15 +1262,22 @@ only when the mesh is <code>coll_divs**2</code> samples wide, so:</p>
 replaced by its piecewise-polynomial interpolant of degree <code>kernel_interp_degree</code>
 on the data grid (default: the number of collocation nodes) and its products
 with the collocation polynomial are integrated exactly. The mesh can then be any
-multiple <code>mesh_samples</code> of <code>coll_divs</code> samples wide (default <code>coll_divs</code>, the
-finest), every sample is used, any convergent node set works without the numba
-fallback, and the FFT-accelerated history of the D extension is still used.</p>
+multiple <code>mesh_samples</code> of <code>coll_divs</code> samples wide, every sample is used, any
+convergent node set works without the numba fallback, and the FFT-accelerated
+history of the D extension is still used. Product integration is the default
+quadrature of all three solvers. The default mesh is the finest one,
+<code>mesh_samples=coll_divs</code>, for <code>solve_VIE_2</code> and <code>solve_VIDE</code>; for
+<code>solve_VIE_1</code> it stays at <code>coll_divs**2</code> samples, because inverting a
+first-kind equation amplifies errors in the data by roughly the inverse of the
+mesh width (see below). The collocation quadrature remains available as
+<code>quadrature="collocation"</code>; it runs in compiled code specialised per setting
+and is a few times faster.</p>
 <h2 id="a-first-kind-equation-on-coarsely-sampled-data">A first-kind equation on coarsely sampled data</h2>
 <p>The Rubin model (a particle at the end of a semi-infinite harmonic chain) has
 the correlation function <span class="arithmatex">\(C(t) = J_1(2t)/t\)</span> and the memory kernel
 <span class="arithmatex">\(\mathcal{K}(t) = -C(t)\)</span>, related by <span class="arithmatex">\(\dot C(t) = \int_0^t C(t-s)\mathcal{K}(s)ds\)</span>.
 Sampled at <code>time_step = 0.125</code>, about 25 samples per oscillation period, the
-default quadrature puts the order-3 method on a mesh of width 1.125.</p>
+collocation quadrature puts the order-3 method on a mesh of width 1.125.</p>
 <pre><code class="language-python">import numpy as np
 from scipy.special import j1, jv
 from voles import solve_VIE_1
@@ -1287,8 +1294,8 @@ C[0], C_dot[0], K_exact[0] = 1.0, 0.0, -1.0
 common = dict(kernel_values=C, g_values=C_dot, time_step=time_step,
               coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
 
-K_coll = solve_VIE_1(**common)                             # mesh 9 samples wide
-K_prod = solve_VIE_1(quadrature=&quot;product&quot;, **common)       # mesh 3 samples wide
+K_coll = solve_VIE_1(quadrature=&quot;collocation&quot;, **common)       # mesh 9 samples wide
+K_prod = solve_VIE_1(mesh_samples=3, **common)                  # product: mesh 3 samples wide
 
 err_coll = np.max(np.abs(K_coll - K_exact))
 err_prod = np.max(np.abs(K_prod - K_exact))
@@ -1297,7 +1304,7 @@ print(f&quot;product integration:    max error {err_prod:.1e}&quot;)
 assert err_prod &lt; err_coll / 10
 </code></pre>
 <p><code>mesh_samples</code> chooses the mesh explicitly. With <code>mesh_samples=9</code> the mesh is
-the same as the default quadrature's, but the integrals now use all nine
+the same as the collocation quadrature's, but the integrals now use all nine
 samples of each interval rather than three of them:</p>
 <pre><code class="language-python">import numpy as np
 from scipy.special import j1, jv
@@ -1343,8 +1350,8 @@ exact = np.exp(-times / 4) * (np.cos(omega * times) + np.sin(omega * times) / (4
 
 common = dict(kernel_values=kernel, soln_init_value=1.0, time_step=time_step,
               coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
-y_coll = solve_VIDE(**common)
-y_prod = solve_VIDE(quadrature=&quot;product&quot;, **common)
+y_coll = solve_VIDE(quadrature=&quot;collocation&quot;, **common)
+y_prod = solve_VIDE(**common)                       # product integration is the default
 
 err_coll = np.max(np.abs(y_coll - exact))
 err_prod = np.max(np.abs(y_prod - exact))

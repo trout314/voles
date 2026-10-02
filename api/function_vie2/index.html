@@ -1330,9 +1330,12 @@ intervals directly.</p>
               <div class="doc-md-description">
                 <p>Collocation node positions: nodes lie at
 <code>coll_choices[k] / coll_divs</code> in each interval. Unlike the array-
-based solvers, <code>coll_divs</code> does <em>not</em> sub-divide intervals. Defaults
-to <code>coll_divs=2, coll_choices=[0, 1, 2]</code> when neither these nor
-<code>coll_nodes</code> are given. Mutually exclusive with <code>coll_nodes</code>.</p>
+based solvers, <code>coll_divs</code> does <em>not</em> sub-divide intervals.
+<code>coll_divs</code> alone selects every admissible point of the
+subdivision, <code>coll_choices = [0, ..., coll_divs]</code>; <code>coll_choices</code>
+alone sets <code>coll_divs</code> to its largest entry; neither gives
+<code>coll_divs=2, coll_choices=[0, 1, 2]</code>. Mutually exclusive with
+<code>coll_nodes</code>.</p>
               </div>
             </td>
             <td>
@@ -1350,9 +1353,12 @@ to <code>coll_divs=2, coll_choices=[0, 1, 2]</code> when neither these nor
               <div class="doc-md-description">
                 <p>Collocation node positions: nodes lie at
 <code>coll_choices[k] / coll_divs</code> in each interval. Unlike the array-
-based solvers, <code>coll_divs</code> does <em>not</em> sub-divide intervals. Defaults
-to <code>coll_divs=2, coll_choices=[0, 1, 2]</code> when neither these nor
-<code>coll_nodes</code> are given. Mutually exclusive with <code>coll_nodes</code>.</p>
+based solvers, <code>coll_divs</code> does <em>not</em> sub-divide intervals.
+<code>coll_divs</code> alone selects every admissible point of the
+subdivision, <code>coll_choices = [0, ..., coll_divs]</code>; <code>coll_choices</code>
+alone sets <code>coll_divs</code> to its largest entry; neither gives
+<code>coll_divs=2, coll_choices=[0, 1, 2]</code>. Mutually exclusive with
+<code>coll_nodes</code>.</p>
               </div>
             </td>
             <td>
@@ -1453,29 +1459,27 @@ all equivalent.</p>
             <td>
               <div class="doc-md-description">
                 <p>On a uniform mesh with a convolution kernel the weight tensor is
-Toeplitz and is assembled from one integrated row. By default only
-blocks evaluated by deterministic fixed-order quadrature are reused
-across rows; blocks touching a declared singularity (adaptive
-quadrature) are re-evaluated per row, which reproduces the general
-assembly to rounding level but keeps an <span class="arithmatex">\(O(M)\)</span> adaptive-quadrature
-cost. Set True to reuse the declared-singularity adaptive blocks too:
-the singular-kernel build cost drops by roughly another order of
-magnitude, and results may differ from the default path by up to the
-adaptive quadrature's own tolerance (scalar problems <span class="arithmatex">\(\sim10^{-8}\)</span>,
-typically <span class="arithmatex">\(\sim10^{-9}\)</span>; vector/matrix and complex problems, which
-integrate via <code>scipy.integrate.quad_vec</code>, up to <span class="arithmatex">\(\sim10^{-7}\)</span>) --
-far below discretization error in practice. Reused adaptive blocks
-are computed at tightened tolerance, so they are at least as accurate
-as the per-row values they replace. Strictly no effect on non-uniform
-meshes or on kernels with no declared <code>kernel_singularity</code> (only
-declared-singularity blocks are ever reused). scipy
+Toeplitz and is assembled from one integrated row. Blocks evaluated
+by deterministic fixed-order quadrature are always reused across
+rows. With the default <code>True</code>, blocks touching a declared
+singularity that need adaptive quadrature are reused too, computed
+once at a tightened tolerance: the singular-kernel build cost is
+about an order of magnitude lower than re-evaluating them per row.
+<code>False</code> re-evaluates those blocks for every row, which reproduces
+the general (non-Toeplitz) assembly to rounding level at an <span class="arithmatex">\(O(M)\)</span>
+adaptive-quadrature cost; the two differ by at most the adaptive
+quadrature's own tolerance (scalar problems <span class="arithmatex">\(\sim10^{-8}\)</span>, typically
+<span class="arithmatex">\(\sim10^{-9}\)</span>; vector/matrix and complex problems, which integrate
+via <code>scipy.integrate.quad_vec</code>, up to <span class="arithmatex">\(\sim10^{-7}\)</span>), far below
+discretization error in practice. No effect on non-uniform meshes
+or on kernels with no declared <code>kernel_singularity</code>. scipy
 <code>IntegrationWarning</code>s raised by the deliberately tightened reuse
 quadratures are suppressed (the best-obtainable value is what reuse
 wants); default-tolerance quadratures still warn as usual.</p>
               </div>
             </td>
             <td>
-                  <code>False</code>
+                  <code>True</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1608,19 +1612,7 @@ CPU count).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1638</span>
-<span class="normal">1639</span>
-<span class="normal">1640</span>
-<span class="normal">1641</span>
-<span class="normal">1642</span>
-<span class="normal">1643</span>
-<span class="normal">1644</span>
-<span class="normal">1645</span>
-<span class="normal">1646</span>
-<span class="normal">1647</span>
-<span class="normal">1648</span>
-<span class="normal">1649</span>
-<span class="normal">1650</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1650</span>
 <span class="normal">1651</span>
 <span class="normal">1652</span>
 <span class="normal">1653</span>
@@ -1870,13 +1862,26 @@ CPU count).</p>
 <span class="normal">1897</span>
 <span class="normal">1898</span>
 <span class="normal">1899</span>
-<span class="normal">1900</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">1900</span>
+<span class="normal">1901</span>
+<span class="normal">1902</span>
+<span class="normal">1903</span>
+<span class="normal">1904</span>
+<span class="normal">1905</span>
+<span class="normal">1906</span>
+<span class="normal">1907</span>
+<span class="normal">1908</span>
+<span class="normal">1909</span>
+<span class="normal">1910</span>
+<span class="normal">1911</span>
+<span class="normal">1912</span>
+<span class="normal">1913</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIE_2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span>
                           <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                           <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">return_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-                          <span class="n">reuse_adaptive_blocks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+                          <span class="n">reuse_adaptive_blocks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
                           <span class="n">show_warnings</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
                           <span class="n">_smooth_gl_order</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Solve the scalar Volterra integral equation of the second kind</span>
@@ -1909,9 +1914,12 @@ CPU count).</p>
 <span class="sd">    coll_divs, coll_choices : int, list of int, optional</span>
 <span class="sd">        Collocation node positions: nodes lie at</span>
 <span class="sd">        ``coll_choices[k] / coll_divs`` in each interval. Unlike the array-</span>
-<span class="sd">        based solvers, ``coll_divs`` does *not* sub-divide intervals. Defaults</span>
-<span class="sd">        to ``coll_divs=2, coll_choices=[0, 1, 2]`` when neither these nor</span>
-<span class="sd">        ``coll_nodes`` are given. Mutually exclusive with ``coll_nodes``.</span>
+<span class="sd">        based solvers, ``coll_divs`` does *not* sub-divide intervals.</span>
+<span class="sd">        ``coll_divs`` alone selects every admissible point of the</span>
+<span class="sd">        subdivision, ``coll_choices = [0, ..., coll_divs]``; ``coll_choices``</span>
+<span class="sd">        alone sets ``coll_divs`` to its largest entry; neither gives</span>
+<span class="sd">        ``coll_divs=2, coll_choices=[0, 1, 2]``. Mutually exclusive with</span>
+<span class="sd">        ``coll_nodes``.</span>
 <span class="sd">    coll_nodes : array_like, optional</span>
 <span class="sd">        Collocation node positions given directly as floats in $[0, 1]$, for</span>
 <span class="sd">        node sets that are not rational multiples of $1/c$ (e.g. Gauss-Legendre</span>
@@ -1956,22 +1964,20 @@ CPU count).</p>
 <span class="sd">        If True, also return a callable solution wrapper.</span>
 <span class="sd">    reuse_adaptive_blocks : bool, optional</span>
 <span class="sd">        On a uniform mesh with a convolution kernel the weight tensor is</span>
-<span class="sd">        Toeplitz and is assembled from one integrated row. By default only</span>
-<span class="sd">        blocks evaluated by deterministic fixed-order quadrature are reused</span>
-<span class="sd">        across rows; blocks touching a declared singularity (adaptive</span>
-<span class="sd">        quadrature) are re-evaluated per row, which reproduces the general</span>
-<span class="sd">        assembly to rounding level but keeps an $O(M)$ adaptive-quadrature</span>
-<span class="sd">        cost. Set True to reuse the declared-singularity adaptive blocks too:</span>
-<span class="sd">        the singular-kernel build cost drops by roughly another order of</span>
-<span class="sd">        magnitude, and results may differ from the default path by up to the</span>
-<span class="sd">        adaptive quadrature's own tolerance (scalar problems $\sim10^{-8}$,</span>
-<span class="sd">        typically $\sim10^{-9}$; vector/matrix and complex problems, which</span>
-<span class="sd">        integrate via ``scipy.integrate.quad_vec``, up to $\sim10^{-7}$) --</span>
-<span class="sd">        far below discretization error in practice. Reused adaptive blocks</span>
-<span class="sd">        are computed at tightened tolerance, so they are at least as accurate</span>
-<span class="sd">        as the per-row values they replace. Strictly no effect on non-uniform</span>
-<span class="sd">        meshes or on kernels with no declared ``kernel_singularity`` (only</span>
-<span class="sd">        declared-singularity blocks are ever reused). scipy</span>
+<span class="sd">        Toeplitz and is assembled from one integrated row. Blocks evaluated</span>
+<span class="sd">        by deterministic fixed-order quadrature are always reused across</span>
+<span class="sd">        rows. With the default ``True``, blocks touching a declared</span>
+<span class="sd">        singularity that need adaptive quadrature are reused too, computed</span>
+<span class="sd">        once at a tightened tolerance: the singular-kernel build cost is</span>
+<span class="sd">        about an order of magnitude lower than re-evaluating them per row.</span>
+<span class="sd">        ``False`` re-evaluates those blocks for every row, which reproduces</span>
+<span class="sd">        the general (non-Toeplitz) assembly to rounding level at an $O(M)$</span>
+<span class="sd">        adaptive-quadrature cost; the two differ by at most the adaptive</span>
+<span class="sd">        quadrature's own tolerance (scalar problems $\sim10^{-8}$, typically</span>
+<span class="sd">        $\sim10^{-9}$; vector/matrix and complex problems, which integrate</span>
+<span class="sd">        via ``scipy.integrate.quad_vec``, up to $\sim10^{-7}$), far below</span>
+<span class="sd">        discretization error in practice. No effect on non-uniform meshes</span>
+<span class="sd">        or on kernels with no declared ``kernel_singularity``. scipy</span>
 <span class="sd">        ``IntegrationWarning``s raised by the deliberately tightened reuse</span>
 <span class="sd">        quadratures are suppressed (the best-obtainable value is what reuse</span>
 <span class="sd">        wants); default-tolerance quadratures still warn as usual.</span>

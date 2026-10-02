@@ -1359,7 +1359,9 @@ matrix-valued case. Defaults to zero.</p>
             <td>
               <div class="doc-md-description">
                 <p>Collocation node positions; see <code>function_solve_VIE_2</code> for the
-convention (differs from the array-based solvers). Defaults to
+convention (differs from the array-based solvers). <code>coll_divs</code>
+alone selects <code>coll_choices = [0, ..., coll_divs]</code>, <code>coll_choices</code>
+alone sets <code>coll_divs</code> to its largest entry, and neither gives
 <code>coll_divs=2, coll_choices=[0, 1, 2]</code>. Mutually exclusive with
 <code>coll_nodes</code>.</p>
               </div>
@@ -1378,7 +1380,9 @@ convention (differs from the array-based solvers). Defaults to
             <td>
               <div class="doc-md-description">
                 <p>Collocation node positions; see <code>function_solve_VIE_2</code> for the
-convention (differs from the array-based solvers). Defaults to
+convention (differs from the array-based solvers). <code>coll_divs</code>
+alone selects <code>coll_choices = [0, ..., coll_divs]</code>, <code>coll_choices</code>
+alone sets <code>coll_divs</code> to its largest entry, and neither gives
 <code>coll_divs=2, coll_choices=[0, 1, 2]</code>. Mutually exclusive with
 <code>coll_nodes</code>.</p>
               </div>
@@ -1453,7 +1457,7 @@ Toeplitz assembly; see <code>function_solve_VIE_2</code>.</p>
               </div>
             </td>
             <td>
-                  <code>False</code>
+                  <code>True</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1547,20 +1551,7 @@ tracked boundary values).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1927</span>
-<span class="normal">1928</span>
-<span class="normal">1929</span>
-<span class="normal">1930</span>
-<span class="normal">1931</span>
-<span class="normal">1932</span>
-<span class="normal">1933</span>
-<span class="normal">1934</span>
-<span class="normal">1935</span>
-<span class="normal">1936</span>
-<span class="normal">1937</span>
-<span class="normal">1938</span>
-<span class="normal">1939</span>
-<span class="normal">1940</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1940</span>
 <span class="normal">1941</span>
 <span class="normal">1942</span>
 <span class="normal">1943</span>
@@ -1807,14 +1798,29 @@ tracked boundary values).</p>
 <span class="normal">2184</span>
 <span class="normal">2185</span>
 <span class="normal">2186</span>
-<span class="normal">2187</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">2187</span>
+<span class="normal">2188</span>
+<span class="normal">2189</span>
+<span class="normal">2190</span>
+<span class="normal">2191</span>
+<span class="normal">2192</span>
+<span class="normal">2193</span>
+<span class="normal">2194</span>
+<span class="normal">2195</span>
+<span class="normal">2196</span>
+<span class="normal">2197</span>
+<span class="normal">2198</span>
+<span class="normal">2199</span>
+<span class="normal">2200</span>
+<span class="normal">2201</span>
+<span class="normal">2202</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span>
                          <span class="n">mesh_breakpoints</span><span class="p">,</span>
                          <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                          <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                          <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                          <span class="n">return_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-                         <span class="n">reuse_adaptive_blocks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+                         <span class="n">reuse_adaptive_blocks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
                          <span class="n">show_warnings</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
                          <span class="n">_smooth_gl_order</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Solve the scalar Volterra integro-differential equation</span>
@@ -1848,7 +1854,9 @@ tracked boundary values).</p>
 <span class="sd">        Strictly-increasing 1-D array starting at 0.</span>
 <span class="sd">    coll_divs, coll_choices : int, list of int, optional</span>
 <span class="sd">        Collocation node positions; see ``function_solve_VIE_2`` for the</span>
-<span class="sd">        convention (differs from the array-based solvers). Defaults to</span>
+<span class="sd">        convention (differs from the array-based solvers). ``coll_divs``</span>
+<span class="sd">        alone selects ``coll_choices = [0, ..., coll_divs]``, ``coll_choices``</span>
+<span class="sd">        alone sets ``coll_divs`` to its largest entry, and neither gives</span>
 <span class="sd">        ``coll_divs=2, coll_choices=[0, 1, 2]``. Mutually exclusive with</span>
 <span class="sd">        ``coll_nodes``.</span>
 <span class="sd">    coll_nodes : array_like, optional</span>

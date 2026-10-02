@@ -1321,11 +1321,13 @@ Default is 1.0.</p>
             <td>
               <div class="doc-md-description">
                 <p>Number of collocation sub-intervals per mesh interval. Must be a
-positive integer. Default is 2.</p>
+positive integer. Given alone, the nodes are all its sub-interval
+points, <code>coll_choices = [0, 1, ..., coll_divs]</code>; given neither,
+the setting is <code>coll_divs=2, coll_choices=[0, 1, 2]</code>.</p>
               </div>
             </td>
             <td>
-                  <code>2</code>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1340,11 +1342,12 @@ positive integer. Default is 2.</p>
                 <p>Indices selecting the collocation nodes within each sub-interval.
 Each entry <span class="arithmatex">\(k\)</span> corresponds to the node <span class="arithmatex">\(k / c\)</span> where <span class="arithmatex">\(c\)</span> =
 <code>coll_divs</code>, placed in <span class="arithmatex">\([0, 1]\)</span>. Entries must be distinct integers
-in <span class="arithmatex">\(\{0, 1, \ldots, \text{coll\_divs}\}\)</span>. Default is <code>[0, 1, 2]</code>.</p>
+in <span class="arithmatex">\(\{0, 1, \ldots, \text{coll\_divs}\}\)</span>. Given alone, <code>coll_divs</code>
+is the largest entry.</p>
               </div>
             </td>
             <td>
-                  <code>[0, 1, 2]</code>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1404,27 +1407,28 @@ the loaded D extension predates its block driver.</p>
                 <code>quadrature</code>
             </td>
             <td>
-                  <code>(<span title="collocation">collocation</span>, <span title="product">product</span>)</code>
+                  <code>(<span title="product">product</span>, <span title="collocation">collocation</span>)</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>How the integrals are evaluated from the sampled kernel. The default
-applies the interpolatory rule on the collocation nodes, which forces
-a mesh <code>coll_divs**2</code> samples wide and reads only every
-<code>coll_divs</code>-th sample of the data in the history sums.
-<code>"product"</code> replaces the kernel by a piecewise polynomial
+                <p>How the integrals are evaluated from the sampled kernel.
+<code>"product"</code> (default) replaces the kernel by a piecewise polynomial
 interpolant of degree <code>kernel_interp_degree</code> on the data grid and
 integrates its products with the collocation polynomial exactly
 (product integration), so the mesh can be any multiple of
 <code>coll_divs</code> samples wide (<code>mesh_samples</code>), every sample is used,
-and any node set is available without the Numba fallback. See
-<code>solve_VIE_1</code> for the construction; unlike the first-kind case this
-equation is well posed, so there is no amplification of data errors
-to trade against the finer mesh.</p>
+and any node set is available without the Numba fallback.
+<code>"collocation"</code> applies the interpolatory rule on the collocation
+nodes, which forces a mesh <code>coll_divs**2</code> samples wide and reads
+only every <code>coll_divs</code>-th sample of the data in the history sums;
+it runs in compiled code specialised per setting and is a few times
+faster. See <code>solve_VIE_1</code> for the construction; unlike the
+first-kind case this equation is well posed, so there is no
+amplification of data errors to trade against the finer mesh.</p>
               </div>
             </td>
             <td>
-                  <code>&#34;collocation&#34;</code>
+                  <code>&#34;product&#34;</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1437,9 +1441,9 @@ to trade against the finer mesh.</p>
             <td>
               <div class="doc-md-description">
                 <p>Samples per mesh interval; the mesh width is
-<code>mesh_samples * time_step</code>. Must be <code>coll_divs**2</code> (the default)
-with <code>quadrature="collocation"</code>; any positive multiple of
-<code>coll_divs</code> with <code>quadrature="product"</code>, default <code>coll_divs</code>.</p>
+<code>mesh_samples * time_step</code>. Any positive multiple of <code>coll_divs</code>
+with <code>quadrature="product"</code>, default <code>coll_divs</code> (the finest
+mesh); must be <code>coll_divs**2</code> with <code>quadrature="collocation"</code>.</p>
               </div>
             </td>
             <td>
@@ -1602,57 +1606,7 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1343</span>
-<span class="normal">1344</span>
-<span class="normal">1345</span>
-<span class="normal">1346</span>
-<span class="normal">1347</span>
-<span class="normal">1348</span>
-<span class="normal">1349</span>
-<span class="normal">1350</span>
-<span class="normal">1351</span>
-<span class="normal">1352</span>
-<span class="normal">1353</span>
-<span class="normal">1354</span>
-<span class="normal">1355</span>
-<span class="normal">1356</span>
-<span class="normal">1357</span>
-<span class="normal">1358</span>
-<span class="normal">1359</span>
-<span class="normal">1360</span>
-<span class="normal">1361</span>
-<span class="normal">1362</span>
-<span class="normal">1363</span>
-<span class="normal">1364</span>
-<span class="normal">1365</span>
-<span class="normal">1366</span>
-<span class="normal">1367</span>
-<span class="normal">1368</span>
-<span class="normal">1369</span>
-<span class="normal">1370</span>
-<span class="normal">1371</span>
-<span class="normal">1372</span>
-<span class="normal">1373</span>
-<span class="normal">1374</span>
-<span class="normal">1375</span>
-<span class="normal">1376</span>
-<span class="normal">1377</span>
-<span class="normal">1378</span>
-<span class="normal">1379</span>
-<span class="normal">1380</span>
-<span class="normal">1381</span>
-<span class="normal">1382</span>
-<span class="normal">1383</span>
-<span class="normal">1384</span>
-<span class="normal">1385</span>
-<span class="normal">1386</span>
-<span class="normal">1387</span>
-<span class="normal">1388</span>
-<span class="normal">1389</span>
-<span class="normal">1390</span>
-<span class="normal">1391</span>
-<span class="normal">1392</span>
-<span class="normal">1393</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1393</span>
 <span class="normal">1394</span>
 <span class="normal">1395</span>
 <span class="normal">1396</span>
@@ -1856,10 +1810,66 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
 <span class="normal">1594</span>
 <span class="normal">1595</span>
 <span class="normal">1596</span>
-<span class="normal">1597</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-                <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">],</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="normal">1597</span>
+<span class="normal">1598</span>
+<span class="normal">1599</span>
+<span class="normal">1600</span>
+<span class="normal">1601</span>
+<span class="normal">1602</span>
+<span class="normal">1603</span>
+<span class="normal">1604</span>
+<span class="normal">1605</span>
+<span class="normal">1606</span>
+<span class="normal">1607</span>
+<span class="normal">1608</span>
+<span class="normal">1609</span>
+<span class="normal">1610</span>
+<span class="normal">1611</span>
+<span class="normal">1612</span>
+<span class="normal">1613</span>
+<span class="normal">1614</span>
+<span class="normal">1615</span>
+<span class="normal">1616</span>
+<span class="normal">1617</span>
+<span class="normal">1618</span>
+<span class="normal">1619</span>
+<span class="normal">1620</span>
+<span class="normal">1621</span>
+<span class="normal">1622</span>
+<span class="normal">1623</span>
+<span class="normal">1624</span>
+<span class="normal">1625</span>
+<span class="normal">1626</span>
+<span class="normal">1627</span>
+<span class="normal">1628</span>
+<span class="normal">1629</span>
+<span class="normal">1630</span>
+<span class="normal">1631</span>
+<span class="normal">1632</span>
+<span class="normal">1633</span>
+<span class="normal">1634</span>
+<span class="normal">1635</span>
+<span class="normal">1636</span>
+<span class="normal">1637</span>
+<span class="normal">1638</span>
+<span class="normal">1639</span>
+<span class="normal">1640</span>
+<span class="normal">1641</span>
+<span class="normal">1642</span>
+<span class="normal">1643</span>
+<span class="normal">1644</span>
+<span class="normal">1645</span>
+<span class="normal">1646</span>
+<span class="normal">1647</span>
+<span class="normal">1648</span>
+<span class="normal">1649</span>
+<span class="normal">1650</span>
+<span class="normal">1651</span>
+<span class="normal">1652</span>
+<span class="normal">1653</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+                <span class="n">coll_divs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                 <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-                <span class="n">quadrature</span><span class="o">=</span><span class="s2">"collocation"</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+                <span class="n">quadrature</span><span class="o">=</span><span class="s2">"product"</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">'''</span>
 <span class="sd">    Solve a Volterra integral equation of the second kind.</span>
 
@@ -1882,12 +1892,15 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
 <span class="sd">        Default is 1.0.</span>
 <span class="sd">    coll_divs : int, optional</span>
 <span class="sd">        Number of collocation sub-intervals per mesh interval. Must be a</span>
-<span class="sd">        positive integer. Default is 2.</span>
+<span class="sd">        positive integer. Given alone, the nodes are all its sub-interval</span>
+<span class="sd">        points, ``coll_choices = [0, 1, ..., coll_divs]``; given neither,</span>
+<span class="sd">        the setting is ``coll_divs=2, coll_choices=[0, 1, 2]``.</span>
 <span class="sd">    coll_choices : list of int, optional</span>
 <span class="sd">        Indices selecting the collocation nodes within each sub-interval.</span>
 <span class="sd">        Each entry $k$ corresponds to the node $k / c$ where $c$ =</span>
 <span class="sd">        ``coll_divs``, placed in $[0, 1]$. Entries must be distinct integers</span>
-<span class="sd">        in $\{0, 1, \ldots, \text{coll\_divs}\}$. Default is ``[0, 1, 2]``.</span>
+<span class="sd">        in $\{0, 1, \ldots, \text{coll\_divs}\}$. Given alone, ``coll_divs``</span>
+<span class="sd">        is the largest entry.</span>
 <span class="sd">    return_function : bool, optional</span>
 <span class="sd">        If ``True``, also return a callable solution object as the second</span>
 <span class="sd">        element of a tuple (see Returns). Default is ``False``.</span>
@@ -1899,25 +1912,26 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
 <span class="sd">        used, or when ``quadrature="product"`` has to step in NumPy because</span>
 <span class="sd">        the loaded D extension predates its block driver.</span>
 
-<span class="sd">    quadrature : {"collocation", "product"}, optional</span>
-<span class="sd">        How the integrals are evaluated from the sampled kernel. The default</span>
-<span class="sd">        applies the interpolatory rule on the collocation nodes, which forces</span>
-<span class="sd">        a mesh ``coll_divs**2`` samples wide and reads only every</span>
-<span class="sd">        ``coll_divs``-th sample of the data in the history sums.</span>
-<span class="sd">        ``"product"`` replaces the kernel by a piecewise polynomial</span>
+<span class="sd">    quadrature : {"product", "collocation"}, optional</span>
+<span class="sd">        How the integrals are evaluated from the sampled kernel.</span>
+<span class="sd">        ``"product"`` (default) replaces the kernel by a piecewise polynomial</span>
 <span class="sd">        interpolant of degree ``kernel_interp_degree`` on the data grid and</span>
 <span class="sd">        integrates its products with the collocation polynomial exactly</span>
 <span class="sd">        (product integration), so the mesh can be any multiple of</span>
 <span class="sd">        ``coll_divs`` samples wide (``mesh_samples``), every sample is used,</span>
-<span class="sd">        and any node set is available without the Numba fallback. See</span>
-<span class="sd">        ``solve_VIE_1`` for the construction; unlike the first-kind case this</span>
-<span class="sd">        equation is well posed, so there is no amplification of data errors</span>
-<span class="sd">        to trade against the finer mesh.</span>
+<span class="sd">        and any node set is available without the Numba fallback.</span>
+<span class="sd">        ``"collocation"`` applies the interpolatory rule on the collocation</span>
+<span class="sd">        nodes, which forces a mesh ``coll_divs**2`` samples wide and reads</span>
+<span class="sd">        only every ``coll_divs``-th sample of the data in the history sums;</span>
+<span class="sd">        it runs in compiled code specialised per setting and is a few times</span>
+<span class="sd">        faster. See ``solve_VIE_1`` for the construction; unlike the</span>
+<span class="sd">        first-kind case this equation is well posed, so there is no</span>
+<span class="sd">        amplification of data errors to trade against the finer mesh.</span>
 <span class="sd">    mesh_samples : int, optional</span>
 <span class="sd">        Samples per mesh interval; the mesh width is</span>
-<span class="sd">        ``mesh_samples * time_step``. Must be ``coll_divs**2`` (the default)</span>
-<span class="sd">        with ``quadrature="collocation"``; any positive multiple of</span>
-<span class="sd">        ``coll_divs`` with ``quadrature="product"``, default ``coll_divs``.</span>
+<span class="sd">        ``mesh_samples * time_step``. Any positive multiple of ``coll_divs``</span>
+<span class="sd">        with ``quadrature="product"``, default ``coll_divs`` (the finest</span>
+<span class="sd">        mesh); must be ``coll_divs**2`` with ``quadrature="collocation"``.</span>
 <span class="sd">    kernel_interp_degree : int, optional</span>
 <span class="sd">        Degree of the kernel interpolant for ``quadrature="product"``;</span>
 <span class="sd">        defaults to the number of collocation nodes. Not accepted with</span>
@@ -1996,6 +2010,7 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
 <span class="sd">       Section 2.2.</span>
 <span class="sd">    '''</span>
     <span class="n">return_function</span> <span class="o">=</span> <span class="n">_resolve_return_flag</span><span class="p">(</span><span class="n">return_function</span><span class="p">,</span> <span class="n">return_polys</span><span class="p">)</span>
+    <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span> <span class="o">=</span> <span class="n">_resolve_coll_setting</span><span class="p">(</span><span class="s2">"vie2"</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
     <span class="c1"># ------------------------------------------------------------------ complex dispatch</span>
     <span class="k">if</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">is_complex</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="p">):</span>
         <span class="n">K_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">)</span>
@@ -2056,6 +2071,7 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
                                        <span class="n">g_values</span><span class="o">=</span><span class="n">g_cols</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">],</span>
                                        <span class="n">time_step</span><span class="o">=</span><span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="n">coll_divs</span><span class="p">,</span>
                                        <span class="n">coll_choices</span><span class="o">=</span><span class="n">coll_choices</span><span class="p">,</span>
+                                       <span class="n">quadrature</span><span class="o">=</span><span class="s2">"collocation"</span><span class="p">,</span>
                                        <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span>
                                        <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span> <span class="ow">and</span> <span class="n">j</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
                 <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">_column_workers</span><span class="p">(</span><span class="n">m_cols</span><span class="p">))</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
