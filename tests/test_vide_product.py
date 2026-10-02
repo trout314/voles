@@ -261,17 +261,17 @@ def _matrix_problem(N, d=2, m_cols=3, seed=0):
 
 @pytest.mark.parametrize("quadrature", ["collocation", "product"])
 def test_matrix_shared_g_solves_under_kernel_truncation(quadrature):
-    """A 2-D g shared by all columns was forwarded untruncated while the
-    kernel and a were truncated, so every column raised ValueError whenever
-    the kernel length was not of the admissible form."""
+    """A 2-D g shared by all columns was forwarded at a different length
+    from the kernel and a when the data did not end on a mesh point, so every
+    column raised ValueError. (The data are no longer truncated; the length
+    here still does not end on a mesh point for either quadrature.)"""
     q, choices = 2, [0, 1, 2]
-    N = (4 * 10 + 1) + 3                 # collocation mesh is 4 wide: truncated to 41
+    N = (4 * 10 + 1) + 3
     K, a, g, init = _matrix_problem(N)
     soln = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=init,
                       time_step=0.01, coll_divs=q, coll_choices=choices, quadrature=quadrature,
                       show_warnings=False)
-    N_used = 41 if quadrature == "collocation" else 43       # product mesh is 2 wide
-    assert soln.shape[0] == N_used and soln.shape[1:] == init.shape
+    assert soln.shape[0] == N and soln.shape[1:] == init.shape
     for j in range(init.shape[1]):
         col = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=init[:, j],
                          time_step=0.01, coll_divs=q, coll_choices=choices, quadrature=quadrature,

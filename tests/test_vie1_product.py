@@ -425,14 +425,17 @@ def test_validation():
                     soln_init_value=0.0, show_warnings=False)      # c_m != 1
 
 
-def test_truncation_warning(capsys):
+def test_odd_length_is_solved_in_full(capsys):
+    """Two samples past the last regular mesh interval used to be truncated
+    with a warning; the final interval absorbs them."""
     dt, q = 0.05, 3
     N = n_samples(q, 10) + 2
-    t, C, Cd, _ = damped(dt, N)
+    t, C, Cd, exact = damped(dt, N)
     vals = solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=q,
                        coll_choices=[1, 2, 3], quadrature="product")
-    assert len(vals) == N - 2
-    assert "truncated" in capsys.readouterr().out
+    assert len(vals) == N
+    assert capsys.readouterr().out == ""
+    assert np.max(np.abs(vals - exact)) < 1e-3
 
 
 # ---------------------------------------------------------------------------

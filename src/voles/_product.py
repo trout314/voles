@@ -52,6 +52,8 @@ the integrated Lagrange basis; see :func:`solve_vide_product`).
 """
 from __future__ import annotations
 
+import functools
+
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from numpy.polynomial import polynomial as npp
@@ -110,9 +112,18 @@ def interp_cell_coefs(K, p):
     coef = np.empty((ncell, p + 1) + K.shape[1:], dtype=float)
     for o in np.unique(off):
         mask = off == o
-        B = _lagrange_basis_coefs(np.arange(p + 1) - o)   # (p+1 samples, p+1 coefs)
+        B = _stencil_basis(p, int(o))                     # (p+1 samples, p+1 coefs)
         coef[mask] = np.einsum('n...r,rq->nq...', windows[mask], B)
     return coef
+
+
+@functools.lru_cache(maxsize=64)
+def _stencil_basis(p, o):
+    """Lagrange basis on the sample stencil ``0 .. p`` shifted by ``-o``
+    (cached: it depends only on the degree and the offset)."""
+    B = _lagrange_basis_coefs(np.arange(p + 1) - o)
+    B.setflags(write=False)
+    return B
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +174,8 @@ def build_lag_blocks(coef, Lam, kappa, Q, M, delta):
     m = len(kappa)
     nb = Lam.shape[0]
     lagB = np.zeros((M, m, nb) + coef.shape[2:], dtype=float)
+    if M == 0:
+        return lagB
     L = np.arange(1, M)
     for i, ki in enumerate(kappa):
         for r in range(Q):
@@ -296,20 +309,278 @@ def evaluate_on_grid(U, y, basis_coefs, Q, M, d, force_continuous, N):
     return vals[:, 0] if d == 0 else vals
 
 
-def build_polynomials(U, y, basis_coefs, Q, M, d, force_continuous, delta):
-    """Solution function over per-interval Polynomials on the actual time
-    axis (scalar: Polynomial; vector: (d,) object arrays). The Polynomial
-    objects are built on first access; evaluation uses the local
-    coefficients directly (see `_SolutionFunction.from_unit_coefs`)."""
-    m = U.shape[1] // max(d, 1)
+# ---------------------------------------------------------------------------
+# Cached node-set tables
+#
+# Everything below depends only on small integers (the node set, the samples
+# per interval, the interpolation degree) and the mesh width, so repeated
+# solves with the same settings -- the common case for many short calls --
+# reuse the tables instead of rebuilding them through numpy.polynomial, which
+# costs about a millisecond per call. The returned arrays are read-only.
+# ---------------------------------------------------------------------------
+
+def _frozen(*arrays):
+    for a in arrays:
+        a.setflags(write=False)
+    return arrays if len(arrays) > 1 else arrays[0]
+
+
+@functools.lru_cache(maxsize=256)
+def _basis_and_moments(kind, nodes, Q, p, H):
+    """``(basis_coefs, Lam)`` for the basis of equation ``kind`` on the node
+    fractions ``nodes`` (a tuple), with ``Lam = moment_tensor(basis, Q, p)``.
+    For the VIDE the basis is ``[H beta_k, 1]`` and so depends on the mesh
+    width ``H`` (part of the key so that results stay bit-identical)."""
+    c = np.array(nodes, dtype=float)
+    m = len(c)
+    if kind == "vie1_cont":
+        basis = _vie1_cont_basis_coefs(c)
+    elif kind == "vide":
+        beta = _integrated_basis_coefs(c)
+        basis = np.zeros((m + 1, m + 1))
+        basis[:m] = H * beta
+        basis[m, 0] = 1.0
+    else:
+        basis = _lagrange_basis_coefs(c)
+    return _frozen(basis, moment_tensor(basis, Q, p))
+
+
+@functools.lru_cache(maxsize=256)
+def _monomial_moments(P, Q, p):
+    """``moment_tensor`` of the monomial basis ``1, v, ..., v^(P-1)``."""
+    return _frozen(moment_tensor(np.eye(P), Q, p))
+
+
+@functools.lru_cache(maxsize=256)
+def _integrated_basis_cached(nodes):
+    return _frozen(_integrated_basis_coefs(np.array(nodes, dtype=float)))
+
+
+@functools.lru_cache(maxsize=256)
+def _cont_advance_cached(nodes):
+    adv_U, adv_0 = _vie1_cont_advance(np.array(nodes, dtype=float))
+    return _frozen(np.ascontiguousarray(adv_U, dtype=float)), float(adv_0)
+
+
+@functools.lru_cache(maxsize=256)
+def _node_rule_tables(coll_choices, coll_divs, cont):
+    """Nodes (fractions and sample offsets) and interpolatory weights of the
+    collocation-quadrature rows' history rule: the nodes ``c_k`` of the
+    discontinuous methods, ``{0, c_k}`` for the continuous VIE-1."""
+    c = np.array(coll_choices, dtype=float) / coll_divs
+    ks = list(coll_choices)
+    if cont:
+        c, ks = np.r_[0.0, c], [0] + ks
+    lag = _lagrange_basis_coefs(c)
+    b = lag @ (1.0 / np.arange(1, lag.shape[1] + 1))          # int_0^1 L_k
+    return _frozen(c), tuple(ks), _frozen(b)
+
+
+# ---------------------------------------------------------------------------
+# The final, irregular mesh interval
+#
+# The sampled data need not end on a mesh point. Rather than dropping the
+# r = (N - 1) mod Q leftover samples, the last regular interval and the
+# leftover samples form one final interval of Q + r samples (between one and
+# two regular widths), with the collocation nodes snapped to the nearest
+# samples. Its row of the collocation system is assembled here directly,
+# from the regular intervals' solution polynomials, so it serves both
+# quadratures and all four equation kinds: the history term is the product
+# integral of the kernel interpolant against each regular interval's local
+# polynomial (its monomial coefficients, shape (M, P[, d])), and the local
+# blocks use a Lagrange basis on the snapped nodes. A single interval of
+# width below 2H with a bounded node set adds one local error of the
+# method's order, so the convergence order is unchanged; the superconvergence
+# of special node sets at the mesh points is kept at the final point but
+# not at the samples inside the final interval.
+# ---------------------------------------------------------------------------
+
+def mesh_split(N, Q):
+    """Regular / final-interval split of N samples for mesh width Q.
+
+    Returns ``(M, Qp)``: ``M`` regular intervals of Q samples followed, when
+    ``Qp > 0``, by one final interval of ``Qp = Q + r`` samples; ``Qp == 0``
+    when the data end on a mesh point. Needs ``N >= Q + 1``."""
+    M_reg, r = divmod(N - 1, Q)
+    if r == 0:
+        return M_reg, 0
+    return M_reg - 1, Q + r
+
+
+def snap_nodes(coll_choices, coll_divs, Qp):
+    """Sample offsets of the collocation nodes on a final interval of ``Qp``
+    samples: ``round(k Qp / coll_divs)``. Distinct for distinct nodes (the
+    scaled nodes are at least one sample apart when ``Qp >= coll_divs``),
+    with 0 and ``coll_divs`` landing exactly on the interval ends."""
+    kap = [int(np.floor(k * Qp / coll_divs + 0.5)) for k in coll_choices]
+    assert len(set(kap)) == len(kap) and all(0 <= k <= Qp for k in kap)
+    return kap
+
+
+def _tail_history_node_rule(K, unit_reg, kap, Q, M, coll_choices, coll_divs, delta, cont):
+    """History of the final interval's collocation points over the regular
+    intervals with the collocation-node interpolatory rule the regular rows
+    of the collocation-quadrature VIE-1 use: ``int_{I_l} K(tau_i - s)
+    y_l(s) ds ~ H sum_k b_k K(tau_i - t_{l,k}) y_l(t_{l,k})`` on the nodes
+    ``c_k`` (the discontinuous method) or ``{0, c_k}`` (the continuous one),
+    every kernel argument being a sample. A first-kind equation amplifies a
+    quadrature mismatch between the rows by one over the mesh width, so the
+    final row must integrate its history the way the rows before it did.
+    ``K`` is the full kernel sample array ((N,) or (N, d, d))."""
+    q = coll_divs
+    c, ks, b = _node_rule_tables(tuple(coll_choices), q, cont)
+    H = Q * delta
+    vector = unit_reg.ndim == 3
+    # y_l at the nodes: (M, n_nodes[, d])
+    if vector:
+        y_nodes = np.moveaxis(npp.polyval(c, unit_reg.transpose(1, 0, 2)), -1, 1)  # (M, n_nodes, d)
+    else:
+        y_nodes = npp.polyval(c, unit_reg.T)                                        # (M, n_nodes)
+    kap = np.asarray(kap, dtype=np.intp)
+    ls = np.arange(M)
+    # sample index of tau_i - t_{l,k}
+    idx = (M - ls)[None, :, None] * Q + kap[:, None, None] - np.asarray(ks)[None, None, :] * (Q // q)
+    Kv = K[idx]                                                # (m, M, n_nodes[, d, d])
+    if vector:
+        return H * np.einsum('ilkab,lkb,k->ia', Kv, y_nodes, b)
+    return H * np.einsum('ilk,lk,k->i', Kv, y_nodes, b)
+
+
+def _tail_history(coef, unit_reg, kap, Q, delta):
+    """History of the final interval's collocation points over the regular
+    intervals: ``hist[i] = sum_l int_{I_l} K_h(tau_i - s) y_l(s) ds`` with
+    ``y_l`` given by its local monomial coefficients ``unit_reg[l]``
+    ((M, P) scalar or (M, P, d) vector). ``coef`` is the kernel interpolant
+    of the full sample array. Returns (m,) or (m, d)."""
+    M, P = unit_reg.shape[:2]
+    vector = unit_reg.ndim == 3
+    p = coef.shape[1] - 1
+    Lam = _monomial_moments(P, Q, p)                          # (P, Q, p+1)
+    # Moments of the solution on every regular cell, mu[l, r, q] =
+    # int_cell xi^q y_l: one contraction, independent of the node count.
+    # Seen from a tail node at sample offset kap_i, cell r of interval l is
+    # kernel cell kap_i + (M - 1 - l) Q + (Q - 1 - r): the cells run through
+    # one contiguous range of the interpolant in reverse order, so each
+    # node's history is a single correlation of a slice of coef with the
+    # reversed moments, no gathering.
+    if vector:
+        mu = np.tensordot(unit_reg, Lam, axes=([1], [0]))     # (M, d, Q, p+1)
+        mu = np.moveaxis(mu, 1, -1)                           # (M, Q, p+1, d)
+    else:
+        mu = np.tensordot(unit_reg, Lam, axes=([1], [0]))     # (M, Q, p+1)
+    mu = np.ascontiguousarray(mu[::-1, ::-1].reshape((M * Q,) + mu.shape[2:]))
+    hist = []
+    for ki in kap:
+        C = coef[ki:ki + M * Q]
+        if vector:
+            hist.append(np.einsum('cqab,cqb->a', C, mu))
+        else:
+            hist.append(np.dot(C.ravel(), mu.ravel()))
+    return delta * np.array(hist)
+
+
+def _tail_local_blocks(coef, Lam_p, kap, delta, d):
+    """Partial-interval blocks of the final interval: ``A[i, k]`` is the
+    product integral of ``K_h(tau_i - s)`` against basis function ``k`` over
+    ``[t_M, tau_i]`` (the first ``kap[i]`` cells); ``Lam_p`` is the basis's
+    moment tensor on the final interval. Shape (m, nb) or (m, nb, d, d)."""
+    nb = Lam_p.shape[0]
+    m = len(kap)
+    A = np.zeros((m, nb) + ((d, d) if d else ()))
+    for i, ki in enumerate(kap):
+        if ki == 0:
+            continue
+        C = coef[ki - 1 - np.arange(ki)]                      # (ki, p+1[, d, d])
+        if d:
+            A[i] = delta * np.einsum('rqab,krq->kab', C, Lam_p[:, :ki, :])
+        else:
+            A[i] = delta * np.einsum('rq,krq->k', C, Lam_p[:, :ki, :])
+    return A
+
+
+def _flat(A, d):
+    """(m, nb, d, d) -> (m d, nb d) with row i d + a, column k d + b."""
+    m, nb = A.shape[:2]
+    if not d:
+        return A
+    return A.transpose(0, 2, 1, 3).reshape(m * d, nb * d)
+
+
+def solve_tail(kind, coef, unit_reg, g_tail, a_tail, y_prev, coll_choices, coll_divs,
+               Q, Qp, delta, d, node_rule_kernel=None):
+    """Solve the final interval of ``Qp`` samples.
+
+    ``coef``: kernel interpolant of the full sample array; ``unit_reg``:
+    local monomial coefficients of the regular intervals ((M, P) or
+    (M, P, d)); ``g_tail`` / ``a_tail``: samples of g (and, for the VIDE, a)
+    on the final interval, ``(Qp + 1[, d[, d]])`` or None for zero;
+    ``y_prev``: the solution's value at the start of the interval (needed by
+    the continuous VIE-1 and the VIDE). Returns ``(unit_tail, values)``: the
+    interval's monomial coefficients ``(P'[, d])`` in its own local variable
+    and its values at the ``Qp + 1`` samples. With ``node_rule_kernel`` (the
+    full kernel sample array) the history is integrated with the regular
+    rows' collocation-node rule instead of the product rule, as the
+    first-kind tails of the collocation-quadrature path need (see
+    `_tail_history_node_rule`)."""
+    m = len(coll_choices)
     dd = max(d, 1)
-    Ur = U.reshape(M, m, dd)
-    unit = np.einsum('nkr,kj->njr', Ur, basis_coefs[:m])      # (M, P, dd)
-    if force_continuous:
-        unit = unit + np.asarray(y)[:M, None, :] * basis_coefs[m][None, :, None]
-    mesh_breakpoints = np.arange(M + 1) * (Q * delta)
-    return _SolutionFunction.from_unit_coefs(unit[:, :, 0] if d == 0 else unit,
-                                             mesh_breakpoints, d=d)
+    kap = snap_nodes(coll_choices, coll_divs, Qp)
+    nodes = tuple(k / Qp for k in kap)
+    Hp = Qp * delta
+    p = coef.shape[1] - 1
+    basis_p, Lam_p = _basis_and_moments(kind, nodes, Qp, p, Hp)
+    M = len(unit_reg)
+    if not M:
+        hist = np.zeros((m, d) if d else (m,))
+    elif node_rule_kernel is not None:
+        hist = _tail_history_node_rule(np.asarray(node_rule_kernel, dtype=float), unit_reg,
+                                       kap, Q, M, coll_choices, coll_divs, delta,
+                                       kind == "vie1_cont")
+    else:
+        hist = _tail_history(coef, unit_reg, kap, Q, delta)
+    g_at = (np.zeros((m, dd)) if g_tail is None
+            else np.asarray(g_tail, dtype=float)[kap].reshape(m, dd))
+    hist = hist.reshape(m, dd)
+    I = np.eye(m * dd)
+
+    Ab = _tail_local_blocks(coef, Lam_p, kap, delta, d)
+    if kind == "vie1":
+        U = np.linalg.solve(_flat(Ab, d), (g_at - hist).ravel())
+        unit = np.einsum('kr,kj->jr', U.reshape(m, dd), basis_p)
+    elif kind == "vie2":
+        U = np.linalg.solve(I - _flat(Ab, d), (g_at + hist).ravel())
+        unit = np.einsum('kr,kj->jr', U.reshape(m, dd), basis_p)
+    elif kind == "vie1_cont":                                 # basis [L_1..L_m, L_0]
+        yp = np.asarray(y_prev, dtype=float).reshape(dd)
+        A_val = _flat(Ab[:, :m], d)
+        A_bnd = Ab[:, m].reshape(m, dd, dd)
+        rhs = g_at - hist - np.einsum('iab,b->ia', A_bnd, yp)
+        U = np.linalg.solve(A_val, rhs.ravel())
+        unit = (np.einsum('kr,kj->jr', U.reshape(m, dd), basis_p[:m])
+                + yp[None, :] * basis_p[m][:, None])
+    elif kind == "vide":                                      # basis [H' beta_k, 1]
+        beta = _integrated_basis_cached(nodes)                # (m, m+1)
+        betaC = Hp * npp.polyval(np.array(nodes), beta.T).T   # (i, k) = H' beta_k(c_i)
+        yp = np.asarray(y_prev, dtype=float).reshape(dd)
+        a_at = (np.zeros((m, dd, dd)) if a_tail is None
+                else np.asarray(a_tail, dtype=float)[kap].reshape(m, dd, dd))
+        P_val = _flat(Ab[:, :m], d)
+        P_bnd = Ab[:, m].reshape(m, dd, dd)
+        Aloc = I - P_val
+        for i in range(m):
+            for k in range(m):
+                Aloc[i*dd:(i+1)*dd, k*dd:(k+1)*dd] -= betaC[i, k] * a_at[i]
+        rhs = g_at + hist + np.einsum('iab,b->ia', P_bnd + a_at, yp)
+        Y = np.linalg.solve(Aloc, rhs.ravel())
+        unit = (np.einsum('kr,kj->jr', Y.reshape(m, dd), basis_p[:m])
+                + yp[None, :] * basis_p[m][:, None])
+    else:
+        raise ValueError(f"unknown equation kind {kind!r}")
+
+    values = npp.polyval(np.arange(Qp + 1) / Qp, unit).T     # (Qp+1, dd)
+    if not d:
+        return unit[:, 0], values[:, 0]
+    return unit, values
 
 
 # ---------------------------------------------------------------------------
@@ -372,36 +643,38 @@ class ProductSetup:
         dd = max(self.d, 1)
         self.Q = int(mesh_samples)
         self.m = m = len(coll_choices)
-        self.M = M = (self.N - 1) // self.Q
+        # M regular intervals of Q samples, then (Qp > 0) one final interval
+        # of Qp samples absorbing the leftover (see mesh_split / solve_tail)
+        self.M, self.Qp = mesh_split(self.N, self.Q)
+        M = self.M
         self.delta = float(time_step)
-        q = int(coll_divs)
-        p = int(kernel_interp_degree)
+        self.q = q = int(coll_divs)
+        self.coll_choices = list(coll_choices)
+        self.p = p = int(kernel_interp_degree)
+        self.a_values = None if a_values is None else np.asarray(a_values, dtype=float)
         H = self.Q * self.delta
 
-        c = np.array([k / q for k in coll_choices], dtype=float)
+        nodes = tuple(k / q for k in coll_choices)
+        c = np.array(nodes)
         self.kappa = [k * self.Q // q for k in coll_choices]
         # basis with the boundary function LAST when there is one, matching
-        # the block column layout [values; boundary]
+        # the block column layout [values; boundary]; the tables are cached
+        # per node set (and mesh width, for the VIDE)
+        self.basis_coefs, Lam = _basis_and_moments(kind, nodes, self.Q, p, H)
         if kind == "vie1_cont":
-            self.basis_coefs = _vie1_cont_basis_coefs(c)
             # y_{n+1} = u_n(1) = y_n * Lhat_0(1) + sum_k U_{n,k} * Lhat_k(1)
-            adv_U, adv_0 = _vie1_cont_advance(c)
-            self.adv_U = np.ascontiguousarray(adv_U, dtype=float)
-            self.adv_0 = float(adv_0)
+            self.adv_U, self.adv_0 = _cont_advance_cached(nodes)
         elif kind == "vide":
-            beta = _integrated_basis_coefs(c)                          # (m, m+1)
-            self.basis_coefs = np.zeros((m + 1, m + 1))
-            self.basis_coefs[:m] = H * beta
-            self.basis_coefs[m, 0] = 1.0                               # boundary basis: constant 1
+            beta = _integrated_basis_cached(nodes)                     # (m, m+1)
             self.betaC = np.ascontiguousarray(H * npp.polyval(c, beta.T).T)  # (i, k) = H beta_k(c_i)
             self.beta1 = np.ascontiguousarray(H * npp.polyval(1.0, beta.T))  # (k,) = H beta_k(1)
-        else:
-            self.basis_coefs = _lagrange_basis_coefs(c)
 
-        coef = interp_cell_coefs(K, p)
-        Lam = moment_tensor(self.basis_coefs, self.Q, p)
-        lagB = flatten_blocks(build_lag_blocks(coef, Lam, self.kappa, self.Q, M, self.delta), self.d)
-        if kind == "vie2":
+        # the interpolant of the full sample array: the regular blocks use its
+        # first M*Q cells, the final interval (if any) the rest
+        self.coef = coef = interp_cell_coefs(K, p)
+        lagB = flatten_blocks(build_lag_blocks(coef[:M * self.Q], Lam, self.kappa, self.Q, M,
+                                               self.delta), self.d)
+        if kind == "vie2" and M:
             # (I - A) U = g + history  ==  first-kind driver on [I - A, -B_1, ...];
             # transformed in place rather than in a second full-size copy
             np.negative(lagB, out=lagB)
@@ -417,9 +690,60 @@ class ProductSetup:
                     np.asarray(a_values, dtype=float)[self.coll_idx].reshape(M, m, dd, dd))
 
     def rhs_at_nodes(self, g):
-        """Right-hand side at the collocation points, row ``i*d + a``."""
+        """Right-hand side at the collocation points of the regular
+        intervals, row ``i*d + a``."""
         dd = max(self.d, 1)
         return np.asarray(g, dtype=float)[self.coll_idx].reshape(self.M, self.m * dd)
+
+
+def _finish(setup, U, y, g_full, y0, return_function):
+    """Values on the whole sample grid and, if asked, the solution object:
+    the regular intervals from the driver's node values ``U`` (and boundary
+    values ``y`` for the continuous kinds), then the final interval, if
+    there is one, from `solve_tail`."""
+    kind, N, d, Q, M, m, Qp = (setup.kind, setup.N, setup.d, setup.Q, setup.M, setup.m,
+                                setup.Qp)
+    dd = max(d, 1)
+    cont = kind in ("vie1_cont", "vide")
+    basis = setup.basis_coefs
+    if M:
+        Ur = U.reshape(M, m, dd)
+        unit = np.einsum('nkr,kj->njr', Ur, basis[:m])                  # (M, P, dd)
+        if cont:
+            unit = unit + np.asarray(y)[:M, None, :] * basis[m][None, :, None]
+        values = evaluate_on_grid(U, y, basis, Q, M, d, cont, M * Q + 1).reshape(M * Q + 1, dd)
+    else:
+        unit = np.zeros((0, basis.shape[1], dd))
+        values = np.zeros((0, dd))
+    if Qp:
+        g_tail = None if g_full is None else np.asarray(g_full, dtype=float)[M * Q:]
+        a_tail = None if setup.a_values is None else setup.a_values[M * Q:]
+        y_prev = (np.asarray(y)[M] if cont else None)
+        unit_t, vals_t = solve_tail(kind, setup.coef, unit[:, :, 0] if d == 0 else unit,
+                                    g_tail, a_tail, y_prev, setup.coll_choices, setup.q,
+                                    Q, Qp, setup.delta, d)
+        unit_t = unit_t.reshape(unit_t.shape[0], dd)
+        vals_t = vals_t.reshape(Qp + 1, dd)
+        full = np.zeros((N, dd))
+        if M:
+            full[:M * Q + 1] = values
+            full[M * Q] = 0.5 * (values[M * Q] + vals_t[0])    # shared mesh point: average
+            full[M * Q + 1:] = vals_t[1:]
+        else:
+            full[:] = vals_t
+        values = full
+        P = max(unit.shape[1], unit_t.shape[0])
+        unit_all = np.zeros((M + 1, P, dd))
+        unit_all[:M, :unit.shape[1]] = unit
+        unit_all[M, :unit_t.shape[0]] = unit_t
+        bps = np.r_[np.arange(M + 1) * (Q * setup.delta), (N - 1) * setup.delta]
+    else:
+        unit_all = unit
+        bps = np.arange(M + 1) * (Q * setup.delta)
+    values = values[:, 0] if d == 0 else values
+    if not return_function:
+        return values, None
+    return values, _SolutionFunction(unit_all[:, :, 0] if d == 0 else unit_all, bps, d=d)
 
 
 def solve_vie1_product(kernel_values, g_values, time_step, coll_divs, coll_choices,
@@ -452,25 +776,22 @@ def solve_vie1_product(kernel_values, g_values, time_step, coll_divs, coll_choic
 
     have_drivers = block_drivers_available(kind, use_extension, show_warnings)
 
-    if not force_continuous:
+    y0 = np.broadcast_to(np.asarray(soln_init_value, dtype=float), (dd,)) if force_continuous else None
+    if M == 0:
+        U, y = np.zeros((0, m * dd)), (None if y0 is None else y0[None, :])
+    elif not force_continuous:
         if have_drivers:
             U = _dlang_module.solve_vie1_blocks_d(lagB, g_coll)
         else:
             U = step_blocks_numpy(lagB, g_coll)
         y = None
     else:
-        y0 = np.broadcast_to(np.asarray(soln_init_value, dtype=float), (dd,))
         if have_drivers:
             U, y = _dlang_module.solve_vie1_cont_blocks_d(
                 lagB, g_coll, setup.adv_U, setup.adv_0, y0, m, dd)
         else:
             U, y = step_cont_blocks_numpy(lagB, g_coll, setup.adv_U, setup.adv_0, y0, m, dd)
-
-    values = evaluate_on_grid(U, y, basis_coefs, Q, M, d, force_continuous, N)
-    polys = None
-    if return_function:
-        polys = build_polynomials(U, y, basis_coefs, Q, M, d, force_continuous, setup.delta)
-    return values, polys
+    return _finish(setup, U, y, g_values, y0, return_function)
 
 
 # ---------------------------------------------------------------------------
@@ -496,16 +817,13 @@ def solve_vie2_product(kernel_values, g_values, time_step, coll_divs, coll_choic
     N, d, Q, M = setup.N, setup.d, setup.Q, setup.M
     g_coll = setup.rhs_at_nodes(g_values)
 
-    if block_drivers_available("vie2", use_extension, show_warnings):
+    if M == 0:
+        U = np.zeros((0, setup.m * max(d, 1)))
+    elif block_drivers_available("vie2", use_extension, show_warnings):
         U = _dlang_module.solve_vie1_blocks_d(setup.lagB, g_coll, name="solve_VIE_2 product step")
     else:
         U = step_blocks_numpy(setup.lagB, g_coll)
-
-    values = evaluate_on_grid(U, None, setup.basis_coefs, Q, M, d, False, N)
-    polys = None
-    if return_function:
-        polys = build_polynomials(U, None, setup.basis_coefs, Q, M, d, False, setup.delta)
-    return values, polys
+    return _finish(setup, U, None, g_values, None, return_function)
 
 
 # ---------------------------------------------------------------------------
@@ -577,13 +895,10 @@ def solve_vide_product(kernel_values, a_values, g_values, time_step, coll_divs, 
     y0 = np.ascontiguousarray(np.broadcast_to(np.asarray(soln_init_value, dtype=float), (dd,)))
 
     args = (setup.lagB, g_coll, setup.a_coll, setup.betaC, setup.beta1, y0, m, dd)
-    if block_drivers_available("vide", use_extension, show_warnings):
+    if M == 0:
+        U, y = np.zeros((0, m * dd)), y0[None, :]
+    elif block_drivers_available("vide", use_extension, show_warnings):
         U, y = _dlang_module.solve_vide_blocks_d(*args)
     else:
         U, y = step_vide_blocks_numpy(*args)
-
-    values = evaluate_on_grid(U, y, setup.basis_coefs, Q, M, d, True, N)
-    polys = None
-    if return_function:
-        polys = build_polynomials(U, y, setup.basis_coefs, Q, M, d, True, setup.delta)
-    return values, polys
+    return _finish(setup, U, y, g_values, y0, return_function)

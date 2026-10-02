@@ -325,32 +325,84 @@ except ImportError:
     _numba_available = False
 
 
-def _truncate_N(kernel_values_, coll_divs, show_warnings):
-    """Truncate kernel_values_ to the largest valid length; return (N, kernel_values_).
-
-    Valid lengths satisfy N ≡ 1 (mod coll_divs²).  Prints a warning when
-    truncation is needed and show_warnings is True. Raises ValueError, before
-    any truncation warning, if N < coll_divs² + 1 (zero mesh intervals).
-    """
+def _split_regular(kernel_values_, coll_divs):
+    """Regular / final-interval split of the sampled data for the
+    collocation quadrature (mesh width coll_divs**2 samples). Returns
+    ``(M, Qp, kernel_reg)``: ``M`` regular intervals, a final interval of
+    ``Qp`` samples (0 if the data end on a mesh point; see
+    `_product.mesh_split`), and the kernel samples of the regular part.
+    Raises ValueError if the data cannot form one interval."""
+    from . import _product
     N = len(kernel_values_)
-    if N < coll_divs ** 2 + 1:
+    Q = coll_divs ** 2
+    if N < Q + 1:
         raise ValueError(
             f"kernel_values has length {N}, which leaves zero mesh intervals for "
             f"coll_divs={coll_divs}: one mesh interval needs at least "
-            f"{coll_divs ** 2 + 1} input points.")
-    if coll_divs > 1 and N % coll_divs**2 != 1:
-        N_used = (N - 1) // coll_divs**2 * coll_divs**2 + 1
-        if show_warnings:
-            print(
-                f"warning: the length of kernel_values ({N}) is not of the form: "
-                f"(multiple of coll_divs**2) + 1 where coll_divs = {coll_divs}. "
-                f"All input data lists will be truncated to the next smaller number "
-                f"of this form ({N_used}) which will also be the length of the "
-                f"returned list of solution values."
-            )
+            f"{Q + 1} input points.")
+    M, Qp = _product.mesh_split(N, Q)
+    return M, Qp, kernel_values_[:M * Q + 1]
+
+
+def _with_tail(kind, regular, kernel_full, g_full, a_full, init, time_step, coll_divs,
+               coll_choices, M, Qp, d, return_function, trim=True):
+    """Run ``regular()`` -> ``(values, poly_coefs)`` for the ``M`` regular
+    intervals (skipped when there are none) and, when ``Qp > 0``, solve the
+    final interval of ``Qp`` samples with `_product.solve_tail` from the
+    regular intervals' polynomials. ``poly_coefs`` must be the driver's
+    coefficient array whenever a tail is needed. Returns the values on the
+    whole sample grid and, if asked, the solution object."""
+    from . import _product
+    Q = coll_divs ** 2
+    if M:
+        values, poly_coefs = regular()
     else:
-        N_used = N
-    return N_used, kernel_values_[:N_used]
+        values, poly_coefs = None, None
+    if not Qp:
+        if return_function:
+            return values, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=d, trim=trim)
+        return values
+    dd = max(d, 1)
+    N = len(kernel_full)
+    unit_reg = (np.asarray(poly_coefs, dtype=float).reshape(M, -1, dd) if M
+                else np.zeros((0, len(coll_choices) + 1, dd)))
+    # The tail's history uses the regular rows' node rule (every kernel
+    # argument is a sample), so the kernel interpolant is needed only for
+    # the local block, i.e. its first Qp cells: build it from a prefix.
+    p = len(coll_choices)
+    coef = _product.interp_cell_coefs(kernel_full[:min(N, Qp + 2 * p + 2)], p)
+    if kind in ("vie1_cont", "vide"):
+        y_prev = unit_reg[-1].sum(axis=0) if M else np.broadcast_to(np.asarray(init, dtype=float), (dd,))
+    else:
+        y_prev = None
+    g_tail = None if g_full is None else np.asarray(g_full, dtype=float)[M * Q:]
+    a_tail = None if a_full is None else np.asarray(a_full, dtype=float)[M * Q:]
+    unit_t, vals_t = _product.solve_tail(
+        kind, coef, unit_reg[:, :, 0] if d == 0 else unit_reg, g_tail, a_tail, y_prev,
+        coll_choices, coll_divs, Q, Qp, time_step, d,
+        # integrate the tail's history the way the regular rows did (the node
+        # rule): for the first kind a quadrature mismatch costs an order, and
+        # it is far cheaper than the product rule on the whole array
+        node_rule_kernel=kernel_full)
+    unit_t = unit_t.reshape(unit_t.shape[0], dd)
+    vals_t = vals_t.reshape(Qp + 1, dd)
+    full = np.zeros((N, dd))
+    if M:
+        v = np.asarray(values, dtype=float).reshape(M * Q + 1, dd)
+        full[:M * Q + 1] = v
+        full[M * Q] = 0.5 * (v[M * Q] + vals_t[0])              # shared mesh point: average
+        full[M * Q + 1:] = vals_t[1:]
+    else:
+        full[:] = vals_t
+    full = full[:, 0] if d == 0 else full
+    if not return_function:
+        return full
+    P = max(unit_reg.shape[1], unit_t.shape[0])
+    unit_all = np.zeros((M + 1, P, dd))
+    unit_all[:M, :unit_reg.shape[1]] = unit_reg
+    unit_all[M, :unit_t.shape[0]] = unit_t
+    bps = np.r_[np.arange(M + 1) * (Q * time_step), (N - 1) * time_step]
+    return full, _SolutionFunction(unit_all[:, :, 0] if d == 0 else unit_all, bps, d=d, trim=trim)
 
 
 def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, time_step=1.0,
@@ -401,10 +453,9 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         Deprecated alias for ``return_function``; passing it emits a
         ``DeprecationWarning``.
     show_warnings : bool, optional
-        If ``True`` (default), print a warning when ``kernel_values`` is
-        truncated, when the Numba fallback is used, or when
-        ``quadrature="product"`` has to step in NumPy because the loaded D
-        extension predates its block driver.
+        If ``True`` (default), print a warning when the Numba fallback is
+        used, or when ``quadrature="product"`` has to step in NumPy because
+        the loaded D extension predates its block driver.
 
     quadrature : {"collocation", "product"}, optional
         How the integrals are evaluated from the sampled kernel. The default
@@ -451,8 +502,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     ------
     ValueError
         For invalid input: shapes that do not fit together (``g_values`` and
-        ``a_values`` must have the length of ``kernel_values``, before any
-        truncation), inputs too short to form one mesh interval, matrix input
+        ``a_values`` must have the length of ``kernel_values``), inputs too
+        short to form one mesh interval, matrix input
         with zero columns, inputs so large that a solver buffer would exceed
         $2^{31}$ elements, a ``coll_divs`` that is not a positive integer or
         ``coll_choices`` that is empty or not made of distinct integers in
@@ -469,17 +520,25 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
 
     Notes
     -----
-    The length $N$ of the input arrays must satisfy
-    $N \equiv 1 \pmod{\text{coll\_divs}^2}$. If a longer array is supplied it
-    is truncated to the largest conforming length and a warning is printed
-    (unless ``show_warnings=False``).
+    The mesh is ``coll_divs**2`` samples wide. Any input length $N$ of at
+    least ``coll_divs**2 + 1`` is accepted and the solution is returned at
+    every sample: the data are covered by regular mesh intervals, and when
+    they do not end on a mesh point the last regular interval and the
+    leftover samples form one final interval of between one and two
+    regular widths, whose collocation nodes are snapped to the nearest
+    samples. That interval is integrated with the product-integration rule
+    (as for ``quadrature="product"``) and adds one local error of the
+    method's order, so the convergence order is unchanged; superconvergence
+    at the mesh points, where a node set has it, is kept at the final point
+    but not at the samples inside the final interval.
 
     With ``quadrature="product"`` the scheme is exact collocation for the
     interpolated kernel; the kernel-perturbation error is of order
-    $\delta^{p+1}$ for interpolation degree $p$, the input length must
-    satisfy $N \equiv 1 \pmod{\text{mesh\_samples}}$ (longer inputs are
-    truncated with a warning), and the lag structure of the blocks lets the
-    FFT-accelerated history of the D extension be used.
+    $\delta^{p+1}$ for interpolation degree $p$, the mesh is ``mesh_samples``
+    samples wide (with the same final-interval treatment of leftover samples
+    as above, so any length of at least ``mesh_samples + 1`` is accepted),
+    and the lag structure of the blocks lets the FFT-accelerated history of
+    the D extension be used.
 
     The solver dispatches at runtime to a D-extension routine specialised for
     the given collocation setting. For scalar equations, settings not compiled
@@ -531,7 +590,8 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     _check_time_step(time_step)
 
     N_orig = len(kernel_values_)
-    N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
+    M_reg, Qp, kernel_reg = _split_regular(kernel_values_, coll_divs)
+    N, N_reg = N_orig, len(kernel_reg)
 
     # ------------------------------------------------------------------ vector path
     if ndim == 3:
@@ -609,16 +669,16 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
                 f"not supported by D extension (no vector-path fallback).")
 
-        k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
-        g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
-        a_c = np.ascontiguousarray(a_values_, dtype=np.float64)
-        N_used = len(k_c)
-        mesh_divs = (N_used - 1) // coll_divs**2
-        soln_vals, poly_coefs = _dlang_module.solve_vide_vec_d(
-            g_c, k_c, a_c, soln_init_values_, time_step, coll_divs, coll_choices, return_function)
-        if return_function:
-            return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=d))
-        return soln_vals
+        def _regular():
+            k_c = np.ascontiguousarray(kernel_reg, dtype=np.float64)
+            g_c = np.ascontiguousarray(g_values_[:N_reg], dtype=np.float64)
+            a_c = np.ascontiguousarray(a_values_[:N_reg], dtype=np.float64)
+            return _dlang_module.solve_vide_vec_d(
+                g_c, k_c, a_c, soln_init_values_, time_step, coll_divs, coll_choices,
+                return_function or Qp > 0)
+        return _with_tail("vide", _regular, kernel_values_, g_values_, a_values_,
+                          soln_init_values_, time_step, coll_divs, coll_choices, M_reg, Qp,
+                          d, return_function)
 
     # ------------------------------------------------------------------ scalar path
 
@@ -632,36 +692,37 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     else:
         a_values_ = np.zeros(N)
 
-    if (coll_divs, coll_choices) in _fast_settings_VIDE:
-        soln_vals, poly_coefs = _dlang_module.solve_vide_d(
-            g_values_, kernel_values_, a_values_, _scalar_init(soln_init_value),
-            time_step, coll_divs, coll_choices, return_function)
-    elif _numba_available:
-        if show_warnings:
-            print("warning: falling back to slower python/numba code")
-        soln_vals, poly_coefs = _numba_solvers.solve_VIDE_jit(
-            g_values_, kernel_values_, a_values_, _scalar_init(soln_init_value),
-            time_step, coll_divs, coll_choices, return_function)
-    else:
+    fast = (coll_divs, coll_choices) in _fast_settings_VIDE
+    if not fast and not _numba_available:
         raise NotImplementedError(
             f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) is not "
             f"supported by the D extension. Install numba to enable the fallback solver, or "
             f"use a supported setting (see fast_coll_settings_VIDE)."
         )
-    if return_function:
-        return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=0,
-                                            trim=False))
-    else:
-        return soln_vals
+    init = _scalar_init(soln_init_value)
+
+    def _regular():
+        args = (g_values_[:N_reg], kernel_reg, a_values_[:N_reg], init,
+                time_step, coll_divs, coll_choices, return_function or Qp > 0)
+        if fast:
+            return _dlang_module.solve_vide_d(*args)
+        if show_warnings:
+            print("warning: falling back to slower python/numba code")
+        return _numba_solvers.solve_VIDE_jit(*args)
+    return _with_tail("vide", _regular, kernel_values_, g_values_, a_values_, init,
+                      time_step, coll_divs, coll_choices, M_reg, Qp, 0, return_function,
+                      trim=False)
 
 
 
 
 def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh_samples,
                         kernel_interp_degree, show_warnings):
-    """Resolve mesh_samples / kernel_interp_degree and truncate the kernel to
-    N = 1 (mod mesh_samples).  ``coll_divs``/``coll_choices`` are already
-    validated.  Returns (Q, p, N_orig, N, K, d, M)."""
+    """Resolve mesh_samples / kernel_interp_degree and split the data into
+    M regular intervals of Q samples plus (Qp > 0) one final interval of Qp
+    samples. ``coll_divs``/``coll_choices`` are already validated.
+    Returns (Q, p, N, d, M, Qp)."""
+    from . import _product
     q = coll_divs
     m = len(coll_choices)
     Q = q if mesh_samples is None else _as_int("mesh_samples", mesh_samples)
@@ -678,22 +739,15 @@ def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh
         raise ValueError(
             f"kernel_values has length {N_orig}, which leaves zero mesh intervals for "
             f"mesh_samples={Q}: one mesh interval needs at least {Q + 1} input points.")
-    N = (N_orig - 1) // Q * Q + 1
-    if N != N_orig and show_warnings:
-        print(
-            f"warning: the length of kernel_values ({N_orig}) is not of the form: "
-            f"(multiple of mesh_samples) + 1 where mesh_samples = {Q}. All input data "
-            f"lists will be truncated to the next smaller number of this form ({N}) "
-            f"which will also be the length of the returned list of solution values.")
-    if N < p + 1:
+    if N_orig < p + 1:
         raise ValueError(
-            f"kernel interpolation of degree {p} needs at least {p + 1} samples, got {N}")
-    K = kernel_values_[:N]
+            f"kernel interpolation of degree {p} needs at least {p + 1} samples, got {N_orig}")
+    K = kernel_values_
     d = 0 if K.ndim == 1 else K.shape[1]
     if K.ndim == 3 and K.shape[1] != K.shape[2]:
         raise ValueError(f"kernel_values must have shape (N, d, d), got {K.shape}")
-    M = (N - 1) // Q
-    return Q, p, N_orig, N, K, d, M
+    M, Qp = _product.mesh_split(N_orig, Q)
+    return Q, p, N_orig, d, M, Qp
 
 
 def _stack_matrix_results(results, return_function, d, m_cols):
@@ -710,9 +764,10 @@ def _solve_vie2_product_path(kernel_values_, g_values, time_step, coll_divs, col
     from . import _product
 
     q, coll_choices = _validate_second_kind_coll_setting(coll_divs, coll_choices)
-    Q, p, N_orig, N, K, d, M = _product_mesh_setup(
+    Q, p, N_orig, d, M, Qp = _product_mesh_setup(
         kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
         show_warnings)
+    K, N = kernel_values_, N_orig
     setup = _product.ProductSetup("vie2", K, time_step, q, coll_choices, Q, p)
 
     if g_values is None:
@@ -753,9 +808,10 @@ def _solve_vide_product_path(kernel_values_, a_values, g_values, soln_init_value
     from . import _product
 
     q, coll_choices = _validate_second_kind_coll_setting(coll_divs, coll_choices)
-    Q, p, N_orig, N, K, d, M = _product_mesh_setup(
+    Q, p, N_orig, d, M, Qp = _product_mesh_setup(
         kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
         show_warnings)
+    K, N = kernel_values_, N_orig
     init = np.asarray(soln_init_value, dtype=float)
 
     # a and g are sampled alongside the kernel, so they must have its
@@ -828,9 +884,10 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
     q, coll_choices = _validate_vie1_coll_setting(coll_divs, coll_choices)
     _check_vie1_setting(q, coll_choices, force_continuous)
     _warn_reduced_order(q, coll_choices, force_continuous, show_warnings)
-    Q, p, N_orig, N, K, d, M = _product_mesh_setup(
+    Q, p, N_orig, d, M, Qp = _product_mesh_setup(
         kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
         show_warnings)
+    K, N = kernel_values_, N_orig
     kind = "vie1_cont" if force_continuous else "vie1"
     setup = _product.ProductSetup(kind, K, time_step, q, coll_choices, Q, p)
 
@@ -953,8 +1010,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         versus order $m$ for the default discontinuous method with the same
         nodes. Default is ``False``.
     show_warnings : bool, optional
-        If ``True`` (default), print a warning when ``kernel_values`` is
-        truncated, when ``soln_init_value`` has no effect, when the node set
+        If ``True`` (default), print a warning when ``soln_init_value`` has
+        no effect, when the node set
         has $\rho = 1$ exactly and so converges one order lower (see Notes),
         when the Numba fallback is used, or when ``quadrature="product"``
         has to step in NumPy because the loaded D extension predates its
@@ -1010,8 +1067,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         For invalid input:
 
         - shapes that do not fit together (``g_values`` must have the length
-          of ``kernel_values``, before any truncation), inputs too short to
-          form one mesh interval, matrix input with zero columns, or inputs
+          of ``kernel_values``), inputs too short to form one mesh interval,
+          matrix input with zero columns, or inputs
           so large that a solver buffer would exceed $2^{31}$ elements;
         - a ``coll_divs`` that is not a positive integer, or ``coll_choices``
           that is empty or not made of distinct integers in
@@ -1035,10 +1092,17 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
 
     Notes
     -----
-    The length $N$ of the input arrays must satisfy
-    $N \equiv 1 \pmod{\text{coll\_divs}^2}$. If a longer array is supplied it
-    is truncated to the largest conforming length and a warning is printed
-    (unless ``show_warnings=False``).
+    The mesh is ``coll_divs**2`` samples wide. Any input length $N$ of at
+    least ``coll_divs**2 + 1`` is accepted and the solution is returned at
+    every sample: the data are covered by regular mesh intervals, and when
+    they do not end on a mesh point the last regular interval and the
+    leftover samples form one final interval of between one and two
+    regular widths, whose collocation nodes are snapped to the nearest
+    samples. That interval is integrated with the product-integration rule
+    (as for ``quadrature="product"``) and adds one local error of the
+    method's order, so the convergence order is unchanged; superconvergence
+    at the mesh points, where a node set has it, is kept at the final point
+    but not at the samples inside the final interval.
 
     Zero is excluded from ``coll_choices`` because the VIE-1 collocation
     scheme does not place nodes at $t = 0$; doing so would require evaluating
@@ -1080,10 +1144,11 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     through the derivative of the interpolation error and is of order
     $\delta^{p}$ for degree $p$ (Linz 1971 [2]; de Hoog and Weiss 1973 [3]);
     the default $p = m$ keeps it below the collocation error. The mesh is
-    ``mesh_samples`` samples wide, the input length must satisfy
-    $N \equiv 1 \pmod{\text{mesh\_samples}}$ (longer inputs are truncated
-    with a warning), and the blocks depend on the mesh intervals only through
-    their lag, so the FFT-accelerated history of the D extension is used. The
+    ``mesh_samples`` samples wide (with the same final-interval treatment of
+    leftover samples as above, so any length of at least
+    ``mesh_samples + 1`` is accepted), and the blocks depend on the mesh
+    intervals only through their lag, so the FFT-accelerated history of the
+    D extension is used. The
     convergence conditions on the node sets are unchanged (they are
     properties of the collocation method, not of the quadrature); the
     discontinuous method is admitted for any ``coll_divs`` provided
@@ -1156,7 +1221,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     _check_time_step(time_step)
 
     N_orig = len(kernel_values_)
-    N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
+    M_reg, Qp, kernel_reg = _split_regular(kernel_values_, coll_divs)
+    N, N_reg = N_orig, len(kernel_reg)
     _warn_vie1_kernel_start(kernel_values_, coll_divs ** 2, show_warnings)
 
     # ------------------------------------------------------------------ vector path
@@ -1224,17 +1290,16 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
                 f"not supported by D extension (no vector-path fallback).")
 
-        # kernel must be C-contiguous (N, d, d) and g (N, d)
-        k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
-        g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
-        N_used = len(k_c)
-        mesh_divs = (N_used - 1) // coll_divs**2
-        soln_vals, poly_coefs = _dlang_module.solve_vie1_vec_d(
-            g_c, k_c, soln_init_value_, time_step,
-            coll_divs, coll_choices, return_function, force_continuous)
-        if return_function:
-            return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=d))
-        return soln_vals
+        def _regular():
+            # kernel must be C-contiguous (N, d, d) and g (N, d)
+            k_c = np.ascontiguousarray(kernel_reg, dtype=np.float64)
+            g_c = np.ascontiguousarray(g_values_[:N_reg], dtype=np.float64)
+            return _dlang_module.solve_vie1_vec_d(
+                g_c, k_c, soln_init_value_, time_step,
+                coll_divs, coll_choices, return_function or Qp > 0, force_continuous)
+        return _with_tail("vie1_cont" if force_continuous else "vie1", _regular,
+                          kernel_values_, g_values_, None, soln_init_value_, time_step,
+                          coll_divs, coll_choices, M_reg, Qp, d, return_function)
 
     # ------------------------------------------------------------------ scalar path
 
@@ -1255,27 +1320,25 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         else:
             soln_init_value_ = _scalar_init(soln_init_value)
 
-    if (coll_divs, coll_choices) in _fast_settings_VIE_1:
-        soln_vals, poly_coefs = _dlang_module.solve_vie1_d(
-            g_values_, kernel_values_, soln_init_value_, time_step,
-            coll_divs, coll_choices, return_function, force_continuous)
-    elif _numba_available:
-        if show_warnings:
-            print("warning: falling back to slower python/numba code")
-        soln_vals, poly_coefs = _numba_solvers.solve_VIE_1_jit(
-            g_values_, kernel_values_, soln_init_value_, time_step,
-            coll_divs, coll_choices, return_function, force_continuous)
-    else:
+    fast = (coll_divs, coll_choices) in _fast_settings_VIE_1
+    if not fast and not _numba_available:
         raise NotImplementedError(
             f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) is not "
             f"supported by the D extension. Install numba to enable the fallback solver, or "
             f"use a supported setting (see fast_coll_settings_VIE_1)."
         )
 
-    if return_function:
-        return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=0))
-    else:
-        return soln_vals
+    def _regular():
+        args = (g_values_[:N_reg], kernel_reg, soln_init_value_, time_step,
+                coll_divs, coll_choices, return_function or Qp > 0, force_continuous)
+        if fast:
+            return _dlang_module.solve_vie1_d(*args)
+        if show_warnings:
+            print("warning: falling back to slower python/numba code")
+        return _numba_solvers.solve_VIE_1_jit(*args)
+    return _with_tail("vie1_cont" if force_continuous else "vie1", _regular, kernel_values_,
+                      g_values_, None, soln_init_value_, time_step, coll_divs, coll_choices,
+                      M_reg, Qp, 0, return_function)
 
 def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                 coll_choices=[0,1,2], return_function=False, return_polys=None,
@@ -1316,10 +1379,9 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         Deprecated alias for ``return_function``; passing it emits a
         ``DeprecationWarning``.
     show_warnings : bool, optional
-        If ``True`` (default), print a warning when ``kernel_values`` is
-        truncated, when the Numba fallback is used, or when
-        ``quadrature="product"`` has to step in NumPy because the loaded D
-        extension predates its block driver.
+        If ``True`` (default), print a warning when the Numba fallback is
+        used, or when ``quadrature="product"`` has to step in NumPy because
+        the loaded D extension predates its block driver.
 
     quadrature : {"collocation", "product"}, optional
         How the integrals are evaluated from the sampled kernel. The default
@@ -1366,8 +1428,8 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     ------
     ValueError
         For invalid input: shapes that do not fit together (``g_values`` and
-        ``a_values`` must have the length of ``kernel_values``, before any
-        truncation), inputs too short to form one mesh interval, matrix input
+        ``a_values`` must have the length of ``kernel_values``), inputs too
+        short to form one mesh interval, matrix input
         with zero columns, inputs so large that a solver buffer would exceed
         $2^{31}$ elements, a ``coll_divs`` that is not a positive integer or
         ``coll_choices`` that is empty or not made of distinct integers in
@@ -1384,17 +1446,25 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
 
     Notes
     -----
-    The length $N$ of the input arrays must satisfy
-    $N \equiv 1 \pmod{\text{coll\_divs}^2}$. If a longer array is supplied it
-    is truncated to the largest conforming length and a warning is printed
-    (unless ``show_warnings=False``).
+    The mesh is ``coll_divs**2`` samples wide. Any input length $N$ of at
+    least ``coll_divs**2 + 1`` is accepted and the solution is returned at
+    every sample: the data are covered by regular mesh intervals, and when
+    they do not end on a mesh point the last regular interval and the
+    leftover samples form one final interval of between one and two
+    regular widths, whose collocation nodes are snapped to the nearest
+    samples. That interval is integrated with the product-integration rule
+    (as for ``quadrature="product"``) and adds one local error of the
+    method's order, so the convergence order is unchanged; superconvergence
+    at the mesh points, where a node set has it, is kept at the final point
+    but not at the samples inside the final interval.
 
     With ``quadrature="product"`` the scheme is exact collocation for the
     interpolated kernel; the kernel-perturbation error is of order
-    $\delta^{p+1}$ for interpolation degree $p$, the input length must
-    satisfy $N \equiv 1 \pmod{\text{mesh\_samples}}$ (longer inputs are
-    truncated with a warning), and the lag structure of the blocks lets the
-    FFT-accelerated history of the D extension be used.
+    $\delta^{p+1}$ for interpolation degree $p$, the mesh is ``mesh_samples``
+    samples wide (with the same final-interval treatment of leftover samples
+    as above, so any length of at least ``mesh_samples + 1`` is accepted),
+    and the lag structure of the blocks lets the FFT-accelerated history of
+    the D extension be used.
 
     The solver dispatches at runtime to a D-extension routine specialised for
     the given collocation setting. For scalar equations, settings not compiled
@@ -1444,7 +1514,8 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     _check_time_step(time_step)
 
     N_orig = len(kernel_values_)
-    N, kernel_values_ = _truncate_N(kernel_values_, coll_divs, show_warnings)
+    M_reg, Qp, kernel_reg = _split_regular(kernel_values_, coll_divs)
+    N, N_reg = N_orig, len(kernel_reg)
 
     # ------------------------------------------------------------------ vector path
     if ndim == 3:
@@ -1491,15 +1562,13 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                 f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
                 f"not supported by D extension (no vector-path fallback).")
 
-        k_c = np.ascontiguousarray(kernel_values_, dtype=np.float64)
-        g_c = np.ascontiguousarray(g_values_, dtype=np.float64)
-        N_used = len(k_c)
-        mesh_divs = (N_used - 1) // coll_divs**2
-        soln_vals, poly_coefs = _dlang_module.solve_vie2_vec_d(
-            g_c, k_c, time_step, coll_divs, coll_choices, return_function)
-        if return_function:
-            return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=d))
-        return soln_vals
+        def _regular():
+            k_c = np.ascontiguousarray(kernel_reg, dtype=np.float64)
+            g_c = np.ascontiguousarray(g_values_[:N_reg], dtype=np.float64)
+            return _dlang_module.solve_vie2_vec_d(
+                g_c, k_c, time_step, coll_divs, coll_choices, return_function or Qp > 0)
+        return _with_tail("vie2", _regular, kernel_values_, g_values_, None, None, time_step,
+                          coll_divs, coll_choices, M_reg, Qp, d, return_function)
 
     # ------------------------------------------------------------------ scalar path
 
@@ -1508,22 +1577,21 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
     else:
         g_values_ = np.zeros(N)
 
-    if (coll_divs, coll_choices) in _fast_settings_VIE_2:
-        soln_vals, poly_coefs = _dlang_module.solve_vie2_d(
-            g_values_, kernel_values_, time_step, coll_divs, coll_choices, return_function)
-    elif _numba_available:
-        if show_warnings:
-            print("warning: falling back to slower python/numba code")
-        soln_vals, poly_coefs = _numba_solvers.solve_VIE_2_jit(
-            g_values_, kernel_values_, time_step, coll_divs, coll_choices, return_function)
-    else:
+    fast = (coll_divs, coll_choices) in _fast_settings_VIE_2
+    if not fast and not _numba_available:
         raise NotImplementedError(
             f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) is not "
             f"supported by the D extension. Install numba to enable the fallback solver, or "
             f"use a supported setting (see fast_coll_settings_VIE_2)."
         )
 
-    if return_function:
-        return (soln_vals, _wrap_unit_coefs(poly_coefs, time_step, coll_divs, d=0))
-    else:
-        return soln_vals
+    def _regular():
+        args = (g_values_[:N_reg], kernel_reg, time_step, coll_divs, coll_choices,
+                return_function or Qp > 0)
+        if fast:
+            return _dlang_module.solve_vie2_d(*args)
+        if show_warnings:
+            print("warning: falling back to slower python/numba code")
+        return _numba_solvers.solve_VIE_2_jit(*args)
+    return _with_tail("vie2", _regular, kernel_values_, g_values_, None, None, time_step,
+                      coll_divs, coll_choices, M_reg, Qp, 0, return_function)

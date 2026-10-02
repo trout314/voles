@@ -21,12 +21,15 @@ class TestTruncationWarning:
         n_pts = 90
         return _make_data(n_pts)
 
-    def test_vie1_truncation_warns(self, capsys):
+    def test_vie1_odd_length_is_silent_and_full(self, capsys):
+        """Lengths that do not end on a mesh point used to be truncated with
+        a warning; the final interval now absorbs the leftover samples."""
         kernel, g, h = self._bad_length_data()
         g[0] = 0.0
-        solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                     coll_divs=3, coll_choices=[1, 2, 3], show_warnings=True)
-        assert "truncated" in capsys.readouterr().out.lower()
+        y = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
+                        coll_divs=3, coll_choices=[1, 2, 3], show_warnings=True)
+        assert len(y) == len(kernel)
+        assert capsys.readouterr().out == ""
 
     def test_vie1_truncation_silent(self, capsys):
         kernel, g, h = self._bad_length_data()
@@ -35,11 +38,12 @@ class TestTruncationWarning:
                      coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
         assert capsys.readouterr().out == ""
 
-    def test_vie2_truncation_warns(self, capsys):
+    def test_vie2_odd_length_is_silent_and_full(self, capsys):
         kernel, g, h = self._bad_length_data()
-        solve_VIE_2(kernel_values=kernel, g_values=g, time_step=h,
-                     coll_divs=3, coll_choices=[0, 1, 2, 3], show_warnings=True)
-        assert "truncated" in capsys.readouterr().out.lower()
+        y = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=h,
+                        coll_divs=3, coll_choices=[0, 1, 2, 3], show_warnings=True)
+        assert len(y) == len(kernel)
+        assert capsys.readouterr().out == ""
 
     def test_vie2_truncation_silent(self, capsys):
         kernel, g, h = self._bad_length_data()
@@ -47,11 +51,12 @@ class TestTruncationWarning:
                      coll_divs=3, coll_choices=[0, 1, 2, 3], show_warnings=False)
         assert capsys.readouterr().out == ""
 
-    def test_vide_truncation_warns(self, capsys):
+    def test_vide_odd_length_is_silent_and_full(self, capsys):
         kernel, g, h = self._bad_length_data()
-        solve_VIDE(kernel_values=kernel, g_values=g, soln_init_value=0.0,
-                    time_step=h, coll_divs=3, coll_choices=[0, 1, 2], show_warnings=True)
-        assert "truncated" in capsys.readouterr().out.lower()
+        y = solve_VIDE(kernel_values=kernel, g_values=g, soln_init_value=0.0,
+                       time_step=h, coll_divs=3, coll_choices=[0, 1, 2], show_warnings=True)
+        assert len(y) == len(kernel)
+        assert capsys.readouterr().out == ""
 
     def test_vide_truncation_silent(self, capsys):
         kernel, g, h = self._bad_length_data()
@@ -228,20 +233,22 @@ class TestMatrixWarningsOnce:
     """Matrix (multi-RHS) solves fan out one thread per column; per-solve
     warnings must appear exactly once, not once per column."""
 
-    def test_vie2_matrix_truncation_warns_once(self, capsys):
-        n_pts, d, m = 90, 2, 3  # 90 is not (multiple of 9) + 1 -> truncation
+    def test_vie2_matrix_odd_length_is_silent(self, capsys):
+        n_pts, d, m = 90, 2, 3  # 90 is not (multiple of 9) + 1: a final interval
         kernel = np.zeros((n_pts, d, d))
         kernel[:, 0, 0] = kernel[:, 1, 1] = 1.0
         g = np.ones((n_pts, d, m))
-        solve_VIE_2(kernel_values=kernel, g_values=g, time_step=0.01,
-                    coll_divs=3, coll_choices=[0, 1, 2], show_warnings=True)
-        assert capsys.readouterr().out.lower().count("truncated") == 1
+        y = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=0.01,
+                        coll_divs=3, coll_choices=[0, 1, 2], show_warnings=True)
+        assert y.shape == (n_pts, d, m)
+        assert capsys.readouterr().out == ""
 
-    def test_vide_matrix_truncation_warns_once(self, capsys):
+    def test_vide_matrix_odd_length_is_silent(self, capsys):
         n_pts, d, m = 90, 2, 3
         kernel = np.zeros((n_pts, d, d))
         g = np.ones((n_pts, d, m))
-        solve_VIDE(kernel_values=kernel, g_values=g,
-                   soln_init_value=np.zeros((d, m)), time_step=0.01,
-                   coll_divs=3, coll_choices=[1, 2, 3], show_warnings=True)
-        assert capsys.readouterr().out.lower().count("truncated") == 1
+        y = solve_VIDE(kernel_values=kernel, g_values=g,
+                       soln_init_value=np.zeros((d, m)), time_step=0.01,
+                       coll_divs=3, coll_choices=[1, 2, 3], show_warnings=True)
+        assert y.shape == (n_pts, d, m)
+        assert capsys.readouterr().out == ""

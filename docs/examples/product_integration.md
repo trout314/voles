@@ -80,8 +80,9 @@ print(f"product integration, mesh_samples=9: max error "
       f"{np.max(np.abs(K_prod9 - K_exact)):.1e}")
 ```
 
-The input length must satisfy `len(kernel_values) = (N × mesh_samples) + 1`;
-longer inputs are truncated with a warning, as for the default quadrature.
+Any input length of at least `mesh_samples + 1` is accepted; as for the
+default quadrature, leftover samples past the last regular mesh interval are
+absorbed by stretching that interval, so the solution covers every sample.
 
 **Noisy data and first-kind equations.** Inverting a first-kind equation
 amplifies errors in the data by roughly the inverse of the mesh width, so on

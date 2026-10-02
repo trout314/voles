@@ -44,6 +44,22 @@
   against a closed-form solution.
 
 ### Changed
+- **The array-input solvers no longer truncate the data.** Previously the
+  input length had to be one more than a multiple of the mesh width
+  (``coll_divs**2`` samples, or ``mesh_samples`` with product quadrature),
+  and longer inputs were cut back with a warning, dropping up to
+  ``coll_divs**2 - 1`` samples at the end. Now any length that covers one
+  mesh interval is accepted and the solution is returned at every sample:
+  the last regular mesh interval and the leftover samples form one final
+  interval of between one and two regular widths, with the collocation
+  nodes snapped to the nearest samples, integrated by the product rule from
+  the regular intervals' solution polynomials. That adds one local error of
+  the method's order, so the convergence order is unchanged (measured for
+  all four methods and both quadratures); the superconvergence of special
+  node sets at mesh points is kept at the final point but not at the
+  samples inside the final interval. Inputs that end on a mesh point are
+  solved exactly as before. The truncation warning is gone, and
+  ``return_function=True`` objects may have a longer last interval.
 - **Faster solves across the board** (measured on an Apple M1 against the
   previous release):
     - The Toeplitz history sums use a real-input FFT: each length-2S

@@ -105,19 +105,17 @@ times = np.arange(0, 2.1, time_step)   # 42 points
 kernel = np.exp(-times)
 g = np.sin(times) - 0.5*(np.exp(-times) + np.sin(times) - np.cos(times))
 
-# Default solver settings require length of form 4k+1; input will be
-# truncated from 42 to 41, so soln has 41 elements, not 42.
 soln = solve_VIE_2(
     kernel_values=kernel,
     g_values=g,
     time_step=time_step,
 )
-print(f"Max error: {max(abs(soln - np.sin(times[:len(soln)]))):.2e}")
+print(f"Max error: {max(abs(soln - np.sin(times))):.2e}")
 ```
 
 All solvers accept `return_function=True` to also return a callable solution object (`return_polys=True` is a deprecated alias). The object evaluates the piecewise polynomial solution at any time in the solved interval $[0, T]$ (NaN outside it) and also indexes/iterates like a list of `numpy.polynomial.Polynomial` objects.
 
-The solvers require input arrays to satisfy an internal size constraint. Any length can be passed; if the length doesn't meet the constraint, the arrays are automatically truncated to the nearest valid length and a warning is printed. See the API reference for each solver for details.
+The array-input solvers accept any input length that covers at least one mesh interval and return the solution at every sample: when the data do not end on a mesh point, the last mesh interval is stretched (to at most twice the regular width) to absorb the leftover samples, which keeps the convergence order. See the API reference for each solver for details.
 
 ## Vector and Matrix Valued Equations
 
