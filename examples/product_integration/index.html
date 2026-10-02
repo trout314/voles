@@ -1317,8 +1317,9 @@ K_prod9 = solve_VIE_1(kernel_values=C, g_values=C_dot, time_step=time_step,
 print(f&quot;product integration, mesh_samples=9: max error &quot;
       f&quot;{np.max(np.abs(K_prod9 - K_exact)):.1e}&quot;)
 </code></pre>
-<p>The input length must satisfy <code>len(kernel_values) = (N × mesh_samples) + 1</code>;
-longer inputs are truncated with a warning, as for the default quadrature.</p>
+<p>Any input length of at least <code>mesh_samples + 1</code> is accepted; as for the
+default quadrature, leftover samples past the last regular mesh interval are
+absorbed by stretching that interval, so the solution covers every sample.</p>
 <p><strong>Noisy data and first-kind equations.</strong> Inverting a first-kind equation
 amplifies errors in the data by roughly the inverse of the mesh width, so on
 noisy data the finest mesh is not automatically the best choice.

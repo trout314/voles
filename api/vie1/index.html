@@ -1442,8 +1442,8 @@ nodes. Default is <code>False</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>If <code>True</code> (default), print a warning when <code>kernel_values</code> is
-truncated, when <code>soln_init_value</code> has no effect, when the node set
+                <p>If <code>True</code> (default), print a warning when <code>soln_init_value</code> has
+no effect, when the node set
 has <span class="arithmatex">\(\rho = 1\)</span> exactly and so converges one order lower (see Notes),
 when the Numba fallback is used, or when <code>quadrature="product"</code>
 has to step in NumPy because the loaded D extension predates its
@@ -1588,8 +1588,8 @@ equations), one polynomial per component.</p>
                 <p>For invalid input:</p>
 <ul>
 <li>shapes that do not fit together (<code>g_values</code> must have the length
-  of <code>kernel_values</code>, before any truncation), inputs too short to
-  form one mesh interval, matrix input with zero columns, or inputs
+  of <code>kernel_values</code>), inputs too short to form one mesh interval,
+  matrix input with zero columns, or inputs
   so large that a solver buffer would exceed <span class="arithmatex">\(2^{31}\)</span> elements;</li>
 <li>a <code>coll_divs</code> that is not a positive integer, or <code>coll_choices</code>
   that is empty or not made of distinct integers in
@@ -1636,10 +1636,17 @@ kernel).</p>
 
 <details class="note" open>
   <summary>Notes</summary>
-  <p>The length <span class="arithmatex">\(N\)</span> of the input arrays must satisfy
-<span class="arithmatex">\(N \equiv 1 \pmod{\text{coll\_divs}^2}\)</span>. If a longer array is supplied it
-is truncated to the largest conforming length and a warning is printed
-(unless <code>show_warnings=False</code>).</p>
+  <p>The mesh is <code>coll_divs**2</code> samples wide. Any input length <span class="arithmatex">\(N\)</span> of at
+least <code>coll_divs**2 + 1</code> is accepted and the solution is returned at
+every sample: the data are covered by regular mesh intervals, and when
+they do not end on a mesh point the last regular interval and the
+leftover samples form one final interval of between one and two
+regular widths, whose collocation nodes are snapped to the nearest
+samples. That interval is integrated with the product-integration rule
+(as for <code>quadrature="product"</code>) and adds one local error of the
+method's order, so the convergence order is unchanged; superconvergence
+at the mesh points, where a node set has it, is kept at the final point
+but not at the samples inside the final interval.</p>
 <p>Zero is excluded from <code>coll_choices</code> because the VIE-1 collocation
 scheme does not place nodes at <span class="arithmatex">\(t = 0\)</span>; doing so would require evaluating
 the equation at <span class="arithmatex">\(t = 0\)</span> where both sides are zero by definition, giving no
@@ -1676,10 +1683,11 @@ kernel-perturbation term. For a first-kind equation that term enters
 through the derivative of the interpolation error and is of order
 <span class="arithmatex">\(\delta^{p}\)</span> for degree <span class="arithmatex">\(p\)</span> (Linz 1971 [2]; de Hoog and Weiss 1973 [3]);
 the default <span class="arithmatex">\(p = m\)</span> keeps it below the collocation error. The mesh is
-<code>mesh_samples</code> samples wide, the input length must satisfy
-<span class="arithmatex">\(N \equiv 1 \pmod{\text{mesh\_samples}}\)</span> (longer inputs are truncated
-with a warning), and the blocks depend on the mesh intervals only through
-their lag, so the FFT-accelerated history of the D extension is used. The
+<code>mesh_samples</code> samples wide (with the same final-interval treatment of
+leftover samples as above, so any length of at least
+<code>mesh_samples + 1</code> is accepted), and the blocks depend on the mesh
+intervals only through their lag, so the FFT-accelerated history of the
+D extension is used. The
 convergence conditions on the node sets are unchanged (they are
 properties of the collocation method, not of the quadrature); the
 discontinuous method is admitted for any <code>coll_divs</code> provided
@@ -1709,64 +1717,7 @@ supported settings (with the non-convergent ones excluded) are listed in
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 893</span>
-<span class="normal"> 894</span>
-<span class="normal"> 895</span>
-<span class="normal"> 896</span>
-<span class="normal"> 897</span>
-<span class="normal"> 898</span>
-<span class="normal"> 899</span>
-<span class="normal"> 900</span>
-<span class="normal"> 901</span>
-<span class="normal"> 902</span>
-<span class="normal"> 903</span>
-<span class="normal"> 904</span>
-<span class="normal"> 905</span>
-<span class="normal"> 906</span>
-<span class="normal"> 907</span>
-<span class="normal"> 908</span>
-<span class="normal"> 909</span>
-<span class="normal"> 910</span>
-<span class="normal"> 911</span>
-<span class="normal"> 912</span>
-<span class="normal"> 913</span>
-<span class="normal"> 914</span>
-<span class="normal"> 915</span>
-<span class="normal"> 916</span>
-<span class="normal"> 917</span>
-<span class="normal"> 918</span>
-<span class="normal"> 919</span>
-<span class="normal"> 920</span>
-<span class="normal"> 921</span>
-<span class="normal"> 922</span>
-<span class="normal"> 923</span>
-<span class="normal"> 924</span>
-<span class="normal"> 925</span>
-<span class="normal"> 926</span>
-<span class="normal"> 927</span>
-<span class="normal"> 928</span>
-<span class="normal"> 929</span>
-<span class="normal"> 930</span>
-<span class="normal"> 931</span>
-<span class="normal"> 932</span>
-<span class="normal"> 933</span>
-<span class="normal"> 934</span>
-<span class="normal"> 935</span>
-<span class="normal"> 936</span>
-<span class="normal"> 937</span>
-<span class="normal"> 938</span>
-<span class="normal"> 939</span>
-<span class="normal"> 940</span>
-<span class="normal"> 941</span>
-<span class="normal"> 942</span>
-<span class="normal"> 943</span>
-<span class="normal"> 944</span>
-<span class="normal"> 945</span>
-<span class="normal"> 946</span>
-<span class="normal"> 947</span>
-<span class="normal"> 948</span>
-<span class="normal"> 949</span>
-<span class="normal"> 950</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 950</span>
 <span class="normal"> 951</span>
 <span class="normal"> 952</span>
 <span class="normal"> 953</span>
@@ -2094,7 +2045,70 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="normal">1275</span>
 <span class="normal">1276</span>
 <span class="normal">1277</span>
-<span class="normal">1278</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="normal">1278</span>
+<span class="normal">1279</span>
+<span class="normal">1280</span>
+<span class="normal">1281</span>
+<span class="normal">1282</span>
+<span class="normal">1283</span>
+<span class="normal">1284</span>
+<span class="normal">1285</span>
+<span class="normal">1286</span>
+<span class="normal">1287</span>
+<span class="normal">1288</span>
+<span class="normal">1289</span>
+<span class="normal">1290</span>
+<span class="normal">1291</span>
+<span class="normal">1292</span>
+<span class="normal">1293</span>
+<span class="normal">1294</span>
+<span class="normal">1295</span>
+<span class="normal">1296</span>
+<span class="normal">1297</span>
+<span class="normal">1298</span>
+<span class="normal">1299</span>
+<span class="normal">1300</span>
+<span class="normal">1301</span>
+<span class="normal">1302</span>
+<span class="normal">1303</span>
+<span class="normal">1304</span>
+<span class="normal">1305</span>
+<span class="normal">1306</span>
+<span class="normal">1307</span>
+<span class="normal">1308</span>
+<span class="normal">1309</span>
+<span class="normal">1310</span>
+<span class="normal">1311</span>
+<span class="normal">1312</span>
+<span class="normal">1313</span>
+<span class="normal">1314</span>
+<span class="normal">1315</span>
+<span class="normal">1316</span>
+<span class="normal">1317</span>
+<span class="normal">1318</span>
+<span class="normal">1319</span>
+<span class="normal">1320</span>
+<span class="normal">1321</span>
+<span class="normal">1322</span>
+<span class="normal">1323</span>
+<span class="normal">1324</span>
+<span class="normal">1325</span>
+<span class="normal">1326</span>
+<span class="normal">1327</span>
+<span class="normal">1328</span>
+<span class="normal">1329</span>
+<span class="normal">1330</span>
+<span class="normal">1331</span>
+<span class="normal">1332</span>
+<span class="normal">1333</span>
+<span class="normal">1334</span>
+<span class="normal">1335</span>
+<span class="normal">1336</span>
+<span class="normal">1337</span>
+<span class="normal">1338</span>
+<span class="normal">1339</span>
+<span class="normal">1340</span>
+<span class="normal">1341</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
                 <span class="n">coll_choices</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                 <span class="n">force_continuous</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                 <span class="n">quadrature</span><span class="o">=</span><span class="s2">"collocation"</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -2157,8 +2171,8 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="sd">        versus order $m$ for the default discontinuous method with the same</span>
 <span class="sd">        nodes. Default is ``False``.</span>
 <span class="sd">    show_warnings : bool, optional</span>
-<span class="sd">        If ``True`` (default), print a warning when ``kernel_values`` is</span>
-<span class="sd">        truncated, when ``soln_init_value`` has no effect, when the node set</span>
+<span class="sd">        If ``True`` (default), print a warning when ``soln_init_value`` has</span>
+<span class="sd">        no effect, when the node set</span>
 <span class="sd">        has $\rho = 1$ exactly and so converges one order lower (see Notes),</span>
 <span class="sd">        when the Numba fallback is used, or when ``quadrature="product"``</span>
 <span class="sd">        has to step in NumPy because the loaded D extension predates its</span>
@@ -2214,8 +2228,8 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="sd">        For invalid input:</span>
 
 <span class="sd">        - shapes that do not fit together (``g_values`` must have the length</span>
-<span class="sd">          of ``kernel_values``, before any truncation), inputs too short to</span>
-<span class="sd">          form one mesh interval, matrix input with zero columns, or inputs</span>
+<span class="sd">          of ``kernel_values``), inputs too short to form one mesh interval,</span>
+<span class="sd">          matrix input with zero columns, or inputs</span>
 <span class="sd">          so large that a solver buffer would exceed $2^{31}$ elements;</span>
 <span class="sd">        - a ``coll_divs`` that is not a positive integer, or ``coll_choices``</span>
 <span class="sd">          that is empty or not made of distinct integers in</span>
@@ -2239,10 +2253,17 @@ supported settings (with the non-convergent ones excluded) are listed in
 
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
-<span class="sd">    The length $N$ of the input arrays must satisfy</span>
-<span class="sd">    $N \equiv 1 \pmod{\text{coll\_divs}^2}$. If a longer array is supplied it</span>
-<span class="sd">    is truncated to the largest conforming length and a warning is printed</span>
-<span class="sd">    (unless ``show_warnings=False``).</span>
+<span class="sd">    The mesh is ``coll_divs**2`` samples wide. Any input length $N$ of at</span>
+<span class="sd">    least ``coll_divs**2 + 1`` is accepted and the solution is returned at</span>
+<span class="sd">    every sample: the data are covered by regular mesh intervals, and when</span>
+<span class="sd">    they do not end on a mesh point the last regular interval and the</span>
+<span class="sd">    leftover samples form one final interval of between one and two</span>
+<span class="sd">    regular widths, whose collocation nodes are snapped to the nearest</span>
+<span class="sd">    samples. That interval is integrated with the product-integration rule</span>
+<span class="sd">    (as for ``quadrature="product"``) and adds one local error of the</span>
+<span class="sd">    method's order, so the convergence order is unchanged; superconvergence</span>
+<span class="sd">    at the mesh points, where a node set has it, is kept at the final point</span>
+<span class="sd">    but not at the samples inside the final interval.</span>
 
 <span class="sd">    Zero is excluded from ``coll_choices`` because the VIE-1 collocation</span>
 <span class="sd">    scheme does not place nodes at $t = 0$; doing so would require evaluating</span>
@@ -2284,10 +2305,11 @@ supported settings (with the non-convergent ones excluded) are listed in
 <span class="sd">    through the derivative of the interpolation error and is of order</span>
 <span class="sd">    $\delta^{p}$ for degree $p$ (Linz 1971 [2]; de Hoog and Weiss 1973 [3]);</span>
 <span class="sd">    the default $p = m$ keeps it below the collocation error. The mesh is</span>
-<span class="sd">    ``mesh_samples`` samples wide, the input length must satisfy</span>
-<span class="sd">    $N \equiv 1 \pmod{\text{mesh\_samples}}$ (longer inputs are truncated</span>
-<span class="sd">    with a warning), and the blocks depend on the mesh intervals only through</span>
-<span class="sd">    their lag, so the FFT-accelerated history of the D extension is used. The</span>
+<span class="sd">    ``mesh_samples`` samples wide (with the same final-interval treatment of</span>
+<span class="sd">    leftover samples as above, so any length of at least</span>
+<span class="sd">    ``mesh_samples + 1`` is accepted), and the blocks depend on the mesh</span>
+<span class="sd">    intervals only through their lag, so the FFT-accelerated history of the</span>
+<span class="sd">    D extension is used. The</span>
 <span class="sd">    convergence conditions on the node sets are unchanged (they are</span>
 <span class="sd">    properties of the collocation method, not of the quadrature); the</span>
 <span class="sd">    discontinuous method is admitted for any ``coll_divs`` provided</span>
@@ -2360,7 +2382,8 @@ supported settings (with the non-convergent ones excluded) are listed in
     <span class="n">_check_time_step</span><span class="p">(</span><span class="n">time_step</span><span class="p">)</span>
 
     <span class="n">N_orig</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">)</span>
-    <span class="n">N</span><span class="p">,</span> <span class="n">kernel_values_</span> <span class="o">=</span> <span class="n">_truncate_N</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
+    <span class="n">M_reg</span><span class="p">,</span> <span class="n">Qp</span><span class="p">,</span> <span class="n">kernel_reg</span> <span class="o">=</span> <span class="n">_split_regular</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">)</span>
+    <span class="n">N</span><span class="p">,</span> <span class="n">N_reg</span> <span class="o">=</span> <span class="n">N_orig</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_reg</span><span class="p">)</span>
     <span class="n">_warn_vie1_kernel_start</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">coll_divs</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
 
     <span class="c1"># ------------------------------------------------------------------ vector path</span>
@@ -2428,17 +2451,16 @@ supported settings (with the non-convergent ones excluded) are listed in
                 <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) "</span>
                 <span class="sa">f</span><span class="s2">"not supported by D extension (no vector-path fallback)."</span><span class="p">)</span>
 
-        <span class="c1"># kernel must be C-contiguous (N, d, d) and g (N, d)</span>
-        <span class="n">k_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-        <span class="n">g_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">g_values_</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-        <span class="n">N_used</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">k_c</span><span class="p">)</span>
-        <span class="n">mesh_divs</span> <span class="o">=</span> <span class="p">(</span><span class="n">N_used</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="n">coll_divs</span><span class="o">**</span><span class="mi">2</span>
-        <span class="n">soln_vals</span><span class="p">,</span> <span class="n">poly_coefs</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vie1_vec_d</span><span class="p">(</span>
-            <span class="n">g_c</span><span class="p">,</span> <span class="n">k_c</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span>
-            <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">(</span><span class="n">soln_vals</span><span class="p">,</span> <span class="n">_wrap_unit_coefs</span><span class="p">(</span><span class="n">poly_coefs</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">d</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">soln_vals</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">_regular</span><span class="p">():</span>
+            <span class="c1"># kernel must be C-contiguous (N, d, d) and g (N, d)</span>
+            <span class="n">k_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">kernel_reg</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+            <span class="n">g_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">g_values_</span><span class="p">[:</span><span class="n">N_reg</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vie1_vec_d</span><span class="p">(</span>
+                <span class="n">g_c</span><span class="p">,</span> <span class="n">k_c</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span>
+                <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span> <span class="ow">or</span> <span class="n">Qp</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">_with_tail</span><span class="p">(</span><span class="s2">"vie1_cont"</span> <span class="k">if</span> <span class="n">force_continuous</span> <span class="k">else</span> <span class="s2">"vie1"</span><span class="p">,</span> <span class="n">_regular</span><span class="p">,</span>
+                          <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">g_values_</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span>
+                          <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">M_reg</span><span class="p">,</span> <span class="n">Qp</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">return_function</span><span class="p">)</span>
 
     <span class="c1"># ------------------------------------------------------------------ scalar path</span>
 
@@ -2459,27 +2481,25 @@ supported settings (with the non-convergent ones excluded) are listed in
         <span class="k">else</span><span class="p">:</span>
             <span class="n">soln_init_value_</span> <span class="o">=</span> <span class="n">_scalar_init</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_fast_settings_VIE_1</span><span class="p">:</span>
-        <span class="n">soln_vals</span><span class="p">,</span> <span class="n">poly_coefs</span> <span class="o">=</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vie1_d</span><span class="p">(</span>
-            <span class="n">g_values_</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span>
-            <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="n">_numba_available</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">show_warnings</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s2">"warning: falling back to slower python/numba code"</span><span class="p">)</span>
-        <span class="n">soln_vals</span><span class="p">,</span> <span class="n">poly_coefs</span> <span class="o">=</span> <span class="n">_numba_solvers</span><span class="o">.</span><span class="n">solve_VIE_1_jit</span><span class="p">(</span>
-            <span class="n">g_values_</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span>
-            <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
+    <span class="n">fast</span> <span class="o">=</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_fast_settings_VIE_1</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">fast</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">_numba_available</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
             <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) is not "</span>
             <span class="sa">f</span><span class="s2">"supported by the D extension. Install numba to enable the fallback solver, or "</span>
             <span class="sa">f</span><span class="s2">"use a supported setting (see fast_coll_settings_VIE_1)."</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
-        <span class="k">return</span> <span class="p">(</span><span class="n">soln_vals</span><span class="p">,</span> <span class="n">_wrap_unit_coefs</span><span class="p">(</span><span class="n">poly_coefs</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">soln_vals</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_regular</span><span class="p">():</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="n">g_values_</span><span class="p">[:</span><span class="n">N_reg</span><span class="p">],</span> <span class="n">kernel_reg</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span>
+                <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span> <span class="ow">or</span> <span class="n">Qp</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">fast</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vie1_d</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">show_warnings</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">"warning: falling back to slower python/numba code"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">_numba_solvers</span><span class="o">.</span><span class="n">solve_VIE_1_jit</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_with_tail</span><span class="p">(</span><span class="s2">"vie1_cont"</span> <span class="k">if</span> <span class="n">force_continuous</span> <span class="k">else</span> <span class="s2">"vie1"</span><span class="p">,</span> <span class="n">_regular</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span>
+                      <span class="n">g_values_</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
+                      <span class="n">M_reg</span><span class="p">,</span> <span class="n">Qp</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">return_function</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
