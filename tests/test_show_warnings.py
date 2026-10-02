@@ -77,7 +77,7 @@ class TestNumbaFallbackWarning:
         kernel, g, h = self._unsupported_data()
         try:
             solve_VIE_2(kernel_values=kernel, g_values=g, time_step=h,
-                         coll_divs=5, coll_choices=[0, 1, 2, 3, 4, 5],
+                         coll_divs=5, quadrature="collocation", coll_choices=[0, 1, 2, 3, 4, 5],
                          show_warnings=True)
         except NotImplementedError:
             pytest.skip("numba not available")
@@ -87,7 +87,7 @@ class TestNumbaFallbackWarning:
         kernel, g, h = self._unsupported_data()
         try:
             solve_VIE_2(kernel_values=kernel, g_values=g, time_step=h,
-                         coll_divs=5, coll_choices=[0, 1, 2, 3, 4, 5],
+                         coll_divs=5, quadrature="collocation", coll_choices=[0, 1, 2, 3, 4, 5],
                          show_warnings=False)
         except NotImplementedError:
             pytest.skip("numba not available")
@@ -97,7 +97,7 @@ class TestNumbaFallbackWarning:
         kernel, g, h = self._unsupported_data()
         try:
             solve_VIDE(kernel_values=kernel, g_values=g, soln_init_value=0.0,
-                        time_step=h, coll_divs=5, coll_choices=[0, 1, 2, 3, 4, 5],
+                        time_step=h, coll_divs=5, quadrature="collocation", coll_choices=[0, 1, 2, 3, 4, 5],
                         show_warnings=True)
         except NotImplementedError:
             pytest.skip("numba not available")
@@ -107,7 +107,7 @@ class TestNumbaFallbackWarning:
         kernel, g, h = self._unsupported_data()
         try:
             solve_VIDE(kernel_values=kernel, g_values=g, soln_init_value=0.0,
-                        time_step=h, coll_divs=5, coll_choices=[0, 1, 2, 3, 4, 5],
+                        time_step=h, coll_divs=5, quadrature="collocation", coll_choices=[0, 1, 2, 3, 4, 5],
                         show_warnings=False)
         except NotImplementedError:
             pytest.skip("numba not available")
@@ -118,7 +118,7 @@ class TestNumbaFallbackWarning:
         g[0] = 0.0
         try:
             solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                         coll_divs=5, coll_choices=[1, 2, 3, 4, 5],
+                         coll_divs=5, quadrature="collocation", coll_choices=[1, 2, 3, 4, 5],
                          show_warnings=True)
         except (NotImplementedError, ValueError):
             pytest.skip("numba not available or setting rejected")
@@ -129,7 +129,7 @@ class TestNumbaFallbackWarning:
         g[0] = 0.0
         try:
             solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                         coll_divs=5, coll_choices=[1, 2, 3, 4, 5],
+                         coll_divs=5, quadrature="collocation", coll_choices=[1, 2, 3, 4, 5],
                          show_warnings=False)
         except (NotImplementedError, ValueError):
             pytest.skip("numba not available or setting rejected")

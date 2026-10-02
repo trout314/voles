@@ -307,7 +307,7 @@ class TestVectorReturnPolys:
     def test_vie2_vec_return_polys_shape(self):
         soln, polys = solve_VIE_2(
             kernel_values=self.kernel, g_values=self.g_vec,
-            time_step=self.time_step, coll_divs=self.coll_divs,
+            time_step=self.time_step, coll_divs=self.coll_divs, quadrature="collocation",
             coll_choices=self.coll_choices, return_function=True)
         assert soln.shape == (len(self.times), 2)
         assert len(polys) == self.mesh_divs
@@ -318,7 +318,7 @@ class TestVectorReturnPolys:
     def test_vie2_vec_return_polys_accuracy(self):
         soln, polys = solve_VIE_2(
             kernel_values=self.kernel, g_values=self.g_vec,
-            time_step=self.time_step, coll_divs=self.coll_divs,
+            time_step=self.time_step, coll_divs=self.coll_divs, quadrature="collocation",
             coll_choices=self.coll_choices, return_function=True)
         h = self.coll_divs**2 * self.time_step
         for n, poly_arr in enumerate(polys):
@@ -358,7 +358,7 @@ class TestVectorReturnPolys:
         soln, polys = solve_VIDE(
             kernel_values=self.kernel, a_values=a_values,
             g_values=g_vec, soln_init_value=soln_init,
-            time_step=self.time_step, coll_divs=self.coll_divs,
+            time_step=self.time_step, coll_divs=self.coll_divs, quadrature="collocation",
             coll_choices=[1, 2, 3], return_function=True)
         assert soln.shape == (len(self.times), 2)
         assert len(polys) == self.mesh_divs

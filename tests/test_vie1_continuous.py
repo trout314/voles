@@ -89,7 +89,7 @@ def test_continuous_one_node_is_product_trapezoidal_rule():
     t = h * np.arange(81)
     kernel, g = np.exp(t), np.sin(t)
     soln = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                       coll_divs=1, coll_choices=[1],
+                       quadrature="collocation", coll_divs=1, coll_choices=[1],
                        force_continuous=True, soln_init_value=1.0)
     # Rounding level only: the D driver accumulates the history in a
     # different (blocked) order than the direct sum.
@@ -235,7 +235,7 @@ def test_continuous_numba_matches_d_extension():
     d = as_array(VIE1_SPEC_DAMPED, time_step=0.01, coll_divs=3,
                  coll_choices=[1, 2, 3], num_blocks=20)
     soln_d = solve_VIE_1(kernel_values=d["kernel"], g_values=d["g"],
-                         time_step=d["time_step"], coll_divs=3, coll_choices=[1, 2, 3],
+                         time_step=d["time_step"], quadrature="collocation", coll_divs=3, coll_choices=[1, 2, 3],
                          force_continuous=True, soln_init_value=d["exact"][0])
     soln_nb, _ = _numba_solvers.solve_VIE_1_jit(
         d["g"], d["kernel"], float(d["exact"][0]), d["time_step"], 3, [1, 2, 3],

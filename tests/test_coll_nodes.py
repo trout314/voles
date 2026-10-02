@@ -426,7 +426,7 @@ def test_array_path_matches_callable_vie2():
     dt, N, ts = _array_grid(M, c)
     g = lambda t: (np.exp(2 * t) + 1) / 2
     _, fa = solve_VIE_2(kernel_values=np.ones(N), g_values=g(ts), time_step=dt,
-                        coll_divs=c, coll_choices=ch, return_function=True,
+                        coll_divs=c, coll_choices=ch, return_function=True, quadrature="collocation",
                         show_warnings=False)
     _, fc = function_solve_VIE_2(kernel=lambda u: 1.0, g=g,
                                  mesh_breakpoints=np.linspace(0, 1, M + 1),
@@ -441,7 +441,7 @@ def test_array_path_matches_callable_vie1():
     dt, N, ts = _array_grid(M, c)
     g = lambda t: (np.exp(2 * t) - 1) / 2
     _, fa = solve_VIE_1(kernel_values=np.ones(N), g_values=g(ts), time_step=dt,
-                        coll_divs=c, coll_choices=ch, return_function=True,
+                        coll_divs=c, coll_choices=ch, return_function=True, quadrature="collocation",
                         show_warnings=False)
     _, fc = function_solve_VIE_1(kernel=lambda u: 1.0, g=g,
                                  mesh_breakpoints=np.linspace(0, 1, M + 1),
@@ -457,7 +457,7 @@ def test_array_path_matches_callable_vide():
     g = lambda t: (3 * np.exp(2 * t) + 1) / 2
     _, fa = solve_VIDE(kernel_values=np.ones(N), a_values=np.zeros(N),
                        g_values=g(ts), soln_init_value=1.0, time_step=dt,
-                       coll_divs=c, coll_choices=ch, return_function=True,
+                       coll_divs=c, coll_choices=ch, return_function=True, quadrature="collocation",
                        show_warnings=False)
     _, fc = function_solve_VIDE(kernel=lambda u: 1.0, g=g, soln_init_value=1.0,
                                 mesh_breakpoints=np.linspace(0, 1, M + 1),

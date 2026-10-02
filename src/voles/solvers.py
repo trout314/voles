@@ -266,6 +266,34 @@ def _scalar_init(value):
     return float(arr.reshape(()))
 
 
+_DEFAULT_COLL = {"vie1": (3, [1, 2, 3]), "vie2": (2, [0, 1, 2]), "vide": (2, [0, 1, 2])}
+
+
+def _resolve_coll_setting(kind, coll_divs, coll_choices):
+    """The collocation setting with its defaults filled in.
+
+    Neither given: ``(3, [1, 2, 3])`` for the first kind, ``(2, [0, 1, 2])``
+    otherwise. Only ``coll_divs``: every sub-interval point the method
+    admits, ``1 .. coll_divs`` for the first kind (zero is excluded there)
+    and ``0 .. coll_divs`` otherwise. Only ``coll_choices``: ``coll_divs`` is
+    the largest choice. Validation of the values is left to the callers."""
+    if coll_divs is None and coll_choices is None:
+        divs, choices = _DEFAULT_COLL[kind]
+        return divs, list(choices)
+    if coll_choices is None:
+        lo = 1 if kind == "vie1" else 0
+        divs = _as_int("coll_divs", coll_divs)
+        if divs < 1:
+            raise ValueError(f"coll_divs must be a positive integer, got {coll_divs!r}")
+        return divs, list(range(lo, divs + 1))
+    if coll_divs is None:
+        choices = list(coll_choices)
+        if not choices:
+            raise ValueError("coll_choices must contain at least one collocation node")
+        return max(_as_int("coll_choices entry", c) for c in choices), choices
+    return coll_divs, coll_choices
+
+
 def _check_time_step(time_step):
     if not (time_step > 0.0 and np.isfinite(time_step)):
         raise ValueError("time_step must be positive and finite")
@@ -406,9 +434,9 @@ def _with_tail(kind, regular, kernel_full, g_full, a_full, init, time_step, coll
 
 
 def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, time_step=1.0,
-               coll_divs=2, coll_choices=[0,1,2], return_function=False, return_polys=None,
+               coll_divs=None, coll_choices=None, return_function=False, return_polys=None,
                show_warnings=True,
-               quadrature="collocation", mesh_samples=None, kernel_interp_degree=None):
+               quadrature="product", mesh_samples=None, kernel_interp_degree=None):
     r'''
     Solve a Volterra integro-differential equation.
 
@@ -440,12 +468,15 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         Default is 1.0.
     coll_divs : int, optional
         Number of collocation sub-intervals per mesh interval. Must be a
-        positive integer. Default is 2.
+        positive integer. Given alone, the nodes are all its sub-interval
+        points, ``coll_choices = [0, 1, ..., coll_divs]``; given neither,
+        the setting is ``coll_divs=2, coll_choices=[0, 1, 2]``.
     coll_choices : list of int, optional
         Indices selecting the collocation nodes within each sub-interval.
         Each entry $k$ corresponds to the node $k / c$ where $c$ =
         ``coll_divs``, placed in $[0, 1]$. Entries must be distinct integers
-        in $\{0, 1, \ldots, \text{coll\_divs}\}$. Default is ``[0, 1, 2]``.
+        in $\{0, 1, \ldots, \text{coll\_divs}\}$. Given alone, ``coll_divs``
+        is the largest entry.
     return_function : bool, optional
         If ``True``, also return a callable solution object as the second
         element of a tuple (see Returns). Default is ``False``.
@@ -457,25 +488,26 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         used, or when ``quadrature="product"`` has to step in NumPy because
         the loaded D extension predates its block driver.
 
-    quadrature : {"collocation", "product"}, optional
-        How the integrals are evaluated from the sampled kernel. The default
-        applies the interpolatory rule on the collocation nodes, which forces
-        a mesh ``coll_divs**2`` samples wide and reads only every
-        ``coll_divs``-th sample of the data in the history sums.
-        ``"product"`` replaces the kernel by a piecewise polynomial
+    quadrature : {"product", "collocation"}, optional
+        How the integrals are evaluated from the sampled kernel.
+        ``"product"`` (default) replaces the kernel by a piecewise polynomial
         interpolant of degree ``kernel_interp_degree`` on the data grid and
         integrates its products with the collocation polynomial exactly
         (product integration), so the mesh can be any multiple of
         ``coll_divs`` samples wide (``mesh_samples``), every sample is used,
-        and any node set is available without the Numba fallback. See
-        ``solve_VIE_1`` for the construction; unlike the first-kind case this
-        equation is well posed, so there is no amplification of data errors
-        to trade against the finer mesh.
+        and any node set is available without the Numba fallback.
+        ``"collocation"`` applies the interpolatory rule on the collocation
+        nodes, which forces a mesh ``coll_divs**2`` samples wide and reads
+        only every ``coll_divs``-th sample of the data in the history sums;
+        it runs in compiled code specialised per setting and is a few times
+        faster. See ``solve_VIE_1`` for the construction; unlike the
+        first-kind case this equation is well posed, so there is no
+        amplification of data errors to trade against the finer mesh.
     mesh_samples : int, optional
         Samples per mesh interval; the mesh width is
-        ``mesh_samples * time_step``. Must be ``coll_divs**2`` (the default)
-        with ``quadrature="collocation"``; any positive multiple of
-        ``coll_divs`` with ``quadrature="product"``, default ``coll_divs``.
+        ``mesh_samples * time_step``. Any positive multiple of ``coll_divs``
+        with ``quadrature="product"``, default ``coll_divs`` (the finest
+        mesh); must be ``coll_divs**2`` with ``quadrature="collocation"``.
     kernel_interp_degree : int, optional
         Degree of the kernel interpolant for ``quadrature="product"``;
         defaults to the number of collocation nodes. Not accepted with
@@ -554,6 +586,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
        Chapter 3, pp. 160–167.
     '''
     return_function = _resolve_return_flag(return_function, return_polys)
+    coll_divs, coll_choices = _resolve_coll_setting("vide", coll_divs, coll_choices)
     # ------------------------------------------------------------------ complex dispatch
     if _cplx.is_complex(kernel_values, a_values, g_values, soln_init_value):
         K_arr = np.asarray(kernel_values)
@@ -635,6 +668,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
                                   soln_init_value=soln_init_values_[:, j],
                                   time_step=time_step, coll_divs=coll_divs,
                                   coll_choices=coll_choices,
+                                  quadrature="collocation",
                                   return_function=return_function,
                                   show_warnings=show_warnings and j == 0)
             with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
@@ -717,7 +751,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
 
 
 def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh_samples,
-                        kernel_interp_degree, show_warnings):
+                        kernel_interp_degree, show_warnings, default_mesh=None):
     """Resolve mesh_samples / kernel_interp_degree and split the data into
     M regular intervals of Q samples plus (Qp > 0) one final interval of Qp
     samples. ``coll_divs``/``coll_choices`` are already validated.
@@ -725,7 +759,10 @@ def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh
     from . import _product
     q = coll_divs
     m = len(coll_choices)
-    Q = q if mesh_samples is None else _as_int("mesh_samples", mesh_samples)
+    if mesh_samples is None:
+        Q = q if default_mesh is None else default_mesh
+    else:
+        Q = _as_int("mesh_samples", mesh_samples)
     if Q < 1 or Q % q != 0:
         raise ValueError(
             f"with quadrature='product', mesh_samples must be a positive multiple of "
@@ -884,9 +921,12 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
     q, coll_choices = _validate_vie1_coll_setting(coll_divs, coll_choices)
     _check_vie1_setting(q, coll_choices, force_continuous)
     _warn_reduced_order(q, coll_choices, force_continuous, show_warnings)
+    # First-kind inversion amplifies data error by about 1/H, so the default
+    # mesh is the collocation quadrature's coll_divs**2 samples, not the
+    # finest one; mesh_samples=coll_divs selects the finest mesh explicitly.
     Q, p, N_orig, d, M, Qp = _product_mesh_setup(
         kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
-        show_warnings)
+        show_warnings, default_mesh=q * q)
     K, N = kernel_values_, N_orig
     kind = "vie1_cont" if force_continuous else "vie1"
     setup = _product.ProductSetup(kind, K, time_step, q, coll_choices, Q, p)
@@ -947,10 +987,10 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
     return values
 
 
-def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step=1.0, coll_divs=3,
-                coll_choices=[1,2,3], return_function=False, return_polys=None,
+def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step=1.0,
+                coll_divs=None, coll_choices=None, return_function=False, return_polys=None,
                 force_continuous=False, show_warnings=True,
-                quadrature="collocation", mesh_samples=None, kernel_interp_degree=None):
+                quadrature="product", mesh_samples=None, kernel_interp_degree=None):
     r'''
     Solve a Volterra integral equation of the first kind.
 
@@ -985,13 +1025,16 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         Default is 1.0.
     coll_divs : int, optional
         Number of collocation sub-intervals per mesh interval. Must be a
-        positive integer. Default is 3.
+        positive integer. Given alone, the nodes are all its sub-interval
+        points, ``coll_choices = [1, ..., coll_divs]`` (the right endpoint
+        included, so $\rho_m = 0$ and the method has its full order); given
+        neither, the setting is ``coll_divs=3, coll_choices=[1, 2, 3]``.
     coll_choices : list of int, optional
         Indices selecting the collocation nodes within each sub-interval.
         Each entry $k$ corresponds to the node $k / c$ where $c$ =
         ``coll_divs``, placed in $(0, 1]$; zero is excluded. Entries must be
-        distinct integers in $\{1, \ldots, \text{coll\_divs}\}$.
-        Default is ``[1, 2, 3]``.
+        distinct integers in $\{1, \ldots, \text{coll\_divs}\}$. Given
+        alone, ``coll_divs`` is the largest entry.
     return_function : bool, optional
         If ``True``, also return a callable solution object as the second
         element of a tuple (see Returns). Default is ``False``.
@@ -1016,27 +1059,32 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         when the Numba fallback is used, or when ``quadrature="product"``
         has to step in NumPy because the loaded D extension predates its
         block drivers.
-    quadrature : {"collocation", "product"}, optional
+    quadrature : {"product", "collocation"}, optional
         How the integrals of the collocation equations are evaluated from the
-        sampled kernel. ``"collocation"`` (default) applies the interpolatory
-        rule on the method's own nodes; this forces the mesh to be
-        ``coll_divs**2`` samples wide and reads only every ``coll_divs``-th
-        sample of the data in the history sums. ``"product"`` replaces the
-        kernel by a piecewise polynomial interpolant of degree
-        ``kernel_interp_degree`` on the data grid and integrates its products
-        with the collocation polynomial exactly (product integration). The
-        mesh can then be any multiple of ``coll_divs`` samples wide
-        (``mesh_samples``), every sample is used, and any valid
-        ``coll_divs``/``coll_choices`` setting is available without the Numba
-        fallback. See Notes.
+        sampled kernel. ``"product"`` (default) replaces the kernel by a
+        piecewise polynomial interpolant of degree ``kernel_interp_degree`` on
+        the data grid and integrates its products with the collocation
+        polynomial exactly (product integration): the mesh can be any
+        multiple of ``coll_divs`` samples wide (``mesh_samples``), every
+        sample is used, and any valid ``coll_divs``/``coll_choices`` setting
+        is available without the Numba fallback. ``"collocation"`` applies
+        the interpolatory rule on the method's own nodes; this forces the
+        mesh to be ``coll_divs**2`` samples wide, reads only every
+        ``coll_divs``-th sample of the data in the history sums, and is
+        unstable when $K(0)$ is small next to the kernel's change over one
+        mesh interval, but runs in compiled code specialised per setting and
+        is a few times faster. See Notes.
     mesh_samples : int, optional
         Number of data samples per mesh interval; the mesh width is
-        ``mesh_samples * time_step``. With ``quadrature="collocation"`` the
-        only admissible value is ``coll_divs**2`` (the default). With
-        ``quadrature="product"`` any positive multiple of ``coll_divs`` is
-        admissible and the default is ``coll_divs``, the finest mesh that keeps
-        every collocation point on a sample; larger values trade resolution
-        for a milder amplification of errors in the data (see Notes).
+        ``mesh_samples * time_step``. With ``quadrature="product"`` any
+        positive multiple of ``coll_divs`` is admissible; the default is
+        ``coll_divs**2``, the same mesh as the collocation quadrature,
+        because inverting a first-kind equation amplifies errors in the data
+        by roughly the inverse of the mesh width, so the finest mesh
+        (``mesh_samples=coll_divs``) buys resolution at the price of a
+        ``coll_divs``-fold larger amplification (see Notes). With
+        ``quadrature="collocation"`` the only admissible value is
+        ``coll_divs**2``.
     kernel_interp_degree : int, optional
         Degree of the kernel interpolant used by ``quadrature="product"``: on
         each cell of the data grid the kernel is represented by the polynomial
@@ -1176,6 +1224,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
        equations of the first kind. *SIAM J. Numer. Anal.* 10 (1973) 647--664.
     '''
     return_function = _resolve_return_flag(return_function, return_polys)
+    coll_divs, coll_choices = _resolve_coll_setting("vie1", coll_divs, coll_choices)
     if force_continuous and soln_init_value is None:
         raise ValueError("must specify soln_init_value when force_continuous=True")
     # ------------------------------------------------------------------ complex dispatch
@@ -1253,6 +1302,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                                        soln_init_value=init_cols[:, j] if init_cols is not None else None,
                                        time_step=time_step, coll_divs=coll_divs,
                                        coll_choices=coll_choices,
+                                       quadrature="collocation",
                                        return_function=return_function,
                                        force_continuous=force_continuous,
                                        show_warnings=False)
@@ -1340,10 +1390,10 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                       g_values_, None, soln_init_value_, time_step, coll_divs, coll_choices,
                       M_reg, Qp, 0, return_function)
 
-def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
-                coll_choices=[0,1,2], return_function=False, return_polys=None,
+def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
+                coll_divs=None, coll_choices=None, return_function=False, return_polys=None,
                 show_warnings=True,
-                quadrature="collocation", mesh_samples=None, kernel_interp_degree=None):
+                quadrature="product", mesh_samples=None, kernel_interp_degree=None):
     r'''
     Solve a Volterra integral equation of the second kind.
 
@@ -1366,12 +1416,15 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         Default is 1.0.
     coll_divs : int, optional
         Number of collocation sub-intervals per mesh interval. Must be a
-        positive integer. Default is 2.
+        positive integer. Given alone, the nodes are all its sub-interval
+        points, ``coll_choices = [0, 1, ..., coll_divs]``; given neither,
+        the setting is ``coll_divs=2, coll_choices=[0, 1, 2]``.
     coll_choices : list of int, optional
         Indices selecting the collocation nodes within each sub-interval.
         Each entry $k$ corresponds to the node $k / c$ where $c$ =
         ``coll_divs``, placed in $[0, 1]$. Entries must be distinct integers
-        in $\{0, 1, \ldots, \text{coll\_divs}\}$. Default is ``[0, 1, 2]``.
+        in $\{0, 1, \ldots, \text{coll\_divs}\}$. Given alone, ``coll_divs``
+        is the largest entry.
     return_function : bool, optional
         If ``True``, also return a callable solution object as the second
         element of a tuple (see Returns). Default is ``False``.
@@ -1383,25 +1436,26 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
         used, or when ``quadrature="product"`` has to step in NumPy because
         the loaded D extension predates its block driver.
 
-    quadrature : {"collocation", "product"}, optional
-        How the integrals are evaluated from the sampled kernel. The default
-        applies the interpolatory rule on the collocation nodes, which forces
-        a mesh ``coll_divs**2`` samples wide and reads only every
-        ``coll_divs``-th sample of the data in the history sums.
-        ``"product"`` replaces the kernel by a piecewise polynomial
+    quadrature : {"product", "collocation"}, optional
+        How the integrals are evaluated from the sampled kernel.
+        ``"product"`` (default) replaces the kernel by a piecewise polynomial
         interpolant of degree ``kernel_interp_degree`` on the data grid and
         integrates its products with the collocation polynomial exactly
         (product integration), so the mesh can be any multiple of
         ``coll_divs`` samples wide (``mesh_samples``), every sample is used,
-        and any node set is available without the Numba fallback. See
-        ``solve_VIE_1`` for the construction; unlike the first-kind case this
-        equation is well posed, so there is no amplification of data errors
-        to trade against the finer mesh.
+        and any node set is available without the Numba fallback.
+        ``"collocation"`` applies the interpolatory rule on the collocation
+        nodes, which forces a mesh ``coll_divs**2`` samples wide and reads
+        only every ``coll_divs``-th sample of the data in the history sums;
+        it runs in compiled code specialised per setting and is a few times
+        faster. See ``solve_VIE_1`` for the construction; unlike the
+        first-kind case this equation is well posed, so there is no
+        amplification of data errors to trade against the finer mesh.
     mesh_samples : int, optional
         Samples per mesh interval; the mesh width is
-        ``mesh_samples * time_step``. Must be ``coll_divs**2`` (the default)
-        with ``quadrature="collocation"``; any positive multiple of
-        ``coll_divs`` with ``quadrature="product"``, default ``coll_divs``.
+        ``mesh_samples * time_step``. Any positive multiple of ``coll_divs``
+        with ``quadrature="product"``, default ``coll_divs`` (the finest
+        mesh); must be ``coll_divs**2`` with ``quadrature="collocation"``.
     kernel_interp_degree : int, optional
         Degree of the kernel interpolant for ``quadrature="product"``;
         defaults to the number of collocation nodes. Not accepted with
@@ -1480,6 +1534,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
        Section 2.2.
     '''
     return_function = _resolve_return_flag(return_function, return_polys)
+    coll_divs, coll_choices = _resolve_coll_setting("vie2", coll_divs, coll_choices)
     # ------------------------------------------------------------------ complex dispatch
     if _cplx.is_complex(kernel_values, g_values):
         K_arr = np.asarray(kernel_values)
@@ -1540,6 +1595,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0, coll_divs=2,
                                        g_values=g_cols[:, :, j],
                                        time_step=time_step, coll_divs=coll_divs,
                                        coll_choices=coll_choices,
+                                       quadrature="collocation",
                                        return_function=return_function,
                                        show_warnings=show_warnings and j == 0)
                 with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:

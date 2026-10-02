@@ -19,6 +19,8 @@ def _solve(kind, N, quad, q, choices, T=2.0):
     delta, t, K, I, y = _data(N, T)
     kw = dict(time_step=delta, coll_divs=q, coll_choices=choices, quadrature=quad,
               show_warnings=False)
+    if quad == "product":
+        kw["mesh_samples"] = q                    # the finest mesh for every kind
     if kind == "vie1":
         out = solve_VIE_1(kernel_values=K, g_values=I, **kw)
     elif kind == "vie1_cont":

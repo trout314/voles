@@ -1,7 +1,7 @@
 # Example: Product integration for sampled kernels
 
 The array-based solvers take the kernel as samples `K(u)` on a grid of spacing
-`time_step`. By default (`quadrature="collocation"`) every integral in the
+`time_step`. With `quadrature="collocation"` every integral in the
 collocation equations is evaluated with the interpolatory rule on the
 collocation nodes themselves (Brunner 2004, Section 2.4.5). That rule needs the
 kernel at the *scaled* nodes of each partial interval, which fall on samples
@@ -17,9 +17,16 @@ only when the mesh is `coll_divs**2` samples wide, so:
 replaced by its piecewise-polynomial interpolant of degree `kernel_interp_degree`
 on the data grid (default: the number of collocation nodes) and its products
 with the collocation polynomial are integrated exactly. The mesh can then be any
-multiple `mesh_samples` of `coll_divs` samples wide (default `coll_divs`, the
-finest), every sample is used, any convergent node set works without the numba
-fallback, and the FFT-accelerated history of the D extension is still used.
+multiple `mesh_samples` of `coll_divs` samples wide, every sample is used, any
+convergent node set works without the numba fallback, and the FFT-accelerated
+history of the D extension is still used. Product integration is the default
+quadrature of all three solvers. The default mesh is the finest one,
+`mesh_samples=coll_divs`, for `solve_VIE_2` and `solve_VIDE`; for
+`solve_VIE_1` it stays at `coll_divs**2` samples, because inverting a
+first-kind equation amplifies errors in the data by roughly the inverse of the
+mesh width (see below). The collocation quadrature remains available as
+`quadrature="collocation"`; it runs in compiled code specialised per setting
+and is a few times faster.
 
 ## A first-kind equation on coarsely sampled data
 
@@ -27,7 +34,7 @@ The Rubin model (a particle at the end of a semi-infinite harmonic chain) has
 the correlation function $C(t) = J_1(2t)/t$ and the memory kernel
 $\mathcal{K}(t) = -C(t)$, related by $\dot C(t) = \int_0^t C(t-s)\mathcal{K}(s)ds$.
 Sampled at `time_step = 0.125`, about 25 samples per oscillation period, the
-default quadrature puts the order-3 method on a mesh of width 1.125.
+collocation quadrature puts the order-3 method on a mesh of width 1.125.
 
 ```python
 import numpy as np
@@ -46,8 +53,8 @@ C[0], C_dot[0], K_exact[0] = 1.0, 0.0, -1.0
 common = dict(kernel_values=C, g_values=C_dot, time_step=time_step,
               coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
 
-K_coll = solve_VIE_1(**common)                             # mesh 9 samples wide
-K_prod = solve_VIE_1(quadrature="product", **common)       # mesh 3 samples wide
+K_coll = solve_VIE_1(quadrature="collocation", **common)       # mesh 9 samples wide
+K_prod = solve_VIE_1(mesh_samples=3, **common)                  # product: mesh 3 samples wide
 
 err_coll = np.max(np.abs(K_coll - K_exact))
 err_prod = np.max(np.abs(K_prod - K_exact))
@@ -57,7 +64,7 @@ assert err_prod < err_coll / 10
 ```
 
 `mesh_samples` chooses the mesh explicitly. With `mesh_samples=9` the mesh is
-the same as the default quadrature's, but the integrals now use all nine
+the same as the collocation quadrature's, but the integrals now use all nine
 samples of each interval rather than three of them:
 
 ```python
@@ -111,8 +118,8 @@ exact = np.exp(-times / 4) * (np.cos(omega * times) + np.sin(omega * times) / (4
 
 common = dict(kernel_values=kernel, soln_init_value=1.0, time_step=time_step,
               coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
-y_coll = solve_VIDE(**common)
-y_prod = solve_VIDE(quadrature="product", **common)
+y_coll = solve_VIDE(quadrature="collocation", **common)
+y_prod = solve_VIDE(**common)                       # product integration is the default
 
 err_coll = np.max(np.abs(y_coll - exact))
 err_prod = np.max(np.abs(y_prod - exact))

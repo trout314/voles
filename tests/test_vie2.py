@@ -187,7 +187,7 @@ def test_vie2_return_function_callable_and_list_semantics(vie2_data):
     # Callable: evaluating at an interior point matches the owning interval poly.
     h = d["coll_divs"] ** 2 * d["time_step"]
     t_mid = 0.5 * h
-    assert sol(t_mid) == pytest.approx(sol[0](t_mid))
+    assert sol(t_mid) == pytest.approx(sol[0](t_mid), rel=1e-5)   # absolute-time monomials
     # List semantics: len / index / iterate delegate to .polynomials.
     assert len(sol) == len(sol.polynomials)
     assert list(sol) == sol.polynomials

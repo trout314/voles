@@ -2583,6 +2583,7 @@ def test_jacobi_wrong_alpha_falls_back_bitwise(sing):
     location-only declaration, never silently degraded."""
     kw, _ = _abel_vie1_kw(sing)
     kw_ref, _ = _abel_vie1_kw(0.0)
+    kw["reuse_adaptive_blocks"] = kw_ref["reuse_adaptive_blocks"] = False   # per-row adaptive path
     assert np.array_equal(function_solve_VIE_1(**kw),
                           function_solve_VIE_1(**kw_ref))
 
@@ -2591,7 +2592,8 @@ def test_jacobi_log_factor_kernel_falls_back_bitwise():
     """Extra non-power-law structure (a log factor) likewise falls back."""
     kw = dict(kernel=lambda u: -np.log(u) / np.sqrt(u) if u > 0 else 0.0,
               g=lambda t: np.sqrt(t), mesh_breakpoints=_uniform_mesh(20),
-              coll_divs=2, coll_choices=[1, 2], show_warnings=False)
+              coll_divs=2, coll_choices=[1, 2], show_warnings=False,
+              reuse_adaptive_blocks=False)
     assert np.array_equal(
         function_solve_VIE_1(**kw, kernel_singularity={0.0: 0.5}),
         function_solve_VIE_1(**kw, kernel_singularity=0.0))
@@ -2704,7 +2706,8 @@ def test_jacobi_wrong_alpha_fine_mesh_still_falls_back_bitwise():
     kw = dict(kernel=lambda u: 1.0 / np.sqrt(np.maximum(u, 1e-300)),
               g=lambda t: np.ones_like(np.asarray(t, dtype=float)),
               mesh_breakpoints=_uniform_mesh(200),
-              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
+              coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False,
+              reuse_adaptive_blocks=False)
     assert np.array_equal(
         function_solve_VIE_2(**kw, kernel_singularity={0.0: 0.4}),
         function_solve_VIE_2(**kw, kernel_singularity=0.0))

@@ -269,8 +269,20 @@ def _resolve_node_pos(coll_nodes, coll_divs, coll_choices, *,
         return nodes, None, None
 
     # Integer (coll_divs, coll_choices) path -- preserves the original messages.
-    divs = default_divs if coll_divs is None else coll_divs
-    choices = default_choices if coll_choices is None else coll_choices
+    # Only coll_divs given: every sub-interval point the method admits; only
+    # coll_choices given: coll_divs is the largest choice.
+    if coll_divs is None and coll_choices is None:
+        divs, choices = default_divs, default_choices
+    elif coll_choices is None:
+        divs = coll_divs
+        choices = list(range(1 if exclude_zero else 0, int(divs) + 1)) if divs >= 1 else []
+    elif coll_divs is None:
+        choices = list(coll_choices)
+        if not choices:
+            raise ValueError("coll_choices must contain at least one entry")
+        divs = max(int(c) for c in choices)
+    else:
+        divs, choices = coll_divs, coll_choices
     if divs < 1:
         raise ValueError("coll_divs must be a positive integer")
     for c in choices:
@@ -1641,7 +1653,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
                           coll_nodes=None,
                           kernel_singularity=None,
                           return_function: bool = False,
-                          reuse_adaptive_blocks: bool = False,
+                          reuse_adaptive_blocks: bool = True,
                           show_warnings: bool = True,
                           _smooth_gl_order: int = 6):
     r"""Solve the scalar Volterra integral equation of the second kind
@@ -1674,9 +1686,12 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     coll_divs, coll_choices : int, list of int, optional
         Collocation node positions: nodes lie at
         ``coll_choices[k] / coll_divs`` in each interval. Unlike the array-
-        based solvers, ``coll_divs`` does *not* sub-divide intervals. Defaults
-        to ``coll_divs=2, coll_choices=[0, 1, 2]`` when neither these nor
-        ``coll_nodes`` are given. Mutually exclusive with ``coll_nodes``.
+        based solvers, ``coll_divs`` does *not* sub-divide intervals.
+        ``coll_divs`` alone selects every admissible point of the
+        subdivision, ``coll_choices = [0, ..., coll_divs]``; ``coll_choices``
+        alone sets ``coll_divs`` to its largest entry; neither gives
+        ``coll_divs=2, coll_choices=[0, 1, 2]``. Mutually exclusive with
+        ``coll_nodes``.
     coll_nodes : array_like, optional
         Collocation node positions given directly as floats in $[0, 1]$, for
         node sets that are not rational multiples of $1/c$ (e.g. Gauss-Legendre
@@ -1721,22 +1736,20 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         If True, also return a callable solution wrapper.
     reuse_adaptive_blocks : bool, optional
         On a uniform mesh with a convolution kernel the weight tensor is
-        Toeplitz and is assembled from one integrated row. By default only
-        blocks evaluated by deterministic fixed-order quadrature are reused
-        across rows; blocks touching a declared singularity (adaptive
-        quadrature) are re-evaluated per row, which reproduces the general
-        assembly to rounding level but keeps an $O(M)$ adaptive-quadrature
-        cost. Set True to reuse the declared-singularity adaptive blocks too:
-        the singular-kernel build cost drops by roughly another order of
-        magnitude, and results may differ from the default path by up to the
-        adaptive quadrature's own tolerance (scalar problems $\sim10^{-8}$,
-        typically $\sim10^{-9}$; vector/matrix and complex problems, which
-        integrate via ``scipy.integrate.quad_vec``, up to $\sim10^{-7}$) --
-        far below discretization error in practice. Reused adaptive blocks
-        are computed at tightened tolerance, so they are at least as accurate
-        as the per-row values they replace. Strictly no effect on non-uniform
-        meshes or on kernels with no declared ``kernel_singularity`` (only
-        declared-singularity blocks are ever reused). scipy
+        Toeplitz and is assembled from one integrated row. Blocks evaluated
+        by deterministic fixed-order quadrature are always reused across
+        rows. With the default ``True``, blocks touching a declared
+        singularity that need adaptive quadrature are reused too, computed
+        once at a tightened tolerance: the singular-kernel build cost is
+        about an order of magnitude lower than re-evaluating them per row.
+        ``False`` re-evaluates those blocks for every row, which reproduces
+        the general (non-Toeplitz) assembly to rounding level at an $O(M)$
+        adaptive-quadrature cost; the two differ by at most the adaptive
+        quadrature's own tolerance (scalar problems $\sim10^{-8}$, typically
+        $\sim10^{-9}$; vector/matrix and complex problems, which integrate
+        via ``scipy.integrate.quad_vec``, up to $\sim10^{-7}$), far below
+        discretization error in practice. No effect on non-uniform meshes
+        or on kernels with no declared ``kernel_singularity``. scipy
         ``IntegrationWarning``s raised by the deliberately tightened reuse
         quadratures are suppressed (the best-obtainable value is what reuse
         wants); default-tolerance quadratures still warn as usual.
@@ -1931,7 +1944,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
                          coll_nodes=None,
                          kernel_singularity=None,
                          return_function: bool = False,
-                         reuse_adaptive_blocks: bool = False,
+                         reuse_adaptive_blocks: bool = True,
                          show_warnings: bool = True,
                          _smooth_gl_order: int = 6):
     r"""Solve the scalar Volterra integro-differential equation
@@ -1965,7 +1978,9 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         Strictly-increasing 1-D array starting at 0.
     coll_divs, coll_choices : int, list of int, optional
         Collocation node positions; see ``function_solve_VIE_2`` for the
-        convention (differs from the array-based solvers). Defaults to
+        convention (differs from the array-based solvers). ``coll_divs``
+        alone selects ``coll_choices = [0, ..., coll_divs]``, ``coll_choices``
+        alone sets ``coll_divs`` to its largest entry, and neither gives
         ``coll_divs=2, coll_choices=[0, 1, 2]``. Mutually exclusive with
         ``coll_nodes``.
     coll_nodes : array_like, optional
@@ -2531,7 +2546,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                           kernel_singularity=None,
                           return_function: bool = False,
                           force_continuous: bool = False,
-                          reuse_adaptive_blocks: bool = False,
+                          reuse_adaptive_blocks: bool = True,
                           show_warnings: bool = True,
                           _smooth_gl_order: int = 6):
     r"""Solve the Volterra integral equation of the first kind
@@ -2573,7 +2588,10 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         Strictly-increasing 1-D array starting at 0.
     coll_divs, coll_choices : int, list of int, optional
         Collocation nodes lie at ``coll_choices[k] / coll_divs`` in (0, 1].
-        Zero is excluded from ``coll_choices``. Defaults to
+        Zero is excluded from ``coll_choices``. ``coll_divs`` alone selects
+        ``coll_choices = [1, ..., coll_divs]`` (the right endpoint included,
+        so $\rho_m = 0$ and the method has its full order), ``coll_choices``
+        alone sets ``coll_divs`` to its largest entry, and neither gives
         ``coll_divs=3, coll_choices=[1, 2, 3]``. Mutually exclusive with
         ``coll_nodes``.
     coll_nodes : array_like, optional

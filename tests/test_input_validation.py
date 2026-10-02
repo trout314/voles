@@ -257,21 +257,21 @@ def test_nan_g_at_coll_point_vie2():
     g = _Gnan.copy(); g[_COLL_IDX] = np.nan
     assert _nan_raises_or_propagates(
         solve_VIE_2, kernel_values=_Knan, g_values=g,
-        coll_divs=5, coll_choices=[1, 2, 3])
+        coll_divs=5, quadrature="collocation", coll_choices=[1, 2, 3])
 
 
 def test_nan_g_at_coll_point_vide():
     g = _Gnan.copy(); g[_COLL_IDX] = np.nan
     assert _nan_raises_or_propagates(
         solve_VIDE, kernel_values=_Knan, g_values=g, a_values=_Anan,
-        soln_init_value=0.0, coll_divs=5, coll_choices=[1, 2, 3])
+        soln_init_value=0.0, coll_divs=5, quadrature="collocation", coll_choices=[1, 2, 3])
 
 
 def test_nan_a_at_coll_point_vide():
     a = _Anan.copy(); a[_COLL_IDX] = np.nan
     assert _nan_raises_or_propagates(
         solve_VIDE, kernel_values=_Knan, g_values=_Gnan, a_values=a,
-        soln_init_value=0.0, coll_divs=5, coll_choices=[1, 2, 3])
+        soln_init_value=0.0, coll_divs=5, quadrature="collocation", coll_choices=[1, 2, 3])
 
 
 # ---------------------------------------------------------------------------
@@ -418,7 +418,7 @@ def test_too_short_input_raises(solver):
     short_G = np.zeros(5)
     short_A = np.zeros(5)
     kwargs = dict(kernel_values=short_K, g_values=short_G,
-                  coll_divs=3,
+                  coll_divs=3, quadrature="collocation",
                   coll_choices=([1, 2, 3] if solver is _vie1 else [0, 1, 2]))
     if solver is _vide:
         kwargs["a_values"] = short_A

@@ -131,7 +131,7 @@ def test_finer_mesh_beats_present_scheme_on_coarse_data():
     t, K, g, y = cos_problem(dt, N)
     common = dict(kernel_values=K, g_values=g, time_step=dt, coll_divs=3,
                   coll_choices=[1, 2, 3], show_warnings=False)
-    err_coll = np.max(np.abs(solve_VIE_2(**common) - y))
+    err_coll = np.max(np.abs(solve_VIE_2(quadrature="collocation", **common) - y))
     err_prod = np.max(np.abs(solve_VIE_2(quadrature="product", **common) - y))
     assert err_prod < err_coll / 5
 
@@ -229,9 +229,9 @@ def test_validation():
     with pytest.raises(ValueError):
         solve_VIE_2(quadrature="gauss", **common)
     with pytest.raises(ValueError):
-        solve_VIE_2(kernel_interp_degree=3, **common)
+        solve_VIE_2(quadrature="collocation", kernel_interp_degree=3, **common)
     with pytest.raises(ValueError):
-        solve_VIE_2(mesh_samples=2, **common)
+        solve_VIE_2(quadrature="collocation", mesh_samples=2, **common)
     with pytest.raises(ValueError):
         solve_VIE_2(quadrature="product", mesh_samples=3, **common)
     with pytest.raises(ValueError):

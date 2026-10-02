@@ -565,7 +565,7 @@ def test_complex_solution_object_is_built_from_complex_coefficients():
     g = np.outer(np.sin(t), [1.0, 1j])
     y, f = solve_VIE_2(kernel_values=K, g_values=g, time_step=0.01, return_function=True)
     assert type(f) is _SolutionFunction and f._unit.dtype == np.complex128
-    assert len(f) == 50 and f[3].shape == (2,)
+    assert len(f) == (len(t) - 1) // 2 and f[3].shape == (2,)   # product mesh: 2 samples
     assert f[3][1].coef.dtype == np.complex128
     assert isinstance(f(0.37), np.ndarray) and f(0.37).shape == (2,)
     np.testing.assert_allclose(f(t[::25]), y[::25], rtol=0, atol=1e-10)

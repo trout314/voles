@@ -77,6 +77,6 @@ def test_vector_beyond_compiled_settings_raises():
     g = np.stack([d["g"], d["g"]], axis=1)
     with pytest.raises(NotImplementedError, match="not supported"):
         solve_VIE_2(kernel_values=kernel, g_values=g,
-                    time_step=d["time_step"], coll_divs=5,
+                    time_step=d["time_step"], coll_divs=5, quadrature="collocation",
                     coll_choices=[0, 1, 2], show_warnings=False)
     assert issubclass(NotImplementedError, RuntimeError)

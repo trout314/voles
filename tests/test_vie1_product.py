@@ -157,13 +157,13 @@ def test_reproduces_polynomial_solutions_for_unit_kernel(coll_divs, choices):
     y = t ** (m - 1)
     g = t ** m / m
     vals = solve_VIE_1(kernel_values=K, g_values=g, time_step=dt, coll_divs=coll_divs,
-                       coll_choices=choices, quadrature="product", show_warnings=False)
+                       coll_choices=choices, quadrature="product", mesh_samples=coll_divs, show_warnings=False)
     assert np.max(np.abs(vals - y)) < 1e-9
     # continuous: degree m
     y = t ** m
     g = t ** (m + 1) / (m + 1)
     vals = solve_VIE_1(kernel_values=K, g_values=g, time_step=dt, coll_divs=coll_divs,
-                       coll_choices=choices, quadrature="product", force_continuous=True,
+                       coll_choices=choices, quadrature="product", mesh_samples=coll_divs, force_continuous=True,
                        soln_init_value=0.0, show_warnings=False)
     assert np.max(np.abs(vals - y)) < 1e-9
 
@@ -177,7 +177,7 @@ def test_continuous_amplification_factor(coll_divs, choices, rho):
     N = n_samples(Q, M)
     K = np.ones(N)
     vals = solve_VIE_1(kernel_values=K, g_values=np.zeros(N), time_step=0.3,
-                       coll_divs=coll_divs, coll_choices=choices, quadrature="product",
+                       coll_divs=coll_divs, coll_choices=choices, quadrature="product", mesh_samples=coll_divs,
                        force_continuous=True, soln_init_value=1.0, show_warnings=False)
     mesh_vals = vals[::Q]
     assert np.allclose(mesh_vals, rho ** np.arange(M + 1), atol=1e-10)
@@ -242,8 +242,8 @@ def test_mesh_samples_q_beats_present_scheme_on_coarse_data():
     t, C, Cd, Kex = rubin(dt, N)
     common = dict(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=3,
                   coll_choices=[1, 2, 3], show_warnings=False)
-    err_coll = np.max(np.abs(solve_VIE_1(**common) - Kex))
-    err_prod = np.max(np.abs(solve_VIE_1(quadrature="product", **common) - Kex))
+    err_coll = np.max(np.abs(solve_VIE_1(quadrature="collocation", **common) - Kex))
+    err_prod = np.max(np.abs(solve_VIE_1(quadrature="product", mesh_samples=3, **common) - Kex))
     assert err_prod < err_coll / 10
 
 
@@ -256,18 +256,18 @@ def test_every_sample_is_used():
     N = n_samples(q, 12)
     t, C, Cd, _ = damped(dt, N)
     base = solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=q,
-                       coll_choices=[1, 2, 3], quadrature="product", show_warnings=False)
+                       coll_choices=[1, 2, 3], quadrature="product", mesh_samples=q, show_warnings=False)
     for j in (1, 5, 7, 11, N - 2):       # lags the collocation quadrature never reads
         Cp = C.copy()
         Cp[j] += 0.1
         pert = solve_VIE_1(kernel_values=Cp, g_values=Cd, time_step=dt, coll_divs=q,
-                           coll_choices=[1, 2, 3], quadrature="product", show_warnings=False)
+                           coll_choices=[1, 2, 3], quadrature="product", mesh_samples=q, show_warnings=False)
         assert np.max(np.abs(pert - base)) > 1e-6, j
     for j in (1, 2, 4, 5):               # g between collocation points of the coarse scheme
         gp = Cd.copy()
         gp[j] += 0.1
         pert = solve_VIE_1(kernel_values=C, g_values=gp, time_step=dt, coll_divs=q,
-                           coll_choices=[1, 2, 3], quadrature="product", show_warnings=False)
+                           coll_choices=[1, 2, 3], quadrature="product", mesh_samples=q, show_warnings=False)
         assert np.max(np.abs(pert - base)) > 1e-6, j
 
 
@@ -279,7 +279,7 @@ def test_mesh_samples_q_squared_is_not_the_collocation_scheme():
         t, C, Cd, Kex = damped(dt, N)
         common = dict(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=q,
                       coll_choices=choices, show_warnings=False)
-        a = solve_VIE_1(**common)
+        a = solve_VIE_1(quadrature="collocation", **common)
         b = solve_VIE_1(quadrature="product", mesh_samples=q * q, **common)
         diffs.append(np.max(np.abs(a - b)))
         assert diffs[-1] > 1e-12
@@ -337,11 +337,11 @@ def test_matrix_columns_and_return_function():
         g[:, 0, j] = (j + 1) * Cd
         g[:, 1, j] = -(j + 1) * Cd
     vals, sol = solve_VIE_1(kernel_values=K, g_values=g, time_step=dt, coll_divs=q,
-                            coll_choices=[1, 2], quadrature="product",
+                            coll_choices=[1, 2], quadrature="product", mesh_samples=q,
                             return_function=True, show_warnings=False)
     assert vals.shape == (N, 2, 3)
     single = solve_VIE_1(kernel_values=C, g_values=2 * Cd, time_step=dt, coll_divs=q,
-                         coll_choices=[1, 2], quadrature="product", show_warnings=False)
+                         coll_choices=[1, 2], quadrature="product", mesh_samples=q, show_warnings=False)
     assert np.allclose(vals[:, 0, 1], single, atol=1e-11)
     assert np.allclose(vals[:, 1, 1], -single, atol=1e-11)
     # the callable evaluates to the returned values at interior grid points
@@ -403,10 +403,10 @@ def test_validation():
     with pytest.raises(ValueError):
         solve_VIE_1(quadrature="gauss", **common)
     with pytest.raises(ValueError):
-        solve_VIE_1(kernel_interp_degree=3, **common)              # collocation quadrature
+        solve_VIE_1(quadrature="collocation", kernel_interp_degree=3, **common)              # collocation quadrature
     with pytest.raises(ValueError):
-        solve_VIE_1(mesh_samples=3, **common)                      # collocation quadrature
-    solve_VIE_1(mesh_samples=9, **common)                          # allowed: the default
+        solve_VIE_1(quadrature="collocation", mesh_samples=3, **common)                      # collocation quadrature
+    solve_VIE_1(quadrature="collocation", mesh_samples=9, **common)                          # allowed: the default
     with pytest.raises(ValueError):
         solve_VIE_1(quadrature="product", mesh_samples=4, **common)  # not a multiple of q
     with pytest.raises(ValueError):

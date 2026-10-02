@@ -358,12 +358,12 @@ def _k0_problem(K0, dt=0.01, d=0):
 def test_warns_when_kernel_start_unresolved(K0, capsys):
     """K(0) = 0 diverges without bound under refinement (1e18 -> 1e83 as dt
     halves); K(0) small next to H*K'(0) diverges too."""
-    solve_VIE_1(**_k0_problem(K0))
+    solve_VIE_1(quadrature="collocation", **_k0_problem(K0))
     assert _K0_MSG in capsys.readouterr().out
 
 
 def test_warns_for_singular_matrix_kernel_start(capsys):
-    solve_VIE_1(**_k0_problem(0.0, d=2))
+    solve_VIE_1(quadrature="collocation", **_k0_problem(0.0, d=2))
     assert _K0_MSG in capsys.readouterr().out
 
 

@@ -16,23 +16,23 @@ def _vie2_inputs(n_intervals):
 
 def test_vie2_500(benchmark):
     kernel, g, dt = _vie2_inputs(124)          # 497 pts
-    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie2_1000(benchmark):
     kernel, g, dt = _vie2_inputs(249)          # 997 pts
-    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie2_2000(benchmark):
     kernel, g, dt = _vie2_inputs(499)          # 1997 pts
-    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie2_4000(benchmark):
     kernel, g, dt = _vie2_inputs(999)          # 3997 pts
-    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie2_8000(benchmark):
     kernel, g, dt = _vie2_inputs(1999)         # 7997 pts
-    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 # --- VIE-1 (coll_divs=3, pts = n_intervals*9+1) ---
 
@@ -46,49 +46,49 @@ def _vie1_inputs(n_intervals):
 
 def test_vie1_500(benchmark):
     kernel, g, dt = _vie1_inputs(55)           # 496 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie1_1000(benchmark):
     kernel, g, dt = _vie1_inputs(111)          # 1000 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie1_2000(benchmark):
     kernel, g, dt = _vie1_inputs(222)          # 1999 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie1_4000(benchmark):
     kernel, g, dt = _vie1_inputs(444)          # 3997 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie1_8000(benchmark):
     kernel, g, dt = _vie1_inputs(888)          # 7993 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 # --- VIE-1 with force_continuous=True (coll_divs=3, pts = n_intervals*9+1) ---
 
 def test_vie1_fc_500(benchmark):
     kernel, g, dt = _vie1_inputs(55)           # 496 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation",
               soln_init_value=0.0, force_continuous=True)
 
 def test_vie1_fc_1000(benchmark):
     kernel, g, dt = _vie1_inputs(111)          # 1000 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation",
               soln_init_value=0.0, force_continuous=True)
 
 def test_vie1_fc_2000(benchmark):
     kernel, g, dt = _vie1_inputs(222)          # 1999 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation",
               soln_init_value=0.0, force_continuous=True)
 
 def test_vie1_fc_4000(benchmark):
     kernel, g, dt = _vie1_inputs(444)          # 3997 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation",
               soln_init_value=0.0, force_continuous=True)
 
 def test_vie1_fc_8000(benchmark):
     kernel, g, dt = _vie1_inputs(888)          # 7993 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation",
               soln_init_value=0.0, force_continuous=True)
 
 # --- VIDE (coll_divs=2, pts = n_intervals*4+1) ---
@@ -107,27 +107,27 @@ def _vide_inputs(n_intervals):
 def test_vide_500(benchmark):
     kernel, g, a, dt = _vide_inputs(124)       # 497 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-              soln_init_value=0.0, time_step=dt)
+              soln_init_value=0.0, time_step=dt, quadrature="collocation")
 
 def test_vide_1000(benchmark):
     kernel, g, a, dt = _vide_inputs(249)       # 997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-              soln_init_value=0.0, time_step=dt)
+              soln_init_value=0.0, time_step=dt, quadrature="collocation")
 
 def test_vide_2000(benchmark):
     kernel, g, a, dt = _vide_inputs(499)       # 1997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-              soln_init_value=0.0, time_step=dt)
+              soln_init_value=0.0, time_step=dt, quadrature="collocation")
 
 def test_vide_4000(benchmark):
     kernel, g, a, dt = _vide_inputs(999)       # 3997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-              soln_init_value=0.0, time_step=dt)
+              soln_init_value=0.0, time_step=dt, quadrature="collocation")
 
 def test_vide_8000(benchmark):
     kernel, g, a, dt = _vide_inputs(1999)      # 7997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-              soln_init_value=0.0, time_step=dt)
+              soln_init_value=0.0, time_step=dt, quadrature="collocation")
 
 
 # --- Vector VIE-1  (d=2, coll_divs=3, pts = n_intervals*9+1) ---
@@ -146,50 +146,50 @@ def _vie1_vec_inputs(n_intervals):
 
 def test_vie1_vec_500(benchmark):
     kernel, g, dt = _vie1_vec_inputs(55)       # 496 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie1_vec_1000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(111)      # 1000 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie1_vec_2000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(222)      # 1999 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie1_vec_4000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(444)      # 3997 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie1_vec_8000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(888)      # 7993 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 
 # --- Vector VIE-1 (continuous, d=2, coll_divs=3, pts = n_intervals*9+1) ---
 
 def test_vie1_vec_fc_500(benchmark):
     kernel, g, dt = _vie1_vec_inputs(55)       # 496 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation",
               soln_init_value=np.zeros(2), force_continuous=True)
 
 def test_vie1_vec_fc_1000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(111)      # 1000 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation",
               soln_init_value=np.zeros(2), force_continuous=True)
 
 def test_vie1_vec_fc_2000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(222)      # 1999 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation",
               soln_init_value=np.zeros(2), force_continuous=True)
 
 def test_vie1_vec_fc_4000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(444)      # 3997 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation",
               soln_init_value=np.zeros(2), force_continuous=True)
 
 def test_vie1_vec_fc_8000(benchmark):
     kernel, g, dt = _vie1_vec_inputs(888)      # 7993 pts
-    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt,
+    benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation",
               soln_init_value=np.zeros(2), force_continuous=True)
 
 
@@ -209,23 +209,23 @@ def _vie2_vec_inputs(n_intervals):
 
 def test_vie2_vec_500(benchmark):
     kernel, g, dt = _vie2_vec_inputs(124)      # 497 pts
-    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie2_vec_1000(benchmark):
     kernel, g, dt = _vie2_vec_inputs(249)      # 997 pts
-    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie2_vec_2000(benchmark):
     kernel, g, dt = _vie2_vec_inputs(499)      # 1997 pts
-    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie2_vec_4000(benchmark):
     kernel, g, dt = _vie2_vec_inputs(999)      # 3997 pts
-    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 def test_vie2_vec_8000(benchmark):
     kernel, g, dt = _vie2_vec_inputs(1999)     # 7997 pts
-    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+    benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
 
 
 # --- Vector VIDE  (d=2, coll_divs=2, pts = n_intervals*4+1) ---
@@ -251,27 +251,27 @@ def _vide_vec_inputs(n_intervals):
 def test_vide_vec_500(benchmark):
     kernel, g, a, init, dt = _vide_vec_inputs(124)   # 497 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-              soln_init_value=init, time_step=dt)
+              soln_init_value=init, time_step=dt, quadrature="collocation")
 
 def test_vide_vec_1000(benchmark):
     kernel, g, a, init, dt = _vide_vec_inputs(249)   # 997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-              soln_init_value=init, time_step=dt)
+              soln_init_value=init, time_step=dt, quadrature="collocation")
 
 def test_vide_vec_2000(benchmark):
     kernel, g, a, init, dt = _vide_vec_inputs(499)   # 1997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-              soln_init_value=init, time_step=dt)
+              soln_init_value=init, time_step=dt, quadrature="collocation")
 
 def test_vide_vec_4000(benchmark):
     kernel, g, a, init, dt = _vide_vec_inputs(999)   # 3997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-              soln_init_value=init, time_step=dt)
+              soln_init_value=init, time_step=dt, quadrature="collocation")
 
 def test_vide_vec_8000(benchmark):
     kernel, g, a, init, dt = _vide_vec_inputs(1999)  # 7997 pts
     benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-              soln_init_value=init, time_step=dt)
+              soln_init_value=init, time_step=dt, quadrature="collocation")
 
 
 # =====================================================================
@@ -452,34 +452,34 @@ def _register(name, func, *marks):
 for _size, _k9, _k4 in ((16000, 1777, 3999), (32000, 3555, 7999)):
     def _t(benchmark, _k=_k9):
         kernel, g, dt = _vie1_inputs(_k)
-        benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+        benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
     _register(f"test_vie1_{_size}", _t)
 
     def _t(benchmark, _k=_k4):
         kernel, g, dt = _vie2_inputs(_k)
-        benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+        benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
     _register(f"test_vie2_{_size}", _t)
 
     def _t(benchmark, _k=_k4):
         kernel, g, a, dt = _vide_inputs(_k)
         benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-                  soln_init_value=0.0, time_step=dt)
+                  soln_init_value=0.0, time_step=dt, quadrature="collocation")
     _register(f"test_vide_{_size}", _t)
 
     def _t(benchmark, _k=_k9):
         kernel, g, dt = _vie1_vec_inputs(_k)
-        benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt)
+        benchmark(solve_VIE_1, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
     _register(f"test_vie1_vec_{_size}", _t)
 
     def _t(benchmark, _k=_k4):
         kernel, g, dt = _vie2_vec_inputs(_k)
-        benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+        benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
     _register(f"test_vie2_vec_{_size}", _t)
 
     def _t(benchmark, _k=_k4):
         kernel, g, a, init, dt = _vide_vec_inputs(_k)
         benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-                  soln_init_value=init, time_step=dt)
+                  soln_init_value=init, time_step=dt, quadrature="collocation")
     _register(f"test_vide_vec_{_size}", _t)
 
 
@@ -516,19 +516,19 @@ _HEAVY = pytest.mark.benchmark(min_rounds=3, warmup=False)
 for _size, _k4 in ((500, 124), (1000, 249), (2000, 499), (4000, 999), (8000, 1999)):
     def _t(benchmark, _k=_k4):
         kernel, g, dt = _vie2_bigd_inputs(_k, 8)
-        benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+        benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
     _register(f"test_vie2_d8_{_size}", _t, _HEAVY)
 
     def _t(benchmark, _k=_k4):
         kernel, g, a, init, dt = _vide_bigd_inputs(_k, 8)
         benchmark(solve_VIDE, kernel_values=kernel, g_values=g, a_values=a,
-                  soln_init_value=init, time_step=dt)
+                  soln_init_value=init, time_step=dt, quadrature="collocation")
     _register(f"test_vide_d8_{_size}", _t, _HEAVY)
 
     if _size <= 4000:
         def _t(benchmark, _k=_k4):
             kernel, g, dt = _vie2_bigd_inputs(_k, 16)
-            benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt)
+            benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation")
         _register(f"test_vie2_d16_{_size}", _t, _HEAVY)
 
 
@@ -556,7 +556,7 @@ def _vie2_numba_inputs(n_intervals):
 for _size, _k25 in ((500, 19), (1000, 39), (2000, 79), (4000, 159), (8000, 319)):
     def _t(benchmark, _k=_k25):
         kernel, g, dt = _vie2_numba_inputs(_k)
-        benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt,
+        benchmark(solve_VIE_2, kernel_values=kernel, g_values=g, time_step=dt, quadrature="collocation",
                   coll_divs=5, coll_choices=[0, 3, 5], show_warnings=False)
     _register(f"test_vie2_numba_{_size}", _t, *_NUMBA_MARKS)
 

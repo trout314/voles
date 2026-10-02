@@ -44,6 +44,24 @@
   against a closed-form solution.
 
 ### Changed
+- **New defaults.** (1) The array-input solvers use product integration by
+  default (``quadrature="product"``): every sample is used, any node set
+  works without Numba, and the first-kind scheme's instability at small
+  K(0) does not arise. The default mesh is the finest, ``mesh_samples =
+  coll_divs``, for ``solve_VIE_2`` and ``solve_VIDE``; for ``solve_VIE_1``
+  it stays at ``coll_divs**2`` samples (the collocation quadrature's mesh),
+  because inverting a first-kind equation amplifies data error by about the
+  inverse of the mesh width. ``quadrature="collocation"`` keeps the previous
+  behaviour and is a few times faster. (2) The callable solvers reuse
+  adaptive-quadrature blocks across a uniform mesh by default
+  (``reuse_adaptive_blocks=True``): about an order of magnitude cheaper on
+  location-only singularity declarations, with results differing from the
+  per-row path by at most the quadrature tolerance. (3) ``coll_divs`` given
+  alone selects every sub-interval point the method admits
+  (``[1, ..., coll_divs]`` for the first kind, ``[0, ..., coll_divs]``
+  otherwise), and ``coll_choices`` given alone sets ``coll_divs`` to its
+  largest entry; the defaults with neither are unchanged. Results of calls
+  that relied on the old defaults change at the discretisation-error level.
 - **The array-input solvers no longer truncate the data.** Previously the
   input length had to be one more than a multiple of the mesh width
   (``coll_divs**2`` samples, or ``mesh_samples`` with product quadrature),
