@@ -1547,17 +1547,7 @@ tracked boundary values).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1917</span>
-<span class="normal">1918</span>
-<span class="normal">1919</span>
-<span class="normal">1920</span>
-<span class="normal">1921</span>
-<span class="normal">1922</span>
-<span class="normal">1923</span>
-<span class="normal">1924</span>
-<span class="normal">1925</span>
-<span class="normal">1926</span>
-<span class="normal">1927</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1927</span>
 <span class="normal">1928</span>
 <span class="normal">1929</span>
 <span class="normal">1930</span>
@@ -1807,7 +1797,17 @@ tracked boundary values).</p>
 <span class="normal">2174</span>
 <span class="normal">2175</span>
 <span class="normal">2176</span>
-<span class="normal">2177</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">2177</span>
+<span class="normal">2178</span>
+<span class="normal">2179</span>
+<span class="normal">2180</span>
+<span class="normal">2181</span>
+<span class="normal">2182</span>
+<span class="normal">2183</span>
+<span class="normal">2184</span>
+<span class="normal">2185</span>
+<span class="normal">2186</span>
+<span class="normal">2187</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span>
                          <span class="n">mesh_breakpoints</span><span class="p">,</span>
                          <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1932,7 +1932,7 @@ tracked boundary values).</p>
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
             <span class="n">y_real</span><span class="p">,</span> <span class="n">y_func_real</span> <span class="o">=</span> <span class="n">result</span>
             <span class="k">return</span> <span class="p">(</span><span class="n">_recombine_complex_y</span><span class="p">(</span><span class="n">y_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">),</span>
-                    <span class="n">_ComplexSolutionFunction</span><span class="p">(</span><span class="n">y_func_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">))</span>
+                    <span class="n">_complex_solution</span><span class="p">(</span><span class="n">y_func_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">_recombine_complex_y</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">)</span>
 
     <span class="n">M</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>

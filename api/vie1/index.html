@@ -2334,7 +2334,7 @@ supported settings (with the non-convergent ones excluded) are listed in
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
             <span class="n">soln_real</span><span class="p">,</span> <span class="n">sf_real</span> <span class="o">=</span> <span class="n">result</span>
             <span class="k">return</span> <span class="p">(</span><span class="n">_cplx</span><span class="o">.</span><span class="n">_recombine</span><span class="p">(</span><span class="n">soln_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">),</span>
-                    <span class="n">_ComplexSolutionFunction</span><span class="p">(</span><span class="n">sf_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">))</span>
+                    <span class="n">_complex_solution</span><span class="p">(</span><span class="n">sf_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">_recombine</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">)</span>
 
     <span class="n">kernel_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
