@@ -86,7 +86,7 @@ pip install voles --no-deps && pip install numpy   # leanest: numpy only, no sci
 
 **What the optional pieces buy you:**
 - `scipy` (core dependency) — required for the callable-input `function_solve_*` family.
-- `numba` (added by `[full]`) — only needed for the array-based solvers when using non-standard collocation settings not compiled into the D extension.
+- `numba` (added by `[full]`) — only needed for the array-based solvers with `quadrature="collocation"` and a collocation setting not compiled into the D extension; the default product quadrature needs neither.
 
 To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](https://github.com/trout314/voles/blob/main/CONTRIBUTING.md).
 <!-- --8<-- [end:install] -->

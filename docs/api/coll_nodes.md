@@ -12,10 +12,11 @@ families. `coll_nodes` is mutually exclusive with `coll_divs`/`coll_choices`.
 
 ## Compiled collocation settings
 
-The array-based solvers dispatch to D-extension routines compiled for a fixed
-list of `(coll_divs, coll_choices)` settings; other settings need the optional
-`numba` dependency (scalar equations only) and otherwise raise
-`NotImplementedError`. The compiled lists are importable as
+With the default product quadrature the array-based solvers accept any
+`(coll_divs, coll_choices)` setting. With `quadrature="collocation"` they
+dispatch to D-extension routines compiled for a fixed list of settings; other
+settings then need the optional `numba` dependency (scalar equations only) and
+otherwise raise `NotImplementedError`. The compiled lists are importable as
 `fast_coll_settings_VIE_1`, `fast_coll_settings_VIE_2`, and
 `fast_coll_settings_VIDE` — each a list of `(coll_divs, coll_choices)` pairs
 (the VIE-1 list excludes the known non-convergent settings).
