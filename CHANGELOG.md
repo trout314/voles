@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-12
+
 ### Fixed
 - **Matrix-valued solves with `quadrature="product"` could crash, abort, or
   raise a spurious `LinAlgError`.** The block drivers build a delegate that
