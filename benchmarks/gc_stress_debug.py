@@ -109,8 +109,9 @@ def _parent(args):
                                timeout=args.round_timeout)
             out, rc = p.stdout + p.stderr, p.returncode
         except subprocess.TimeoutExpired as e:
-            out = ((e.stdout or b"").decode(errors="replace")
-                   + (e.stderr or b"").decode(errors="replace"))
+            # The partial output is bytes on some platforms even with text=True.
+            out = "".join(s.decode(errors="replace") if isinstance(s, bytes) else s
+                          for s in (e.stdout or "", e.stderr or ""))
             rc = None
         dt = time.monotonic() - t0
         summary = next((ln[8:] for ln in out.splitlines()
