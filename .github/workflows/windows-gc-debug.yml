@@ -42,14 +42,18 @@ jobs:
         shell: pwsh
         run: |
           cd dlang
-          meson setup build --wipe --buildtype=release
+          meson setup build --wipe --buildtype=release -Ddebug=true   # PDB for symbolizing
           ninja -C build
           Copy-Item build\volterra_dlang.dll ..\src\voles\
+          Get-ChildItem build -Filter *.pdb | ForEach-Object { $_.FullName }
+          if (Test-Path build\volterra_dlang.pdb) { Copy-Item build\volterra_dlang.pdb ..\src\voles\ }
 
       - uses: actions/upload-artifact@v4
         with:
           name: volterra_dlang_dll_debug
-          path: src/voles/volterra_dlang.dll
+          path: |
+            src/voles/volterra_dlang.dll
+            src/voles/volterra_dlang.pdb
 
   stress:
     needs: build-dlang-windows

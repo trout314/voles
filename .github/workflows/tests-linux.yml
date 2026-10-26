@@ -92,6 +92,9 @@ jobs:
         run: pip install -e ".[dev,full]"
 
       - name: Run tests
+        # Step-level limit: a hang that wedges the GIL also stops
+        # pytest-timeout's watchdog thread, so it can't fail the run.
+        timeout-minutes: 10
         run: pytest tests/ -v --timeout=300
 
   # Build with -Dwith-lapack=disabled even though liblapack-dev is installed,
@@ -134,4 +137,7 @@ jobs:
           python -c "from voles._dlang import have_lapack_d; assert have_lapack_d() == False, 'Expected no-LAPACK build'"
 
       - name: Run tests
+        # Step-level limit: a hang that wedges the GIL also stops
+        # pytest-timeout's watchdog thread, so it can't fail the run.
+        timeout-minutes: 10
         run: pytest tests/ -v --timeout=300

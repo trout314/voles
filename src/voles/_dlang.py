@@ -32,6 +32,9 @@ def _setup_argtypes() -> None:
         _lib.volterra_debug_thread_stats.restype = ctypes.c_int
         _lib.volterra_debug_thread_stats.argtypes = [
             _ip, ctypes.POINTER(ctypes.c_uint), ctypes.c_int]
+    if hasattr(_lib, "volterra_debug_install_veh"):
+        _lib.volterra_debug_install_veh.restype = ctypes.c_int
+        _lib.volterra_debug_install_veh.argtypes = []
 
     # Block drivers for precomputed lag blocks (product-integration quadrature,
     # see _product.py). Each is guarded on its own, so a dylib built before
@@ -886,6 +889,16 @@ def debug_thread_stats_d(max_ids: int = 64):
     ids = (ctypes.c_uint * max_ids)()
     n_dead = _lib.volterra_debug_thread_stats(ctypes.byref(total), ids, max_ids)
     return total.value, n_dead, list(ids[:min(n_dead, max_ids)])
+
+
+def debug_install_veh_d() -> bool:
+    """Install the D extension's diagnostic vectored exception handler
+    (Windows only): on a guard-page fault or access violation it dumps the
+    fault, the faulting region, a backtrace and druntime's thread and stack
+    context lists to stderr. Returns False where unavailable."""
+    if not hasattr(_lib, "volterra_debug_install_veh"):
+        return False
+    return bool(_lib.volterra_debug_install_veh())
 
 
 def have_lapack_d() -> bool:

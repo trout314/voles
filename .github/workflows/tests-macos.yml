@@ -73,4 +73,7 @@ jobs:
         run: pip install -e ".[dev,full]"
 
       - name: Run tests
+        # Step-level limit: a hang that wedges the GIL also stops
+        # pytest-timeout's watchdog thread, so it can't fail the run.
+        timeout-minutes: 10
         run: pytest tests/ -v --timeout=300
