@@ -28,6 +28,11 @@ def _setup_argtypes() -> None:
     _lib.volterra_have_lapack.restype = ctypes.c_int
     _lib.volterra_have_lapack.argtypes = []
 
+    if hasattr(_lib, "volterra_debug_thread_stats"):
+        _lib.volterra_debug_thread_stats.restype = ctypes.c_int
+        _lib.volterra_debug_thread_stats.argtypes = [
+            _ip, ctypes.POINTER(ctypes.c_uint), ctypes.c_int]
+
     # Block drivers for precomputed lag blocks (product-integration quadrature,
     # see _product.py). Each is guarded on its own, so a dylib built before
     # some of them were added still loads and keeps the drivers it does have.
@@ -868,6 +873,19 @@ def gc_collect_d() -> None:
     """Force a D GC collection (thread-attached for the duration). Used by the
     thread-safety stress test; harmless to call from any thread."""
     _lib.volterra_gc_collect()
+
+
+def debug_thread_stats_d(max_ids: int = 64):
+    """Return ``(n_registered, n_dead, dead_ids)`` for druntime's
+    registered-thread list: ``n_dead`` entries are registered but no longer
+    running, and ``dead_ids`` holds up to ``max_ids`` of their OS thread ids. Diagnostic for the Windows forced-GC hang; returns
+    ``None`` if the loaded library predates the export."""
+    if not hasattr(_lib, "volterra_debug_thread_stats"):
+        return None
+    total = ctypes.c_int(0)
+    ids = (ctypes.c_uint * max_ids)()
+    n_dead = _lib.volterra_debug_thread_stats(ctypes.byref(total), ids, max_ids)
+    return total.value, n_dead, list(ids[:min(n_dead, max_ids)])
 
 
 def have_lapack_d() -> bool:

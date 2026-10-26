@@ -2886,6 +2886,36 @@ void volterra_gc_collect()
         GC.collect();
 }
 
+// Diagnostic for the Windows forced-GC hang (.github/workflows/
+// windows-gc-debug.yml): walks druntime's registered-thread list and reports
+// threads that are registered but no longer running -- a dead thread left
+// registered would have its stale stack range scanned by the next collection.
+// Writes the registered-thread count to *out_total and up to max_ids OS thread
+// ids of dead entries to dead_ids; returns the number of dead entries.
+int volterra_debug_thread_stats(int* out_total, uint* dead_ids, int max_ids)
+{
+    import core.memory : GC;
+    import core.thread.threadbase : ThreadBase;
+    ensureThreadAttached();
+    // ThreadBase.opApply iterates a malloc'd snapshot the GC does not scan;
+    // keep a collection from freeing a just-removed Thread mid-walk.
+    GC.disable();
+    scope(exit) GC.enable();
+    int total = 0, dead = 0;
+    foreach (t; ThreadBase)
+    {
+        ++total;
+        if (!t.isRunning)
+        {
+            if (dead < max_ids)
+                dead_ids[dead] = cast(uint) t.id;
+            ++dead;
+        }
+    }
+    *out_total = total;
+    return dead;
+}
+
 // volterra_solve_vie1_vec: primary VIE-1 entry point, handles all d.
 // kernel_values: (n, d, d) C-contiguous flat array of length n*d*d
 // g_values:      (n, d)   C-contiguous flat array of length n*d

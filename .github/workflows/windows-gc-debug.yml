@@ -1,0 +1,81 @@
+name: Windows GC debug
+
+# Manually triggered diagnostic for the intermittent Windows forced-GC hang
+# (py3.10/3.11: 0x80000001 inside GC.collect, then a deadlock). Loops
+# benchmarks/gc_stress_debug.py, which logs dead-but-registered druntime
+# threads and exceptions out of the collector. py3.12 is the control.
+
+on:
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: "Subprocess rounds per job"
+        default: "40"
+      solves:
+        description: "Matrix solves per round"
+        default: "20"
+
+jobs:
+  build-dlang-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install meson and ninja
+        run: pip install meson ninja
+
+      - name: Download and extract ldc2
+        shell: pwsh
+        run: |
+          $LDC_VERSION = "1.41.0"
+          $archive = "ldc2-${LDC_VERSION}-windows-x64.7z"
+          Invoke-WebRequest -Uri "https://github.com/ldc-developers/ldc/releases/download/v${LDC_VERSION}/$archive" -OutFile "$env:TEMP\$archive"
+          7z x "$env:TEMP\$archive" -o"$env:USERPROFILE"
+          echo "$env:USERPROFILE\ldc2-${LDC_VERSION}-windows-x64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build D extension
+        shell: pwsh
+        run: |
+          cd dlang
+          meson setup build --wipe --buildtype=release
+          ninja -C build
+          Copy-Item build\volterra_dlang.dll ..\src\voles\
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: volterra_dlang_dll_debug
+          path: src/voles/volterra_dlang.dll
+
+  stress:
+    needs: build-dlang-windows
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+        mode: [matrix, pool]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: volterra_dlang_dll_debug
+          path: src/voles/
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Stress forced GC (${{ matrix.mode }})
+        run: python benchmarks/gc_stress_debug.py --mode ${{ matrix.mode }} --rounds ${{ inputs.rounds }} --solves ${{ inputs.solves }}

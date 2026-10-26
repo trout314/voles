@@ -49,6 +49,7 @@ dev = [
     "pytest-cov",
     "pytest-benchmark",
     "pytest-markdown-docs",
+    "pytest-timeout",
 ]
 docs = [
     "mkdocs-material",

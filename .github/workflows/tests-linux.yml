@@ -92,7 +92,7 @@ jobs:
         run: pip install -e ".[dev,full]"
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: pytest tests/ -v --timeout=300
 
   # Build with -Dwith-lapack=disabled even though liblapack-dev is installed,
   # so the pure-D lin_solve_rt fallback is exercised. Without this job, the
@@ -134,4 +134,4 @@ jobs:
           python -c "from voles._dlang import have_lapack_d; assert have_lapack_d() == False, 'Expected no-LAPACK build'"
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: pytest tests/ -v --timeout=300
