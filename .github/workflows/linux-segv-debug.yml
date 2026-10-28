@@ -2,9 +2,10 @@ name: Linux segfault debug
 
 # Manually triggered hunt for the rare Linux segfault in threaded matrix
 # solves (test_complex_matrix_valued_d49_workflow_smoke; seen Aug 2026 and
-# 2026-10-28). Loops that test's body under gdb with a debug-built extension
-# and dumps native backtraces of all threads on a fatal signal. See
-# benchmarks/linux_segv_debug.py.
+# twice on 2026-10-28). Loops the full test suite (where every crash happened)
+# and, as a control, the test's body alone, at full speed with core dumps on;
+# each crash's core is analysed with gdb against a debug-built extension.
+# See benchmarks/linux_segv_debug.py.
 
 on:
   workflow_dispatch:
@@ -13,7 +14,7 @@ on:
         description: "Hunt budget per job (minutes)"
         default: "40"
       iters:
-        description: "Test-body iterations per gdb session"
+        description: "Test-body iterations per process (body mode)"
         default: "200"
 
 jobs:
@@ -56,6 +57,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+        mode: [suite, body]
 
     steps:
       - uses: actions/checkout@v4
@@ -76,5 +78,20 @@ jobs:
           sudo apt-get install -y -qq gdb
           pip install -e ".[dev,full]"
 
-      - name: Hunt (${{ matrix.python-version }})
-        run: python benchmarks/linux_segv_debug.py --minutes ${{ inputs.minutes }} --iters ${{ inputs.iters }}
+      - name: Enable core dumps
+        run: |
+          sudo mkdir -p /tmp/cores && sudo chmod 1777 /tmp/cores
+          sudo sysctl -w kernel.core_pattern=/tmp/cores/core.%e.%p
+          ulimit -c unlimited
+          # Prove the pipeline before spending the budget: a deliberate crash
+          # must leave a core.
+          python -c "import os, signal; os.kill(os.getpid(), signal.SIGSEGV)" || true
+          ls -la /tmp/cores
+          test -n "$(ls /tmp/cores)"
+          rm -f /tmp/cores/core*
+
+      - name: Hunt (${{ matrix.python-version }}, ${{ matrix.mode }})
+        run: |
+          ulimit -c unlimited
+          python benchmarks/linux_segv_debug.py --mode ${{ matrix.mode }} \
+            --minutes ${{ inputs.minutes }} --iters ${{ inputs.iters }} --core-dir /tmp/cores

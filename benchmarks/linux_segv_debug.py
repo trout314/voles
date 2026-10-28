@@ -1,50 +1,48 @@
 """Crash hunter for the rare Linux segfault in threaded matrix solves.
 
 tests/test_complex.py::test_complex_matrix_valued_d49_workflow_smoke has
-segfaulted twice in CI (Aug 2026, and 2026-10-28 on 7eebca6), with the pool
-workers inside the D extension each time. This driver runs that test's body
-in a loop inside gdb, in repeated sessions until a wall-clock budget runs
-out. On a fatal signal gdb dumps every thread's native backtrace (the
-debug-built extension has symbols), the faulting instruction and registers;
-the driver prints each dump and a tally.
+segfaulted in CI three times (Aug 2026; twice on 2026-10-28), each time during
+a full ``pytest tests/`` run with the pool workers inside the D extension.
 
-druntime suspends threads for collection with SIGRTMIN and SIGRTMIN+1, so gdb
-passes the real-time signals through without stopping.
+Runs the workload repeatedly at full speed until a wall-clock budget is used
+up, and analyses crashes post mortem: the workflow enables core dumps, and
+after a fatal signal the driver runs gdb on the core (the debug-built
+extension has symbols) to dump every thread's native backtrace, the faulting
+instruction and registers. (An earlier version ran the loop under gdb, which
+was ~7x slower and perturbed the thread timing.)
 
-Usage (Linux, gdb on PATH):
-  python benchmarks/linux_segv_debug.py --minutes 40 --iters 200
+Modes:
+  suite   the full ``pytest tests/`` run, as CI runs it -- the context all
+          three crashes happened in;
+  body    the d49 test's body looped in a fresh process (control: does the
+          crash need state left by the earlier tests?).
+
+Usage (Linux; core dumps enabled; gdb on PATH):
+  python benchmarks/linux_segv_debug.py --mode suite --core-dir /tmp/cores
 """
 import argparse
+import glob
 import json
 import os
-import re
 import subprocess
 import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-FATAL = re.compile(r"received signal (SIGSEGV|SIGBUS|SIGABRT|SIGILL|SIGFPE)")
+ROOT = os.path.dirname(HERE)
 
 GDB_CMDS = [
     "set pagination off",
-    "set print thread-events off",
-    "set print inferior-events off",
-    "handle SIGUSR1 SIGUSR2 SIGXCPU SIGPWR nostop noprint pass",
-    "handle SIG32 SIG33 SIG34 SIG35 SIG36 SIG37 SIG38 SIG39 SIG40 nostop noprint pass",
-    "run",
-    # Reached only if the program stopped (fatal signal); after a normal
-    # exit these just report "The program is not being run".
     "info threads",
     "thread apply all bt 40",
     "info registers rip rsp rbp rax rdi rsi",
     "x/8i $pc - 16",
     "info sharedlibrary volterra",
-    "info proc mappings",
 ]
 
 
 def _child(iters):
-    sys.path.insert(0, os.path.join(HERE, "..", "tests"))
+    sys.path.insert(0, os.path.join(ROOT, "tests"))
     from test_complex import test_complex_matrix_valued_d49_workflow_smoke as body
     t0 = time.monotonic()
     for _ in range(iters):
@@ -52,61 +50,85 @@ def _child(iters):
     print(f"CHILD_OK iters={iters} {time.monotonic() - t0:.1f}s", flush=True)
 
 
-def _session(args):
+def _workload(args):
+    if args.mode == "suite":
+        return [sys.executable, "-m", "pytest", "tests/", "-x", "-q",
+                "-p", "no:cacheprovider", "--timeout=300"]
+    return [sys.executable, "-X", "faulthandler", os.path.abspath(__file__),
+            "--child", "--iters", str(args.iters)]
+
+
+def _cores(core_dir):
+    return set(glob.glob(os.path.join(core_dir, "core*"))) if core_dir else set()
+
+
+def _analyse(core):
     cmd = ["gdb", "-q", "-nx", "-batch"]
     for c in GDB_CMDS:
         cmd += ["-ex", c]
-    cmd += ["--args", sys.executable, os.path.abspath(__file__),
-            "--child", "--iters", str(args.iters)]
+    cmd += [sys.executable, core]
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True,
-                           timeout=args.session_timeout)
-        out = p.stdout + p.stderr
-        timed_out = False
-    except subprocess.TimeoutExpired as e:
-        out = "".join(s.decode(errors="replace") if isinstance(s, bytes) else s
-                      for s in (e.stdout or "", e.stderr or ""))
-        timed_out = True
-    m = FATAL.search(out)
-    if m:
-        return m[1], out
-    if timed_out:
-        return "hang", out
-    if "CHILD_OK" in out:
-        return "ok", out
-    return "error", out
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        return p.stdout + p.stderr
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"(gdb failed: {e!r})"
 
 
 def _parent(args):
     deadline = time.monotonic() + 60 * args.minutes
-    tally, dumps, sessions = {}, 0, 0
+    tally, dumps, runs = {}, 0, 0
     while time.monotonic() < deadline:
+        before = _cores(args.core_dir)
         t0 = time.monotonic()
-        status, out = _session(args)
-        sessions += 1
+        try:
+            p = subprocess.run(_workload(args), cwd=ROOT, capture_output=True,
+                               text=True, timeout=args.run_timeout)
+            rc, out = p.returncode, p.stdout + p.stderr
+        except subprocess.TimeoutExpired as e:
+            rc = None
+            out = "".join(s.decode(errors="replace") if isinstance(s, bytes) else s
+                          for s in (e.stdout or "", e.stderr or ""))
+        runs += 1
+        if rc is None:
+            status = "hang"
+        elif rc < 0:
+            status = f"signal{-rc}"
+        elif rc == 0:
+            status = "ok"
+        else:
+            status = "fail"             # test failure, or a crash in pytest's
+                                        # own process that exited nonzero
         tally[status] = tally.get(status, 0) + 1
-        print(f"session {sessions:4d}  {status:7s}  {time.monotonic() - t0:6.1f}s",
-              flush=True)
+        new_cores = sorted(_cores(args.core_dir) - before, key=os.path.getmtime)
+        print(f"run {runs:4d}  {status:9s}  rc={rc}  {time.monotonic() - t0:6.1f}s"
+              f"  cores={len(new_cores)}", flush=True)
         if status != "ok" and dumps < args.max_dumps:
             dumps += 1
-            # The mappings table is long; keep it but put it last.
-            print("  ---- gdb output ----")
-            for ln in out.splitlines():
+            print("  ---- workload output (tail) ----")
+            for ln in out.splitlines()[-80:]:
                 print("  " + ln)
-            print("  --------------------", flush=True)
-    iters_ok = tally.get("ok", 0) * args.iters
-    print("TALLY " + json.dumps({"sessions": sessions, "iters_ok": iters_ok,
-                                 **tally}), flush=True)
+            for core in new_cores[:1]:
+                print(f"  ---- gdb on {os.path.basename(core)} ----")
+                for ln in _analyse(core).splitlines():
+                    print("  " + ln)
+            print("  -------------------------------", flush=True)
+        for core in new_cores:          # cores are large; keep the disk free
+            os.remove(core)
+    print("TALLY " + json.dumps({"mode": args.mode, "runs": runs, **tally}),
+          flush=True)
     return 0 if set(tally) <= {"ok"} else 1
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--mode", choices=["suite", "body"], default="suite")
     ap.add_argument("--minutes", type=float, default=40.0,
                     help="wall-clock budget for the whole hunt")
     ap.add_argument("--iters", type=int, default=200,
-                    help="test-body iterations per gdb session")
-    ap.add_argument("--session-timeout", type=float, default=900.0)
+                    help="test-body iterations per process (body mode)")
+    ap.add_argument("--run-timeout", type=float, default=900.0)
+    ap.add_argument("--core-dir", default=None,
+                    help="directory kernel.core_pattern writes cores to")
     ap.add_argument("--max-dumps", type=int, default=3)
     ap.add_argument("--child", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args()
