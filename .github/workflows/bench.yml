@@ -62,7 +62,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[dev,full]"   # full: numba, for the fallback benchmarks
+        # full: numba, for the fallback benchmarks. pytest<9.2: pytest-benchmark
+        # 5.3.0 reads Function._nodeid, which pytest 9.2.0 removed; drop the pin
+        # once a pytest-benchmark release supports 9.2.
+        run: pip install -e ".[dev,full]" "pytest<9.2"
 
       - name: Run benchmarks
         run: |

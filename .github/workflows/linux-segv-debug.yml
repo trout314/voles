@@ -1,0 +1,80 @@
+name: Linux segfault debug
+
+# Manually triggered hunt for the rare Linux segfault in threaded matrix
+# solves (test_complex_matrix_valued_d49_workflow_smoke; seen Aug 2026 and
+# 2026-10-28). Loops that test's body under gdb with a debug-built extension
+# and dumps native backtraces of all threads on a fatal signal. See
+# benchmarks/linux_segv_debug.py.
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Hunt budget per job (minutes)"
+        default: "40"
+      iters:
+        description: "Test-body iterations per gdb session"
+        default: "200"
+
+jobs:
+  build-dlang-linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same container and toolchain as tests-linux.yml, plus -Ddebug=true so
+      # gdb has symbols (the copied .so is the unstripped build output).
+      - name: Build D extension (debug info) in Ubuntu 20.04 container
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/work" ubuntu:20.04 bash -c "
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq curl xz-utils ninja-build python3-pip libxml2
+            pip3 install -q 'meson==1.5.2'
+            curl -fL https://github.com/ldc-developers/ldc/releases/download/v1.40.0/ldc2-1.40.0-linux-x86_64.tar.xz \
+              | tar -xJ -C /tmp
+            export PATH=/tmp/ldc2-1.40.0-linux-x86_64/bin:\$PATH
+            cd /work/dlang
+            meson setup build --wipe --buildtype=release -Ddebug=true
+            ninja -C build
+            cp build/volterra_dlang.so /work/src/voles/
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: volterra_dlang_so_debug
+          path: src/voles/volterra_dlang.so
+
+  hunt:
+    needs: build-dlang-linux
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: volterra_dlang_so_debug
+          path: src/voles/
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install gdb and the package
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gdb
+          pip install -e ".[dev,full]"
+
+      - name: Hunt (${{ matrix.python-version }})
+        run: python benchmarks/linux_segv_debug.py --minutes ${{ inputs.minutes }} --iters ${{ inputs.iters }}
