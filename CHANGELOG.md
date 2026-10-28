@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Windows: a garbage collection during threaded solves could hang the
+  process.** A thread can be suspended with its stack pointer already inside
+  its stack's guard page, which Windows lets only the owning thread touch;
+  the D runtime then read that page from the collecting thread, the fault
+  unwound out of the collection with the other threads still suspended
+  (one of them holding the GIL), and Python froze. Likeliest with freshly
+  created threads, such as the per-call pool of the matrix fan-out. Threads
+  now commit their stack, up to 8 MB, when they first enter the extension, so
+  the stack pointer can reach a guard page only at a genuine overflow.
+
+### Changed
+- CI: every test step has a 10-minute limit enforced by GitHub (a hang that
+  holds the GIL also stops pytest-timeout's watchdog), and a manually
+  triggered Windows workflow stress-tests forced collections with a fault
+  logger in the extension (`benchmarks/gc_stress_debug.py`).
+
 ## [0.10.0] - 2026-10-12
 
 ### Fixed

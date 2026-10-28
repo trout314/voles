@@ -2732,9 +2732,44 @@ version (Windows)
         alias FlsCallback = void function(void*);
         uint FlsAlloc(FlsCallback);
         int FlsSetValue(uint, void*);
+        void GetCurrentThreadStackLimits(size_t* low, size_t* high);   // Win8+
     }
     private enum uint FLS_OUT_OF_INDEXES = 0xFFFF_FFFF;
     private __gshared uint g_detachFlsIndex = FLS_OUT_OF_INDEXES;
+
+    // Commit the calling thread's stack down to near the bottom of its
+    // reservation before it is registered with the collector.
+    //
+    // A Windows stack grows through a guard page that only its own thread
+    // may touch: the kernel commits the next page silently for the owner,
+    // but raises STATUS_GUARD_PAGE_VIOLATION for any other thread. A thread
+    // can be suspended with RSP already moved into its guard page (a
+    // prologue's `sub rsp` executed, the page not yet touched), and druntime
+    // then scans [RSP, StackBase) from the collecting thread -- straight
+    // into the guard page. ctypes' SEH handler unwinds that fault out of the
+    // collection with every other thread still suspended, one of them
+    // typically holding the GIL, and the process wedges. Young threads,
+    // with only a few pages committed, hit it most (the matrix fan-out's
+    // fresh thread pools; tests/test_thread_safety.py).
+    //
+    // Touching the pages in order from the current SP downward makes this
+    // thread grow its own stack, so afterwards RSP can only reach a guard
+    // page at a genuine stack overflow. Capped at 8 MB below SP (an embedder
+    // with a huge main-thread stack keeps the rest uncommitted), and stopping
+    // 64 KB above the reservation bottom, clear of the kernel's overflow
+    // guarantee. Commit is never released, so once per thread suffices.
+    private void precommitStack() nothrow @nogc
+    {
+        import core.volatile : volatileLoad;
+        enum size_t page = 4096, margin = 64 * 1024, cap = 8 * 1024 * 1024;
+        size_t low = 0, high = 0;
+        GetCurrentThreadStackLimits(&low, &high);
+        ubyte here = 0;
+        size_t p = cast(size_t) &here & ~(page - 1);
+        immutable size_t stop = p - low > cap + margin ? p - cap : low + margin;
+        for (; p >= stop; p -= page)
+            volatileLoad(cast(ubyte*) p);
+    }
 
     // nothrow @nogc: required to match FlsCallback (the alias inherits those
     // attributes from its extern(Windows) declaration block), and valid --
@@ -2803,6 +2838,8 @@ private void ensureThreadAttached()
     import core.memory : GC;
     if (Thread.getThis() !is null)
         return;
+    version (Windows)
+        precommitStack();       // before registering (see precommitStack)
     // thread_attachThis allocates the Thread object BEFORE registering the
     // thread; until registration completes this thread's stack is invisible
     // to the collector, so a concurrent collection frees the half-attached
@@ -2866,6 +2903,8 @@ export extern(C):
 int volterra_rt_init()
 {
     import core.runtime : Runtime;
+    version (Windows)
+        precommitStack();       // the loading thread stays attached for good
     if (!Runtime.initialize())
         return 0;
     initDetachHook();
