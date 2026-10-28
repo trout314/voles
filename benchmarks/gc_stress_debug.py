@@ -6,8 +6,10 @@ a series of subprocess rounds, each under a timeout so a hang costs one round,
 not the job. The hammer thread checks druntime's registered-thread list before
 every collection and logs, as it happens:
 
-  DEAD     a thread registered with druntime that is no longer running (its
-           stale stack range would be scanned by the next collection);
+  DEAD     a thread registered with druntime that is no longer running.
+           Informational only: an exiting thread shows up briefly before its
+           detach hook runs, and druntime's suspend() drops such threads
+           instead of scanning them, so DEAD alone does not fail a round;
   RAISED   an exception out of gc_collect_d (on Windows, ctypes turns an SEH
            fault inside the collector into OSError, leaving the world stopped).
 
@@ -200,7 +202,7 @@ def _parent(args):
             status = "hang"
         elif rc != 0:
             status = "crash"
-        elif s.get("dead_events") or s.get("raised") or s.get("mismatches"):
+        elif s.get("raised") or s.get("mismatches"):
             status = "anomaly"
         else:
             status = "ok"
