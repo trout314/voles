@@ -16,6 +16,10 @@ on:
       iters:
         description: "Test-body iterations per process (body mode)"
         default: "200"
+      modes:
+        description: 'JSON list of modes: "suite", "body", "first"'
+        default: '["first"]'
+
 
 jobs:
   build-dlang-linux:
@@ -57,7 +61,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
-        mode: [suite, body]
+        mode: ${{ fromJSON(inputs.modes) }}
 
     steps:
       - uses: actions/checkout@v4
