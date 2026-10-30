@@ -12,6 +12,13 @@
   created threads, such as the per-call pool of the matrix fan-out. Threads
   now commit their stack, up to 8 MB, when they first enter the extension, so
   the stack pointer can reach a guard page only at a genuine overflow.
+- **Linux: a garbage collection could segfault the process**, typically during
+  the first large threaded solve (about 2% of processes in CI). With the D
+  runtime linked statically, LDC locates a thread's thread-local storage as if
+  the library were an executable, so the collector scanned unrelated memory
+  in its place; for the main thread that range can begin in an unmapped page.
+  Each thread's range is now replaced with its real thread-local storage
+  block when it registers, which also means that storage is scanned at all.
 
 ### Changed
 - CI: every test step has a 10-minute limit enforced by GitHub (a hang that

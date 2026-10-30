@@ -2804,6 +2804,80 @@ else
     }
 }
 
+// Linux x86_64: correct the TLS range druntime scans for each thread.
+//
+// With druntime linked statically (as here: -link-defaultlib-shared=false),
+// LDC's rt.sections_elf_shared computes a thread's TLS range as
+// [fs:0 - memsz, fs:0), with memsz this library's PT_TLS size. That is the
+// layout of an *executable's* TLS. For a library loaded by dlopen the range
+// is unrelated memory: the real TLS is never scanned, and for the loading
+// thread -- whose thread control block sits a few KB into ld.so's startup
+// TLS allocation -- the range can start in the unmapped page below it, so
+// the first collection segfaults in the TLS scan. Whether that page is
+// mapped depends on the process's address layout (~2% of CI processes; see
+// benchmarks/linux_segv_debug.py). Each thread's own TLS block is the
+// dlpi_tls_data that dl_iterate_phdr reports for this library, so after
+// registering a thread, overwrite druntime's entry with it.
+version (linux) version (X86_64) version = FixDruntimeTlsRange;
+
+version (FixDruntimeTlsRange)
+{
+    import core.internal.container.array : Array;
+    import core.sys.elf : PT_LOAD, PT_TLS;
+    import core.sys.linux.link : dl_iterate_phdr, dl_phdr_info;
+
+    // rt.sections_elf_shared.initTLSRanges(): public in druntime, but `rt` is
+    // not on the import path, so it is bound by its mangled name. Returns the
+    // calling thread's TLS range list, the one the collector scans for it.
+    pragma(mangle, "_D2rt19sections_elf_shared13initTLSRangesFNbNiZPS4core8internal9container5array__T5ArrayTAvZQk")
+    private extern (D) Array!(void[])* druntimeInitTLSRanges() nothrow @nogc;
+
+    private struct OwnTls { size_t anchor; void[] block; }
+
+    // dl_iterate_phdr callback: find the object containing `anchor` (an
+    // address in this library) and take its PT_TLS block for this thread.
+    private extern (C) int findOwnTls(dl_phdr_info* info, size_t size, void* data) nothrow @nogc
+    {
+        auto q = cast(OwnTls*) data;
+        bool ours = false;
+        size_t tlsSize = 0;
+        foreach (i; 0 .. info.dlpi_phnum)
+        {
+            auto ph = &info.dlpi_phdr[i];
+            if (ph.p_type == PT_LOAD)
+            {
+                immutable size_t lo = info.dlpi_addr + ph.p_vaddr;
+                if (q.anchor >= lo && q.anchor < lo + ph.p_memsz)
+                    ours = true;
+            }
+            else if (ph.p_type == PT_TLS)
+                tlsSize = ph.p_memsz;
+        }
+        if (!ours)
+            return 0;
+        // dlpi_tls_data exists only if the callback's size argument covers it.
+        if (size >= dl_phdr_info.dlpi_tls_data.offsetof + (void*).sizeof
+            && info.dlpi_tls_data !is null)
+            q.block = info.dlpi_tls_data[0 .. tlsSize];
+        return 1;
+    }
+
+    // Call on the thread itself, after it is registered and before any
+    // collection can scan it. Static druntime means exactly one D object, so
+    // druntime's list has exactly one entry; anything else is left alone.
+    private void fixTlsRange() nothrow @nogc
+    {
+        OwnTls q;
+        q.anchor = cast(size_t) &findOwnTls;
+        dl_iterate_phdr(&findOwnTls, &q);
+        if (q.block.ptr is null)
+            return;
+        auto rngs = druntimeInitTLSRanges();
+        if (rngs.length == 1)
+            (*rngs)[0] = q.block;
+    }
+}
+
 // Serializes thread attachment against explicit GC collections
 // (volterra_gc_collect). Created in volterra_rt_init; stored in __gshared so
 // the static-data scan roots it forever.
@@ -2851,7 +2925,11 @@ private void ensureThreadAttached()
     scope(exit) GC.enable();
     Thread t;
     synchronized (g_attachLock)
+    {
         t = thread_attachThis();
+        version (FixDruntimeTlsRange)
+            fixTlsRange();      // still inside the no-collection window
+    }
     // Store the Thread object as the TLS value so the exit hook can detach
     // by instance. While registered, the object is kept alive by druntime's
     // global thread list (a scanned static root), so the pointer stays valid
@@ -2908,6 +2986,8 @@ int volterra_rt_init()
     if (!Runtime.initialize())
         return 0;
     initDetachHook();
+    version (FixDruntimeTlsRange)
+        fixTlsRange();          // the loading thread, before any collection
     return 1;
 }
 
