@@ -8,6 +8,7 @@ import std.format : format;
 
 import utility : subsetsOfSize;
 import toeplitz_history : ToeplitzHistory, ToeplitzHistoryRT;
+import buffers : HeapArray;
 
 // ---------------------------------------------------------------------------
 // Linear solver — runtime dim (used for d > max_d_compile)
@@ -1524,13 +1525,13 @@ bool solve_VIE_1_vec_impl(int coll_divs, int[] coll_choices, int d)(
     int mesh_divs  = (N - 1) / coll_divs^^2;
     out_mesh_divs  = mesh_divs;
 
-    double[dm][] solution_U;
+    HeapArray!(double[dm]) solution_U;
     solution_U.length = mesh_divs;
     double[dm] zeros_dm = 0.0;
     solution_U[] = zeros_dm;
 
     // Declared here so it's in scope for poly/evaluation code below.
-    double[d][] boundary_vals;
+    HeapArray!(double[d]) boundary_vals;
 
     if (!force_continuous)
     {
@@ -1729,17 +1730,17 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     int mesh_divs = (N - 1) / coll_divs^^2;
     out_mesh_divs = mesh_divs;
 
-    double[] solution_U_flat = new double[mesh_divs * dm];
+    auto solution_U_flat = HeapArray!double(mesh_divs * dm);
     solution_U_flat[] = 0;
 
-    double[] coef_orig = new double[dm * dm];
-    double[] coef_work = new double[dm * dm];
-    double[] rhs       = new double[dm];
-    int[]    ipiv      = new int[dm];
+    auto coef_orig = HeapArray!double(dm * dm);
+    auto coef_work = HeapArray!double(dm * dm);
+    auto rhs       = HeapArray!double(dm);
+    auto ipiv      = HeapArray!int(dm);
 
     if (!force_continuous)
     {
-        double[] BNL_buf = new double[dm * dm];
+        auto BNL_buf = HeapArray!double(dm * dm);
         BN_vec_rt!coll_info(kernel_values, d, coef_orig);
         foreach (i; 0 .. dm * dm)
             coef_orig[i] *= dt;
@@ -1778,11 +1779,11 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
             return false;
         else
         {
-        double[] boundary_flat = new double[(mesh_divs + 1) * d];
+        auto boundary_flat = HeapArray!double((mesh_divs + 1) * d);
         boundary_flat[] = 0;
         boundary_flat[0 .. d] = soln_init_values[0 .. d];
 
-        double[] bnd_buf = new double[dm * d];
+        auto bnd_buf = HeapArray!double(dm * d);
         BN_cont_vec_rt!coll_info(kernel_values, d, coef_orig, bnd_buf);
         foreach (i; 0 .. dm * dm)
             coef_orig[i] *= dt;
@@ -1791,7 +1792,7 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
 
         // Square folded lag blocks acting on U_ell alone; lag 1 also carries
         // the local boundary block in its j = m column.
-        double[] BNL_buf = new double[dm * dm];
+        auto BNL_buf = HeapArray!double(dm * dm);
         ToeplitzHistoryRT hist;
         hist.initialize(mesh_divs, dm, dm);
         hist.setLagFiller((int lag, ref ToeplitzHistoryRT h)
@@ -1806,7 +1807,7 @@ bool solve_VIE_1_vec_runtime_impl(int coll_divs, int[] coll_choices)(
                     blk[i * dm + s*m + (m - 1)] += bnd_buf[i * d + s];
         });
 
-        double[] y0_term = new double[dm];
+        auto y0_term = HeapArray!double(dm);
         y0_term[] = 0;
         foreach (n; 0 .. mesh_divs)
         {
@@ -1966,7 +1967,7 @@ bool solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
     int mesh_divs = (N - 1) / coll_divs^^2;
     out_mesh_divs = mesh_divs;
 
-    double[dm][] solution_U;
+    HeapArray!(double[dm]) solution_U;
     solution_U.length = mesh_divs;
     double[dm] zeros_dm = 0.0;
     solution_U[] = zeros_dm;
@@ -2061,15 +2062,15 @@ bool solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     int mesh_divs = (N - 1) / coll_divs^^2;
     out_mesh_divs = mesh_divs;
 
-    double[] solution_U_flat = new double[mesh_divs * dm];
+    auto solution_U_flat = HeapArray!double(mesh_divs * dm);
     solution_U_flat[] = 0;
 
-    double[] BN_buf    = new double[dm * dm];
-    double[] coef_orig = new double[dm * dm];
-    double[] coef_work = new double[dm * dm];
-    double[] BNL_buf   = new double[dm * dm];
-    double[] rhs       = new double[dm];
-    int[]    ipiv      = new int[dm];
+    auto BN_buf    = HeapArray!double(dm * dm);
+    auto coef_orig = HeapArray!double(dm * dm);
+    auto coef_work = HeapArray!double(dm * dm);
+    auto BNL_buf   = HeapArray!double(dm * dm);
+    auto rhs       = HeapArray!double(dm);
+    auto ipiv      = HeapArray!int(dm);
 
     BN_vec_rt!coll_info(kernel_values, d, BN_buf);
     foreach (col; 0 .. dm)
@@ -2181,12 +2182,12 @@ bool solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
     int mesh_divs = (N - 1) / coll_divs^^2;
     out_mesh_divs = mesh_divs;
 
-    double[dm][] solution_Y;
+    HeapArray!(double[dm]) solution_Y;
     solution_Y.length = mesh_divs;
     double[dm] zeros_dm = 0.0;
     solution_Y[] = zeros_dm;
 
-    double[d][] boundary_vals;
+    HeapArray!(double[d]) boundary_vals;
     boundary_vals.length = mesh_divs + 1;
     double[d] zeros_d = 0.0;
     boundary_vals[] = zeros_d;
@@ -2321,21 +2322,21 @@ bool solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
     int mesh_divs = (N - 1) / coll_divs^^2;
     out_mesh_divs = mesh_divs;
 
-    double[] solution_Y_flat = new double[mesh_divs * dm];
+    auto solution_Y_flat = HeapArray!double(mesh_divs * dm);
     solution_Y_flat[] = 0;
 
-    double[] boundary_flat = new double[(mesh_divs + 1) * d];
+    auto boundary_flat = HeapArray!double((mesh_divs + 1) * d);
     boundary_flat[] = 0;
     boundary_flat[0 .. d] = soln_init_values[0 .. d];
 
-    double[] CN_buf       = new double[dm * dm];
-    double[] AN_buf       = new double[dm * dm];
-    double[] coef_buf     = new double[dm * dm];
-    double[] kappa_n_buf  = new double[dm * d];
-    double[] kappa_nl_buf = new double[dm * d];
-    double[] CNL_buf      = new double[dm * dm];
-    double[] rhs          = new double[dm];
-    int[]    ipiv         = new int[dm];
+    auto CN_buf       = HeapArray!double(dm * dm);
+    auto AN_buf       = HeapArray!double(dm * dm);
+    auto coef_buf     = HeapArray!double(dm * dm);
+    auto kappa_n_buf  = HeapArray!double(dm * d);
+    auto kappa_nl_buf = HeapArray!double(dm * d);
+    auto CNL_buf      = HeapArray!double(dm * dm);
+    auto rhs          = HeapArray!double(dm);
+    auto ipiv         = HeapArray!int(dm);
 
     CN_vec_rt!coll_info(kernel_values, d, CN_buf);
 
@@ -2356,7 +2357,7 @@ bool solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
                 row[dm + s] = dt * kappa_nl_buf[ri * d + s];
         }
     });
-    double[] src_aug = new double[dm + d];
+    auto src_aug = HeapArray!double(dm + d);
 
     foreach (n; 0 .. mesh_divs)
     {
@@ -2476,7 +2477,7 @@ bool solve_VIE_2_impl(int coll_divs, int[] coll_choices)(
     auto mesh_divs = (kernel_values.length.to!int - 1) / coll_divs^^2;
     out_mesh_divs = mesh_divs;
 
-    double[num_c_params][] solution_U;
+    HeapArray!(double[num_c_params]) solution_U;
     solution_U.length = mesh_divs;
     double[num_c_params] zeros = 0.0;
     solution_U[] = zeros;
@@ -2562,12 +2563,12 @@ bool solve_VIDE_impl(int coll_divs, int[] coll_choices)(
     auto num_mesh_points = mesh_divs + 1;
     out_mesh_divs = mesh_divs;
 
-    double[num_c_params][] solution_Y;
+    HeapArray!(double[num_c_params]) solution_Y;
     solution_Y.length = mesh_divs;
     double[num_c_params] zeros = 0.0;
     solution_Y[] = zeros;
 
-    auto boundary_values = new double[num_mesh_points];
+    auto boundary_values = HeapArray!double(num_mesh_points);
     boundary_values[] = 0.0;
     boundary_values[0] = soln_init_value;
 
@@ -3381,9 +3382,9 @@ private int volterra_solve_vie1_blocks_impl(
     });
 
     // The diagonal block is the same on every step: factor it once.
-    double[] a_lu = new double[Dsz * Dsz];
-    double[] rhs  = new double[Dsz];
-    int[]    ipiv = new int[Dsz];
+    auto a_lu = HeapArray!double(Dsz * Dsz);
+    auto rhs  = HeapArray!double(Dsz);
+    auto ipiv = HeapArray!int(Dsz);
     foreach (i; 0 .. Db)
         foreach (j; 0 .. Db)
             a_lu[i + j * Db] = lag_s[cast(size_t) i * Dsz + j];
@@ -3430,11 +3431,11 @@ private int volterra_solve_vie1_cont_blocks_impl(
         blk[] = lag_s[cast(size_t) lag * Dbz * Dsz .. (cast(size_t) lag + 1) * Dbz * Dsz];
     });
 
-    double[] a_lu   = new double[Dbz * Dbz];   // value columns of the diagonal block, column-major
-    double[] bnd    = new double[Dbz * dz];    // boundary columns of the diagonal block, row-major
-    double[] rhs    = new double[Dbz];
-    double[] source = new double[Dsz];
-    int[]    ipiv   = new int[Dbz];
+    auto a_lu   = HeapArray!double(Dbz * Dbz);   // value columns of the diagonal block, column-major
+    auto bnd    = HeapArray!double(Dbz * dz);    // boundary columns of the diagonal block, row-major
+    auto rhs    = HeapArray!double(Dbz);
+    auto source = HeapArray!double(Dsz);
+    auto ipiv   = HeapArray!int(Dbz);
     foreach (i; 0 .. Db)
     {
         foreach (j; 0 .. Db)
@@ -3504,10 +3505,10 @@ private int volterra_solve_vide_blocks_impl(
         blk[] = lag_s[cast(size_t) lag * Dbz * Dsz .. (cast(size_t) lag + 1) * Dbz * Dsz];
     });
 
-    double[] a_col  = new double[Dbz * Dbz];
-    double[] rhs    = new double[Dbz];
-    double[] source = new double[Dsz];
-    int[]    ipiv   = new int[Dbz];
+    auto a_col  = HeapArray!double(Dbz * Dbz);
+    auto rhs    = HeapArray!double(Dbz);
+    auto source = HeapArray!double(Dsz);
+    auto ipiv   = HeapArray!int(Dbz);
 
     foreach (n; 0 .. M)
     {

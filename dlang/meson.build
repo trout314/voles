@@ -22,7 +22,7 @@ lib = shared_library(
   'volterra_dlang',
   ['source/volterra_solvers.d', 'source/utility.d',
    'source/volterra_function_solvers.d', 'source/toeplitz_history.d',
-   'source/volterra_debug_veh.d'],
+   'source/volterra_debug_veh.d', 'source/buffers.d'],
   include_directories: include_directories('source'),
   d_args: d_version_flags,
   link_args: ['-link-defaultlib-shared=false'] + lapack_link_args,
