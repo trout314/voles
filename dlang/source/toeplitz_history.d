@@ -39,6 +39,7 @@ module toeplitz_history;
 // ---------------------------------------------------------------------------
 
 import std.math : PI, cos, sin;
+import buffers : HeapArray;
 
 // In-place iterative radix-2 complex FFT on split re/im arrays.
 // n = re.length = im.length must be a power of two. No output scaling is
@@ -247,19 +248,24 @@ struct ToeplitzHistoryRT
     int Q;
     int tdim;
     int sdim;
-    double[] lagB;   // flat [lag][a][b], lag = 0 .. Q-1 (lag 0 unused).
-                     // The caller fills lags 1 .. Q-1, scaling folded in.
-    double[] Gacc;   // flat [n][a]: accumulated history, length Q * tdim
-    double[] srcs;   // flat [ell][b]: pushed source vectors
+    // All buffers live on the C heap (buffers.HeapArray), never the GC
+    // heap, and are freed when the history goes out of scope; it owns them,
+    // so it cannot be copied.
+    @disable this(this);
+
+    HeapArray!double lagB;   // flat [lag][a][b], lag = 0 .. Q-1 (lag 0 unused).
+                             // The caller fills lags 1 .. Q-1, scaling folded in.
+    HeapArray!double Gacc;   // flat [n][a]: accumulated history, length Q * tdim
+    HeapArray!double srcs;   // flat [ell][b]: pushed source vectors
     int nPushed;
 
     // scratch buffers, grown on demand and reused across merges; stwre/stwim
     // is fft_radix2's stage-twiddle table (see its comment for why it lives
     // here rather than in thread-local storage)
-    double[] xre, xim, kre, kim, accre, accim, zre, zim, stwre, stwim;
+    HeapArray!double xre, xim, kre, kim, accre, accim, zre, zim, stwre, stwim;
 
     // Per-level real-FFT twiddles cos/sin(2 pi k / 2S), k = 0 .. S.
-    private double[][] twCos, twSin;
+    private HeapArray!(HeapArray!double) twCos, twSin;   // empty = not built
 
     // Per-level cache of kernel-lag spectra. The kernel FFT in mergeFFT
     // depends only on (S, a, c): the lag segment 1 .. min(2S-1, Q-1) is the
@@ -271,9 +277,9 @@ struct ToeplitzHistoryRT
     // kcacheBudget lasts (small levels merge most often and store least);
     // levels over budget -- typically only the top one or two, which merge
     // once or twice -- fall back to the on-the-fly path.
-    private double[][] kcacheRe;   // per level li (S = FFT_CUTOFF << li):
-    private double[][] kcacheIm;   //   [(a*sdim + c)*(S+1) + t], null = uncached
-    private bool[] kcacheTried;
+    private HeapArray!(HeapArray!double) kcacheRe;   // per level li (S = FFT_CUTOFF << li):
+    private HeapArray!(HeapArray!double) kcacheIm;   //   [(a*sdim + c)*(S+1) + t], empty = uncached
+    private HeapArray!bool kcacheTried;
     private size_t kcacheBudget;   // doubles remaining for cache arrays
 
     // Lazy lag-table fill: when set (see setLagFiller), push() extends the
@@ -298,11 +304,11 @@ struct ToeplitzHistoryRT
         nPushed = 0;
         fillLag = null;
         lagsFilled = Q;   // eager mode: caller pre-fills lags 1 .. Q-1
-        kcacheRe = null;
-        kcacheIm = null;
-        kcacheTried = null;
-        twCos = null;
-        twSin = null;
+        kcacheRe.clear();
+        kcacheIm.clear();
+        kcacheTried.clear();
+        twCos.clear();
+        twSin.clear();
         kcacheBudget = 2 * lagB.length;   // cap cache (re+im) at 2x lag table
     }
 
@@ -565,19 +571,19 @@ struct ToeplitzHistoryRT
             twCos.length = li + 1;
             twSin.length = li + 1;
         }
-        if (twCos[li] is null)
+        if (twCos[li].length == 0)
         {
             immutable size_t nb = cast(size_t) S + 1;
-            auto cr = new double[nb];
-            auto sr = new double[nb];
+            auto cr = HeapArray!double(nb);
+            auto sr = HeapArray!double(nb);
             immutable double step = PI / cast(double) S;   // 2 pi / (2S)
             foreach (k; 0 .. nb)
             {
                 cr[k] = cos(step * cast(double) k);
                 sr[k] = sin(step * cast(double) k);
             }
-            twCos[li] = cr;
-            twSin[li] = sr;
+            twCos.put(li, cr);
+            twSin.put(li, sr);
         }
         twr = twCos[li];
         twi = twSin[li];
@@ -594,7 +600,7 @@ struct ToeplitzHistoryRT
             kcacheTried.length = li + 1;
         }
         if (kcacheTried[li])
-            return kcacheRe[li] !is null;
+            return kcacheRe[li].length != 0;
         kcacheTried[li] = true;
         immutable size_t nb = cast(size_t) S + 1;
         immutable size_t need = cast(size_t) tdim * sdim * nb;
@@ -603,8 +609,8 @@ struct ToeplitzHistoryRT
         kcacheBudget -= 2 * need;
         const(double)[] twr, twi;
         levelTwiddles(li, S, twr, twi);
-        auto re = new double[need];
-        auto im = new double[need];
+        auto re = HeapArray!double(need);
+        auto im = HeapArray!double(need);
         foreach (a; 0 .. tdim)
             foreach (c; 0 .. sdim)
             {
@@ -612,8 +618,8 @@ struct ToeplitzHistoryRT
                 kernelSpectrum(S, a, c, twr, twi, re[off .. off + nb],
                                im[off .. off + nb]);
             }
-        kcacheRe[li] = re;
-        kcacheIm[li] = im;
+        kcacheRe.put(li, re);
+        kcacheIm.put(li, im);
         return true;
     }
 }
