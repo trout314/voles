@@ -153,6 +153,9 @@ bool function_solve_vie2_vec_impl(int p, int d)(
 
 export extern(C):
 
+// Nothing here may allocate from the GC; see volterra_rt_init.
+@nogc:
+
 int function_solve_vie2(
     double* W, double* g, int M, int p,
     double* out_y)

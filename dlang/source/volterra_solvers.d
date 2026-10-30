@@ -29,7 +29,7 @@ import buffers : HeapArray;
 version (Have_lapack)
 {
     extern(C) void dgesv_(int* n, int* nrhs, double* a, int* lda,
-                          int* ipiv, double* b, int* ldb, int* info);
+                          int* ipiv, double* b, int* ldb, int* info) nothrow @nogc;
 }
 
 // Solve A*x = b in-place (b overwritten with solution).
@@ -40,7 +40,7 @@ version (Have_lapack)
 //
 // Dispatches to LAPACK dgesv_ when built with -d-version=Have_lapack,
 // otherwise to the pure-D lin_solve_rt (Gaussian elimination with partial pivoting).
-bool lin_solve_lapack(double[] a_colmaj, double[] b, int dm, int[] ipiv)
+bool lin_solve_lapack(double[] a_colmaj, double[] b, int dm, int[] ipiv) @nogc
 {
     version (Have_lapack)
     {
@@ -77,7 +77,7 @@ bool lin_solve_lapack(double[] a_colmaj, double[] b, int dm, int[] ipiv)
 // Pure-D fallback: in-place LU with partial pivoting on a column-major buffer.
 // Same signature/semantics as the LAPACK path so callers can be agnostic.
 // Returns false if any pivot magnitude falls below dm * eps * max_pivot_seen.
-bool lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv)
+bool lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv) @nogc
 {
     enum double eps = double.epsilon;
     double max_pivot_seen = 0.0;
@@ -148,7 +148,7 @@ bool lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv)
 // records the row swaps in ipiv, applying exactly lin_solve_rt's singularity
 // test; lu_solve_rt then solves in place for any number of right-hand sides
 // at O(dm^2) each instead of O(dm^3).
-bool lu_factor_rt(double[] a_colmaj, int dm, int[] ipiv)
+bool lu_factor_rt(double[] a_colmaj, int dm, int[] ipiv) @nogc
 {
     enum double eps = double.epsilon;
     double max_pivot_seen = 0.0;
@@ -192,7 +192,7 @@ bool lu_factor_rt(double[] a_colmaj, int dm, int[] ipiv)
     return true;
 }
 
-void lu_solve_rt(const double[] lu_colmaj, double[] b, int dm, const int[] ipiv)
+void lu_solve_rt(const double[] lu_colmaj, double[] b, int dm, const int[] ipiv) @nogc
 {
     // Whole rows (multipliers included) were swapped during factorisation,
     // so the permutation is applied to b up front.
@@ -2474,7 +2474,7 @@ bool solve_VIE_2_impl(int coll_divs, int[] coll_choices)(
     double dt = time_step * coll_divs^^2;
     alias coll_info = AliasSeq!(coll_divs, coll_choices);
 
-    auto mesh_divs = (kernel_values.length.to!int - 1) / coll_divs^^2;
+    auto mesh_divs = (cast(int) kernel_values.length - 1) / coll_divs^^2;
     out_mesh_divs = mesh_divs;
 
     HeapArray!(double[num_c_params]) solution_U;
@@ -2559,7 +2559,7 @@ bool solve_VIDE_impl(int coll_divs, int[] coll_choices)(
     double dt = time_step * coll_divs^^2;
     alias coll_info = AliasSeq!(coll_divs, coll_choices);
 
-    auto mesh_divs = (kernel_values.length.to!int - 1) / coll_divs^^2;
+    auto mesh_divs = (cast(int) kernel_values.length - 1) / coll_divs^^2;
     auto num_mesh_points = mesh_divs + 1;
     out_mesh_divs = mesh_divs;
 
@@ -2689,7 +2689,7 @@ int find_coll_info_id(int max_cd, int max_cp)(int coll_divs, int[] coll_choices)
 // integer comparison prod (coll_divs - k_i) <= prod k_i, taken over all nodes
 // for the discontinuous method and over all but the last for the continuous
 // one, which additionally requires c_m = 1. ``choices`` must be sorted.
-bool is_nonconvergent_vie1_setting(int coll_divs, int[] choices, bool force_continuous)
+bool is_nonconvergent_vie1_setting(int coll_divs, int[] choices, bool force_continuous) @nogc
 {
     if (choices.length == 0) return true;
     if (force_continuous && choices[$ - 1] != coll_divs) return true;
@@ -2963,7 +2963,7 @@ private void ensureThreadAttached()
 // True when any flat buffer the solvers index would exceed int.max elements:
 // the (n, d, d) kernel, the (mesh_divs, m+1, d) poly output, or the largest
 // square block matrix (dm + d covers VIDE's augmented source dimension).
-private bool sizes_overflow_int(int n, int d, int mesh_divs, int num_choices)
+private bool sizes_overflow_int(int n, int d, int mesh_divs, int num_choices) @nogc
 {
     immutable long dml = cast(long) d * num_choices + d;
     return cast(long) n * d * d > int.max
@@ -2986,6 +2986,13 @@ int volterra_rt_init()
         precommitStack();       // the loading thread stays attached for good
     if (!Runtime.initialize())
         return 0;
+    // The solvers never allocate from the GC (their entry points are @nogc),
+    // which is what lets Python threads call them without registering with
+    // druntime. Disabling automatic collections also covers druntime's own
+    // failure paths (e.g. an assert's error object), which could otherwise
+    // start a collection while unregistered threads run D code.
+    import core.memory : GC;
+    GC.disable();
     initDetachHook();
     version (FixDruntimeTlsRange)
         fixTlsRange();          // the loading thread, before any collection
@@ -3040,14 +3047,13 @@ int volterra_debug_thread_stats(int* out_total, uint* dead_ids, int max_ids)
 // kernel_values: (n, d, d) C-contiguous flat array of length n*d*d
 // g_values:      (n, d)   C-contiguous flat array of length n*d
 // out_soln:      (n, d)   caller-allocated flat array of length n*d
-int volterra_solve_vie1_vec(
+@nogc int volterra_solve_vie1_vec(
     double* g_values, double* kernel_values, int n, int d,
     double* soln_init_values, double time_step,
     int coll_divs, int* coll_choices, int num_choices,
     int return_polys, int force_continuous,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    ensureThreadAttached();
     if (sizes_overflow_int(n, d, (n - 1) / (coll_divs * coll_divs), num_choices))
         return 3;
     double[] gv      = g_values[0 .. n * d];
@@ -3098,7 +3104,7 @@ int volterra_solve_vie1_vec(
 
 // volterra_solve_vie1: scalar wrapper — delegates to volterra_solve_vie1_vec with d=1.
 // kernel_values and g_values are (n,) arrays; d=1 layout is identical.
-int volterra_solve_vie1(
+@nogc int volterra_solve_vie1(
     double* g_values, double* kernel_values, int n,
     double soln_init_value, double time_step,
     int coll_divs, int* coll_choices, int num_choices,
@@ -3113,13 +3119,12 @@ int volterra_solve_vie1(
         out_soln, out_poly_coefs, out_mesh_divs);
 }
 
-int volterra_solve_vie2(
+@nogc int volterra_solve_vie2(
     double* g_values, double* kernel_values, int n,
     double time_step, int coll_divs,
     int* coll_choices, int num_choices, int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    ensureThreadAttached();
     if (sizes_overflow_int(n, 1, (n - 1) / (coll_divs * coll_divs), num_choices))
         return 3;
     double[] gv = g_values[0..n];
@@ -3162,13 +3167,12 @@ int volterra_solve_vie2(
     return 0;
 }
 
-int volterra_solve_vide(
+@nogc int volterra_solve_vide(
     double* g_values, double* kernel_values, double* a_values, int n,
     double soln_init_value, double time_step,
     int coll_divs, int* coll_choices, int num_choices, int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    ensureThreadAttached();
     if (sizes_overflow_int(n, 1, (n - 1) / (coll_divs * coll_divs), num_choices))
         return 3;
     double[] gv = g_values[0..n];
@@ -3217,14 +3221,13 @@ int volterra_solve_vide(
 // g_values:      (n, d)   C-contiguous flat, length n*d
 // out_soln:      (n, d)   caller-allocated flat, length n*d
 // out_poly_coefs: caller-allocated flat, length mesh_divs*(num_choices+1)*d (if return_polys)
-int volterra_solve_vie2_vec(
+@nogc int volterra_solve_vie2_vec(
     double* g_values, double* kernel_values, int n, int d,
     double time_step,
     int coll_divs, int* coll_choices, int num_choices,
     int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    ensureThreadAttached();
     if (sizes_overflow_int(n, d, (n - 1) / (coll_divs * coll_divs), num_choices))
         return 3;
     double[] gv      = g_values[0 .. n * d];
@@ -3272,7 +3275,7 @@ int volterra_solve_vie2_vec(
 // soln_init_values:  (d,)     flat, length d
 // out_soln:          (n, d)   caller-allocated flat, length n*d
 // out_poly_coefs:    caller-allocated flat, length mesh_divs*(num_choices+1)*d (if return_polys)
-int volterra_solve_vide_vec(
+@nogc int volterra_solve_vide_vec(
     double* g_values, double* kernel_values, double* a_values,
     int n, int d,
     double* soln_init_values,
@@ -3281,7 +3284,6 @@ int volterra_solve_vide_vec(
     int return_polys,
     double* out_soln, double* out_poly_coefs, int* out_mesh_divs)
 {
-    ensureThreadAttached();
     if (sizes_overflow_int(n, d, (n - 1) / (coll_divs * coll_divs), num_choices))
         return 3;
     double[] gv   = g_values[0 .. n * d];
@@ -3328,24 +3330,24 @@ int volterra_solve_vide_vec(
 // in which case lin_solve_lapack dispatches to dgesv_. Returns 0 if built
 // without LAPACK, in which case lin_solve_lapack dispatches to the pure-D
 // lin_solve_rt fallback. Used by tests to assert which LU path is active.
-int volterra_have_lapack()
+@nogc int volterra_have_lapack()
 {
     version (Have_lapack) return 1;
     else                  return 0;
 }
 
-int volterra_max_coll_params()
+@nogc int volterra_max_coll_params()
 {
     return max_coll_params;
 }
 
-int volterra_num_supported_settings()
+@nogc int volterra_num_supported_settings()
 {
     static immutable settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
     return cast(int) settings.length;
 }
 
-void volterra_get_supported_settings(int* out_data)
+@nogc void volterra_get_supported_settings(int* out_data)
 {
     // Each row is (max_coll_params + 1) wide: [coll_divs, c1, c2, ..., -1, ...]
     static immutable settings = supported_coll_settings_internal!(max_coll_divs, max_coll_params)();
@@ -3363,7 +3365,7 @@ void volterra_get_supported_settings(int* out_data)
 // Bodies of the block drivers below; each is entered only after its
 // extern(C) shim has attached the calling thread.
 extern(D) pragma(inline, false)
-private int volterra_solve_vie1_blocks_impl(
+private @nogc int volterra_solve_vie1_blocks_impl(
     double* lagB, double* g, int M, int Db, double* out_U)
 {
     if (M < 1 || Db < 1) return 1;
@@ -3405,7 +3407,7 @@ private int volterra_solve_vie1_blocks_impl(
 }
 
 extern(D) pragma(inline, false)
-private int volterra_solve_vie1_cont_blocks_impl(
+private @nogc int volterra_solve_vie1_cont_blocks_impl(
     double* lagB, double* g, double* adv_U, double adv_0, double* y0,
     int M, int m, int d, double* out_U, double* out_y)
 {
@@ -3476,7 +3478,7 @@ private int volterra_solve_vie1_cont_blocks_impl(
 }
 
 extern(D) pragma(inline, false)
-private int volterra_solve_vide_blocks_impl(
+private @nogc int volterra_solve_vide_blocks_impl(
     double* lagB, double* g, double* a_coll, double* betaC, double* beta1, double* y0,
     int M, int m, int d, double* out_Y, double* out_y)
 {
@@ -3582,18 +3584,16 @@ private int volterra_solve_vide_blocks_impl(
 // would free the live closure -- see ensureThreadAttached.
 // ---------------------------------------------------------------------------
 
-int volterra_solve_vie1_blocks(
+@nogc int volterra_solve_vie1_blocks(
     double* lagB, double* g, int M, int Db, double* out_U)
 {
-    ensureThreadAttached();   // before the body allocates its closure (see above)
     return volterra_solve_vie1_blocks_impl(lagB, g, M, Db, out_U);
 }
 
-int volterra_solve_vie1_cont_blocks(
+@nogc int volterra_solve_vie1_cont_blocks(
     double* lagB, double* g, double* adv_U, double adv_0, double* y0,
     int M, int m, int d, double* out_U, double* out_y)
 {
-    ensureThreadAttached();   // before the body allocates its closure (see above)
     return volterra_solve_vie1_cont_blocks_impl(lagB, g, adv_U, adv_0, y0, M, m, d, out_U, out_y);
 }
 
@@ -3605,10 +3605,9 @@ int volterra_solve_vie1_cont_blocks(
 //     y_{n+1} = y_n + sum_k beta1[k] Y_{n,k}
 // where a_coll holds a(t_{n,i}) as (M, m, d, d), betaC[i][k] = H beta_k(c_i),
 // beta1[k] = H beta_k(1), and P is lag block 0 (history is ADDED here).
-int volterra_solve_vide_blocks(
+@nogc int volterra_solve_vide_blocks(
     double* lagB, double* g, double* a_coll, double* betaC, double* beta1, double* y0,
     int M, int m, int d, double* out_Y, double* out_y)
 {
-    ensureThreadAttached();   // before the body allocates its closure (see above)
     return volterra_solve_vide_blocks_impl(lagB, g, a_coll, betaC, beta1, y0, M, m, d, out_Y, out_y);
 }

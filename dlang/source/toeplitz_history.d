@@ -41,6 +41,9 @@ module toeplitz_history;
 import std.math : PI, cos, sin;
 import buffers : HeapArray;
 
+// Everything here runs inside the solvers' @nogc entry points.
+@nogc:
+
 // In-place iterative radix-2 complex FFT on split re/im arrays.
 // n = re.length = im.length must be a power of two. No output scaling is
 // applied for the inverse transform (callers scale by 1/n).
@@ -240,6 +243,7 @@ void irfft_packed(const(double)[] Xr, const(double)[] Xi,
 
 struct ToeplitzHistoryRT
 {
+@nogc:
     // Merges smaller than this are done by direct block mat-vecs; at and
     // above it, by FFT convolution. Direct pair work below the cutoff totals
     // O(Q * FFT_CUTOFF) and is negligible.
@@ -322,7 +326,7 @@ struct ToeplitzHistoryRT
     // never outlives the frame that fills it: every caller declares the
     // history as a local of the same function as the lambda. (Under
     // -preview=dip1000 this store becomes a compile error, not a silent bug.)
-    void setLagFiller(scope void delegate(int lag, ref ToeplitzHistoryRT self) filler)
+    void setLagFiller(scope void delegate(int lag, ref ToeplitzHistoryRT self) @nogc filler)
     {
         fillLag = filler;
         lagsFilled = 1;
@@ -635,6 +639,7 @@ struct ToeplitzHistoryRT
 // value-typed push/G matching the stack-array style of the ct code.
 struct ToeplitzHistory(int tdim_, int sdim_)
 {
+@nogc:
     ToeplitzHistoryRT core;
     alias core this;
 
