@@ -54,6 +54,7 @@ Test tolerance is `1e-3`. No linter/formatter is configured.
 - **`_dlang.py`** — ctypes wrapper loading the platform-specific shared library. Defines C function signatures and provides `solve_vie{1,2}_d()`, `solve_vie{1,2}_vec_d()`, `solve_vide_d()`, `solve_vide_vec_d()`. Also exposes `supported_coll_settings_d()` to query compiled settings.
 - **`_numba_solvers.py`** — Numba JIT fallback for scalar equations when the requested collocation setting isn't compiled into the D extension. Uses `@ncjit` decorator.
 - **`dlang/source/volterra_solvers.d`** — Core computational engine. Compile-time template specialization for collocation settings, LU factorization, polynomial evaluation/integration, separate paths for scalar/vector/matrix.
+- **No GC in the D extension.** Every exported entry point is `@nogc` (the compiler enforces it); scratch memory uses `buffers.HeapArray!T` (`dlang/source/buffers.d`: malloc-backed, non-copyable, `T.init`-filled like `new T[n]`, converts to `T[]`), and `volterra_rt_init` disables automatic collections. This is what lets Python threads call the solvers without registering with druntime, whose stop-the-world collector mishandles threads it doesn't own (a Windows guard-page hang and a Linux TLS-range segfault, both 2026-10). Don't reintroduce `new`, `.length =` on dynamic arrays, `~`, or heap closures in solver code; `ldc2 -vgc -o- -I. dlang/source/*.d` should list only compile-time array literals.
 
 ### Dispatch flow
 1. `solvers.py` validates inputs and determines scalar vs vector vs matrix

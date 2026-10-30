@@ -2704,250 +2704,6 @@ bool is_nonconvergent_vie1_setting(int coll_divs, int[] choices, bool force_cont
 }
 
 // ---------------------------------------------------------------------------
-// Foreign-thread GC registration
-//
-// The solvers below allocate from the D GC, and the Python layer calls them
-// from ThreadPoolExecutor worker threads (matrix columns run in parallel).
-// druntime's stop-the-world collector only suspends and stack-scans threads
-// registered with the runtime, so every foreign thread must be attached
-// before executing D code: an unattached thread's stack is never scanned for
-// roots (its live locals look dead to the GC), and it keeps mutating the
-// heap through a sibling thread's mark phase.
-//
-// Attachment is once-per-thread and persistent: every entry point calls
-// ensureThreadAttached(), and the thread is detached only when it dies, via
-// a TLS destructor registered the first time it attaches. Persistent
-// attachment matters twice over: (a) a thread left registered at death would
-// be a dangling entry the GC later tries to suspend, so detach-at-death is
-// required; and (b) a per-call attach/detach guard is not just wasteful but
-// unsafe -- empirically, high-frequency attach -> collect -> detach cycling
-// by a collecting thread segfaults druntime (macOS, LDC), while a
-// persistently attached collector survives millions of collections
-// concurrent with solves. See tests/test_thread_safety.py.
-// ---------------------------------------------------------------------------
-
-version (Windows)
-{
-    private extern (Windows) nothrow @nogc
-    {
-        alias FlsCallback = void function(void*);
-        uint FlsAlloc(FlsCallback);
-        int FlsSetValue(uint, void*);
-        void GetCurrentThreadStackLimits(size_t* low, size_t* high);   // Win8+
-    }
-    private enum uint FLS_OUT_OF_INDEXES = 0xFFFF_FFFF;
-    private __gshared uint g_detachFlsIndex = FLS_OUT_OF_INDEXES;
-
-    // Commit the calling thread's stack down to near the bottom of its
-    // reservation before it is registered with the collector.
-    //
-    // A Windows stack grows through a guard page that only its own thread
-    // may touch: the kernel commits the next page silently for the owner,
-    // but raises STATUS_GUARD_PAGE_VIOLATION for any other thread. A thread
-    // can be suspended with RSP already moved into its guard page (a
-    // prologue's `sub rsp` executed, the page not yet touched), and druntime
-    // then scans [RSP, StackBase) from the collecting thread -- straight
-    // into the guard page. ctypes' SEH handler unwinds that fault out of the
-    // collection with every other thread still suspended, one of them
-    // typically holding the GIL, and the process wedges. Young threads,
-    // with only a few pages committed, hit it most (the matrix fan-out's
-    // fresh thread pools; tests/test_thread_safety.py).
-    //
-    // Touching the pages in order from the current SP downward makes this
-    // thread grow its own stack, so afterwards RSP can only reach a guard
-    // page at a genuine stack overflow. Capped at 8 MB below SP (an embedder
-    // with a huge main-thread stack keeps the rest uncommitted), and stopping
-    // 64 KB above the reservation bottom, clear of the kernel's overflow
-    // guarantee. Commit is never released, so once per thread suffices.
-    private void precommitStack() nothrow @nogc
-    {
-        import core.volatile : volatileLoad;
-        enum size_t page = 4096, margin = 64 * 1024, cap = 8 * 1024 * 1024;
-        size_t low = 0, high = 0;
-        GetCurrentThreadStackLimits(&low, &high);
-        ubyte here = 0;
-        size_t p = cast(size_t) &here & ~(page - 1);
-        immutable size_t stop = p - low > cap + margin ? p - cap : low + margin;
-        for (; p >= stop; p -= page)
-            volatileLoad(cast(ubyte*) p);
-    }
-
-    // nothrow @nogc: required to match FlsCallback (the alias inherits those
-    // attributes from its extern(Windows) declaration block), and valid --
-    // thread_detachInstance is itself nothrow @nogc.
-    private extern (Windows) void detachThisThread(void* threadObj) nothrow @nogc
-    {
-        // Detach by stored instance: druntime's own TLS may already be torn
-        // down when this destructor runs (destructor ordering across TLS
-        // implementations is unspecified), so Thread.getThis() is unusable
-        // here. thread_detachInstance tolerates already-removed threads.
-        import core.thread.threadbase : ThreadBase, thread_detachInstance;
-        if (threadObj !is null)
-            thread_detachInstance(cast(ThreadBase) threadObj);
-    }
-}
-else
-{
-    private import core.sys.posix.pthread :
-        pthread_key_t, pthread_key_create, pthread_setspecific;
-    private __gshared pthread_key_t g_detachKey;
-    private __gshared bool g_detachKeyCreated = false;
-
-    private extern (C) void detachThisThread(void* threadObj) nothrow @nogc
-    {
-        // See the Windows variant: detach by stored instance, because
-        // druntime's TLS (and so Thread.getThis) may already be gone when
-        // pthread key destructors run. nothrow @nogc for symmetry with the
-        // Windows hook (and thread_detachInstance is nothrow @nogc anyway).
-        import core.thread.threadbase : ThreadBase, thread_detachInstance;
-        if (threadObj !is null)
-            thread_detachInstance(cast(ThreadBase) threadObj);
-    }
-}
-
-// Linux x86_64: correct the TLS range druntime scans for each thread.
-//
-// With druntime linked statically (as here: -link-defaultlib-shared=false),
-// LDC's rt.sections_elf_shared computes a thread's TLS range as
-// [fs:0 - memsz, fs:0), with memsz this library's PT_TLS size. That is the
-// layout of an *executable's* TLS. For a library loaded by dlopen the range
-// is unrelated memory: the real TLS is never scanned, and for the loading
-// thread -- whose thread control block sits a few KB into ld.so's startup
-// TLS allocation -- the range can start in the unmapped page below it, so
-// the first collection segfaults in the TLS scan. Whether that page is
-// mapped depends on the process's address layout (~2% of CI processes; see
-// benchmarks/linux_segv_debug.py). Each thread's own TLS block is the
-// dlpi_tls_data that dl_iterate_phdr reports for this library, so after
-// registering a thread, overwrite druntime's entry with it.
-version (linux) version (X86_64) version = FixDruntimeTlsRange;
-
-version (FixDruntimeTlsRange)
-{
-    import core.internal.container.array : Array;
-    import core.sys.elf : PT_LOAD, PT_TLS;
-    import core.sys.linux.link : dl_iterate_phdr, dl_phdr_info;
-
-    // rt.sections_elf_shared.initTLSRanges(): public in druntime, but `rt` is
-    // not on the import path, so it is bound by its mangled name. Returns the
-    // calling thread's TLS range list, the one the collector scans for it.
-    pragma(mangle, "_D2rt19sections_elf_shared13initTLSRangesFNbNiZPS4core8internal9container5array__T5ArrayTAvZQk")
-    private extern (D) Array!(void[])* druntimeInitTLSRanges() nothrow @nogc;
-
-    private struct OwnTls { size_t anchor; void[] block; }
-
-    // dl_iterate_phdr callback: find the object containing `anchor` (an
-    // address in this library) and take its PT_TLS block for this thread.
-    private extern (C) int findOwnTls(dl_phdr_info* info, size_t size, void* data) nothrow @nogc
-    {
-        auto q = cast(OwnTls*) data;
-        bool ours = false;
-        size_t tlsSize = 0;
-        foreach (i; 0 .. info.dlpi_phnum)
-        {
-            auto ph = &info.dlpi_phdr[i];
-            if (ph.p_type == PT_LOAD)
-            {
-                immutable size_t lo = info.dlpi_addr + ph.p_vaddr;
-                if (q.anchor >= lo && q.anchor < lo + ph.p_memsz)
-                    ours = true;
-            }
-            else if (ph.p_type == PT_TLS)
-                tlsSize = ph.p_memsz;
-        }
-        if (!ours)
-            return 0;
-        // dlpi_tls_data exists only if the callback's size argument covers it.
-        if (size >= dl_phdr_info.dlpi_tls_data.offsetof + (void*).sizeof
-            && info.dlpi_tls_data !is null)
-            q.block = info.dlpi_tls_data[0 .. tlsSize];
-        return 1;
-    }
-
-    // Call on the thread itself, after it is registered and before any
-    // collection can scan it. Static druntime means exactly one D object, so
-    // druntime's list has exactly one entry; anything else is left alone.
-    private void fixTlsRange() nothrow @nogc
-    {
-        OwnTls q;
-        q.anchor = cast(size_t) &findOwnTls;
-        dl_iterate_phdr(&findOwnTls, &q);
-        if (q.block.ptr is null)
-            return;
-        auto rngs = druntimeInitTLSRanges();
-        if (rngs.length == 1)
-            (*rngs)[0] = q.block;
-    }
-}
-
-// Serializes thread attachment against explicit GC collections
-// (volterra_gc_collect). Created in volterra_rt_init; stored in __gshared so
-// the static-data scan roots it forever.
-private __gshared Object g_attachLock;
-
-// Create the attach lock and the thread-exit detach hook. Called once,
-// single-threaded, from volterra_rt_init before any solver call.
-private void initDetachHook()
-{
-    if (g_attachLock is null)
-        g_attachLock = new Object;
-    version (Windows)
-    {
-        if (g_detachFlsIndex == FLS_OUT_OF_INDEXES)
-            g_detachFlsIndex = FlsAlloc(&detachThisThread);
-    }
-    else
-    {
-        if (!g_detachKeyCreated)
-            g_detachKeyCreated =
-                pthread_key_create(&g_detachKey, &detachThisThread) == 0;
-    }
-}
-
-// Attach the calling thread to the D runtime if it is not already attached,
-// and arm the detach-at-thread-exit hook for it. No-op for attached threads
-// (including the loading thread, attached by rt_init). The TLS value only
-// needs to be non-null so the destructor fires at thread exit.
-private void ensureThreadAttached()
-{
-    import core.thread : Thread, thread_attachThis;
-    import core.memory : GC;
-    if (Thread.getThis() !is null)
-        return;
-    version (Windows)
-        precommitStack();       // before registering (see precommitStack)
-    // thread_attachThis allocates the Thread object BEFORE registering the
-    // thread; until registration completes this thread's stack is invisible
-    // to the collector, so a concurrent collection frees the half-attached
-    // Thread object (empirically reproducible; see tests/test_thread_safety).
-    // Close the window: GC.disable blocks allocation-triggered collections
-    // for the duration, and the attach lock excludes volterra_gc_collect's
-    // explicit ones.
-    GC.disable();
-    scope(exit) GC.enable();
-    Thread t;
-    synchronized (g_attachLock)
-    {
-        t = thread_attachThis();
-        version (FixDruntimeTlsRange)
-            fixTlsRange();      // still inside the no-collection window
-    }
-    // Store the Thread object as the TLS value so the exit hook can detach
-    // by instance. While registered, the object is kept alive by druntime's
-    // global thread list (a scanned static root), so the pointer stays valid
-    // until the destructor uses it.
-    version (Windows)
-    {
-        if (g_detachFlsIndex != FLS_OUT_OF_INDEXES)
-            FlsSetValue(g_detachFlsIndex, cast(void*) t);
-    }
-    else
-    {
-        if (g_detachKeyCreated)
-            pthread_setspecific(g_detachKey, cast(void*) t);
-    }
-}
-
-// ---------------------------------------------------------------------------
 // extern(C) entry points
 //
 // Return codes:
@@ -2976,71 +2732,24 @@ export extern(C):
 // Explicit druntime initialization, called once by the Python wrapper right
 // after loading the library. Runtime.initialize is refcounted, so this is a
 // no-op if LDC's DSO constructor already initialized the runtime at load; it
-// removes the platform dependence and permanently attaches the loading
-// (Python main) thread. Also creates the detach-at-thread-exit hook used by
-// ensureThreadAttached. Returns 1 on success.
+// removes the platform dependence. Returns 1 on success.
+//
+// The solvers never allocate from the GC: every entry point below is @nogc,
+// so the compiler rejects any GC use on a solver path. That is what lets
+// Python threads (the matrix fan-out's pool, or a user's own threads) call
+// them without registering with druntime, whose stop-the-world collector
+// cannot safely suspend and scan threads it doesn't own on every platform.
+// Disabling automatic collections also covers druntime's own failure paths
+// (e.g. an assert's error object), which could otherwise start a collection
+// while those threads run D code.
 int volterra_rt_init()
 {
+    import core.memory : GC;
     import core.runtime : Runtime;
-    version (Windows)
-        precommitStack();       // the loading thread stays attached for good
     if (!Runtime.initialize())
         return 0;
-    // The solvers never allocate from the GC (their entry points are @nogc),
-    // which is what lets Python threads call them without registering with
-    // druntime. Disabling automatic collections also covers druntime's own
-    // failure paths (e.g. an assert's error object), which could otherwise
-    // start a collection while unregistered threads run D code.
-    import core.memory : GC;
     GC.disable();
-    initDetachHook();
-    version (FixDruntimeTlsRange)
-        fixTlsRange();          // the loading thread, before any collection
     return 1;
-}
-
-// Force a GC collection from the calling thread (attaching it persistently
-// if needed). Exposed for the thread-safety stress test: hammering this from
-// one Python thread while others run matrix solves exercises the
-// suspend/scan machinery that a collection triggered mid-solve would hit.
-void volterra_gc_collect()
-{
-    import core.memory : GC;
-    ensureThreadAttached();
-    // The attach lock excludes the explicit collection from the window in
-    // which another thread is mid-attach (see ensureThreadAttached).
-    synchronized (g_attachLock)
-        GC.collect();
-}
-
-// Diagnostic for the Windows forced-GC hang (.github/workflows/
-// windows-gc-debug.yml): walks druntime's registered-thread list and reports
-// threads that are registered but no longer running -- a dead thread left
-// registered would have its stale stack range scanned by the next collection.
-// Writes the registered-thread count to *out_total and up to max_ids OS thread
-// ids of dead entries to dead_ids; returns the number of dead entries.
-int volterra_debug_thread_stats(int* out_total, uint* dead_ids, int max_ids)
-{
-    import core.memory : GC;
-    import core.thread.threadbase : ThreadBase;
-    ensureThreadAttached();
-    // ThreadBase.opApply iterates a malloc'd snapshot the GC does not scan;
-    // keep a collection from freeing a just-removed Thread mid-walk.
-    GC.disable();
-    scope(exit) GC.enable();
-    int total = 0, dead = 0;
-    foreach (t; ThreadBase)
-    {
-        ++total;
-        if (!t.isRunning)
-        {
-            if (dead < max_ids)
-                dead_ids[dead] = cast(uint) t.id;
-            ++dead;
-        }
-    }
-    *out_total = total;
-    return dead;
 }
 
 // volterra_solve_vie1_vec: primary VIE-1 entry point, handles all d.
@@ -3362,10 +3071,24 @@ int volterra_debug_thread_stats(int* out_total, uint* dead_ids, int max_ids)
     }
 }
 
-// Bodies of the block drivers below; each is entered only after its
-// extern(C) shim has attached the calling thread.
-extern(D) pragma(inline, false)
-private @nogc int volterra_solve_vie1_blocks_impl(
+// ---------------------------------------------------------------------------
+// Block drivers for precomputed lag blocks (product-integration quadrature;
+// the blocks are built in src/voles/_product.py).  Runtime block dimension.
+//
+//   lagB : flat (M, Db, Ds) row-major.  Lag 0 holds the diagonal block of the
+//          current interval, lag L >= 1 the block that multiplies the source
+//          vector of interval n - L.  All scaling is folded in.
+//   Per step n:   A U_n = g_n - sum_{L=1..n} lagB[L] s_{n-L}
+//   where s_l is the source vector of interval l: U_l for the discontinuous
+//   method (Ds = Db) and [U_l; y_l] for the continuous one (Ds = Db + d, the
+//   boundary value y_l carried by y_{l+1} = adv_0 y_l + sum_k adv_U[k] U_{l,k}).
+//
+// History accumulation goes through ToeplitzHistoryRT, so the cost is
+// O(M log^2 M) block operations.  Return codes as for volterra_solve_vie1_vec:
+// 0 ok, 1 invalid sizes, 2 singular diagonal block, 3 buffer overflow.
+// ---------------------------------------------------------------------------
+
+@nogc int volterra_solve_vie1_blocks(
     double* lagB, double* g, int M, int Db, double* out_U)
 {
     if (M < 1 || Db < 1) return 1;
@@ -3406,8 +3129,7 @@ private @nogc int volterra_solve_vie1_blocks_impl(
     return 0;
 }
 
-extern(D) pragma(inline, false)
-private @nogc int volterra_solve_vie1_cont_blocks_impl(
+@nogc int volterra_solve_vie1_cont_blocks(
     double* lagB, double* g, double* adv_U, double adv_0, double* y0,
     int M, int m, int d, double* out_U, double* out_y)
 {
@@ -3477,8 +3199,15 @@ private @nogc int volterra_solve_vie1_cont_blocks_impl(
     return 0;
 }
 
-extern(D) pragma(inline, false)
-private @nogc int volterra_solve_vide_blocks_impl(
+// VIDE block driver: y' = a y + g + int K y with the solution represented on
+// interval n as y_n + H sum_k Y_{n,k} beta_k(v) (beta_k = int_0^v ell_k), so
+// the lag blocks are rectangular (Db x (Db + d)) with the boundary column
+// last, and the source vector of interval l is [Y_l; y_l].  Per step
+//     (I - betaC (x) a_n - P_val) Y_n = g_n + history + (a_n + P_bnd) y_n
+//     y_{n+1} = y_n + sum_k beta1[k] Y_{n,k}
+// where a_coll holds a(t_{n,i}) as (M, m, d, d), betaC[i][k] = H beta_k(c_i),
+// beta1[k] = H beta_k(1), and P is lag block 0 (history is ADDED here).
+@nogc int volterra_solve_vide_blocks(
     double* lagB, double* g, double* a_coll, double* betaC, double* beta1, double* y0,
     int M, int m, int d, double* out_Y, double* out_y)
 {
@@ -3558,56 +3287,4 @@ private @nogc int volterra_solve_vide_blocks_impl(
         }
     }
     return 0;
-}
-
-// ---------------------------------------------------------------------------
-// Block drivers for precomputed lag blocks (product-integration quadrature;
-// the blocks are built in src/voles/_product.py).  Runtime block dimension.
-//
-//   lagB : flat (M, Db, Ds) row-major.  Lag 0 holds the diagonal block of the
-//          current interval, lag L >= 1 the block that multiplies the source
-//          vector of interval n - L.  All scaling is folded in.
-//   Per step n:   A U_n = g_n - sum_{L=1..n} lagB[L] s_{n-L}
-//   where s_l is the source vector of interval l: U_l for the discontinuous
-//   method (Ds = Db) and [U_l; y_l] for the continuous one (Ds = Db + d, the
-//   boundary value y_l carried by y_{l+1} = adv_0 y_l + sum_k adv_U[k] U_{l,k}).
-//
-// History accumulation goes through ToeplitzHistoryRT, so the cost is
-// O(M log^2 M) block operations.  Return codes as for volterra_solve_vie1_vec:
-// 0 ok, 1 invalid sizes, 2 singular diagonal block, 3 buffer overflow.
-//
-// Each extern(C) entry point below is a thin shim: it attaches the calling
-// thread and only then calls its private ..._impl. The body's lag-filler
-// delegate captures locals, so its heap closure is allocated at the body's
-// entry; allocated in the shim itself, it would precede the attach, and a
-// collection in that window (not scanning the still-unregistered thread)
-// would free the live closure -- see ensureThreadAttached.
-// ---------------------------------------------------------------------------
-
-@nogc int volterra_solve_vie1_blocks(
-    double* lagB, double* g, int M, int Db, double* out_U)
-{
-    return volterra_solve_vie1_blocks_impl(lagB, g, M, Db, out_U);
-}
-
-@nogc int volterra_solve_vie1_cont_blocks(
-    double* lagB, double* g, double* adv_U, double adv_0, double* y0,
-    int M, int m, int d, double* out_U, double* out_y)
-{
-    return volterra_solve_vie1_cont_blocks_impl(lagB, g, adv_U, adv_0, y0, M, m, d, out_U, out_y);
-}
-
-// VIDE block driver: y' = a y + g + int K y with the solution represented on
-// interval n as y_n + H sum_k Y_{n,k} beta_k(v) (beta_k = int_0^v ell_k), so
-// the lag blocks are rectangular (Db x (Db + d)) with the boundary column
-// last, and the source vector of interval l is [Y_l; y_l].  Per step
-//     (I - betaC (x) a_n - P_val) Y_n = g_n + history + (a_n + P_bnd) y_n
-//     y_{n+1} = y_n + sum_k beta1[k] Y_{n,k}
-// where a_coll holds a(t_{n,i}) as (M, m, d, d), betaC[i][k] = H beta_k(c_i),
-// beta1[k] = H beta_k(1), and P is lag block 0 (history is ADDED here).
-@nogc int volterra_solve_vide_blocks(
-    double* lagB, double* g, double* a_coll, double* betaC, double* beta1, double* y0,
-    int M, int m, int d, double* out_Y, double* out_y)
-{
-    return volterra_solve_vide_blocks_impl(lagB, g, a_coll, betaC, beta1, y0, M, m, d, out_Y, out_y);
 }

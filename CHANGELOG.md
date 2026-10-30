@@ -3,28 +3,36 @@
 ## [Unreleased]
 
 ### Fixed
-- **Windows: a garbage collection during threaded solves could hang the
-  process.** A thread can be suspended with its stack pointer already inside
-  its stack's guard page, which Windows lets only the owning thread touch;
-  the D runtime then read that page from the collecting thread, the fault
-  unwound out of the collection with the other threads still suspended
-  (one of them holding the GIL), and Python froze. Likeliest with freshly
-  created threads, such as the per-call pool of the matrix fan-out. Threads
-  now commit their stack, up to 8 MB, when they first enter the extension, so
-  the stack pointer can reach a guard page only at a genuine overflow.
-- **Linux: a garbage collection could segfault the process**, typically during
-  the first large threaded solve (about 2% of processes in CI). With the D
-  runtime linked statically, LDC locates a thread's thread-local storage as if
-  the library were an executable, so the collector scanned unrelated memory
-  in its place; for the main thread that range can begin in an unmapped page.
-  Each thread's range is now replaced with its real thread-local storage
-  block when it registers, which also means that storage is scanned at all.
+- **Threaded solves could hang (Windows) or segfault (Linux)** when the D
+  garbage collector ran while Python threads were executing the extension:
+  the matrix fan-out's per-call thread pool, or a user's own threads. Both
+  were bugs in how the D runtime suspends and scans threads it doesn't own:
+  - **Windows:** a thread can be suspended with its stack pointer already
+    inside its stack's guard page, which only the owning thread may touch.
+    The collector read that page from its own thread, the fault unwound out
+    of the collection with the other threads still suspended (one of them
+    holding the GIL), and Python froze.
+  - **Linux:** with the D runtime linked statically, LDC locates a thread's
+    thread-local storage as if the library were an executable, so the
+    collector scanned unrelated memory instead. For the main thread that
+    range can start in an unmapped page, and the first collection crashed
+    (about 2% of processes in CI).
+
+  The extension no longer uses the garbage collector at all. Every solver
+  entry point is `@nogc`, so the compiler rejects any GC use on a solver
+  path; scratch memory lives on the C heap and is freed when each call
+  returns. Calling threads no longer register with the D runtime, and
+  nothing ever suspends or scans them. Results are bitwise identical to
+  before. Array-based solves are about 8% faster on Linux CI; peak memory
+  moves within about ±15% depending on the workload.
 
 ### Changed
-- CI: every test step has a 10-minute limit enforced by GitHub (a hang that
-  holds the GIL also stops pytest-timeout's watchdog), and a manually
-  triggered Windows workflow stress-tests forced collections with a fault
-  logger in the extension (`benchmarks/gc_stress_debug.py`).
+- CI: every test step has a 10-minute limit enforced by GitHub, since a hang
+  that holds the GIL also stops pytest-timeout's watchdog thread.
+- `tests/test_thread_safety.py` (forced collections from a background thread)
+  is replaced by `tests/test_threading.py`, which requires threaded solves to
+  match serial ones bit for bit. The private `voles._dlang.gc_collect_d` is
+  gone.
 
 ## [0.10.0] - 2026-10-12
 
