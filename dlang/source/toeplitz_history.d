@@ -315,7 +315,14 @@ struct ToeplitzHistoryRT
     // Register the per-lag fill callback and switch to lazy fill. The
     // callback writes block `lag` through self.lagBlock/lagRow; it is
     // invoked with lags in increasing order, each exactly once.
-    void setLagFiller(void delegate(int lag, ref ToeplitzHistoryRT self) filler)
+    //
+    // `scope`: callers pass a lambda that captures their locals, and a scope
+    // parameter makes D use the caller's stack frame as its context instead
+    // of allocating a GC closure. Storing it is sound only because a history
+    // never outlives the frame that fills it: every caller declares the
+    // history as a local of the same function as the lambda. (Under
+    // -preview=dip1000 this store becomes a compile error, not a silent bug.)
+    void setLagFiller(scope void delegate(int lag, ref ToeplitzHistoryRT self) filler)
     {
         fillLag = filler;
         lagsFilled = 1;
