@@ -1,0 +1,2158 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Collocation-method solvers for Volterra integral and integro-differential equations">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>API review for 1.0 — inventory and first-pass findings - voles</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#api-review-for-10-inventory-and-first-pass-findings" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="voles" class="md-header__button md-logo" aria-label="voles" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            voles
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API review for 1.0 — inventory and first-pass findings
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/trout314/voles" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting_started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../api/vie1/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../examples/vie1/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="voles" class="md-nav__button md-logo" aria-label="voles" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    voles
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/trout314/voles" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Array-based solvers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Array-based solvers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vie1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve_VIE_1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vie2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve_VIE_2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve_VIDE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Callable-input solvers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Callable-input solvers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/function_vie1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    function_solve_VIE_1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/function_vie2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    function_solve_VIE_2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/function_vide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    function_solve_VIDE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/optimal_graded_mesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    optimal_graded_mesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/coll_nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collocation node helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/vie1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VIE Type 1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/vie2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VIE Type 2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/vide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VIDE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/product_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Product integration for sampled kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/function_solvers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Callable inputs and arbitrary mesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/matrix_vector/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector- and matrix-valued equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/complex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complex-valued equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/polynomial_solutions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polynomial solutions (return_function)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#part-1-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part 1 — Inventory
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Part 1 — Inventory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-public-names-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Public names (13)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-parameter-matrix-array-input-family" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Parameter matrix — array-input family
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-parameter-matrix-callable-input-family" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Parameter matrix — callable-input family
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 Helpers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-return-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5 Return values
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-exceptions-raised-by-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6 Exceptions raised, by type
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#17-warnings-emitted-by-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.7 Warnings emitted, by channel
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#part-2-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part 2 — Findings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Part 2 — Findings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lens-1-error-and-warning-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lens 1: Error and warning model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lens-2-consistency-across-the-six-solvers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lens 2: Consistency across the six solvers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lens-3-naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lens 3: Naming
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lens-4-return-types-and-dtypeshape-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lens 4: Return types and dtype/shape contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lens-5-defaults-and-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lens 5: Defaults and inference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lens-6-extensibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lens 6: Extensibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lens-7-documentation-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lens 7: Documentation contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lens-8-packaging-and-stability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lens 8: Packaging and stability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#part-3-suggested-shape-of-the-10-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part 3 — Suggested shape of the 1.0 surface
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#part-4-findings-by-severity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part 4 — Findings by severity
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="api-review-for-10-inventory-and-first-pass-findings">API review for 1.0 — inventory and first-pass findings</h1>
+<p>Reviewed against <code>main</code> at 3724a6a (v0.10.0), 2026-10-12. Scope: every name in
+<code>voles.__all__</code>, the object returned by <code>return_function=True</code>, and the error
+and warning behaviour observable from Python. Not reviewed: internal modules,
+the D ABI, docs prose beyond what the public functions promise.</p>
+<p>The benchmark throughout is "would this pass review as <code>scipy.integrate.solve_X</code>":
+keyword-only, a result object with named fields, numpydoc docstrings with
+runnable examples, errors and warnings through the standard channels, and a
+written stability promise.</p>
+<hr />
+<h2 id="part-1-inventory">Part 1 — Inventory</h2>
+<h3 id="11-public-names-13">1.1 Public names (13)</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Kind</th>
+<th>Module of definition</th>
+<th>Documented in <code>docs/</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>solve_VIE_1</code></td>
+<td>function</td>
+<td><code>solvers.py</code></td>
+<td>api/vie1.md</td>
+</tr>
+<tr>
+<td><code>solve_VIE_2</code></td>
+<td>function</td>
+<td><code>solvers.py</code></td>
+<td>api/vie2.md</td>
+</tr>
+<tr>
+<td><code>solve_VIDE</code></td>
+<td>function</td>
+<td><code>solvers.py</code></td>
+<td>api/vide.md</td>
+</tr>
+<tr>
+<td><code>function_solve_VIE_1</code></td>
+<td>function</td>
+<td><code>_callable_solvers.py</code></td>
+<td>api/function_vie1.md</td>
+</tr>
+<tr>
+<td><code>function_solve_VIE_2</code></td>
+<td>function</td>
+<td><code>_callable_solvers.py</code></td>
+<td>api/function_vie2.md</td>
+</tr>
+<tr>
+<td><code>function_solve_VIDE</code></td>
+<td>function</td>
+<td><code>_callable_solvers.py</code></td>
+<td>api/function_vide.md</td>
+</tr>
+<tr>
+<td><code>optimal_graded_mesh</code></td>
+<td>function</td>
+<td><code>_callable_solvers.py</code></td>
+<td>api/optimal_graded_mesh.md</td>
+</tr>
+<tr>
+<td><code>gauss_legendre_nodes</code></td>
+<td>function</td>
+<td><code>_callable_solvers.py</code></td>
+<td>api/coll_nodes.md</td>
+</tr>
+<tr>
+<td><code>radau_iia_nodes</code></td>
+<td>function</td>
+<td><code>_callable_solvers.py</code></td>
+<td>api/coll_nodes.md</td>
+</tr>
+<tr>
+<td><code>lobatto_nodes</code></td>
+<td>function</td>
+<td><code>_callable_solvers.py</code></td>
+<td>api/coll_nodes.md</td>
+</tr>
+<tr>
+<td><code>fast_coll_settings_VIE_1</code></td>
+<td>list constant</td>
+<td><code>__init__.py</code></td>
+<td>api/coll_nodes.md (bottom)</td>
+</tr>
+<tr>
+<td><code>fast_coll_settings_VIE_2</code></td>
+<td>list constant</td>
+<td><code>__init__.py</code></td>
+<td>api/coll_nodes.md (bottom)</td>
+</tr>
+<tr>
+<td><code>fast_coll_settings_VIDE</code></td>
+<td>list constant</td>
+<td><code>__init__.py</code></td>
+<td>api/coll_nodes.md (bottom)</td>
+</tr>
+</tbody>
+</table>
+<p>Also public in effect, though not in <code>__all__</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Status</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>voles.__version__</code></td>
+<td>attribute</td>
+<td>From <code>importlib.metadata</code>; reports the <em>installed</em> metadata, which can lag the source (this checkout reports 0.7.0).</td>
+</tr>
+<tr>
+<td><code>voles.solvers</code></td>
+<td>importable module</td>
+<td>No underscore, so users can and will <code>from voles.solvers import ...</code>.</td>
+</tr>
+<tr>
+<td><code>voles._solution._SolutionFunction</code></td>
+<td>class, private name</td>
+<td>Returned to every <code>return_function=True</code> caller. Its repr is <code>&lt;voles._solution._SolutionFunction object at 0x...&gt;</code>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="12-parameter-matrix-array-input-family">1.2 Parameter matrix — array-input family</h3>
+<p>Every parameter is keyword-only. "req" = required. Defaults in code.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th><code>solve_VIE_1</code></th>
+<th><code>solve_VIE_2</code></th>
+<th><code>solve_VIDE</code></th>
+<th>Accepts</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kernel_values</code></td>
+<td>req</td>
+<td>req</td>
+<td>req</td>
+<td>array_like <code>(N,)</code> or <code>(N,d,d)</code></td>
+<td>complex allowed; <code>float32</code> upcast to <code>float64</code>; NaN/inf propagate silently</td>
+</tr>
+<tr>
+<td><code>a_values</code></td>
+<td>—</td>
+<td>—</td>
+<td><code>None</code></td>
+<td><code>(N,)</code> or <code>(N,d,d)</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>g_values</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>(N,)</code>, <code>(N,d)</code>, <code>(N,d,m)</code></td>
+<td><code>(N,d,m)</code> selects matrix mode for VIE-1/2</td>
+</tr>
+<tr>
+<td><code>soln_init_value</code></td>
+<td><code>None</code></td>
+<td>—</td>
+<td>req</td>
+<td>scalar, <code>(d,)</code>, <code>(d,m)</code></td>
+<td>VIE-1: only used with <code>force_continuous</code>; VIDE: <code>(d,m)</code> selects matrix mode; <strong><code>None</code> is accepted by VIDE and yields all-NaN</strong></td>
+</tr>
+<tr>
+<td><code>time_step</code></td>
+<td><code>1.0</code></td>
+<td><code>1.0</code></td>
+<td><code>1.0</code></td>
+<td>positive finite number</td>
+<td>string gives a bare <code>TypeError</code> from <code>&gt;</code></td>
+</tr>
+<tr>
+<td><code>coll_divs</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td>positive int</td>
+<td>floats rejected (not truncated); inferred from <code>coll_choices</code></td>
+</tr>
+<tr>
+<td><code>coll_choices</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td>sequence of distinct ints</td>
+<td>tuple/ndarray accepted; sorted internally; VIE-1 excludes 0</td>
+</tr>
+<tr>
+<td><code>return_function</code></td>
+<td><code>False</code></td>
+<td><code>False</code></td>
+<td><code>False</code></td>
+<td>bool (truthy)</td>
+<td></td>
+</tr>
+<tr>
+<td><code>return_polys</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td>bool</td>
+<td><strong>deprecated alias</strong> since 0.5.x; emits <code>DeprecationWarning</code></td>
+</tr>
+<tr>
+<td><code>force_continuous</code></td>
+<td><code>False</code></td>
+<td>—</td>
+<td>—</td>
+<td>bool</td>
+<td></td>
+</tr>
+<tr>
+<td><code>show_warnings</code></td>
+<td><code>True</code></td>
+<td><code>True</code></td>
+<td><code>True</code></td>
+<td>bool (truthy, unvalidated)</td>
+<td>gates <code>print()</code> calls, not <code>warnings.warn</code></td>
+</tr>
+<tr>
+<td><code>quadrature</code></td>
+<td><code>"product"</code></td>
+<td><code>"product"</code></td>
+<td><code>"product"</code></td>
+<td><code>{"product","collocation"}</code></td>
+<td>case-sensitive</td>
+</tr>
+<tr>
+<td><code>mesh_samples</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td>int, multiple of <code>coll_divs</code></td>
+<td>default <code>coll_divs**2</code> (VIE-1) / <code>coll_divs</code> (VIE-2, VIDE)</td>
+</tr>
+<tr>
+<td><code>kernel_interp_degree</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td>int</td>
+<td>default <code>len(coll_choices)</code>; rejected with <code>quadrature="collocation"</code></td>
+</tr>
+</tbody>
+</table>
+<p>Defaults for the collocation setting when neither is given:
+VIE-1 <code>(3, [1,2,3])</code>; VIE-2 and VIDE <code>(2, [0,1,2])</code>.</p>
+<h3 id="13-parameter-matrix-callable-input-family">1.3 Parameter matrix — callable-input family</h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th><code>function_solve_VIE_1</code></th>
+<th><code>function_solve_VIE_2</code></th>
+<th><code>function_solve_VIDE</code></th>
+<th>Accepts</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kernel</code></td>
+<td>req</td>
+<td>req</td>
+<td>req</td>
+<td>callable <code>u -&gt; scalar / (d,d)</code></td>
+<td>vectorised over 1-D <code>u</code> is faster; shape detected by sampling</td>
+</tr>
+<tr>
+<td><code>a</code></td>
+<td>—</td>
+<td>—</td>
+<td><code>None</code></td>
+<td>callable <code>t -&gt; scalar / (d,d)</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>g</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td>callable <code>t -&gt; scalar / (d,) / (d,m)</code></td>
+<td>2-D return selects matrix mode</td>
+</tr>
+<tr>
+<td><code>soln_init_value</code></td>
+<td><code>None</code></td>
+<td>—</td>
+<td>req</td>
+<td>scalar, <code>(d,)</code>, <code>(d,m)</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>mesh_breakpoints</code></td>
+<td>req</td>
+<td>req</td>
+<td>req</td>
+<td>1-D, strictly increasing, finite, <strong>must start at 0</strong></td>
+<td></td>
+</tr>
+<tr>
+<td><code>coll_divs</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td>int</td>
+<td>annotated <code>int = None</code> (should be <code>int \| None</code>)</td>
+</tr>
+<tr>
+<td><code>coll_choices</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td>list of int</td>
+<td>annotated <code>list[int] = None</code></td>
+</tr>
+<tr>
+<td><code>coll_nodes</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td>floats in <code>[0,1]</code> (<code>(0,1]</code> for VIE-1)</td>
+<td>exclusive with <code>coll_divs</code>/<code>coll_choices</code>; unsorted accepted</td>
+</tr>
+<tr>
+<td><code>kernel_singularity</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>None</code></td>
+<td><code>None</code>, float, list, dict <code>{loc: alpha}</code>, callable</td>
+<td>bools rejected</td>
+</tr>
+<tr>
+<td><code>return_function</code></td>
+<td><code>False</code></td>
+<td><code>False</code></td>
+<td><code>False</code></td>
+<td>bool</td>
+<td></td>
+</tr>
+<tr>
+<td><code>force_continuous</code></td>
+<td><code>False</code></td>
+<td>—</td>
+<td>—</td>
+<td>bool</td>
+<td></td>
+</tr>
+<tr>
+<td><code>reuse_adaptive_blocks</code></td>
+<td><code>True</code></td>
+<td><code>True</code></td>
+<td><code>True</code></td>
+<td>bool</td>
+<td></td>
+</tr>
+<tr>
+<td><code>show_warnings</code></td>
+<td><code>True</code></td>
+<td><code>True</code></td>
+<td><code>True</code></td>
+<td>bool</td>
+<td></td>
+</tr>
+<tr>
+<td><code>_smooth_gl_order</code></td>
+<td><code>6</code></td>
+<td><code>6</code></td>
+<td><code>6</code></td>
+<td>int</td>
+<td><strong>private parameter in the public signature</strong>; visible in <code>help()</code> and the rendered docs</td>
+</tr>
+</tbody>
+</table>
+<p>Defaults for the collocation setting: VIE-1 <code>(3, [1,2,3])</code>; VIE-2 and VIDE <code>(2, [0,1,2])</code>. Same as the array family, but here <code>coll_divs</code> does <strong>not</strong> subdivide the interval; it only positions nodes.</p>
+<h3 id="14-helpers">1.4 Helpers</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Parameters</th>
+<th>Returns</th>
+<th>Raises</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>optimal_graded_mesh</code></td>
+<td><code>alpha: float, T: float, M: int, order: int</code> (kw-only)</td>
+<td><code>ndarray (M+1,)</code></td>
+<td><code>ValueError</code></td>
+</tr>
+<tr>
+<td><code>gauss_legendre_nodes</code></td>
+<td><code>p: int</code> (positional allowed)</td>
+<td><code>ndarray (p,)</code> in <code>(0,1)</code></td>
+<td><code>ValueError</code> (also for non-int <code>p</code>)</td>
+</tr>
+<tr>
+<td><code>radau_iia_nodes</code></td>
+<td><code>p: int</code></td>
+<td><code>ndarray (p,)</code> in <code>(0,1]</code></td>
+<td><code>ValueError</code></td>
+</tr>
+<tr>
+<td><code>lobatto_nodes</code></td>
+<td><code>p: int</code>, <code>p &gt;= 2</code></td>
+<td><code>ndarray (p,)</code> in <code>[0,1]</code></td>
+<td><code>ValueError</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="15-return-values">1.5 Return values</h3>
+<table>
+<thead>
+<tr>
+<th>Family</th>
+<th><code>return_function=False</code></th>
+<th><code>return_function=True</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>array</td>
+<td><code>ndarray</code> <code>(N,)</code> / <code>(N,d)</code> / <code>(N,d,m)</code>, values at the input sample times</td>
+<td><code>(values, solution)</code> tuple</td>
+</tr>
+<tr>
+<td>callable</td>
+<td><code>ndarray</code> <code>(M,p)</code> / <code>(M,p,d)</code> / <code>(M,p,d,m)</code>, values at the collocation nodes; <strong>no time array is returned</strong></td>
+<td><code>(values, solution)</code> tuple</td>
+</tr>
+</tbody>
+</table>
+<p><code>solution</code> is a <code>_SolutionFunction</code>. Public surface:</p>
+<table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>solution(t)</code></td>
+<td>scalar <code>t</code> gives Python <code>float</code>/<code>complex</code> (scalar eq) or <code>ndarray (d,)</code>/<code>(d,m)</code>; array <code>t</code> gives a leading time axis; NaN outside <code>[0, T]</code></td>
+</tr>
+<tr>
+<td><code>solution.mesh_breakpoints</code></td>
+<td><code>ndarray (M+1,)</code></td>
+</tr>
+<tr>
+<td><code>solution.polynomials</code></td>
+<td>lazily built list of <code>numpy.polynomial.Polynomial</code> (scalar) or object arrays <code>(d,)</code>/<code>(d,m)</code></td>
+</tr>
+<tr>
+<td><code>len</code>, <code>[i]</code>, iteration</td>
+<td>delegate to <code>polynomials</code> (legacy list compatibility)</td>
+</tr>
+<tr>
+<td><code>from_unit_coefs</code></td>
+<td>classmethod, internal, but public-named</td>
+</tr>
+<tr>
+<td>pickling</td>
+<td>works</td>
+</tr>
+<tr>
+<td><code>repr</code></td>
+<td>default object repr</td>
+</tr>
+</tbody>
+</table>
+<h3 id="16-exceptions-raised-by-type">1.6 Exceptions raised, by type</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Count of sites</th>
+<th>Used for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ValueError</code></td>
+<td>141</td>
+<td>nearly everything: shapes, ranges, non-integers, mutually exclusive args, unknown <code>quadrature</code>, non-convergent node sets, <strong>wrong-type arguments such as <code>coll_divs=2.0</code> or <code>show_warnings</code> of the wrong type (not checked at all)</strong></td>
+</tr>
+<tr>
+<td><code>TypeError</code></td>
+<td>9</td>
+<td>non-callable <code>kernel</code>/<code>g</code>/<code>a</code>; internal <code>_SolutionFunction</code> construction; Python's own for missing required kwargs</td>
+</tr>
+<tr>
+<td><code>NotImplementedError</code></td>
+<td>6</td>
+<td>collocation setting not compiled and no fallback</td>
+</tr>
+<tr>
+<td><code>ImportError</code></td>
+<td>6</td>
+<td>D extension not found; scipy missing</td>
+</tr>
+<tr>
+<td><code>numpy.linalg.LinAlgError</code></td>
+<td>2</td>
+<td>singular collocation system</td>
+</tr>
+<tr>
+<td><code>RuntimeError</code></td>
+<td>1</td>
+<td>nonzero return code from the D extension (<code>_dlang.py:246</code>) — undocumented</td>
+</tr>
+</tbody>
+</table>
+<h3 id="17-warnings-emitted-by-channel">1.7 Warnings emitted, by channel</h3>
+<table>
+<thead>
+<tr>
+<th>Channel</th>
+<th>Count</th>
+<th>Conditions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>print("warning: ...")</code> to stdout</td>
+<td>15 sites</td>
+<td>Numba fallback; <code>soln_init_value</code> ignored; ρ = 1 reduced order; g(0) ≠ 0; K(0) small (VIE-1 collocation quadrature); singularity declared on a uniform mesh; singularity outside <code>[0, T]</code>; stale D extension lacking the lag-block driver</td>
+</tr>
+<tr>
+<td><code>warnings.warn(DeprecationWarning)</code></td>
+<td>1 site</td>
+<td><code>return_polys</code></td>
+</tr>
+<tr>
+<td>scipy <code>IntegrationWarning</code></td>
+<td>pass-through</td>
+<td>from adaptive quadrature in the callable family (partly suppressed under <code>reuse_adaptive_blocks</code>)</td>
+</tr>
+<tr>
+<td>numpy <code>ComplexWarning</code></td>
+<td>escalated to <code>ValueError</code></td>
+<td>callable family, when sampling missed a complex return</td>
+</tr>
+</tbody>
+</table>
+<p><code>show_warnings</code> gates only the <code>print</code> channel. None of the printed warnings has a category, can be filtered, turned into an error, or captured by <code>pytest.warns</code>.</p>
+<hr />
+<h2 id="part-2-findings">Part 2 — Findings</h2>
+<p>Severity: <strong>A</strong> = would block a 1.0 at NumPy/SciPy review standard; <strong>B</strong> = should fix before 1.0, breaking changes need a deprecation cycle; <strong>C</strong> = polish, can follow 1.0.</p>
+<h3 id="lens-1-error-and-warning-model">Lens 1: Error and warning model</h3>
+<p><strong>F1 (A). Warnings are <code>print()</code> statements.</strong>
+Fifteen diagnostic sites write <code>"warning: ..."</code> to stdout. They cannot be filtered, promoted to errors, captured in tests, or silenced per category; <code>show_warnings=False</code> is the only control and it is all-or-nothing. In a Jupyter cell or a batch job the message is invisible or lost. Proposed: define <code>VolesWarning(UserWarning)</code> with two or three subclasses (e.g. <code>ConvergenceWarning</code> for ρ = 1, g(0) ≠ 0, K(0) small; <code>PerformanceWarning</code> for the Numba fallback and the stale-extension notice; <code>MeshWarning</code> for the uniform-mesh hint) and emit through <code>warnings.warn(..., stacklevel=2)</code>. Then deprecate <code>show_warnings</code> (see F2).</p>
+<p><strong>F2 (B). <code>show_warnings</code> duplicates the standard warnings machinery.</strong>
+Once F1 is done, <code>show_warnings=False</code> is <code>warnings.filterwarnings("ignore", category=VolesWarning)</code>. Keep the parameter through 1.0 as a convenience if you like, but define it as exactly that filter so the two can never disagree. SciPy has no such flag on any solver.</p>
+<p><strong>F3 (B). <code>ValueError</code> is used where <code>TypeError</code> belongs.</strong>
+<code>coll_divs=2.0</code>, <code>coll_choices=[0.5]</code>, <code>order=1.5</code>, <code>p=2.0</code> all raise <code>ValueError</code> for what is a type problem. Python convention and NumPy/SciPy practice: wrong type → <code>TypeError</code>, right type wrong value → <code>ValueError</code>. Conversely <code>time_step="0.1"</code> escapes validation and raises <code>TypeError: '&gt;' not supported between instances of 'str' and 'float'</code> from the comparison. <code>show_warnings="no"</code> and <code>return_function=1</code> are accepted without comment. Decide the rule once (a one-line policy in the contract doc) and apply it in a single <code>_validate</code> helper per parameter.</p>
+<p><strong>F4 (B). <code>RuntimeError</code> from the D extension is undocumented.</strong>
+<code>_dlang.py:246</code> raises <code>RuntimeError(f"{func_name} returned error code {ret}")</code>. No docstring lists it, and the message is not actionable for a user. Either map the known codes to the documented exceptions or document it.</p>
+<p><strong>F5 (B). <code>soln_init_value=None</code> on <code>solve_VIDE</code> silently produces an all-NaN solution.</strong>
+<code>_scalar_init(None)</code> goes through <code>np.asarray(None, dtype=float)</code> → <code>nan</code>. The parameter is documented as required and is required syntactically, but an explicit <code>None</code> (easy to produce from a config dict) is accepted. Should raise.</p>
+<p><strong>F6 (C). NaN and inf in the data propagate silently.</strong>
+<code>kernel_values</code> or <code>g_values</code> containing NaN/inf yield an all-NaN result with no diagnostic. The tests codify "raises or propagates". SciPy's <code>solve_ivp</code> and <code>quad</code> do not check either, so this is defensible, but the Raises section should say so explicitly ("non-finite input is not checked"), or a cheap <code>np.isfinite</code> check should raise <code>ValueError</code>.</p>
+<h3 id="lens-2-consistency-across-the-six-solvers">Lens 2: Consistency across the six solvers</h3>
+<p><strong>F7 (A). The two families name the same concept differently.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Concept</th>
+<th>array family</th>
+<th>callable family</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>kernel</td>
+<td><code>kernel_values</code></td>
+<td><code>kernel</code></td>
+</tr>
+<tr>
+<td>forcing</td>
+<td><code>g_values</code></td>
+<td><code>g</code></td>
+</tr>
+<tr>
+<td>coefficient</td>
+<td><code>a_values</code></td>
+<td><code>a</code></td>
+</tr>
+<tr>
+<td>time grid</td>
+<td><code>time_step</code> (+ implicit <code>N</code>)</td>
+<td><code>mesh_breakpoints</code></td>
+</tr>
+<tr>
+<td>initial value</td>
+<td><code>soln_init_value</code></td>
+<td><code>soln_init_value</code></td>
+</tr>
+<tr>
+<td>node set</td>
+<td><code>coll_divs</code>, <code>coll_choices</code></td>
+<td><code>coll_divs</code>, <code>coll_choices</code>, <code>coll_nodes</code></td>
+</tr>
+</tbody>
+</table>
+<p>The <code>_values</code> suffix is justified for the array family only because the <em>same</em> names mean callables elsewhere. A single family with <code>kernel=</code> accepting either an array or a callable (dispatch on <code>callable(kernel)</code>) would remove the prefix <code>function_</code> and the suffix <code>_values</code> together. See F9 before deciding.</p>
+<p><strong>F8 (A). <code>coll_divs</code> means two different things in the two families.</strong>
+Array family: a mesh interval is <code>coll_divs**2</code> samples (collocation quadrature) or <code>mesh_samples</code> samples, with <code>coll_divs</code> sub-intervals. Callable family: <code>coll_divs</code> only sets node positions <code>k/coll_divs</code>; the mesh is <code>mesh_breakpoints</code>. The docs flag this in a "Convention note" because it bites. For 1.0 the node set should be expressed one way everywhere. The callable family's <code>coll_nodes</code> (floats in <code>[0,1]</code>) is the general form; <code>coll_divs</code>/<code>coll_choices</code> is a rational special case of it. Proposed: a single <code>nodes=</code> parameter accepting an array of floats in <code>[0,1]</code> or a string preset (<code>"radau"</code>, <code>"gauss"</code>, <code>"lobatto"</code>, <code>"uniform"</code>) with a count, and <code>coll_divs</code>/<code>coll_choices</code> kept only as the array family's <em>sampling</em> parameter under a name that says so (e.g. <code>samples_per_interval</code>).</p>
+<p><strong>F9 (A). The two families return different things for "the solution".</strong>
+Array family: values at the input sample times, shape <code>(N, ...)</code>. Callable family: values at the collocation nodes, shape <code>(M, p, ...)</code>, and <strong>no time array</strong>. A user of <code>function_solve_*</code> must reconstruct <code>t[n, i] = mesh[n] + c_i * h_n</code> themselves; the docs example does exactly this in a double loop. This is the strongest argument for a result object (F10): <code>res.t</code> and <code>res.y</code> make both families return the same thing, and <code>res.sol</code> is the dense output.</p>
+<p><strong>F10 (A). The solution object is a private class with no public name and no repr.</strong>
+<code>type(solution)</code> is <code>voles._solution._SolutionFunction</code>; <code>repr</code> is the default. Users cannot annotate it, <code>isinstance</code> it, or document it. Proposed: a public <code>VolterraResult</code> (or <code>VolterraSolution</code>) modelled on <code>scipy.integrate.OdeResult</code>: attributes <code>t</code>, <code>y</code>, <code>sol</code> (the callable), <code>mesh</code>, <code>nodes</code>, <code>method</code>-style metadata, <code>success</code>/<code>message</code> if you ever add adaptive failure modes, and a useful <code>__repr__</code>. Then <code>return_function</code> is unnecessary: the callable is always available (coefficient storage is already cheap; the <code>Polynomial</code> list is lazy).</p>
+<p><strong>F11 (B). Matrix mode is selected by different inputs in different solvers.</strong>
+VIE-1/VIE-2: 3-D <code>g_values</code>. VIDE: 2-D <code>soln_init_value</code> (3-D <code>g_values</code> alone does not select it). Callable VIE-1/2: 2-D return from <code>g</code>. This is documented but asymmetric. With a result object and explicit shapes it is better to select on one rule: trailing axis of <code>g</code> (or <code>y0</code> where <code>g</code> is absent).</p>
+<p><strong>F12 (B). VIE-1's <code>soln_init_value</code> is a conditional parameter with a printed warning when ignored.</strong>
+It only means anything with <code>force_continuous=True</code>. Two parameters that are only valid together is a smell; consider <code>continuous=y0</code> (<code>None</code> = discontinuous method, a value = continuous method with that initial value), which removes the warning and the "required when" clause.</p>
+<h3 id="lens-3-naming">Lens 3: Naming</h3>
+<p><strong>F13 (B). <code>soln_init_value</code> → <code>y0</code>.</strong>
+Every ODE/IE interface in SciPy, Julia, and MATLAB calls this <code>y0</code>. The equations in the docstrings already write <code>y(0) = y_0</code>.</p>
+<p><strong>F14 (B). <code>function_solve_*</code> prefix.</strong>
+Reads as "the function that solves" rather than "solve from functions". If the families stay separate, <code>solve_VIE_2_callable</code> or a <code>callable</code>/<code>sampled</code> keyword is clearer; if merged (F7), the prefix disappears.</p>
+<p><strong>F15 (C). <code>VIE_1</code> / <code>VIE_2</code> / <code>VIDE</code> casing.</strong>
+Mixed case in function names is non-PEP8 and unusual in NumPy/SciPy (<code>solve_ivp</code>, <code>solve_bvp</code>). <code>solve_vie1</code>, <code>solve_vie2</code>, <code>solve_vide</code> would be conventional. This is a judgement call; the current names are at least internally consistent and searchable. Decide and record it.</p>
+<p><strong>F16 (B). <code>fast_coll_settings_*</code> expose a build detail as API.</strong>
+The lists answer "which settings run compiled under <code>quadrature="collocation"</code>", a question that disappeared from the default path in 0.10. They also have an awkward type (list of <code>(int, list)</code>). Either drop them from <code>__all__</code> (keep as <code>voles.compiled_settings()</code> returning a frozenset, undocumented in the main nav) or deprecate them outright.</p>
+<p><strong>F17 (C). <code>_smooth_gl_order</code> in the public signature.</strong>
+A leading-underscore parameter appears in <code>help()</code>, the rendered API pages, and <code>inspect.signature</code>. Move it to a module-level knob or <code>**_internal</code>.</p>
+<p><strong>F18 (C). <code>optimal_graded_mesh</code> parameter names.</strong>
+<code>alpha, T, M, order</code> are fine for the audience but inconsistent with the solvers' verbosity (<code>mesh_breakpoints</code>, <code>soln_init_value</code>). <code>n_intervals</code> for <code>M</code> would match. Low priority.</p>
+<h3 id="lens-4-return-types-and-dtypeshape-contract">Lens 4: Return types and dtype/shape contract</h3>
+<p><strong>F19 (B). No single written statement of the shape contract.</strong>
+Shapes are scattered across six docstrings. Needed once, in the user guide: time axis first; scalar <code>()</code>, vector <code>(d,)</code>, matrix <code>(d, m)</code>; kernel <code>(d, d)</code>; complex handled by block embedding; <code>float32</code> upcast; no broadcasting of <code>g</code> against columns except the documented shared-<code>(N, d)</code> case for VIDE. The review found one undocumented asymmetry: VIDE accepts a shared <code>(N, d)</code> forcing for all columns, VIE-1/2 do not.</p>
+<p><strong>F20 (C). Scalar <code>solution(t)</code> returns a Python <code>float</code>, array <code>t</code> returns <code>ndarray</code>.</strong>
+Matches <code>np.polynomial.Polynomial</code> behaviour, so acceptable, but say so.</p>
+<p><strong>F21 (C). Dense output outside <code>[0, T]</code> is NaN rather than an error.</strong>
+Reasonable and documented. SciPy's <code>OdeSolution</code> extrapolates silently, which is worse. Keep.</p>
+<h3 id="lens-5-defaults-and-inference">Lens 5: Defaults and inference</h3>
+<p><strong>F22 (B). Three different defaults for "what happens when I give only one of <code>coll_divs</code>/<code>coll_choices</code>".</strong>
+The rules (<code>coll_divs</code> alone → all points; <code>coll_choices</code> alone → max entry; neither → <code>(3,[1,2,3])</code> or <code>(2,[0,1,2])</code>) are sensible and now documented, but they are a consequence of the two-integer encoding. Under F8 they vanish.</p>
+<p><strong>F23 (B). Default <code>mesh_samples</code> differs between VIE-1 (<code>coll_divs**2</code>) and VIE-2/VIDE (<code>coll_divs</code>).</strong>
+Justified in the Notes (first-kind amplification), but a researcher comparing a first- and second-kind solve on the same data gets different mesh widths without asking. Fine to keep; needs one sentence in the user guide and a worked example of the trade-off.</p>
+<p><strong>F24 (C). <code>quadrature</code> is case-sensitive and the error lists the options.</strong>
+Fine. Consider accepting <code>str.lower()</code>.</p>
+<h3 id="lens-6-extensibility">Lens 6: Extensibility</h3>
+<p><strong>F25 (B). Non-convolution kernels are the announced next feature and the current signatures leave no slot for them.</strong>
+<code>kernel(u)</code> and <code>kernel_values[(N,)]</code> both assume <code>K(t - s)</code>. The callable <code>kernel_singularity</code> form already anticipates <code>K(t, s)</code>. If 1.0 ships before that feature, the contract doc should reserve the extension (e.g. <code>kernel</code> of two arguments detected by arity, or a <code>convolution: bool</code> flag) so it is not a breaking change later.</p>
+<p><strong>F26 (C). <code>quadrature=</code> and <code>coll_nodes=</code> are good extension points.</strong>
+Keyword-only everywhere is good. No positional parameters exist except <code>p</code> in the node helpers, which is fine.</p>
+<h3 id="lens-7-documentation-contract">Lens 7: Documentation contract</h3>
+<p><strong>F27 (B). Docstrings have no <code>Examples</code> section and nothing is doctested.</strong>
+<code>optimal_graded_mesh</code> has a non-runnable example with <code>...</code>. SciPy requires a runnable example on every public function and runs them in CI. The <code>pytest-markdown-docs</code> dev dependency suggests the docs pages are tested; the docstrings are not.</p>
+<p><strong>F28 (B). Cross-references use <code>double backticks</code> rather than numpydoc's single-backtick role.</strong>
+<code>See ``function_solve_VIE_2``` renders as literal text, not a link, under mkdocstrings. Use ``</code>function_solve_VIE_2<code>`` and add</code>See Also` sections.</p>
+<p><strong>F29 (C). <code>Raises</code> sections list <code>ValueError</code> once with a paragraph of causes.</strong>
+Acceptable, but once F3 lands, split <code>TypeError</code> from <code>ValueError</code> and list <code>RuntimeError</code> (F4) and <code>VolesWarning</code> subclasses under a <code>Warns</code> section.</p>
+<p><strong>F30 (C). Type hints are partial and <code>py.typed</code> is absent.</strong>
+The array family has none; the callable family has <code>int = None</code>. For 1.0 either annotate everything and ship <code>py.typed</code>, or strip the partial hints so they do not mislead.</p>
+<h3 id="lens-8-packaging-and-stability">Lens 8: Packaging and stability</h3>
+<p><strong>F31 (A). No written stability or deprecation policy.</strong>
+Nothing in README, CHANGELOG, or CONTRIBUTING says what 1.0 promises. One paragraph: semver on the public names in <code>__all__</code>; numerical results may change in a minor release only when the change is a documented accuracy improvement; deprecations warn for at least one minor release.</p>
+<p><strong>F32 (B). No signature-snapshot test.</strong>
+A test that pins <code>inspect.signature</code> of every public callable, and the set of names in <code>__all__</code>, catches accidental breaks from then on.</p>
+<p><strong>F33 (C). <code>__version__</code> comes from installed metadata.</strong>
+Correct for wheels, misleading for editable installs with stale metadata (this checkout reports 0.7.0 from a 0.10.0 source tree). Hatch can write a <code>_version.py</code> at build time; either is fine, just be aware.</p>
+<p><strong>F34 (C). <code>[callable]</code> and <code>[numba]</code> extras are redundant with <code>[full]</code>.</strong>
+Already noted as compatibility shims in <code>pyproject.toml</code>. Drop at 1.0.</p>
+<hr />
+<h2 id="part-3-suggested-shape-of-the-10-surface">Part 3 — Suggested shape of the 1.0 surface</h2>
+<p>Not a decision, a strawman to argue with. It resolves F7–F14 and F19 at once.</p>
+<p><code>python notest
+res = voles.solve_vie2(
+    kernel,            # array (N,) / (N,d,d) sampled at t = 0, h, ..., or callable K(u)
+    g=None,            # array or callable, same convention as kernel
+    t=None,            # float h (uniform sampling) or 1-D mesh breakpoints
+    nodes="radau",     # str preset, or array of floats in [0, 1], or (divs, choices)
+    order=3,           # number of nodes when `nodes` is a preset
+    singularity=None,  # as today's kernel_singularity
+    quadrature="product",
+    mesh_samples=None, kernel_interp_degree=None,
+)
+res.t      # times where res.y is reported (sample times, or collocation nodes)
+res.y      # values, shape (len(t), ...) — time axis first, always
+res.sol    # callable dense output, NaN outside [0, T]
+res.mesh   # breakpoints
+res.nodes  # node positions in [0, 1]</code></p>
+<p><code>solve_vie1</code> adds <code>continuous=None</code> (a <code>y0</code> value turns on the continuous
+method); <code>solve_vide</code> adds <code>a=None</code> and required <code>y0</code>. Everything today's
+API does is reachable; the six functions become three; <code>return_function</code>,
+<code>return_polys</code>, <code>show_warnings</code>, <code>soln_init_value</code>, <code>force_continuous</code>,
+<code>coll_divs</code>, <code>coll_choices</code>, <code>coll_nodes</code>, <code>function_solve_*</code>, and
+<code>fast_coll_settings_*</code> become deprecation shims for one minor release.</p>
+<p>If merging the families is too large a change, the minimum set that still
+reaches the bar is: F1, F3, F5, F9, F10, F13, F31, F32 — a result object with
+<code>t</code>/<code>y</code>/<code>sol</code>, real warnings, a type/value error rule, <code>y0</code>, and a policy.</p>
+<hr />
+<h2 id="part-4-findings-by-severity">Part 4 — Findings by severity</h2>
+<table>
+<thead>
+<tr>
+<th>Sev</th>
+<th>IDs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>F1, F7, F8, F9, F10, F31</td>
+</tr>
+<tr>
+<td>B</td>
+<td>F2, F3, F4, F5, F11, F12, F13, F14, F16, F19, F22, F23, F25, F27, F28, F32</td>
+</tr>
+<tr>
+<td>C</td>
+<td>F6, F15, F17, F18, F20, F21, F24, F26, F29, F30, F33, F34</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

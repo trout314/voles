@@ -1,0 +1,2382 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Collocation-method solvers for Volterra integral and integro-differential equations">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Plan: the 1.0 API (merged solver families + review fixes) - voles</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#plan-the-10-api-merged-solver-families-review-fixes" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="voles" class="md-header__button md-logo" aria-label="voles" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            voles
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Plan: the 1.0 API (merged solver families + review fixes)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/trout314/voles" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting_started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../api/vie1/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../examples/vie1/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="voles" class="md-nav__button md-logo" aria-label="voles" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    voles
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/trout314/voles" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Array-based solvers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Array-based solvers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vie1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve_VIE_1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vie2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve_VIE_2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve_VIDE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Callable-input solvers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Callable-input solvers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/function_vie1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    function_solve_VIE_1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/function_vie2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    function_solve_VIE_2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/function_vide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    function_solve_VIDE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/optimal_graded_mesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    optimal_graded_mesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/coll_nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collocation node helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/vie1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VIE Type 1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/vie2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VIE Type 2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/vide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VIDE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/product_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Product integration for sampled kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/function_solvers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Callable inputs and arbitrary mesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/matrix_vector/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector- and matrix-valued equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/complex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complex-valued equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/polynomial_solutions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polynomial solutions (return_function)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-goal-and-shape-of-the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Goal and shape of the result
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Goal and shape of the result">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#volterrasolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VolterraSolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shape-and-matrix-mode-rule-f11-f19-stated-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shape and matrix-mode rule (F11, F19), stated once
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kernel-convention-f25" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kernel convention (F25)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Phases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Phases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-contract-and-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: contract and baseline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-foundations-no-signature-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: foundations (no signature changes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-volterrasolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: VolterraSolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-separate-validation-from-the-cores-no-signature-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: separate validation from the cores (no signature changes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-the-new-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: the new API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-old-api-to-deprecation-wrappers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: old API to deprecation wrappers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-7-guard-rails-and-packaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7: guard rails and packaging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#release-0110-then-a-feedback-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release 0.11.0, then a feedback window
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-8-100" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 8: 1.0.0
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-verification-and-risks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Verification and risks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-finding-phase-traceability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Finding → phase traceability
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#appendix-a-old-new-mapping-draft-of-the-migration-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Appendix A: old → new mapping (draft of the migration guide)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="plan-the-10-api-merged-solver-families-review-fixes">Plan: the 1.0 API (merged solver families + review fixes)</h1>
+<p>Status: decisions settled 2026-10-31 (§2). One open item: whether to offer an
+<em>iterated</em> solution, which may change the default <code>at_breakpoints</code>
+convention (§2, D5). No code changes yet.
+Inputs: <code>docs/dev/api-review-1.0.md</code> (34 findings, F1–F34) and the
+2026-10-31 decision to merge the array-input and callable-input families.</p>
+<hr />
+<h2 id="1-goal-and-shape-of-the-result">1. Goal and shape of the result</h2>
+<p>Three public solvers replace six:</p>
+<p>```python notest
+sol = voles.solve_vie2(kernel=K, g=g, dt=0.01)        # sampled inputs
+sol = voles.solve_vie2(kernel=k, g=f, mesh=bps)       # callable inputs
+sol.t, sol.y      # the grid the problem was posed on, and the values there
+sol(t)            # dense output
+sol.node_times, sol.node_values, sol.coefficients, sol.to_ppoly()</p>
+<pre><code>
+Two release steps:
+
+- **0.11.0**: the new API, warnings through `warnings`, every bug-level fix,
+  and the six old functions kept as deprecation wrappers. Each wrapper
+  translates its kwargs, calls the new API, and converts the result back to
+  the old return type. Old code keeps running with **bitwise-identical
+  results**, with one accepted exception (dense evaluation at exact interior
+  breakpoints, D5). Each wrapper call raises a `DeprecationWarning` that
+  names the new call.
+- **1.0.0**: delete the wrappers and other deprecated names, ship `py.typed`,
+  and put the stability policy into force.
+
+This matches the process agreed on 2026-10-12: deprecate in 0.11, remove in
+1.0, with a signature-snapshot test as the guard.
+
+**No D changes.** The D ABI already takes what both cores need. All the work
+is in Python.
+
+### Two input regimes, one documented rule
+
+The cores stay two different discretisations, and the API says so in one
+place instead of in the function names:
+
+| | **sampled** | **functional** |
+|---|---|---|
+| Selected when | any of `kernel`, `g`, `a` is an array | all given inputs are callables |
+| Grid argument | `dt` (sample spacing, default 1.0); the solver builds the mesh | `mesh` (breakpoints starting at 0, required); the user owns the mesh |
+| Nodes | `coll_setting=(divs, [choices])` or `coll_setting=divs`: integers on the sample grid | `coll_nodes=`: floats in [0,1] ((0,1] for VIE-1) |
+| Options that apply only here | `coll_setting`, `quadrature`, `samples_per_interval`, `kernel_interp_degree` | `coll_nodes`, `kernel_singularity`, `reuse_adaptive_blocks` |
+| `sol.t` | the sample times n·dt, n = 0…N−1 | the mesh breakpoints |
+| Core (today's code) | `solvers.py` internals + D | `_callable_solvers.py` internals + D/scipy |
+
+- **Crossed inputs:** an option belonging to the other regime raises a
+  `ValueError` that says which regime was inferred and why. Example: &quot;kernel
+  is an array, so the problem is sampled; mesh= is for callable inputs, use
+  dt= and coll_setting=&quot;.
+- **`dt` with `mesh`:** a `dt` other than the default, passed with `mesh`,
+  raises. An explicit `dt=1.0` can't be told apart from the default and is
+  ignored; this is accepted.
+- **Mixed inputs** (e.g. a callable K with sampled g) are rejected in 1.0
+  with `NotImplementedError`, and the contract doc reserves them. Adding them
+  later breaks nothing. When added, their nodes sit on the sample grid, so
+  they take `coll_setting`.
+
+---
+
+## 2. Decisions (settled 2026-10-31)
+
+**D1. PEP 8 identifiers everywhere.**
+- Public: `solve_vie1`, `solve_vie2`, `solve_vide`; `optimal_graded_mesh`
+  parameters `T` → `t_end` and `M` → `n_intervals` (`alpha` and `order`
+  stay).
+- Private *function* names are renamed too (e.g. `_build_W_scalar` →
+  `_build_w_scalar`).
+- Maths-notation locals (`N`, `M`, `Q`, `K`, `W`, `K_real`) stay; PEP 8's
+  &quot;foolish consistency&quot; clause covers them.
+- The new names also make the deprecation clean: the old names keep their
+  old return types throughout 0.11.
+
+**D2. `dt: float = 1.0`**, sampled regime only. `mesh` is required in the
+functional regime.
+
+**D3. Nodes, one argument per regime.**
+- Sampled: `coll_setting=(divs, [choices])`, exactly today's
+  `coll_divs`/`coll_choices`.
+  - A bare `coll_setting=divs` means every point the method admits: 1..q
+    for VIE-1, 0..q otherwise.
+  - `None` gives the default: VIE-1 `(3, [1,2,3])`; VIE-2/VIDE
+    `(2, [0,1,2])`.
+  - Any length-2 sequence is accepted. Integers only (NumPy ints allowed);
+    floats raise `TypeError`.
+  - The choices-only form is gone, which removes one of F22's three
+    inference rules.
+  - Why integers: `divs` also fixes the mesh. It is `divs²` samples wide
+    under collocation quadrature, and it sets the default and the allowed
+    multiples of `samples_per_interval` under product quadrature. So float
+    node positions would lose information, and nudging a float could
+    silently select an unrelated method.
+- Functional: `coll_nodes=` floats, as today. `coll_setting` is *not*
+  accepted there (F8: the same name must not mean two things). The
+  defaults are the same node positions.
+- `samples_per_interval` (renamed from `mesh_samples`) keeps today's rules:
+  any multiple of `divs` under product quadrature, exactly `divs²` under
+  collocation quadrature, and today's defaults.
+- Docstring caveat: a bare `divs` with VIE-1 `continuous=True` gives
+  ρ = (−1)^q, so for even q the method is admitted at reduced order, with an
+  `AccuracyWarning`. Same as today's `coll_divs` alone.
+
+**D4. VIE-1 continuous method: `continuous: bool = False` plus `y0`.**
+`y0` is required when `continuous=True` and a `ValueError` otherwise (today
+it is a printed warning). The initial value is called `y0` in all three
+solvers (F13).
+
+**D5. Returned object: one merged class, `VolterraSolution`** (§3). There is
+no separate result-plus-solution pair: we have no solver diagnostics, since
+failures raise, so everything the result would hold describes the piecewise
+polynomial.
+- **Breakpoint convention:** at interior breakpoints, `sol.y` and `sol(t)`
+  report the *mean* of the two one-sided limits by default.
+  `sol(t, at_breakpoints=&quot;left&quot;|&quot;right&quot;)` gives either limit.
+- *Provisional:* revisit the default after the iterated-solution discussion.
+- Measured error at interior breakpoints, K = e⁻ᵘ, y = cos t on [0,4]
+  (scripts in that day's scratchpad, `breakpoint_sides*.py`):
+
+  | Method | left | right | mean |
+  |---|---|---|---|
+  | VIE-1 default {1/3,2/3,1} | O(h³) | O(h³) | **O(h⁴)** |
+  | VIE-1 Radau IIA p=3 | O(h³) | O(h³) | O(h³), best constant |
+  | VIE-2 default {0,1/2,1} | O(h⁴) | identical (\|L−R\| ≈ 1e-16) | identical |
+  | VIE-2 Gauss p=3 | O(h³) | O(h³) | **O(h⁴)** |
+  | VIE-2 Radau IIA p=3 | **O(h⁵)** | O(h³) | O(h³) |
+
+  Today the sampled grid output already averages (on both the D path and
+  the product path), while `sol(t)` takes the right limit.
+- **The 0.11 wrappers** take the new convention for dense evaluation at
+  exact interior breakpoints. This was accepted as an accuracy improvement;
+  on sampled VIE-1 data the error at breakpoints goes from 2.8e-7 to
+  3.6e-9.
+- **`to_ppoly()` is added. `to_polynomials()` and the `Polynomial` list are
+  removed.** The list survives in 0.11 only behind the deprecated
+  `.polynomials`, indexing and iteration aliases.
+
+**D6. `sol.t`/`sol.y` are the grid the problem was posed on.** That's the
+sample times in the sampled regime and the mesh breakpoints in the
+functional regime. The collocation data is `node_times`/`node_values` in
+both regimes. The flattened `(M·p,)` node grid I first proposed is dropped:
+with the default VIE-2/VIDE nodes it repeats every interior breakpoint,
+which breaks `np.interp`/`searchsorted`.
+
+**D7. Warnings:** `VolesWarning(UserWarning)` as the base, with
+`AccuracyWarning` and `PerformanceWarning` under it.
+
+| Site(s) | Category |
+|---|---|
+| ρ = 1 reduced order (`solvers.py:156`) | Accuracy |
+| VIE-1 g(0) ≠ 0 (`:193`, `:197`) | Accuracy |
+| VIE-1 K(0) small/singular, collocation quadrature (`:252`) | Accuracy |
+| singularity declared on a uniform mesh (`_callable_solvers.py:2425`) | Accuracy |
+| singularity location outside [0, T] (`:2417`) | base `VolesWarning` |
+| Numba fallback (`solvers.py:744, 1387, 1650`) | Performance |
+| stale D extension lacking the lag-block driver (`_product.py:605`) | Performance |
+| `soln_init_value` ignored (5 sites) | becomes a `ValueError` (D4); a `VolesWarning` inside the wrappers until 1.0 |
+
+**D8.** Mixed inputs are rejected in 1.0 and reserved (§1).
+
+**D9.** Deprecations use `DeprecationWarning`.
+
+**D10.** These names stay: `kernel_singularity`, `reuse_adaptive_blocks`,
+`kernel_interp_degree`, `quadrature`. `mesh_samples` →
+`samples_per_interval`. `optimal_graded_mesh(T=, M=)` is accepted with a
+warning in 0.11.
+
+**D11.** Every parameter stays keyword-only.
+
+**D12. Non-finite inputs:**
+- Arrays: raise `ValueError`.
+- Callable `g` and `a`: checked at the collocation times.
+- Kernel callables: not checked, and the docs say so. A singular kernel
+  legitimately returns inf at u = 0, and the quadrature never samples there.
+
+**Open: iterated solution.** For VIE-2, the iterated solution is
+u_it(t) = g(t) + ∫₀ᵗ K(t−s) u_h(s) ds. It needs its own discussion:
+- what it costs in each regime: in the sampled regime it's a convolution
+  on the grid, like the residual prototype; in the functional regime it's
+  a quadrature per evaluation point, and the result is not a piecewise
+  polynomial;
+- whether it is offered for VIDE, and what &quot;iterated&quot; means for VIE-1;
+- what the API looks like (a method on `VolterraSolution`, or a solver
+  option);
+- whether it changes the `at_breakpoints` default.
+
+The design below leaves room for it as an addition.
+
+---
+
+## 3. Target public surface (0.11 additions; all that remains in 1.0)
+
+```python notest
+solve_vie1(*, kernel, g=None, continuous=False, y0=None,
+           dt=1.0, coll_setting=None, quadrature=&quot;product&quot;,
+           samples_per_interval=None, kernel_interp_degree=None,      # sampled
+           mesh=None, coll_nodes=None,
+           kernel_singularity=None, reuse_adaptive_blocks=True        # functional
+           ) -&gt; VolterraSolution
+
+solve_vie2(*, kernel, g=None,
+           dt=1.0, coll_setting=None, quadrature=&quot;product&quot;,
+           samples_per_interval=None, kernel_interp_degree=None,
+           mesh=None, coll_nodes=None,
+           kernel_singularity=None, reuse_adaptive_blocks=True) -&gt; VolterraSolution
+
+solve_vide(*, kernel, a=None, g=None, y0,
+           dt=1.0, coll_setting=None, quadrature=&quot;product&quot;,
+           samples_per_interval=None, kernel_interp_degree=None,
+           mesh=None, coll_nodes=None,
+           kernel_singularity=None, reuse_adaptive_blocks=True) -&gt; VolterraSolution
+
+VolesWarning, AccuracyWarning, PerformanceWarning
+optimal_graded_mesh(*, alpha, t_end, n_intervals, order)
+gauss_legendre_nodes, radau_iia_nodes, lobatto_nodes
+__version__
+</code></pre>
+<h3 id="volterrasolution"><code>VolterraSolution</code></h3>
+<p>Below, <code>shape</code> is <code>()</code> (scalar), <code>(d,)</code> (vector) or <code>(d, m)</code> (matrix). The
+dtype is complex for complex inputs.</p>
+<p><strong>Grid output.</strong> Each attribute means the same thing in both regimes.</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Shape</th>
+<th>Sampled</th>
+<th>Functional</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>t</code></td>
+<td><code>(K,)</code></td>
+<td>n·dt, K = N (computed on first access)</td>
+<td>mesh breakpoints, K = M+1</td>
+</tr>
+<tr>
+<td><code>y</code></td>
+<td><code>(K, *shape)</code></td>
+<td>values from D, as today</td>
+<td>the mesh values, evaluated</td>
+</tr>
+</tbody>
+</table>
+<p>Interior breakpoints use the mean convention. <code>y</code> is writable (users
+subtract exact solutions in place). Invariant: <code>sol(sol.t)</code> equals <code>sol.y</code>
+to rounding.</p>
+<p><strong>Piecewise-polynomial structure.</strong> Identical in both regimes; read-only
+unless noted.</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Shape</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mesh</code></td>
+<td><code>(M+1,)</code></td>
+<td>breakpoints</td>
+</tr>
+<tr>
+<td><code>node_times</code></td>
+<td><code>(M, p)</code></td>
+<td>the actual collocation times, <em>stored</em>: on the sampled regime's final interval (Q+r samples) the nodes are snapped to that interval's own grid, so they can't be derived from <code>mesh</code> and <code>nodes</code></td>
+</tr>
+<tr>
+<td><code>node_values</code></td>
+<td><code>(M, p, *shape)</code></td>
+<td>the collocation values (the unknowns). Functional: the solve output. Sampled: computed lazily from <code>coefficients</code>. Equals the old callable-family return.</td>
+</tr>
+<tr>
+<td><code>coefficients</code></td>
+<td><code>(M, P, *shape)</code></td>
+<td>local monomial coefficients in x = (t − tₙ)/hₙ ∈ [0,1]. This is the public accessor the noisy-data residual helper needs.</td>
+</tr>
+<tr>
+<td><code>nodes</code></td>
+<td><code>(p,)</code></td>
+<td>nominal node positions as floats</td>
+</tr>
+<tr>
+<td><code>coll_setting</code></td>
+<td>—</td>
+<td><code>(divs, [choices])</code> in the sampled regime, <code>None</code> in the functional regime</td>
+</tr>
+<tr>
+<td><code>equation</code></td>
+<td>—</td>
+<td><code>"vie1"</code>, <code>"vie2"</code> or <code>"vide"</code></td>
+</tr>
+<tr>
+<td><code>regime</code></td>
+<td>—</td>
+<td><code>"sampled"</code> or <code>"functional"</code></td>
+</tr>
+<tr>
+<td><code>continuous</code></td>
+<td>—</td>
+<td>whether the space is C⁰: VIDE, or VIE-1 with <code>continuous=True</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Evaluation.</strong>
+- <code>__call__(t, *, at_breakpoints="mean")</code> returns <code>(len(t), *shape)</code>, and a
+  scalar <code>t</code> gives a scalar or a <code>shape</code> array (F20, documented). It
+  returns NaN outside [0, T] (F21, documented).
+  - <code>at_breakpoints</code> ∈ {"mean", "left", "right"} and only affects
+    interior breakpoints.
+  - Breakpoints are detected within a few ulps, because <code>n·dt</code> and
+    <code>n·(Q·dt)</code> can differ by one ulp and exact equality would silently
+    fall back to one limit.
+  - At t = 0 only the right limit exists; at t = T only the left.
+- <code>to_ppoly()</code> returns a <code>scipy.interpolate.PPoly</code>: coefficients cₖ/hₙᵏ,
+  highest degree first, trailing axes <code>shape</code>. That gives derivatives,
+  antiderivatives, integrals and roots. PPoly evaluates right-continuously,
+  and the docstring says so. Complex coefficients must be verified before
+  promising them; if PPoly can't take them, raise <code>TypeError</code> for complex
+  solutions.
+- <code>__repr__</code> shows the equation, regime, interval count, T, degree, node
+  set, shape and dtype.
+- Pickling works; lazy caches are not pickled. Pickles are <em>not</em> promised
+  stable across minor versions; the stability policy says so.
+- No <code>__len__</code>, indexing, iteration, <code>.polynomials</code>, <code>mesh_breakpoints</code> or
+  <code>from_unit_coefs</code>. These are deprecated aliases in 0.11 only.</p>
+<p><strong>Efficiency rules:</strong>
+- <strong>Nothing on the default path gets more expensive than today.</strong> In the
+  sampled regime <code>y</code> comes from D unchanged. <code>node_values</code> and <code>t</code> are
+  computed on first access.
+- <strong>Dense evaluation:</strong> a Horner loop indexing one coefficient at a time
+  (<code>c[idx, k]</code>) instead of today's <code>self._unit[idx]</code> copy. That copy is
+  <code>(len(t), P, *shape)</code>, hundreds of MB for a matrix solution on a fine
+  grid. The arithmetic order is unchanged, so the result is bitwise
+  identical.
+- <strong>Coefficients are always produced.</strong> The D calls currently skip them
+  when <code>return_polys=False</code>; Phase 7 measures the cost of always asking. I
+  expect it to be negligible, since they are about N·p/Q, versus N for <code>y</code>.
+- Lazy caches are filled without a lock. That's a benign race, because the
+  computations are idempotent.</p>
+<h3 id="shape-and-matrix-mode-rule-f11-f19-stated-once">Shape and matrix-mode rule (F11, F19), stated once</h3>
+<ul>
+<li>The time axis comes first.</li>
+<li>The solution is matrix-valued exactly when some input has a column axis:
+  sampled <code>g</code> <code>(N,d,m)</code>, callable <code>g</code> returning <code>(d,m)</code>, or <code>y0</code> <code>(d,m)</code>.</li>
+<li>Every input with a column axis must have the same m.</li>
+<li>An input without one is shared across all columns. This generalises
+  VIDE's shared-<code>(N,d)</code> forcing to all solvers.</li>
+<li>Complex inputs give complex outputs, and <code>float32</code> is upcast.</li>
+<li>A 2-D kernel array is rejected, which keeps it free for a future
+  non-convolution K(tᵢ, sⱼ) (F25).</li>
+</ul>
+<h3 id="kernel-convention-f25">Kernel convention (F25)</h3>
+<p>A callable kernel is called with one positional array argument u and means
+K(t − s). A future non-convolution kernel will get a new keyword, never
+arity sniffing (which breaks on <code>functools.partial</code>, <code>np.vectorize</code> and numba
+dispatchers). Adding a keyword is non-breaking, so 1.0 only has to <em>not</em>
+promise arity-based dispatch.</p>
+<hr />
+<h2 id="4-phases">4. Phases</h2>
+<p>Each phase leaves <code>pytest tests/</code> green, passes the bitwise battery (§5), and
+ends with an offer to commit. Phases 1–3 change no public signature.</p>
+<h3 id="phase-0-contract-and-baseline">Phase 0: contract and baseline</h3>
+<ol>
+<li><strong>Write the contract doc</strong> (<code>docs/dev/api-contract-1.0.md</code>; it becomes
+   the user-facing conventions page in Phase 6). It covers:</li>
+<li>the regime rule</li>
+<li>the shape and matrix rule</li>
+<li>the breakpoint convention</li>
+<li>the kernel convention and reserved extensions</li>
+<li>the type/value error policy (F3: wrong type → <code>TypeError</code>, right type
+     with a wrong value → <code>ValueError</code>; ints are <code>numbers.Integral</code> and not
+     <code>bool</code>; bools must be <code>bool</code>/<code>np.bool_</code>)</li>
+<li>the warnings policy</li>
+<li>non-finite handling</li>
+<li><code>RuntimeError</code> meaning "internal error, please report" (F4)</li>
+<li>the stability policy draft (F31)</li>
+<li><strong>Baseline battery</strong>: generalise <code>docs/dev/nogc_battery.py</code> into
+   <code>docs/dev/api_battery.py</code>, extended with:</li>
+<li>every old-API parameter combination (both families, all three solvers,
+     scalar/vector/runtime-d/matrix/complex, both quadratures, continuous
+     VIE-1, graded meshes, <code>kernel_singularity</code> forms, <code>coll_nodes</code>, a short
+     final interval)</li>
+<li>the <code>return_function</code> coefficients and dense evaluation on a grid
+     <em>excluding</em> exact interior breakpoints (the accepted D5 change)</li>
+<li>the exception type and message of a representative invalid call per
+     validation branch</li>
+</ol>
+<p>Save the reference from <code>main</code> <em>before</em> Phase 1. <code>compare</code> requires exact
+   equality.
+3. Benchmark baseline: run <code>benchmarks/bench_solvers.py</code> locally and keep the
+   JSON. Small-N cases matter here, since the new validation layer is pure
+   overhead there.</p>
+<h3 id="phase-1-foundations-no-signature-changes">Phase 1: foundations (no signature changes)</h3>
+<ol>
+<li><strong><code>_warnings.py</code></strong>: the three classes and <code>_warn(msg, category)</code>.</li>
+<li><code>stacklevel</code> is computed by walking frames to the first non-<code>voles</code>
+     frame. That's needed for Python 3.10/3.11; <code>skip_file_prefixes</code> only
+     arrived in 3.12.</li>
+<li>Convert all 15 <code>print</code> sites (F1).</li>
+<li><code>show_warnings=False</code> becomes an internal <code>suppress</code> flag checked
+     inside <code>_warn</code>, <strong>not</strong> <code>warnings.catch_warnings</code>: that mutates
+     process-global state and isn't thread-safe before 3.14, and the matrix
+     path fans out to threads.</li>
+<li>The per-column recursive calls (e.g. <code>_col_vie1</code> → <code>solve_VIE_1</code> near
+     <code>solvers.py:1299</code>) already pass <code>show_warnings=False</code>. Audit them so
+     every warning is emitted once, from the calling thread (F2).</li>
+<li><strong><code>_validate.py</code></strong>: one helper per parameter kind (<code>integer</code>, <code>positive
+   integer</code>, <code>bool</code>, <code>positive finite real</code>, <code>choice</code>, <code>1-D increasing
+   finite array starting at 0</code>, <code>array or callable</code>, <code>coll setting</code>, …),
+   each applying the F3 rule. Route <code>_as_int</code>, <code>_check_time_step</code> and
+   friends through it. Behaviour changes, all for the changelog:</li>
+<li><code>coll_divs=2.0</code> raises <code>TypeError</code></li>
+<li><code>time_step="0.1"</code> raises a voles <code>TypeError</code> instead of the <code>&gt;</code>
+     comparison error</li>
+<li><code>show_warnings="no"</code> and <code>return_function=1</code> raise <code>TypeError</code></li>
+<li><strong>F5</strong>: <code>soln_init_value=None</code> on VIDE (both families) raises <code>TypeError</code>
+   ("y0 is required").</li>
+<li><strong>F4</strong>: <code>_dlang.py:246</code> raises <code>RuntimeError("internal error: &lt;fn&gt; returned
+   code n; please report at &lt;issues URL&gt;")</code>, listed in the Raises sections.
+   Codes 1 (argument checks that Python already enforces) and 3 (too large,
+   already a <code>ValueError</code>) are the only nonzero returns today.</li>
+<li><strong>F6</strong>: the finite checks of D12.</li>
+<li><strong>F17</strong>: move <code>_smooth_gl_order</code> to a module constant
+   (<code>_SMOOTH_GL_ORDER</code>); only <code>src/</code> uses it.</li>
+<li><strong>F24</strong>: <code>quadrature</code> accepted case-insensitively.</li>
+<li><strong>pytest</strong>: set <code>filterwarnings = ["error"]</code> plus explicit ignores, so
+   every warning site must be expected with <code>pytest.warns</code>. Rewrite
+   <code>test_show_warnings.py</code> from <code>capsys</code> to <code>pytest.warns</code> / <code>recwarn</code>, and
+   add a test that a suppressed solve emits nothing from any thread.</li>
+</ol>
+<p>Battery: numerics bitwise equal. The expected-exception table is updated only
+for the deliberate F3/F5 changes, each listed in the commit message.</p>
+<h3 id="phase-2-volterrasolution">Phase 2: <code>VolterraSolution</code></h3>
+<ol>
+<li>Build <code>VolterraSolution</code> (§3) in <code>_solution.py</code> from today's
+   <code>_SolutionFunction</code>, plus:</li>
+<li>the grid output (<code>t</code>, <code>y</code>)</li>
+<li><code>node_times</code>, <code>node_values</code> and the metadata</li>
+<li><code>at_breakpoints</code> with tolerant breakpoint detection</li>
+<li>the copy-free Horner loop</li>
+<li><code>to_ppoly()</code>, with complex support verified or refused explicitly</li>
+<li><code>__repr__</code></li>
+<li>0.11-only deprecated aliases: <code>mesh_breakpoints</code>, <code>polynomials</code>
+   (<code>_polys_from_unit_coefs</code> moves behind it), <code>__getitem__</code>, <code>__iter__</code>,
+   <code>__len__</code>. Keep the legacy <code>_SolutionFunction</code> class unchanged in 0.11
+   so 0.10 pickles still load; delete it in 1.0.</li>
+<li>Internal constructor: <code>VolterraSolution._build(raw, regime, equation,
+   …)</code> takes the cores' <code>_Raw</code> (Phase 3). Until Phase 3 lands, an adapter
+   builds it from today's <code>(values, _SolutionFunction)</code> output.</li>
+<li>Tests:</li>
+<li>the invariant <code>sol(sol.t) == sol.y</code> (to rounding), in both regimes,
+     for continuous and discontinuous methods</li>
+<li>the left/right/mean limits against direct polynomial evaluation</li>
+<li>breakpoint detection with ulp-perturbed <code>t</code></li>
+<li>NaN outside [0, T]</li>
+<li><code>to_ppoly()</code> against <code>sol(t)</code> away from breakpoints, plus its
+     <code>.derivative()</code> against differentiated coefficients</li>
+<li>read-only flags; repr; a pickle round-trip</li>
+<li>the deprecated aliases warn</li>
+<li>a 0.10 pickle fixture loads</li>
+</ol>
+<h3 id="phase-3-separate-validation-from-the-cores-no-signature-changes">Phase 3: separate validation from the cores (no signature changes)</h3>
+<p>This is the largest internal change. Today each public function validates and
+computes in one body (<code>solve_VIE_1</code> is ~390 lines). After this phase:</p>
+<ol>
+<li>Move the shared helpers that the callable family imports from
+   <code>solvers.py</code> (<code>_column_workers</code>, <code>_check_vie1_setting</code>,
+   <code>_warn_g_start_columns</code>, <code>_vie1_rho</code>, …; see <code>_callable_solvers.py:30</code>)
+   into <code>_common.py</code>, so neither core imports the other.</li>
+<li><code>git mv solvers.py _sampled.py</code> and <code>git mv _callable_solvers.py
+   _functional.py</code>, which keeps blame intact. <code>voles/solvers.py</code> comes back
+   as a re-export stub; its deprecation is Phase 5.</li>
+<li>Split each of the six functions into <strong>normalise</strong> (validate, apply
+   defaults, determine d/m/complex, produce plain arrays plus
+   <code>(divs, choices)</code> or <code>node_pos</code>) and a <strong>core</strong>:
+   <code>_sampled_vie1(kernel, g, y0, dt, divs, choices, continuous, quadrature,
+   Q, interp_deg, suppress) -&gt; _Raw</code> and its siblings.</li>
+<li><code>_Raw</code> holds the grid values, unit coefficients, mesh, node times, node
+     values (when the core has them), d and m, so all cores share one
+     return type.</li>
+<li>The matrix fan-out and the complex block-embedding stay in the cores,
+     so both API layers get them unchanged.</li>
+<li>Apply the D1 private-function renames in the same pass, while every call
+   site is being touched anyway.</li>
+<li>The old public functions become <em>normalise-old-kwargs → core → old return
+   shape</em>. This is a pure move. Battery: bitwise, including exception
+   messages.</li>
+</ol>
+<h3 id="phase-4-the-new-api">Phase 4: the new API</h3>
+<ol>
+<li><strong><code>_api.py</code></strong>: <code>solve_vie1/2/vide</code> with full type hints and numpydoc
+   docstrings (Examples sections come in Phase 6).</li>
+<li><code>_classify(kernel, g, a)</code> returns the regime, or a
+      <code>NotImplementedError</code> for mixed inputs. <code>callable()</code> decides: an
+      ndarray is not callable, while <code>Polynomial</code>, scipy interpolators,
+      <code>np.vectorize</code> and numba dispatchers are.</li>
+<li>Regime-specific options per §1: <code>dt</code>/<code>coll_setting</code>/<code>quadrature</code>/
+      <code>samples_per_interval</code>/<code>kernel_interp_degree</code> versus <code>mesh</code>/
+      <code>coll_nodes</code>/<code>kernel_singularity</code>/<code>reuse_adaptive_blocks</code>.
+      Wrong-regime options raise <code>ValueError</code> naming the regime.</li>
+<li><code>coll_setting</code> resolution (D3): tuple, bare int or <code>None</code> gives
+      <code>(divs, sorted choices)</code>, then today's admissibility checks.
+      <code>coll_nodes</code> validated as today.</li>
+<li>Shapes per §3 (matrix rule, shared inputs, 2-D kernels rejected).</li>
+<li><code>continuous</code>/<code>y0</code> per D4.</li>
+<li>Call the core and return <code>VolterraSolution._build(...)</code>.</li>
+<li>Export the new names and warning classes from <code>__init__</code>. Leave the old
+   names in <code>__all__</code> for 0.11 so <code>from voles import *</code> keeps working.</li>
+<li><strong>Tests (new files):</strong></li>
+<li><code>test_api_regimes.py</code>: classification, crossed options, <code>dt</code>≠default
+     with <code>mesh</code>, mixed inputs.</li>
+<li><code>test_api_validation.py</code>: a parametrized table of (call, exception
+     type, message fragment). This makes the F3 policy executable.</li>
+<li><code>test_api_shapes.py</code>: the matrix and shared-input rule across all
+     three solvers and both regimes, plus complex inputs.</li>
+<li><code>test_api_equivalence.py</code>: every battery case through the new API
+     equals the old API bit for bit (<code>y</code> vs the old values; <code>node_values</code>
+     vs the old callable return; <code>coefficients</code> vs the old unit coefs).</li>
+<li><code>test_api_solution.py</code>: end-to-end <code>VolterraSolution</code> contents per
+     regime, including <code>node_times</code> on a short final interval.</li>
+</ol>
+<h3 id="phase-5-old-api-to-deprecation-wrappers">Phase 5: old API to deprecation wrappers</h3>
+<ol>
+<li>Rewrite the six old functions in <code>_legacy.py</code> as kwargs translators onto
+   the new API that convert the result back to the old return type:</li>
+<li>array family: <code>sol.y</code></li>
+<li>callable family: <code>sol.node_values</code></li>
+<li><code>return_function=True</code> gives <code>(values, sol)</code>; the <code>VolterraSolution</code>
+     carries the 0.11 deprecated aliases for list-style access</li>
+</ol>
+<p>Each emits one <code>DeprecationWarning</code> whose message is the equivalent new
+   call, built from the actual kwargs, e.g. <code>solve_vie2(kernel=..., g=...,
+   dt=0.01, coll_setting=(2, [0, 1, 2]))</code>. <code>return_polys</code> and
+   <code>show_warnings</code> keep working inside the wrappers only.
+2. <code>fast_coll_settings_*</code> warn through a module-level <code>__getattr__</code> (F16).
+   There is no public replacement; <code>_supported_coll_settings_d</code> stays private.
+3. <code>voles/solvers.py</code>: a stub that warns on import and re-exports the
+   wrappers.
+4. <code>optimal_graded_mesh(T=, M=)</code> is accepted with a <code>DeprecationWarning</code>
+   (D1/D10).
+5. Tests:
+   - Existing test files keep calling the old API in 0.11. That way the whole
+     legacy suite becomes wrapper coverage, and through the wrappers it
+     exercises the new layer's numerics too. Each such file gets
+     <code>pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")</code>.
+   - New <code>test_legacy_shims.py</code>: every old kwarg is translated, every old
+     return shape is reproduced, and each wrapper warns exactly once per call
+     (not once per column).
+   - The battery passes through the wrappers, bitwise (breakpoints excluded,
+     per D5).</p>
+<h3 id="phase-6-documentation">Phase 6: documentation</h3>
+<ol>
+<li>Docstrings for the three solvers, <code>VolterraSolution</code> and the warning
+   classes:</li>
+<li>a runnable <code>Examples</code> section on each (F27), doctested via
+     <code>--doctest-modules</code> on <code>src/voles</code> (print rounded values so the doctests
+     are platform-stable)</li>
+<li><code>See Also</code> sections (F28)</li>
+<li><code>Raises</code> split by <code>TypeError</code>/<code>ValueError</code>/<code>NotImplementedError</code>/
+     <code>RuntimeError</code>, plus a <code>Warns</code> section (F29)</li>
+</ol>
+<p><strong>First check</strong> which cross-reference syntax the installed
+   mkdocstrings/griffe renders as a link (single backticks in <code>See Also</code>
+   versus <code>[name][voles.name]</code> autorefs); don't assume.
+2. New user-guide pages:
+   - <strong>Conventions</strong>, from the contract doc: the regime rule, the shape
+     contract (F19), the breakpoint convention with the D5 table and when to
+     use <code>"left"</code>, scalar <code>t</code> → scalar (F20), NaN outside [0, T] (F21), and
+     why the VIE-1 default mesh is wider, with a worked example of the
+     noise/discretisation trade-off (F23).
+   - <strong>Warnings</strong>: the categories and how to filter or raise them.
+   - <strong>Migration from 0.10</strong>: Appendix A, plus a before/after example per
+     family.
+   - <strong>Stability policy</strong> (F31): semver on <code>__all__</code>; numerical results may
+     change in a minor release only as a documented accuracy improvement;
+     deprecations warn for at least one minor release before removal;
+     pickles are not stable across minor versions.
+3. Rewrite README, <code>getting_started.md</code>, <code>index.md</code>, all eight examples
+   pages and the mkdocs nav (API Reference becomes solvers /
+   <code>VolterraSolution</code> / warnings / helpers).
+   - <code>examples/polynomial_solutions.md</code> becomes "Working with the solution":
+     <code>coefficients</code>, <code>node_values</code>, <code>to_ppoly()</code> (derivative, integral).
+   - <code>docs-examples.yml</code> must pass.
+4. <code>benchmarks/bench_solvers.py</code> moves to the new API but keeps its benchmark
+   IDs, so the published history stays continuous.
+5. Update the CLAUDE.md "Architecture" and "Dispatch flow" sections, and
+   CONTRIBUTING.
+6. CHANGELOG <code>[0.11.0]</code>:
+   - the new API
+   - the deprecations, with their removal version
+   - the behaviour changes: prints become warnings, the <code>ValueError</code> →
+     <code>TypeError</code> cases, VIDE <code>y0=None</code>, non-finite checks, and dense
+     evaluation at exact breakpoints (mean of the limits)
+   - an announcement that the <code>[callable]</code>/<code>[numba]</code> extras go in 1.0 (F34)</p>
+<h3 id="phase-7-guard-rails-and-packaging">Phase 7: guard rails and packaging</h3>
+<ol>
+<li><strong>F32</strong>: <code>tests/test_public_api.py</code> pins <code>voles.__all__</code> and the
+   <code>str(inspect.signature(...))</code> of every public callable and of
+   <code>VolterraSolution</code>'s public members against a checked-in snapshot.</li>
+<li><strong>F30</strong>: full annotations on the public surface (<code>ArrayLike</code>,
+   <code>Callable[[NDArray], ArrayLike]</code>, <code>Literal</code>). <code>py.typed</code> is added at
+   1.0, once the loosely annotated wrappers are gone. Run a CI
+   <code>pyright --verifytypes voles</code> (or <code>mypy</code>) check on the public surface.</li>
+<li><strong>F33</strong>: make <code>src/voles/__init__.py</code> the single source of the version
+   (pyproject <code>dynamic = ["version"]</code>, <code>[tool.hatch.version] path = ...</code>).
+   Update the release-procedure memory: version bumps happen in
+   <code>__init__.py</code>.</li>
+<li>Performance check against the Phase 0 benchmark JSON:</li>
+<li>small-N overhead of the new layer</li>
+<li>the cost of always requesting coefficients from D (§3)</li>
+<li>dense-evaluation memory and time with the copy-free Horner loop</li>
+</ol>
+<p>If anything regresses beyond noise, profile before release.</p>
+<h3 id="release-0110-then-a-feedback-window">Release 0.11.0, then a feedback window</h3>
+<ul>
+<li>Follow the release procedure in the <code>release-0-10-0</code> memory.</li>
+<li>Write 3–4 "day-one" scripts as a new user would, using only the docs: a
+  sampled VIE-2, a singular VIE-1 on a graded mesh, a matrix VIDE, a noisy-g
+  VIE-1. Each awkward moment becomes an issue.</li>
+<li>Ask William to port something real to 0.11, and collect what was awkward.</li>
+</ul>
+<h3 id="phase-8-100">Phase 8: 1.0.0</h3>
+<ol>
+<li>Delete:</li>
+<li><code>_legacy.py</code>, the <code>voles/solvers.py</code> stub, <code>fast_coll_settings_*</code></li>
+<li>the legacy <code>_SolutionFunction</code></li>
+<li>the <code>VolterraSolution</code> deprecated aliases</li>
+<li><code>optimal_graded_mesh(T=, M=)</code></li>
+<li>the <code>[callable]</code>/<code>[numba]</code> extras (F34)</li>
+<li>Migrate the legacy test files to the new API. Mostly mechanical:</li>
+<li>kwarg renames by script</li>
+<li><code>coll_divs</code>/<code>coll_choices</code> → <code>coll_setting</code></li>
+<li><code>return_function</code> unpacking → <code>sol.y</code>/<code>sol.node_values</code>/<code>sol</code></li>
+</ol>
+<p><code>test_function_solvers.py</code> (264 call sites) is the bulk of it. Keep
+   <code>test_api_equivalence.py</code>'s reference outputs as a frozen <code>.npz</code> fixture,
+   so coverage of the old numerics survives the wrappers' deletion.
+3. Add <code>py.typed</code>, set the classifier to <code>Development Status :: 5 -
+   Production/Stable</code>, regenerate the signature snapshot, and start the
+   stability policy.
+4. Release 1.0.0.</p>
+<hr />
+<h2 id="5-verification-and-risks">5. Verification and risks</h2>
+<ul>
+<li><strong>Bitwise battery</strong> (Phase 0 onward) is the main guard: the merge is a
+  re-plumbing, and nothing numerical may move except dense evaluation at
+  exact interior breakpoints (D5). Exception messages are compared too.
+  Phase 3 especially has to keep the old messages exactly.</li>
+<li><strong>Breakpoint detection tolerance</strong> in <code>__call__</code>. Test with <code>t</code> perturbed
+  by ±1–4 ulps, and with <code>t = n·dt</code> versus <code>mesh = arange(M+1)·(Q·dt)</code>.</li>
+<li><strong>Final-interval nodes</strong> in the sampled regime: <code>node_times</code> must match
+  <code>snap_nodes</code> exactly. Test with N chosen so that r = 1 and r = Q−1.</li>
+<li><strong>Warnings and threads</strong>: no <code>catch_warnings</code> on the solve path, and
+  warnings are emitted only from the calling thread. <code>test_threading.py</code>
+  gains a "warns once, from the main thread" case.</li>
+<li><strong><code>stacklevel</code></strong> must point at the user's call line through every layer
+  (wrapper → API → core). Test it with
+  <code>warnings.catch_warnings(record=True)</code> and the recorded <code>filename</code>.</li>
+<li><strong>Error messages</strong> in the new API name <em>new</em> parameters. A wrapper user
+  triggering a validation error sees the new name; the deprecation message
+  printed just before shows the mapping, which is acceptable.</li>
+<li><strong><code>to_ppoly()</code> with complex coefficients</strong>: verify before documenting.</li>
+</ul>
+<hr />
+<h2 id="6-finding-phase-traceability">6. Finding → phase traceability</h2>
+<table>
+<thead>
+<tr>
+<th>Finding</th>
+<th>Where</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F1 print warnings</td>
+<td>P1</td>
+<td>D7 categories</td>
+</tr>
+<tr>
+<td>F2 <code>show_warnings</code></td>
+<td>P1, P5</td>
+<td>gone from the new API; a suppress flag inside the wrappers</td>
+</tr>
+<tr>
+<td>F3 TypeError/ValueError</td>
+<td>P0 policy, P1, P4</td>
+<td><code>_validate.py</code>; executable table</td>
+</tr>
+<tr>
+<td>F4 RuntimeError</td>
+<td>P1</td>
+<td>"internal error, please report"</td>
+</tr>
+<tr>
+<td>F5 VIDE <code>y0=None</code></td>
+<td>P1</td>
+<td>bug; fixed in the old API too</td>
+</tr>
+<tr>
+<td>F6 non-finite</td>
+<td>P1</td>
+<td>D12</td>
+</tr>
+<tr>
+<td>F7 naming split</td>
+<td>P4</td>
+<td>merged names</td>
+</tr>
+<tr>
+<td>F8 <code>coll_divs</code> two meanings</td>
+<td>P4</td>
+<td><code>coll_setting</code> sampled only, <code>coll_nodes</code> functional only (D3)</td>
+</tr>
+<tr>
+<td>F9 different returns</td>
+<td>P2, P4</td>
+<td><code>t</code>/<code>y</code> = problem grid; <code>node_values</code> (D6)</td>
+</tr>
+<tr>
+<td>F10 private solution class</td>
+<td>P2</td>
+<td><code>VolterraSolution</code> (D5)</td>
+</tr>
+<tr>
+<td>F11 matrix-mode selection</td>
+<td>P4</td>
+<td>§3 rule</td>
+</tr>
+<tr>
+<td>F12 VIE-1 conditional <code>y0</code></td>
+<td>P4</td>
+<td>D4</td>
+</tr>
+<tr>
+<td>F13 <code>y0</code></td>
+<td>P4</td>
+<td></td>
+</tr>
+<tr>
+<td>F14 <code>function_</code> prefix</td>
+<td>P4, P5</td>
+<td>removed in the merge</td>
+</tr>
+<tr>
+<td>F15 casing</td>
+<td>P3, P4</td>
+<td>D1</td>
+</tr>
+<tr>
+<td>F16 <code>fast_coll_settings_*</code></td>
+<td>P5, P8</td>
+<td>deprecated, then removed</td>
+</tr>
+<tr>
+<td>F17 <code>_smooth_gl_order</code></td>
+<td>P1</td>
+<td>module constant</td>
+</tr>
+<tr>
+<td>F18 <code>optimal_graded_mesh</code> names</td>
+<td>P5, P8</td>
+<td><code>t_end</code>, <code>n_intervals</code> (D1)</td>
+</tr>
+<tr>
+<td>F19 shape contract</td>
+<td>P0, P6</td>
+<td>conventions page</td>
+</tr>
+<tr>
+<td>F20 scalar → scalar</td>
+<td>P6</td>
+<td>documented, behaviour kept</td>
+</tr>
+<tr>
+<td>F21 NaN outside [0, T]</td>
+<td>P6</td>
+<td>documented, behaviour kept</td>
+</tr>
+<tr>
+<td>F22 three inference rules</td>
+<td>P4</td>
+<td>choices-only form removed; int / tuple / None remain (D3)</td>
+</tr>
+<tr>
+<td>F23 VIE-1 mesh default</td>
+<td>P6</td>
+<td>documented with a worked example</td>
+</tr>
+<tr>
+<td>F24 <code>quadrature</code> case</td>
+<td>P1</td>
+<td>accepted case-insensitively</td>
+</tr>
+<tr>
+<td>F25 non-convolution slot</td>
+<td>P0, P4</td>
+<td>contract reservation; 2-D kernels rejected</td>
+</tr>
+<tr>
+<td>F26 extension points</td>
+<td>—</td>
+<td>already fine</td>
+</tr>
+<tr>
+<td>F27 Examples + doctest</td>
+<td>P6</td>
+<td></td>
+</tr>
+<tr>
+<td>F28 cross-refs</td>
+<td>P6</td>
+<td>check the syntax first</td>
+</tr>
+<tr>
+<td>F29 Raises/Warns</td>
+<td>P6</td>
+<td></td>
+</tr>
+<tr>
+<td>F30 type hints / <code>py.typed</code></td>
+<td>P7, P8</td>
+<td></td>
+</tr>
+<tr>
+<td>F31 stability policy</td>
+<td>P0 draft, P6, P8</td>
+<td></td>
+</tr>
+<tr>
+<td>F32 signature snapshot</td>
+<td>P7</td>
+<td></td>
+</tr>
+<tr>
+<td>F33 <code>__version__</code></td>
+<td>P7</td>
+<td>single-sourced in <code>__init__.py</code></td>
+</tr>
+<tr>
+<td>F34 redundant extras</td>
+<td>P6 announce, P8 remove</td>
+<td></td>
+</tr>
+<tr>
+<td>inventory: <code>voles.solvers</code> importable</td>
+<td>P3, P5, P8</td>
+<td>stub, then removal</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="appendix-a-old-new-mapping-draft-of-the-migration-guide">Appendix A: old → new mapping (draft of the migration guide)</h2>
+<table>
+<thead>
+<tr>
+<th>0.10</th>
+<th>0.11 / 1.0</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>solve_VIE_1/2</code>, <code>solve_VIDE</code></td>
+<td><code>solve_vie1/2</code>, <code>solve_vide</code> with array inputs</td>
+</tr>
+<tr>
+<td><code>function_solve_VIE_1/2/VIDE</code></td>
+<td>the same three with callable inputs + <code>mesh=</code></td>
+</tr>
+<tr>
+<td><code>kernel_values=</code>, <code>g_values=</code>, <code>a_values=</code></td>
+<td><code>kernel=</code>, <code>g=</code>, <code>a=</code></td>
+</tr>
+<tr>
+<td><code>soln_init_value=</code></td>
+<td><code>y0=</code></td>
+</tr>
+<tr>
+<td><code>time_step=</code></td>
+<td><code>dt=</code></td>
+</tr>
+<tr>
+<td><code>mesh_breakpoints=</code></td>
+<td><code>mesh=</code></td>
+</tr>
+<tr>
+<td><code>coll_divs=q, coll_choices=[...]</code> (array family)</td>
+<td><code>coll_setting=(q, [...])</code></td>
+</tr>
+<tr>
+<td><code>coll_divs=q</code> alone (array family)</td>
+<td><code>coll_setting=q</code></td>
+</tr>
+<tr>
+<td><code>coll_choices=[...]</code> alone (array family)</td>
+<td><code>coll_setting=(max(choices), [...])</code></td>
+</tr>
+<tr>
+<td><code>coll_divs</code>/<code>coll_choices</code> (callable family)</td>
+<td><code>coll_nodes=np.array(choices) / divs</code></td>
+</tr>
+<tr>
+<td><code>coll_nodes=</code></td>
+<td><code>coll_nodes=</code></td>
+</tr>
+<tr>
+<td><code>force_continuous=True, soln_init_value=v</code></td>
+<td><code>continuous=True, y0=v</code></td>
+</tr>
+<tr>
+<td><code>mesh_samples=</code></td>
+<td><code>samples_per_interval=</code></td>
+</tr>
+<tr>
+<td>array-family return <code>(N, …)</code></td>
+<td><code>sol.y</code> (times: <code>sol.t</code>)</td>
+</tr>
+<tr>
+<td>callable-family return <code>(M, p, …)</code></td>
+<td><code>sol.node_values</code> (times: <code>sol.node_times</code>)</td>
+</tr>
+<tr>
+<td><code>return_function=True</code> → <code>(values, sol)</code></td>
+<td>the returned <code>sol</code> itself</td>
+</tr>
+<tr>
+<td><code>return_polys=</code></td>
+<td>removed (deprecated since 0.5)</td>
+</tr>
+<tr>
+<td><code>show_warnings=False</code></td>
+<td><code>warnings.simplefilter("ignore", voles.VolesWarning)</code></td>
+</tr>
+<tr>
+<td><code>sol.mesh_breakpoints</code></td>
+<td><code>sol.mesh</code></td>
+</tr>
+<tr>
+<td><code>sol[n]</code>, <code>iter(sol)</code>, <code>sol.polynomials</code></td>
+<td><code>sol.coefficients[n]</code> or <code>sol.to_ppoly()</code></td>
+</tr>
+<tr>
+<td><code>sol(t_n)</code> at an interior breakpoint (right limit)</td>
+<td><code>sol(t_n)</code> gives the mean; <code>at_breakpoints="right"</code> for the old value</td>
+</tr>
+<tr>
+<td><code>sol._unit</code> (private)</td>
+<td><code>sol.coefficients</code></td>
+</tr>
+<tr>
+<td><code>fast_coll_settings_*</code></td>
+<td>removed</td>
+</tr>
+<tr>
+<td><code>from voles.solvers import …</code></td>
+<td><code>from voles import …</code></td>
+</tr>
+<tr>
+<td><code>optimal_graded_mesh(T=…, M=…)</code></td>
+<td><code>optimal_graded_mesh(t_end=…, n_intervals=…)</code></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
