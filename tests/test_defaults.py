@@ -61,13 +61,13 @@ def test_coll_divs_alone_is_the_full_node_set():
     assert np.array_equal(fc, fd)
 
 
-def test_product_quadrature_is_the_default(capsys):
+def test_product_quadrature_is_the_default(voles_warnings):
     """A non-compiled setting runs without the Numba fallback, and the
     default equals quadrature='product' explicitly."""
     t, K, g, y = _vie2_data(61)
     kw = dict(kernel_values=K, g_values=g, time_step=0.02, coll_divs=5, coll_choices=[0, 1, 2, 3, 4, 5])
     a = solve_VIE_2(**kw)
-    assert "falling back" not in capsys.readouterr().out
+    assert "falling back" not in voles_warnings.text()
     assert np.array_equal(a, solve_VIE_2(quadrature="product", **kw))
     assert np.max(np.abs(a - y)) < 1e-8
 

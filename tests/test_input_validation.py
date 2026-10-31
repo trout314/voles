@@ -137,7 +137,7 @@ def test_vie1_coll_divs_non_integer():
     """Used to reach the solver and fail deep inside (or, with
     quadrature='product', silently run as coll_divs=2)."""
     for quadrature in ("collocation", "product"):
-        with pytest.raises(ValueError, match="coll_divs must be a positive integer"):
+        with pytest.raises(TypeError, match="coll_divs must be a positive integer"):
             _vie1(coll_divs=2.7, coll_choices=[1, 2], quadrature=quadrature)
 
 
@@ -145,9 +145,10 @@ def test_vie1_coll_divs_non_integer():
 # coll_choices must be integers
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("solver, error", _COLL_ERRORS)
-def test_coll_choices_floats(solver, error):
-    with pytest.raises(error, match="coll_choices must be a list of integers"):
+@pytest.mark.parametrize("solver", [s for s, _ in _COLL_ERRORS])
+def test_coll_choices_floats(solver):
+    # A float where an integer is required is a type error (contract §9).
+    with pytest.raises(TypeError, match="coll_choices must be a list of integers"):
         solver(coll_choices=[1.0, 2.0])
 
 
@@ -486,10 +487,10 @@ def test_vector_vide_scalar_init_message(quad):
 
 @pytest.mark.parametrize("quad", ["collocation", "product"])
 @pytest.mark.parametrize("N", [0, 3])
-def test_too_short_input_message(N, quad, capsys):
+def test_too_short_input_message(N, quad, voles_warnings):
     """An empty input used to report 'truncated to -3', after printing a
     truncation warning; now the length check comes first."""
     with pytest.raises(ValueError, match=rf"has length {N}, which leaves zero mesh intervals"):
         solve_VIE_2(kernel_values=np.ones(N), g_values=np.ones(N), time_step=0.1,
                     quadrature=quad, mesh_samples=4 if quad == "product" else None)
-    assert "truncated" not in capsys.readouterr().out
+    assert "truncated" not in voles_warnings.text()

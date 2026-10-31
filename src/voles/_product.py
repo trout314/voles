@@ -59,6 +59,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from numpy.polynomial import polynomial as npp
 
 from ._solution import _SolutionFunction
+from ._warnings import _warn, PerformanceWarning
 
 from ._callable_solvers import (_lagrange_basis_coefs, _vie1_cont_basis_coefs,
                                 _vie1_cont_advance)
@@ -602,10 +603,10 @@ def block_drivers_available(kind, use_extension=True, show_warnings=False):
     driver = _DRIVER_OF[kind]
     have = use_extension and getattr(_dlang_module, "have_block_driver", lambda k: False)(driver)
     if use_extension and not have and show_warnings:
-        print(f"warning: the loaded D extension does not export the lag-block driver "
+        _warn(f"the loaded D extension does not export the lag-block driver "
               f"volterra_solve_{driver}_blocks (it was probably built before it was added); "
               f"falling back to the NumPy stepper, whose cost grows quadratically with the "
-              f"number of mesh intervals. Rebuild the extension to restore the fast path.")
+              f"number of mesh intervals. Rebuild the extension to restore the fast path.", PerformanceWarning)
     return have
 
 

@@ -425,7 +425,7 @@ def test_validation():
                     soln_init_value=0.0, show_warnings=False)      # c_m != 1
 
 
-def test_odd_length_is_solved_in_full(capsys):
+def test_odd_length_is_solved_in_full(voles_warnings):
     """Two samples past the last regular mesh interval used to be truncated
     with a warning; the final interval absorbs them."""
     dt, q = 0.05, 3
@@ -434,7 +434,7 @@ def test_odd_length_is_solved_in_full(capsys):
     vals = solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=q,
                        coll_choices=[1, 2, 3], quadrature="product")
     assert len(vals) == N
-    assert capsys.readouterr().out == ""
+    assert voles_warnings.text() == ""
     assert np.max(np.abs(vals - exact)) < 1e-3
 
 
@@ -459,14 +459,14 @@ def test_product_rejects_non_integer_parameters(kwargs):
     base = dict(kernel_values=K, g_values=g, time_step=0.01, coll_divs=2,
                 coll_choices=[1, 2], quadrature="product", show_warnings=False)
     base.update(kwargs)
-    with pytest.raises(ValueError, match="integer"):
+    with pytest.raises(TypeError, match="integer"):
         solve_VIE_1(**base)
 
 
 def test_collocation_rejects_non_integer_mesh_samples():
     """mesh_samples=9.9 used to be truncated to 9 == coll_divs**2 and accepted."""
     K, g = _smooth_problem(91)
-    with pytest.raises(ValueError, match="integer"):
+    with pytest.raises(TypeError, match="integer"):
         solve_VIE_1(kernel_values=K, g_values=g, time_step=0.01, mesh_samples=9.9)
 
 
@@ -482,18 +482,18 @@ def test_numpy_integer_parameters_are_accepted():
 
 
 @pytest.mark.parametrize("quadrature", ["collocation", "product"])
-def test_rho_plus_one_setting_warns_about_reduced_order(quadrature, capsys):
+def test_rho_plus_one_setting_warns_about_reduced_order(quadrature, voles_warnings):
     """(3, [1, 2]) has rho_m = +1 exactly: admitted, but it converges at order
     m - 1 = 1, and says so unless warnings are off."""
     K, g = _smooth_problem(91)
     kw = dict(kernel_values=K, g_values=g, time_step=0.01, coll_divs=3,
               coll_choices=[1, 2], quadrature=quadrature)
     solve_VIE_1(**kw)
-    assert "order 1 rather than 2" in capsys.readouterr().out
+    assert "order 1 rather than 2" in voles_warnings.text()
     solve_VIE_1(show_warnings=False, **kw)
-    assert capsys.readouterr().out == ""
+    assert voles_warnings.text() == ""
     solve_VIE_1(**{**kw, "coll_choices": [1, 2, 3]})           # rho_m = 0
-    assert capsys.readouterr().out == ""
+    assert voles_warnings.text() == ""
 
 
 def test_rho_plus_one_really_is_first_order_with_product_quadrature():
@@ -522,18 +522,18 @@ def test_matrix_g_must_match_the_kernel_length(quadrature):
                     quadrature=quadrature, show_warnings=False)
 
 
-def test_stale_extension_fallback_is_announced_and_agrees(monkeypatch, capsys):
+def test_stale_extension_fallback_is_announced_and_agrees(monkeypatch, voles_warnings):
     from voles import _dlang
     K, g = _smooth_problem(151)
     kw = dict(kernel_values=K, g_values=g, time_step=0.01, quadrature="product")
     fast = solve_VIE_1(**kw)
-    assert capsys.readouterr().out == ""
+    assert voles_warnings.text() == ""
     monkeypatch.setattr(_dlang, "have_block_driver", lambda name: False)
     slow = solve_VIE_1(**kw)
-    assert "falling back to the NumPy stepper" in capsys.readouterr().out
+    assert "falling back to the NumPy stepper" in voles_warnings.text()
     assert np.max(np.abs(fast - slow)) < 1e-9
     solve_VIE_1(show_warnings=False, **kw)
-    assert capsys.readouterr().out == ""
+    assert voles_warnings.text() == ""
 
 
 def test_numpy_fallback_lu_matches_the_extension_singularity_test():

@@ -1,254 +1,235 @@
-"""Tests that show_warnings controls warning output for all three solvers."""
+"""voles diagnostics go through `warnings`, and show_warnings silences them.
+
+Every diagnostic is a `voles.VolesWarning` subclass, emitted with
+`warnings.warn`, attributed to the caller's line, emitted at most once per
+call and only from the calling thread. ``show_warnings=False`` (0.10 API)
+emits nothing. Nothing is ever printed.
+"""
+import contextlib
+import threading
+import warnings
 
 import numpy as np
 import pytest
-from voles import solve_VIE_1, solve_VIE_2, solve_VIDE
+
+import voles
+from voles import (solve_VIE_1, solve_VIE_2, solve_VIDE, VolesWarning, AccuracyWarning,
+                   PerformanceWarning)
+
+
+@contextlib.contextmanager
+def recorded():
+    """Record every warning (overriding the suite's "error" filter)."""
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        yield rec
+
+
+def _voles(rec, category=VolesWarning):
+    return [w for w in rec if issubclass(w.category, category)]
 
 
 def _make_data(n_pts, time_step=0.01):
-    """Create simple test data with n_pts points."""
     times = np.arange(n_pts) * time_step
-    kernel = np.exp(-times)
-    g = np.sin(times)
-    return kernel, g, time_step
+    return np.exp(-times), np.sin(times), time_step
 
 
-class TestTruncationWarning:
-    """Truncation warning when length isn't (multiple of coll_divs²) + 1."""
+def _numba_or_skip(fn, **kw):
+    try:
+        return fn(**kw)
+    except NotImplementedError:
+        pytest.skip("numba not available")
 
-    def _bad_length_data(self, coll_divs=3):
-        # 91 = 10*9+1 is valid; 90 is not
-        n_pts = 90
-        return _make_data(n_pts)
 
-    def test_vie1_odd_length_is_silent_and_full(self, capsys):
-        """Lengths that do not end on a mesh point used to be truncated with
-        a warning; the final interval now absorbs the leftover samples."""
-        kernel, g, h = self._bad_length_data()
+# ---------------------------------------------------------------- the classes
+
+def test_warning_classes_are_exported_and_nested():
+    assert issubclass(VolesWarning, UserWarning)
+    assert issubclass(AccuracyWarning, VolesWarning)
+    assert issubclass(PerformanceWarning, VolesWarning)
+    for name in ("VolesWarning", "AccuracyWarning", "PerformanceWarning"):
+        assert name in voles.__all__
+
+
+# --------------------------------------------- odd data lengths are not diagnosed
+
+class TestOddLengthIsSilent:
+    """Lengths that don't end on a mesh point used to be truncated with a
+    warning; the final interval now absorbs the leftover samples."""
+
+    @pytest.mark.parametrize("show", [True, False])
+    def test_vie1(self, show):
+        kernel, g, h = _make_data(90)
         g[0] = 0.0
-        y = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                        coll_divs=3, coll_choices=[1, 2, 3], show_warnings=True)
-        assert len(y) == len(kernel)
-        assert capsys.readouterr().out == ""
+        with recorded() as rec:
+            y = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h, coll_divs=3,
+                            coll_choices=[1, 2, 3], show_warnings=show)
+        assert len(y) == len(kernel) and rec == []
 
-    def test_vie1_truncation_silent(self, capsys):
-        kernel, g, h = self._bad_length_data()
-        g[0] = 0.0
-        solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                     coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
-        assert capsys.readouterr().out == ""
+    @pytest.mark.parametrize("show", [True, False])
+    def test_vie2(self, show):
+        kernel, g, h = _make_data(90)
+        with recorded() as rec:
+            y = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=h, coll_divs=3,
+                            coll_choices=[0, 1, 2, 3], show_warnings=show)
+        assert len(y) == len(kernel) and rec == []
 
-    def test_vie2_odd_length_is_silent_and_full(self, capsys):
-        kernel, g, h = self._bad_length_data()
-        y = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=h,
-                        coll_divs=3, coll_choices=[0, 1, 2, 3], show_warnings=True)
-        assert len(y) == len(kernel)
-        assert capsys.readouterr().out == ""
+    @pytest.mark.parametrize("show", [True, False])
+    def test_vide(self, show):
+        kernel, g, h = _make_data(90)
+        with recorded() as rec:
+            y = solve_VIDE(kernel_values=kernel, g_values=g, soln_init_value=0.0, time_step=h,
+                           coll_divs=3, coll_choices=[0, 1, 2], show_warnings=show)
+        assert len(y) == len(kernel) and rec == []
 
-    def test_vie2_truncation_silent(self, capsys):
-        kernel, g, h = self._bad_length_data()
-        solve_VIE_2(kernel_values=kernel, g_values=g, time_step=h,
-                     coll_divs=3, coll_choices=[0, 1, 2, 3], show_warnings=False)
-        assert capsys.readouterr().out == ""
+    def test_matrix_vie2_and_vide(self):
+        n, d, m = 90, 2, 3
+        kernel = np.zeros((n, d, d))
+        kernel[:, 0, 0] = kernel[:, 1, 1] = 1.0
+        with recorded() as rec:
+            solve_VIE_2(kernel_values=kernel, g_values=np.ones((n, d, m)), time_step=0.01,
+                        coll_divs=3, coll_choices=[0, 1, 2])
+            solve_VIDE(kernel_values=np.zeros((n, d, d)), g_values=np.ones((n, d, m)),
+                       soln_init_value=np.zeros((d, m)), time_step=0.01, coll_divs=3,
+                       coll_choices=[1, 2, 3])
+        assert rec == []
 
-    def test_vide_odd_length_is_silent_and_full(self, capsys):
-        kernel, g, h = self._bad_length_data()
-        y = solve_VIDE(kernel_values=kernel, g_values=g, soln_init_value=0.0,
-                       time_step=h, coll_divs=3, coll_choices=[0, 1, 2], show_warnings=True)
-        assert len(y) == len(kernel)
-        assert capsys.readouterr().out == ""
 
-    def test_vide_truncation_silent(self, capsys):
-        kernel, g, h = self._bad_length_data()
-        solve_VIDE(kernel_values=kernel, g_values=g, soln_init_value=0.0,
-                    time_step=h, coll_divs=3, coll_choices=[0, 1, 2], show_warnings=False)
-        assert capsys.readouterr().out == ""
-
+# ---------------------------------------------------------------- numba fallback
 
 class TestNumbaFallbackWarning:
-    """Fallback warning when collocation setting isn't compiled in D extension."""
+    """An uncompiled setting under collocation quadrature runs on numba."""
 
-    # Use coll_divs=5 which is unlikely to be compiled
-    def _unsupported_data(self):
-        kernel, g, h = _make_data(5**2 + 1)
-        return kernel, g, h
+    SETTINGS = dict(coll_divs=5, quadrature="collocation")
 
-    def test_vie2_fallback_warns(self, capsys):
-        kernel, g, h = self._unsupported_data()
-        try:
-            solve_VIE_2(kernel_values=kernel, g_values=g, time_step=h,
-                         coll_divs=5, quadrature="collocation", coll_choices=[0, 1, 2, 3, 4, 5],
-                         show_warnings=True)
-        except NotImplementedError:
-            pytest.skip("numba not available")
-        assert "falling back" in capsys.readouterr().out.lower()
+    def _calls(self):
+        kernel, g, h = _make_data(5 ** 2 + 1)
+        g1 = g.copy()
+        g1[0] = 0.0
+        return {
+            "vie1": (solve_VIE_1, dict(kernel_values=kernel, g_values=g1, time_step=h,
+                                       coll_choices=[1, 2, 3, 4, 5], **self.SETTINGS)),
+            "vie2": (solve_VIE_2, dict(kernel_values=kernel, g_values=g, time_step=h,
+                                       coll_choices=[0, 1, 2, 3, 4, 5], **self.SETTINGS)),
+            "vide": (solve_VIDE, dict(kernel_values=kernel, g_values=g, soln_init_value=0.0,
+                                      time_step=h, coll_choices=[0, 1, 2, 3, 4, 5],
+                                      **self.SETTINGS)),
+        }
 
-    def test_vie2_fallback_silent(self, capsys):
-        kernel, g, h = self._unsupported_data()
-        try:
-            solve_VIE_2(kernel_values=kernel, g_values=g, time_step=h,
-                         coll_divs=5, quadrature="collocation", coll_choices=[0, 1, 2, 3, 4, 5],
-                         show_warnings=False)
-        except NotImplementedError:
-            pytest.skip("numba not available")
-        assert capsys.readouterr().out == ""
+    @pytest.mark.parametrize("kind", ["vie1", "vie2", "vide"])
+    def test_warns(self, kind):
+        fn, kw = self._calls()[kind]
+        with pytest.warns(PerformanceWarning, match="falling back"):
+            _numba_or_skip(fn, **kw)
 
-    def test_vide_fallback_warns(self, capsys):
-        kernel, g, h = self._unsupported_data()
-        try:
-            solve_VIDE(kernel_values=kernel, g_values=g, soln_init_value=0.0,
-                        time_step=h, coll_divs=5, quadrature="collocation", coll_choices=[0, 1, 2, 3, 4, 5],
-                        show_warnings=True)
-        except NotImplementedError:
-            pytest.skip("numba not available")
-        assert "falling back" in capsys.readouterr().out.lower()
+    @pytest.mark.parametrize("kind", ["vie1", "vie2", "vide"])
+    def test_silent(self, kind):
+        fn, kw = self._calls()[kind]
+        with recorded() as rec:
+            _numba_or_skip(fn, show_warnings=False, **kw)
+        assert _voles(rec) == []
 
-    def test_vide_fallback_silent(self, capsys):
-        kernel, g, h = self._unsupported_data()
-        try:
-            solve_VIDE(kernel_values=kernel, g_values=g, soln_init_value=0.0,
-                        time_step=h, coll_divs=5, quadrature="collocation", coll_choices=[0, 1, 2, 3, 4, 5],
-                        show_warnings=False)
-        except NotImplementedError:
-            pytest.skip("numba not available")
-        assert capsys.readouterr().out == ""
 
-    def test_vie1_fallback_warns(self, capsys):
-        kernel, g, h = self._unsupported_data()
-        g[0] = 0.0
-        try:
-            solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                         coll_divs=5, quadrature="collocation", coll_choices=[1, 2, 3, 4, 5],
-                         show_warnings=True)
-        except (NotImplementedError, ValueError):
-            pytest.skip("numba not available or setting rejected")
-        assert "falling back" in capsys.readouterr().out.lower()
-
-    def test_vie1_fallback_silent(self, capsys):
-        kernel, g, h = self._unsupported_data()
-        g[0] = 0.0
-        try:
-            solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                         coll_divs=5, quadrature="collocation", coll_choices=[1, 2, 3, 4, 5],
-                         show_warnings=False)
-        except (NotImplementedError, ValueError):
-            pytest.skip("numba not available or setting rejected")
-        assert capsys.readouterr().out == ""
-
+# ----------------------------------------------- VIE-1: unused soln_init_value
 
 class TestVIE1SolnInitValueWarning:
-    """Warning when soln_init_value is set but force_continuous=False in VIE-1."""
-
-    def test_scalar_warns(self, capsys):
-        kernel, g, h = _make_data(10)
-        g[0] = 0.0
-        solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                     coll_divs=1, coll_choices=[1],
-                     soln_init_value=1.0, force_continuous=False,
-                     show_warnings=True)
-        assert "no effect" in capsys.readouterr().out.lower()
-
-    def test_scalar_silent(self, capsys):
-        kernel, g, h = _make_data(10)
-        g[0] = 0.0
-        solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                     coll_divs=1, coll_choices=[1],
-                     soln_init_value=1.0, force_continuous=False,
-                     show_warnings=False)
-        assert capsys.readouterr().out == ""
-
-    def test_vector_warns(self, capsys):
-        n = 10
-        d = 2
-        h = 0.01
-        times = np.arange(n) * h
-        kernel = np.zeros((n, d, d))
-        for i in range(n):
-            kernel[i] = np.eye(d) * np.exp(-times[i])
-        g = np.column_stack([np.sin(times)] * d)
-        g[0, :] = 0.0
-        solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                     coll_divs=1, coll_choices=[1],
-                     soln_init_value=np.ones(d), force_continuous=False,
-                     show_warnings=True)
-        assert "no effect" in capsys.readouterr().out.lower()
-
-    def test_vector_silent(self, capsys):
-        n = 10
-        d = 2
-        h = 0.01
-        times = np.arange(n) * h
-        kernel = np.zeros((n, d, d))
-        for i in range(n):
-            kernel[i] = np.eye(d) * np.exp(-times[i])
-        g = np.column_stack([np.sin(times)] * d)
-        g[0, :] = 0.0
-        solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                     coll_divs=1, coll_choices=[1],
-                     soln_init_value=np.ones(d), force_continuous=False,
-                     show_warnings=False)
-        assert capsys.readouterr().out == ""
+    """soln_init_value has no effect unless force_continuous=True."""
 
     @staticmethod
-    def _matrix_inputs(n=10, d=2, m=3):
-        h = 0.01
-        times = np.arange(n) * h
-        kernel = np.zeros((n, d, d))
-        for i in range(n):
-            kernel[i] = np.eye(d) * np.exp(-times[i])
-        g = np.zeros((n, d, m))
-        for j in range(m):
-            g[:, :, j] = np.column_stack([np.sin(times * (j + 1))] * d)
+    def _inputs(d, m):
+        n, h = 10, 0.01
+        t = np.arange(n) * h
+        if d == 0:
+            kernel, g = np.exp(-t), np.sin(t)
+        else:
+            kernel = np.exp(-t)[:, None, None] * np.eye(d)
+            shape = (n, d) if m is None else (n, d, m)
+            g = np.broadcast_to(np.sin(t).reshape((n,) + (1,) * (len(shape) - 1)),
+                                shape).copy()
         g[0] = 0.0
-        return kernel, g, h, d, m
+        init = 1.0 if d == 0 else (np.ones(d) if m is None else np.ones((d, m)))
+        return dict(kernel_values=kernel, g_values=g, time_step=h, coll_divs=1,
+                    coll_choices=[1], force_continuous=False), init
 
-    def test_matrix_no_init_silent(self, capsys):
-        """When no soln_init_value is passed, no spurious 'no effect' warning fires."""
-        kernel, g, h, d, m = self._matrix_inputs()
-        solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                     coll_divs=1, coll_choices=[1],
-                     force_continuous=False, show_warnings=True)
-        assert "no effect" not in capsys.readouterr().out.lower()
+    @pytest.mark.parametrize("d,m", [(0, None), (2, None), (2, 3)])
+    def test_warns_once(self, d, m):
+        kw, init = self._inputs(d, m)
+        with recorded() as rec:
+            solve_VIE_1(soln_init_value=init, **kw)
+        msgs = [str(w.message) for w in _voles(rec)]
+        assert len(msgs) == 1 and "no effect" in msgs[0]
 
-    def test_matrix_warns_once(self, capsys):
-        """When init is passed with force_continuous=False, warn exactly once (not per-column)."""
-        kernel, g, h, d, m = self._matrix_inputs()
-        solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                     coll_divs=1, coll_choices=[1],
-                     soln_init_value=np.ones((d, m)), force_continuous=False,
-                     show_warnings=True)
-        out = capsys.readouterr().out.lower()
-        assert out.count("no effect") == 1
+    @pytest.mark.parametrize("d,m", [(0, None), (2, None), (2, 3)])
+    def test_silent(self, d, m):
+        kw, init = self._inputs(d, m)
+        with recorded() as rec:
+            solve_VIE_1(soln_init_value=init, show_warnings=False, **kw)
+        assert rec == []
 
-    def test_matrix_silent(self, capsys):
-        kernel, g, h, d, m = self._matrix_inputs()
-        solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                     coll_divs=1, coll_choices=[1],
-                     soln_init_value=np.ones((d, m)), force_continuous=False,
-                     show_warnings=False)
-        assert capsys.readouterr().out == ""
+    def test_no_init_no_warning(self):
+        kw, _ = self._inputs(2, 3)
+        with recorded() as rec:
+            solve_VIE_1(**kw)
+        assert rec == []
 
 
-class TestMatrixWarningsOnce:
-    """Matrix (multi-RHS) solves fan out one thread per column; per-solve
-    warnings must appear exactly once, not once per column."""
+# ------------------------------------------------- where and how warnings arrive
 
-    def test_vie2_matrix_odd_length_is_silent(self, capsys):
-        n_pts, d, m = 90, 2, 3  # 90 is not (multiple of 9) + 1: a final interval
-        kernel = np.zeros((n_pts, d, d))
-        kernel[:, 0, 0] = kernel[:, 1, 1] = 1.0
-        g = np.ones((n_pts, d, m))
-        y = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=0.01,
-                        coll_divs=3, coll_choices=[0, 1, 2], show_warnings=True)
-        assert y.shape == (n_pts, d, m)
-        assert capsys.readouterr().out == ""
+def _g0_nonzero_matrix():
+    n, d, m, h = 200, 2, 3, 0.01
+    t = np.arange(n) * h
+    kernel = np.exp(-t)[:, None, None] * np.eye(d)
+    g = np.sin(t)[:, None, None] + np.ones((n, d, m))      # g(0) = 1 in every column
+    return dict(kernel_values=kernel, g_values=g, time_step=h)
 
-    def test_vide_matrix_odd_length_is_silent(self, capsys):
-        n_pts, d, m = 90, 2, 3
-        kernel = np.zeros((n_pts, d, d))
-        g = np.ones((n_pts, d, m))
-        y = solve_VIDE(kernel_values=kernel, g_values=g,
-                       soln_init_value=np.zeros((d, m)), time_step=0.01,
-                       coll_divs=3, coll_choices=[1, 2, 3], show_warnings=True)
-        assert y.shape == (n_pts, d, m)
-        assert capsys.readouterr().out == ""
+
+def test_warning_points_at_the_callers_line():
+    with recorded() as rec:
+        solve_VIE_1(**_g0_nonzero_matrix())
+    (w,) = _voles(rec)
+    assert w.category is AccuracyWarning
+    assert w.filename == __file__
+
+
+def test_matrix_solve_warns_once_from_the_calling_thread(monkeypatch):
+    """The column fan-out runs in worker threads; diagnostics must not."""
+    threads = []
+    real_warn = warnings.warn
+
+    def spy(message, category=None, stacklevel=1, **kw):
+        threads.append(threading.current_thread())
+        return real_warn(message, category, stacklevel=stacklevel + 1, **kw)
+
+    monkeypatch.setattr(warnings, "warn", spy)
+    kw = _g0_nonzero_matrix()
+    with recorded() as rec:
+        solve_VIE_1(soln_init_value=np.zeros((2, 3)), **kw)     # two diagnostics
+    assert len(_voles(rec)) == 2
+    assert threads and all(t is threading.main_thread() for t in threads)
+
+
+def test_show_warnings_false_silences_matrix_workers():
+    with recorded() as rec:
+        solve_VIE_1(soln_init_value=np.zeros((2, 3)), show_warnings=False,
+                    **_g0_nonzero_matrix())
+    assert rec == []
+
+
+def test_standard_filter_silences_voles():
+    with recorded() as rec:
+        warnings.simplefilter("ignore", VolesWarning)
+        solve_VIE_1(**_g0_nonzero_matrix())
+    assert rec == []
+
+
+def test_error_filter_makes_a_diagnostic_fatal():
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", AccuracyWarning)
+        with pytest.raises(AccuracyWarning, match="g\\(0\\) is not zero"):
+            solve_VIE_1(**_g0_nonzero_matrix())
+
+
+def test_nothing_is_printed(capsys):
+    with recorded():
+        solve_VIE_1(soln_init_value=np.zeros((2, 3)), **_g0_nonzero_matrix())
+    assert capsys.readouterr().out == ""

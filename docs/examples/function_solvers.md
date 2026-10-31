@@ -80,9 +80,10 @@ solver quietly loses convergence order (and spends longer in adaptive
 fallbacks) instead. If the kernel ever evaluates to `inf`/`nan` at a
 quadrature node, a `ValueError` from the weight tensor's `np.isfinite` check
 points you to `kernel_singularity`, but do not rely on that safety net:
-declare every integrable singularity you know about. (The solver also prints
-a hint if you declare a singularity on a near-uniform mesh, suggesting
-`optimal_graded_mesh`; silence it with `show_warnings=False`.)
+declare every integrable singularity you know about. (The solver also emits
+a `voles.AccuracyWarning` if you declare a singularity on a near-uniform mesh,
+suggesting `optimal_graded_mesh`; silence it with `show_warnings=False` or a
+`warnings` filter.)
 
 ## Known power law? Declare it for a much faster build
 

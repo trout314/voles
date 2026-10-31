@@ -2,7 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+- **Warning classes.** `voles.VolesWarning` (a `UserWarning`) with
+  subclasses `voles.AccuracyWarning` (reduced order, g(0) ≠ 0 for VIE-1,
+  K(0) too small for collocation quadrature, a singularity declared on a
+  uniform mesh) and `voles.PerformanceWarning` (the Numba fallback, an
+  extension build without the lag-block drivers).
+
 ### Fixed
+- **`function_solve_*` accepted a float `coll_divs`.** `coll_divs=2.5`
+  silently ran with nodes {0, 0.4, 0.8}. It now raises `TypeError`, as the
+  array-based solvers already did for floats.
+- **`solve_VIDE` and `function_solve_VIDE` accepted
+  `soln_init_value=None`** and returned an all-NaN solution. They now raise
+  `TypeError`.
+- An invalid `kernel_singularity` declaration (e.g. a bool location or
+  `alpha` outside (0, 1)) no longer emits the uniform-mesh warning before
+  raising its error.
 - **Threaded solves could hang (Windows) or segfault (Linux)** when the D
   garbage collector ran while Python threads were executing the extension:
   the matrix fan-out's per-call thread pool, or a user's own threads. Both
@@ -27,6 +43,35 @@
   moves within about ±15% depending on the workload.
 
 ### Changed
+- **Diagnostics are warnings, not prints.** Every message voles used to
+  print (`warning: ...` on stdout) is now emitted with `warnings.warn` as
+  one of the classes above, attributed to the caller's line, once per call,
+  and only from the calling thread. Filter, record or escalate them with the
+  standard machinery, e.g. `warnings.simplefilter("ignore",
+  voles.VolesWarning)`. `show_warnings=False` still silences them.
+- **Wrong types raise `TypeError`.** A float (even an integer-valued one) or
+  bool where an integer is required (`coll_divs`, `coll_choices` entries,
+  `mesh_samples`, `kernel_interp_degree`, the node helpers' `p`,
+  `optimal_graded_mesh`'s `M` and `order`), a bool or non-number
+  `kernel_singularity` location, and a non-number `time_step` now raise
+  `TypeError` instead of `ValueError`. Flags (`show_warnings`,
+  `return_function`, `return_polys`, `force_continuous`,
+  `reuse_adaptive_blocks`) must be bools: `show_warnings="no"` and
+  `return_function=1` used to be accepted. `optimal_graded_mesh(M=10.0)`
+  used to be accepted too.
+- **Non-finite input is rejected.** NaN or infinity in `kernel_values`,
+  `g_values`, `a_values` or `soln_init_value`, or returned by a callable `g`
+  or `a` at a collocation time, raises `ValueError` naming the input and the
+  first bad index or time. It used to give an all-NaN result. Callable
+  kernels are not checked: a weakly singular kernel legitimately returns inf
+  at u = 0.
+- `quadrature` is matched case-insensitively (`"Product"` works).
+- The private `_smooth_gl_order` keyword is gone from the `function_solve_*`
+  signatures.
+- An internal error code from the D extension now raises a `RuntimeError`
+  that says it is a bug and asks for a report.
+- Tests: pytest runs with `filterwarnings = ["error"]`, so every warning a
+  test triggers must be expected (`pytest.warns`) or filtered explicitly.
 - CI: every test step has a 10-minute limit enforced by GitHub, since a hang
   that holds the GIL also stops pytest-timeout's watchdog thread.
 - `tests/test_thread_safety.py` (forced collections from a background thread)

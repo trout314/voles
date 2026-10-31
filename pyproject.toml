@@ -83,3 +83,7 @@ artifacts = ["*.so", "*.dylib", "*.dll"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Every warning is an error unless the test expects it (pytest.warns) or
+# filters it. This keeps each voles diagnostic covered by a test and stops
+# new warnings from appearing unnoticed.
+filterwarnings = ["error"]

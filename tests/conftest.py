@@ -1,7 +1,41 @@
+import warnings
+
 import numpy as np
 import pytest
 
 TOLERANCE = 1e-3
+
+
+class _VolesWarningLog:
+    """What a test sees of voles' diagnostics: ``text()`` returns the voles
+    warning messages emitted since the previous call, one per line (empty
+    when there were none). It consumes them, as ``capsys.readouterr()``
+    did when the diagnostics were printed."""
+
+    def __init__(self, records):
+        self._records = records
+        self._seen = 0
+
+    def _new(self):
+        from voles import VolesWarning
+        fresh = self._records[self._seen:]
+        self._seen = len(self._records)
+        return [w for w in fresh if issubclass(w.category, VolesWarning)]
+
+    def text(self):
+        return "\n".join(str(w.message) for w in self._new())
+
+    def records(self):
+        return self._new()
+
+
+@pytest.fixture
+def voles_warnings():
+    """Record every warning for the duration of the test (overriding the
+    suite's "error" filter) and expose the voles ones."""
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        yield _VolesWarningLog(rec)
 
 
 # ===========================================================================

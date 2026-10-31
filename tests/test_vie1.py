@@ -355,29 +355,29 @@ def _k0_problem(K0, dt=0.01, d=0):
 
 
 @pytest.mark.parametrize("K0", [0.0, 1e-3])
-def test_warns_when_kernel_start_unresolved(K0, capsys):
+def test_warns_when_kernel_start_unresolved(K0, voles_warnings):
     """K(0) = 0 diverges without bound under refinement (1e18 -> 1e83 as dt
     halves); K(0) small next to H*K'(0) diverges too."""
     solve_VIE_1(quadrature="collocation", **_k0_problem(K0))
-    assert _K0_MSG in capsys.readouterr().out
+    assert _K0_MSG in voles_warnings.text()
 
 
-def test_warns_for_singular_matrix_kernel_start(capsys):
+def test_warns_for_singular_matrix_kernel_start(voles_warnings):
     solve_VIE_1(quadrature="collocation", **_k0_problem(0.0, d=2))
-    assert _K0_MSG in capsys.readouterr().out
+    assert _K0_MSG in voles_warnings.text()
 
 
 @pytest.mark.parametrize("kw", [dict(quadrature="product"), dict(show_warnings=False)])
-def test_no_kernel_start_warning_for_product_or_when_silenced(kw, capsys):
+def test_no_kernel_start_warning_for_product_or_when_silenced(kw, voles_warnings):
     solve_VIE_1(**_k0_problem(0.0), **kw)
-    assert _K0_MSG not in capsys.readouterr().out
+    assert _K0_MSG not in voles_warnings.text()
 
 
 @pytest.mark.parametrize("d", [0, 3])
-def test_no_kernel_start_warning_for_resolved_kernel(d, capsys):
+def test_no_kernel_start_warning_for_resolved_kernel(d, voles_warnings):
     """K(0) = 1 with the same slope: ratio H*K'(0)/K(0) = 0.09, stable."""
     y = solve_VIE_1(**_k0_problem(1.0, d=d))
-    assert _K0_MSG not in capsys.readouterr().out
+    assert _K0_MSG not in voles_warnings.text()
     assert np.all(np.isfinite(y))
 
 
@@ -394,23 +394,23 @@ def _g0_problem(g0_offset):
 
 
 @pytest.mark.parametrize("quad", ["collocation", "product"])
-def test_warns_when_g_start_nonzero(quad, capsys):
+def test_warns_when_g_start_nonzero(quad, voles_warnings):
     solve_VIE_1(**_g0_problem(0.5), quadrature=quad)
-    assert _G0_MSG in capsys.readouterr().out
+    assert _G0_MSG in voles_warnings.text()
 
 
 @pytest.mark.parametrize("offset", [0.0, 1e-15])
-def test_no_g_start_warning_for_zero_or_rounding(offset, capsys):
+def test_no_g_start_warning_for_zero_or_rounding(offset, voles_warnings):
     solve_VIE_1(**_g0_problem(offset))
-    assert _G0_MSG not in capsys.readouterr().out
+    assert _G0_MSG not in voles_warnings.text()
 
 
-def test_no_g_start_warning_when_silenced(capsys):
+def test_no_g_start_warning_when_silenced(voles_warnings):
     solve_VIE_1(**_g0_problem(0.5), show_warnings=False)
-    assert _G0_MSG not in capsys.readouterr().out
+    assert _G0_MSG not in voles_warnings.text()
 
 
-def test_g_start_warning_names_worst_column_for_matrix(capsys):
+def test_g_start_warning_names_worst_column_for_matrix(voles_warnings):
     """Matrix problems report how many right-hand sides have g(0) != 0 and
     the worst one, not a pooled maximum."""
     t = np.arange(4 * 9 * 10 + 1) * 0.01
@@ -418,18 +418,18 @@ def test_g_start_warning_names_worst_column_for_matrix(capsys):
     g = np.outer(np.sin(t), [1.0, 2.0])
     G = np.stack([g, g + [0.0, 0.3], g], axis=2)        # only column 1 has g(0) != 0
     solve_VIE_1(kernel_values=K, g_values=G, time_step=0.01)
-    out = capsys.readouterr().out
+    out = voles_warnings.text()
     assert "g(0) is not zero in 1 of 3 columns; worst column 1" in out
 
 
-def test_rejected_g_shape_gets_no_g_start_warning(capsys):
+def test_rejected_g_shape_gets_no_g_start_warning(voles_warnings):
     """A g the solver is about to reject used to print the g(0) warning
     first; now only a g whose shape fits the kernel is diagnosed."""
     t = np.arange(37) * 0.01
     with pytest.raises(ValueError, match="g_values shape"):
         solve_VIE_1(kernel_values=np.exp(-t), g_values=np.ones((3, 3)), time_step=0.01)
-    assert "g(0) is not zero" not in capsys.readouterr().out
+    assert "g(0) is not zero" not in voles_warnings.text()
     # a non-square kernel is rejected before any warning as well
     with pytest.raises(ValueError, match=r"\(N, d, d\)"):
         solve_VIE_1(kernel_values=np.ones((37, 2, 3)), g_values=np.ones((37, 2)), time_step=0.01)
-    assert capsys.readouterr().out == ""
+    assert voles_warnings.text() == ""

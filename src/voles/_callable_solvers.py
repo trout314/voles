@@ -34,12 +34,19 @@ import numpy as np
 from numpy.polynomial import polynomial as npp
 
 from ._solution import _SolutionFunction, _complex_solution
+from . import _validate as _v
+from ._warnings import _warn, AccuracyWarning, VolesWarning
 
 
 try:
     _ComplexWarning = np.exceptions.ComplexWarning
 except AttributeError:  # numpy < 1.25
     _ComplexWarning = np.ComplexWarning
+
+
+# Gauss-Legendre order of the smooth-block quadrature (formerly the private
+# keyword _smooth_gl_order of the public solvers).
+_SMOOTH_GL_ORDER = 6
 
 
 def _scalar_callable_value(value, t, name="g"):
@@ -53,6 +60,9 @@ def _scalar_callable_value(value, t, name="g"):
         raise ValueError(
             f"{name}(t) returned shape {arr.shape} at t={t:.6g}, but kernel(u) returns a "
             f"scalar: for a vector equation kernel(u) must return a (d, d) matrix.")
+    if arr.dtype.kind in "biufc" and not np.isfinite(arr).all():
+        raise ValueError(f"{name}(t) returned a non-finite value ({arr.item()!r}) at "
+                         f"t={t:.6g}; inputs must be finite")
     return arr.reshape(())
 
 
@@ -274,21 +284,28 @@ def _resolve_node_pos(coll_nodes, coll_divs, coll_choices, *,
     if coll_divs is None and coll_choices is None:
         divs, choices = default_divs, default_choices
     elif coll_choices is None:
-        divs = coll_divs
-        choices = list(range(1 if exclude_zero else 0, int(divs) + 1)) if divs >= 1 else []
+        divs = _v.integer("coll_divs", coll_divs, minimum=1,
+                          type_msg=f"coll_divs must be a positive integer, got {coll_divs!r}",
+                          value_msg="coll_divs must be a positive integer")
+        choices = list(range(1 if exclude_zero else 0, divs + 1))
     elif coll_divs is None:
         choices = list(coll_choices)
         if not choices:
             raise ValueError("coll_choices must contain at least one entry")
+        for c in choices:
+            if isinstance(c, bool) or not isinstance(c, (int, np.integer)):
+                raise TypeError(
+                    f"coll_choices must be a list of integers, got {type(c).__name__}")
         divs = max(int(c) for c in choices)
     else:
         divs, choices = coll_divs, coll_choices
-    if divs < 1:
-        raise ValueError("coll_divs must be a positive integer")
+    divs = _v.integer("coll_divs", divs, minimum=1,
+                      type_msg=f"coll_divs must be a positive integer, got {divs!r}",
+                      value_msg="coll_divs must be a positive integer")
     for c in choices:
         # bool is a subclass of int in Python; reject anyway since it's never intended
         if isinstance(c, bool) or not isinstance(c, (int, np.integer)):
-            raise ValueError(
+            raise TypeError(
                 f"coll_choices must be a list of integers, got {type(c).__name__}")
     choices = sorted(int(c) for c in choices)
     if exclude_zero and 0 in choices:
@@ -331,15 +348,15 @@ def _normalize_kernel_singularity(kernel_singularity):
 
     def _location(u):
         # bool is an int subclass: True would silently declare location 1.0.
-        if isinstance(u, bool):
-            raise ValueError(
+        if isinstance(u, (bool, np.bool_)):
+            raise TypeError(
                 "kernel_singularity locations must be real numbers, got a "
                 f"bool ({u}); pass the singular location in kernel "
                 "coordinates, e.g. kernel_singularity=0.0 for K(u) ~ u^-a.")
         try:
             return float(u)  # accepts numpy scalars and 0-d arrays too
         except (TypeError, ValueError) as exc:
-            raise ValueError(
+            raise TypeError(
                 "kernel_singularity locations must be real numbers, got "
                 f"{u!r}") from exc
 
@@ -1377,6 +1394,18 @@ def _build_W_vector(kernel, mesh_breakpoints, node_pos,
 # Collocation-point sampling of g and a (shared by vector and matrix paths)
 # ---------------------------------------------------------------------------
 
+def _check_finite_samples(arr, name, mesh_breakpoints, node_pos, widths):
+    """ValueError naming the first collocation time where a sampled callable
+    (``g`` or ``a``, array ``(M, p, ...)``) returned a non-finite value."""
+    ok = np.isfinite(arr).reshape(arr.shape[0], arr.shape[1], -1).all(axis=2)
+    if not ok.all():
+        n, i = (int(k) for k in np.argwhere(~ok)[0])
+        t = mesh_breakpoints[n] + node_pos[i] * widths[n]
+        raise ValueError(f"{name}(t) returned a non-finite value at t={t:.6g}; "
+                         f"inputs must be finite")
+    return arr
+
+
 def _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d):
     """Sample a vector forcing term g(t) -> (d,) at the collocation nodes.
 
@@ -1395,7 +1424,7 @@ def _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d):
                     f"g(t) must return a shape ({d},) array for vector kernel; "
                     f"got shape {tuple(g_val.shape)}")
             g_arr[n, i, :] = g_val
-    return g_arr
+    return _check_finite_samples(g_arr, "g", mesh_breakpoints, node_pos, widths)
 
 
 def _sample_a_at_coll(a, mesh_breakpoints, node_pos, widths, M, p, d):
@@ -1417,7 +1446,7 @@ def _sample_a_at_coll(a, mesh_breakpoints, node_pos, widths, M, p, d):
                     f"a(t) must return a shape ({d}, {d}) array for vector "
                     f"kernel; got shape {tuple(a_val.shape)}")
             a_arr[n, i, :, :] = a_val
-    return a_arr
+    return _check_finite_samples(a_arr, "a", mesh_breakpoints, node_pos, widths)
 
 
 def _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths, M, p, d, m):
@@ -1439,7 +1468,7 @@ def _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths, M, p, d, m):
                     f"g(t) must return a shape ({d}, {m}) array for a "
                     f"matrix-valued problem; got shape {tuple(g_val.shape)}")
             G[n, i, :, :] = g_val
-    return G
+    return _check_finite_samples(G, "g", mesh_breakpoints, node_pos, widths)
 
 
 def _detect_g_matrix_cols(g, d, sample_t):
@@ -1654,8 +1683,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
                           kernel_singularity=None,
                           return_function: bool = False,
                           reuse_adaptive_blocks: bool = True,
-                          show_warnings: bool = True,
-                          _smooth_gl_order: int = 6):
+                          show_warnings: bool = True):
     r"""Solve the scalar Volterra integral equation of the second kind
 
     $$y(t) = g(t) + \int_0^t K(t-s)\,y(s)\,ds$$
@@ -1726,7 +1754,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
           $K(s, t)$.
 
         Locations may be Python floats/ints, NumPy scalars, or 0-d arrays;
-        booleans are rejected with a ``ValueError`` (``True`` would silently
+        booleans are rejected with a ``TypeError`` (``True`` would silently
         mean location 1.0). An empty list/tuple/dict declares nothing and
         behaves exactly like ``None``. The kernel's return value exactly *at*
         a declared singular point is never used (it is masked out of the
@@ -1754,9 +1782,11 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
         quadratures are suppressed (the best-obtainable value is what reuse
         wants); default-tolerance quadratures still warn as usual.
     show_warnings : bool, optional
-        If True (default), print the near-uniform-mesh hint when a
+        If True (default), emit a `voles.AccuracyWarning` when a
         ``kernel_singularity`` is declared on a mesh that looks uniform
-        (suggesting ``optimal_graded_mesh``). Pass False to suppress it.
+        (suggesting ``optimal_graded_mesh``), and a `voles.VolesWarning` when
+        a declared location lies outside $[0, T]$. ``False`` emits nothing;
+        the standard `warnings` filters work as well.
 
     Returns
     -------
@@ -1775,11 +1805,16 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     ------
     ValueError
         For invalid meshes, collocation settings, ``kernel_singularity``
-        declarations (including bool locations and out-of-range ``alpha``),
-        non-finite weight-tensor entries, kernel dimension or node count
-        past the compiled limits, or matrix input with zero columns.
+        declarations (out-of-range ``alpha``), non-finite weight-tensor
+        entries, a ``g`` returning NaN or infinity at a collocation time,
+        kernel dimension or node count past the compiled limits, or matrix
+        input with zero columns.
     TypeError
-        If ``kernel`` or ``g`` is not callable.
+        If ``kernel`` or ``g`` is not callable; for a ``coll_divs`` or
+        ``coll_choices`` entry that is not an integer (floats are rejected,
+        not truncated); for a ``kernel_singularity`` location that is a bool
+        or not a number; or for a flag (``return_function``,
+        ``reuse_adaptive_blocks``, ``show_warnings``) that is not a bool.
     numpy.linalg.LinAlgError
         If a collocation system is singular or nearly singular (e.g. a zero
         kernel).
@@ -1796,6 +1831,10 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     $m$ separate calls. The $m$ columns are solved in threads (capped at the
     CPU count).
     """
+    return_function = _v.flag("return_function", return_function)
+    reuse_adaptive_blocks = _v.flag("reuse_adaptive_blocks", reuse_adaptive_blocks)
+    show_warnings = _v.flag("show_warnings", show_warnings)
+    _smooth_gl_order = _SMOOTH_GL_ORDER
     kernel_singularity = _empty_singularity_to_none(kernel_singularity)
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
@@ -1828,8 +1867,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
             coll_nodes=node_pos,
             kernel_singularity=kernel_singularity,
             return_function=return_function, show_warnings=show_warnings,
-            reuse_adaptive_blocks=reuse_adaptive_blocks,
-            _smooth_gl_order=_smooth_gl_order)
+            reuse_adaptive_blocks=reuse_adaptive_blocks)
         if return_function:
             y_real, y_func_real = result
             return (_recombine_complex_y(y_real, d_orig),
@@ -1945,8 +1983,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
                          kernel_singularity=None,
                          return_function: bool = False,
                          reuse_adaptive_blocks: bool = True,
-                         show_warnings: bool = True,
-                         _smooth_gl_order: int = 6):
+                         show_warnings: bool = True):
     r"""Solve the scalar Volterra integro-differential equation
 
     $$y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds,\quad y(0) = y_0$$
@@ -1997,9 +2034,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
         Reuse the adaptive-quadrature weight blocks across the uniform-mesh
         Toeplitz assembly; see ``function_solve_VIE_2``.
     show_warnings : bool, optional
-        If True (default), print the near-uniform-mesh hint when a
-        ``kernel_singularity`` is declared on a mesh that looks uniform;
-        see ``function_solve_VIE_2``.
+        If True (default), emit the ``kernel_singularity`` warnings described
+        in ``function_solve_VIE_2``.
 
     Returns
     -------
@@ -2014,8 +2050,9 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     ------
     ValueError, TypeError, numpy.linalg.LinAlgError, ImportError
         As for ``function_solve_VIE_2``; additionally ``TypeError`` when
-        ``soln_init_value`` is omitted and ``ValueError`` when its shape is
-        incompatible with the kernel dimension.
+        ``soln_init_value`` is omitted or None, and ``ValueError`` when its
+        shape is incompatible with the kernel dimension, when it or ``a(t)``
+        is not finite.
 
     Notes
     -----
@@ -2023,6 +2060,13 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     values are $y$ itself (reconstructed via the antiderivative basis and the
     tracked boundary values).
     """
+    return_function = _v.flag("return_function", return_function)
+    reuse_adaptive_blocks = _v.flag("reuse_adaptive_blocks", reuse_adaptive_blocks)
+    show_warnings = _v.flag("show_warnings", show_warnings)
+    if soln_init_value is None:
+        raise TypeError("function_solve_VIDE: soln_init_value is required (got None)")
+    _v.finite("soln_init_value", soln_init_value)
+    _smooth_gl_order = _SMOOTH_GL_ORDER
     kernel_singularity = _empty_singularity_to_none(kernel_singularity)
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
@@ -2059,8 +2103,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
             coll_nodes=node_pos,
             kernel_singularity=kernel_singularity,
             return_function=return_function, show_warnings=show_warnings,
-            reuse_adaptive_blocks=reuse_adaptive_blocks,
-            _smooth_gl_order=_smooth_gl_order)
+            reuse_adaptive_blocks=reuse_adaptive_blocks)
         if return_function:
             y_real, y_func_real = result
             return (_recombine_complex_y(y_real, d_orig),
@@ -2238,8 +2281,11 @@ def optimal_graded_mesh(*, alpha: float, T: float, M: int,
     Raises
     ------
     ValueError
-        If ``alpha`` is outside $[0, 1)$, ``T`` is not positive, or ``M`` /
-        ``order`` is not a positive integer.
+        If ``alpha`` is outside $[0, 1)$, ``T`` is not positive and finite,
+        or ``M`` / ``order`` is less than 1.
+    TypeError
+        If ``alpha`` or ``T`` is not a real number, or ``M`` / ``order`` is
+        not an integer.
 
     Examples
     --------
@@ -2253,16 +2299,14 @@ def optimal_graded_mesh(*, alpha: float, T: float, M: int,
                                  coll_divs=3, coll_choices=coll_choices,
                                  kernel_singularity=0.0)
     """
+    alpha = _v.real("alpha", alpha)
     if not 0.0 <= alpha < 1.0:
         raise ValueError(f"alpha must satisfy 0 <= alpha < 1, got {alpha}")
-    if T <= 0:
-        raise ValueError(f"T must be positive, got {T}")
-    if M < 1:
-        raise ValueError(f"M must be a positive integer, got {M}")
-    if isinstance(order, bool) or not isinstance(order, (int, np.integer)):
-        raise ValueError(f"order must be a positive integer, got {order!r}")
-    if order < 1:
-        raise ValueError(f"order must be a positive integer, got {order}")
+    T = _v.real("T", T, positive=True, value_msg=f"T must be positive, got {T}")
+    M = _v.integer("M", M, minimum=1, value_msg=f"M must be a positive integer, got {M}")
+    order = _v.integer("order", order, minimum=1,
+                       type_msg=f"order must be a positive integer, got {order!r}",
+                       value_msg=f"order must be a positive integer, got {order}")
     p = order
     # At alpha=0 the kernel is non-singular and the solution is smooth, so a
     # uniform mesh (r=1) is optimal; grading would only waste resolution near 0.
@@ -2282,8 +2326,7 @@ def optimal_graded_mesh(*, alpha: float, T: float, M: int,
 # ---------------------------------------------------------------------------
 
 def _check_node_count(p, *, minimum: int, name: str) -> int:
-    if isinstance(p, bool) or not isinstance(p, (int, np.integer)):
-        raise ValueError(f"p must be a positive integer, got {p!r}")
+    _v.integer("p", p, type_msg=f"p must be a positive integer, got {p!r}")
     if p < minimum:
         raise ValueError(
             f"p must be an integer >= {minimum} for {name} nodes, got {p}")
@@ -2400,6 +2443,9 @@ def _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints: np.ndarray,
     """
     if not show_warnings or kernel_singularity is None:
         return
+    # Validate first: an invalid declaration gets its error, not a warning
+    # followed by the error.
+    _normalize_kernel_singularity(kernel_singularity)
     if not callable(kernel_singularity):
         # Parse the declared locations leniently: anything that does not
         # convert is left to _normalize_kernel_singularity, whose error
@@ -2414,21 +2460,21 @@ def _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints: np.ndarray,
         tol = 1e-12 * max(1.0, T)
         outside = [u for u in locs if not (-tol <= u <= T + tol)]
         if outside:
-            print(f"warning: kernel_singularity location(s) {outside} lie outside "
+            _warn(f"kernel_singularity location(s) {outside} lie outside "
                   f"[0, T] = [0, {T:.6g}]; the kernel is only evaluated at u in "
-                  f"[0, T], so they have no effect.")
+                  f"[0, T], so they have no effect.", VolesWarning)
             if len(outside) == len(locs):
                 return
     widths = np.diff(mesh_breakpoints)
     ratio = float(widths.max() / widths.min())
     if ratio < 1.5:
-        print(
-            "warning: kernel_singularity is declared but the mesh appears "
+        _warn(
+            "kernel_singularity is declared but the mesh appears "
             "uniform (max/min interval ratio = {:.2f}). For optimal "
             "convergence on weakly singular problems, consider "
             "`optimal_graded_mesh(alpha=..., T=..., M=..., "
-            "order=len(coll_choices))`.".format(ratio)
-        )
+            "order=len(coll_choices))`.".format(ratio),
+            AccuracyWarning)
 
 
 # ---------------------------------------------------------------------------
@@ -2547,8 +2593,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                           return_function: bool = False,
                           force_continuous: bool = False,
                           reuse_adaptive_blocks: bool = True,
-                          show_warnings: bool = True,
-                          _smooth_gl_order: int = 6):
+                          show_warnings: bool = True):
     r"""Solve the Volterra integral equation of the first kind
 
     $$g(t) = \int_0^t K(t-s)\,y(s)\,ds$$
@@ -2616,7 +2661,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     reuse_adaptive_blocks : bool, optional
         See ``function_solve_VIE_2``.
     show_warnings : bool, optional
-        See ``function_solve_VIE_2``; also gates the warning printed when
+        See ``function_solve_VIE_2``; also gates the `voles.AccuracyWarning`
+        for $g(0) \ne 0$ and the `voles.VolesWarning` emitted when
         ``soln_init_value`` is passed without ``force_continuous``.
 
     Returns
@@ -2635,13 +2681,15 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     ValueError, TypeError, numpy.linalg.LinAlgError, ImportError
         As for ``function_solve_VIE_2``; additionally ``ValueError`` for
         non-convergent node sets (see Notes), zero in ``coll_choices`` /
-        ``coll_nodes``, ``force_continuous`` without $c_m = 1$, or
-        ``force_continuous`` without ``soln_init_value``.
+        ``coll_nodes``, ``force_continuous`` without $c_m = 1$,
+        ``force_continuous`` without ``soln_init_value``, or a non-finite
+        ``soln_init_value``; ``TypeError`` for a ``force_continuous`` that is
+        not a bool.
 
     Notes
     -----
     The equation forces $g(0) = 0$; for $g(0) \ne 0$ there is no bounded
-    solution, and a warning is printed.
+    solution, and a `voles.AccuracyWarning` is emitted.
 
     Whether a given node set yields a convergent method depends on the nodes
     (Brunner 2004, smooth-kernel chapter). For a smooth kernel with
@@ -2670,6 +2718,12 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     accompany a declared ``kernel_singularity``, for which the check is already
     skipped.
     """
+    return_function = _v.flag("return_function", return_function)
+    force_continuous = _v.flag("force_continuous", force_continuous)
+    reuse_adaptive_blocks = _v.flag("reuse_adaptive_blocks", reuse_adaptive_blocks)
+    show_warnings = _v.flag("show_warnings", show_warnings)
+    _v.finite("soln_init_value", soln_init_value)
+    _smooth_gl_order = _SMOOTH_GL_ORDER
     kernel_singularity = _empty_singularity_to_none(kernel_singularity)
     mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
     if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
@@ -2730,7 +2784,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     if force_continuous and soln_init_value is None:
         raise ValueError("must specify soln_init_value when force_continuous=True")
     if not force_continuous and soln_init_value is not None and show_warnings:
-        print("warning: setting soln_init_value has no effect when force_continuous=False.")
+        _warn("setting soln_init_value has no effect when force_continuous=False.", VolesWarning)
 
     # Complex dispatch. soln_init_value only contributes to the complex check
     # when force_continuous=True (otherwise it has no effect on the result).
@@ -2750,8 +2804,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             return_function=return_function,
             force_continuous=force_continuous,
             show_warnings=show_warnings,
-            reuse_adaptive_blocks=reuse_adaptive_blocks,
-            _smooth_gl_order=_smooth_gl_order)
+            reuse_adaptive_blocks=reuse_adaptive_blocks)
         if return_function:
             y_real, y_func_real = result
             return (_recombine_complex_y(y_real, d_orig),

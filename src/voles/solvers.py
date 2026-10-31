@@ -7,6 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 from . import _dlang as _dlang_module
 from . import _complex as _cplx
 from ._solution import _SolutionFunction, _complex_solution
+from . import _validate as _v
+from ._warnings import _warn, AccuracyWarning, PerformanceWarning, VolesWarning
 
 
 def _column_workers(m_cols):
@@ -31,7 +33,9 @@ def _resolve_return_flag(return_function, return_polys):
     ``return_polys`` defaults to ``None`` (not passed); any non-None value means
     the caller used the old keyword and gets a DeprecationWarning.
     """
+    return_function = _v.flag("return_function", return_function)
     if return_polys is not None:
+        return_polys = _v.flag("return_polys", return_polys)
         warnings.warn(
             "`return_polys` is deprecated; use `return_function`. The second "
             "return value is now a callable solution object that also indexes "
@@ -117,25 +121,22 @@ def _check_vie1_setting(coll_divs, coll_choices, force_continuous):
 
 
 def _as_int(name, value):
-    """``value`` as a Python int, or ValueError. Only genuine integers are
+    """``value`` as a Python int, or TypeError. Only genuine integers are
     accepted (int, numpy integers): a float is rejected rather than
     truncated, since e.g. ``mesh_samples=2.6`` silently running as 2 would
     solve a different discretisation from the one asked for."""
-    if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)):
-        raise ValueError(f"{name} must be an integer, got {value!r}")
-    return int(value)
+    return _v.integer(name, value)
 
 
 def _validate_vie1_coll_setting(coll_divs, coll_choices):
     """Structural checks shared by the VIE-1 paths (both quadratures);
     returns ``(coll_divs, sorted coll_choices)`` as Python ints."""
-    if (isinstance(coll_divs, (bool, np.bool_))
-            or not isinstance(coll_divs, (int, np.integer)) or coll_divs <= 0):
-        raise ValueError(f"coll_divs must be a positive integer, got {coll_divs!r}")
+    _v.integer("coll_divs", coll_divs, minimum=1,
+               type_msg=f"coll_divs must be a positive integer, got {coll_divs!r}")
     choices = list(coll_choices)
     if not all(isinstance(c, (int, np.integer)) and not isinstance(c, (bool, np.bool_))
                for c in choices):
-        raise ValueError("coll_choices must be a list of integers")
+        raise TypeError("coll_choices must be a list of integers")
     if len(choices) == 0:
         raise ValueError("coll_choices must contain at least one collocation node")
     if 0 in choices:
@@ -153,22 +154,21 @@ def _warn_reduced_order(coll_divs, coll_choices, force_continuous, show_warnings
     if show_warnings and _vie1_rho(coll_divs, coll_choices, continuous=force_continuous) == 1:
         m = len(coll_choices)
         nominal = m + 1 if force_continuous else m
-        print(f"warning: collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
+        _warn(f"collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
               f"has amplification factor rho = 1 exactly, so the "
               f"{'continuous' if force_continuous else 'discontinuous'} VIE-1 method converges "
-              f"at order {nominal - 1} rather than {nominal}.")
+              f"at order {nominal - 1} rather than {nominal}.", AccuracyWarning)
 
 
 def _validate_second_kind_coll_setting(coll_divs, coll_choices):
     """Structural checks for VIE-2 / VIDE node sets (0 allowed); returns
     ``(coll_divs, sorted coll_choices)`` as Python ints."""
-    if (isinstance(coll_divs, (bool, np.bool_))
-            or not isinstance(coll_divs, (int, np.integer)) or coll_divs <= 0):
-        raise ValueError(f"coll_divs must be a positive integer, got {coll_divs!r}")
+    _v.integer("coll_divs", coll_divs, minimum=1,
+               type_msg=f"coll_divs must be a positive integer, got {coll_divs!r}")
     choices = list(coll_choices)
     if not all(isinstance(c, (int, np.integer)) and not isinstance(c, (bool, np.bool_))
                for c in choices):
-        raise ValueError("coll_choices must be a list of integers")
+        raise TypeError("coll_choices must be a list of integers")
     if len(choices) == 0:
         raise ValueError("coll_choices must contain at least one collocation node")
     if len(set(choices)) != len(choices):
@@ -190,12 +190,12 @@ def _warn_g_start_columns(g0, scale):
     rule = (" A first-kind equation g(t) = int_0^t K(t-s) y(s) ds requires g(0) = 0; "
             "otherwise it has no bounded solution and values near t = 0 are meaningless.")
     if g0.size == 1:
-        print(f"warning: g(0) is not zero (max |g(0)| = {g0[0]:.3g}, "
-              f"max |g| = {scale[0]:.3g})." + rule)
+        _warn(f"g(0) is not zero (max |g(0)| = {g0[0]:.3g}, "
+              f"max |g| = {scale[0]:.3g})." + rule, AccuracyWarning)
     else:
         j = int(np.argmax(np.where(bad, g0 / np.maximum(scale, 1e-300), -np.inf)))
-        print(f"warning: g(0) is not zero in {int(bad.sum())} of {g0.size} columns; "
-              f"worst column {j}: max |g(0)| = {g0[j]:.3g}, max |g| = {scale[j]:.3g}." + rule)
+        _warn(f"g(0) is not zero in {int(bad.sum())} of {g0.size} columns; "
+              f"worst column {j}: max |g(0)| = {g0[j]:.3g}, max |g| = {scale[j]:.3g}." + rule, AccuracyWarning)
 
 
 def _warn_vie1_g_start(g_values, kernel_values_, show_warnings):
@@ -249,9 +249,9 @@ def _warn_vie1_kernel_start(kernel_values_, samples_per_mesh, show_warnings):
     if ratio > 2:
         which = ("K(0) is zero or singular" if not np.isfinite(ratio) else
                  f"K changes by {ratio:.3g} x |K(0)| over one mesh interval")
-        print(f"warning: {which}. The first-kind collocation scheme is unstable in "
+        _warn(f"{which}. The first-kind collocation scheme is unstable in "
               f"this regime and can return values that grow without bound. Use "
-              f"quadrature='product' (stable here), or a finer time_step if K(0) != 0.")
+              f"quadrature='product' (stable here), or a finer time_step if K(0) != 0.", AccuracyWarning)
 
 
 def _scalar_init(value):
@@ -295,17 +295,15 @@ def _resolve_coll_setting(kind, coll_divs, coll_choices):
 
 
 def _check_time_step(time_step):
-    if not (time_step > 0.0 and np.isfinite(time_step)):
-        raise ValueError("time_step must be positive and finite")
+    _v.real("time_step", time_step, positive=True,
+            value_msg="time_step must be positive and finite")
 
 
 def _use_product_quadrature(quadrature, mesh_samples, kernel_interp_degree, coll_divs):
     """Shared by the three sampled-data solvers: validate ``quadrature`` and,
     for the default collocation quadrature, the two product-only parameters.
     Returns True when the product path should be taken."""
-    if quadrature not in ("collocation", "product"):
-        raise ValueError(
-            f"quadrature must be 'collocation' or 'product', got {quadrature!r}")
+    quadrature = _v.choice("quadrature", quadrature, ("collocation", "product"))
     if quadrature == "product":
         return True
     if kernel_interp_degree is not None:
@@ -484,9 +482,11 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         Deprecated alias for ``return_function``; passing it emits a
         ``DeprecationWarning``.
     show_warnings : bool, optional
-        If ``True`` (default), print a warning when the Numba fallback is
-        used, or when ``quadrature="product"`` has to step in NumPy because
-        the loaded D extension predates its block driver.
+        If ``True`` (default), emit a `voles.PerformanceWarning` when the
+        Numba fallback is used, or when ``quadrature="product"`` has to step
+        in NumPy because the loaded D extension predates its block driver.
+        ``False`` emits nothing; the standard `warnings` filters work as
+        well, e.g. ``warnings.simplefilter("ignore", voles.VolesWarning)``.
 
     quadrature : {"product", "collocation"}, optional
         How the integrals are evaluated from the sampled kernel.
@@ -537,18 +537,27 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         ``a_values`` must have the length of ``kernel_values``), inputs too
         short to form one mesh interval, matrix input
         with zero columns, inputs so large that a solver buffer would exceed
-        $2^{31}$ elements, a ``coll_divs`` that is not a positive integer or
-        ``coll_choices`` that is empty or not made of distinct integers in
-        ``0 .. coll_divs`` (floats are rejected, not truncated), a
-        non-positive ``time_step``, an unknown ``quadrature``, or a
-        ``mesh_samples`` / ``kernel_interp_degree`` that is not an integer or
-        not admissible for the chosen quadrature.
+        $2^{31}$ elements, a ``coll_divs`` below 1 or ``coll_choices``
+        that is empty or not made of distinct integers in ``0 .. coll_divs``,
+        a ``time_step`` that is not positive and finite, an unknown
+        ``quadrature`` (matched case-insensitively), a ``mesh_samples`` /
+        ``kernel_interp_degree`` that is not admissible for the chosen
+        quadrature, or input data containing NaN or infinity.
+    TypeError
+        For an argument of the wrong type: a float (even an integer-valued
+        one) or bool for ``coll_divs``, a ``coll_choices`` entry,
+        ``mesh_samples`` or ``kernel_interp_degree``; a non-number
+        ``time_step``; a non-string ``quadrature``; a flag (``show_warnings``,
+        ``return_function``) that is not a bool; ``soln_init_value=None``.
     NotImplementedError
         For a collocation setting not compiled into the D extension, on the
         vector/matrix path (no fallback exists) or on the scalar path when
         ``numba`` is not installed.
     numpy.linalg.LinAlgError
         If a collocation system is singular or nearly singular.
+    RuntimeError
+        If the D extension reports an internal error. This is a bug in voles;
+        please report it.
 
     Notes
     -----
@@ -575,8 +584,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
     The solver dispatches at runtime to a D-extension routine specialised for
     the given collocation setting. For scalar equations, settings not compiled
     into the extension fall back to a Numba-JIT implementation (requires the
-    ``numba`` optional dependency); a warning is printed when the fallback is
-    used. For vector equations only the compiled settings are supported. The
+    ``numba`` optional dependency), with a `voles.PerformanceWarning`. For vector equations only the compiled settings are supported. The
     compiled settings are listed in ``fast_coll_settings_VIDE``.
 
     References
@@ -586,6 +594,12 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
        Chapter 3, pp. 160–167.
     '''
     return_function = _resolve_return_flag(return_function, return_polys)
+    show_warnings = _v.flag("show_warnings", show_warnings)
+    if soln_init_value is None:
+        raise TypeError("solve_VIDE: soln_init_value is required (got None)")
+    for _name, _val in (("kernel_values", kernel_values), ("a_values", a_values),
+                        ("g_values", g_values), ("soln_init_value", soln_init_value)):
+        _v.finite(_name, _val)
     coll_divs, coll_choices = _resolve_coll_setting("vide", coll_divs, coll_choices)
     # ------------------------------------------------------------------ complex dispatch
     if _cplx.is_complex(kernel_values, a_values, g_values, soln_init_value):
@@ -670,7 +684,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
                                   coll_choices=coll_choices,
                                   quadrature="collocation",
                                   return_function=return_function,
-                                  show_warnings=show_warnings and j == 0)
+                                  show_warnings=False)  # warn from the calling thread only
             with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                 results = list(ex.map(_col_vide, range(m_cols)))
             if return_function:
@@ -741,7 +755,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         if fast:
             return _dlang_module.solve_vide_d(*args)
         if show_warnings:
-            print("warning: falling back to slower python/numba code")
+            _warn("falling back to slower python/numba code", PerformanceWarning)
         return _numba_solvers.solve_VIDE_jit(*args)
     return _with_tail("vide", _regular, kernel_values_, g_values_, a_values_, init,
                       time_step, coll_divs, coll_choices, M_reg, Qp, 0, return_function,
@@ -951,7 +965,7 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
                     raise ValueError(
                         f"soln_init_value must have shape ({d}, {m_cols}) for matrix-valued g_values")
                 if (not force_continuous) and show_warnings:
-                    print("warning: setting soln_init_value has no effect when force_continuous=False.")
+                    _warn("setting soln_init_value has no effect when force_continuous=False.", VolesWarning)
             g_cols = g[:N]
             _product.block_drivers_available(kind, show_warnings=show_warnings)
 
@@ -971,8 +985,8 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
         init = 0.0 if d == 0 else np.zeros(d)
     else:
         if (not force_continuous) and show_warnings:
-            print("warning: setting soln_init_value has no effect, since "
-                  "force_continuous is set to false.")
+            _warn("setting soln_init_value has no effect, since "
+                  "force_continuous is set to false.", VolesWarning)
         init = np.asarray(soln_init_value, dtype=float)
         if d == 0:
             init = _scalar_init(init)
@@ -1053,12 +1067,15 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         versus order $m$ for the default discontinuous method with the same
         nodes. Default is ``False``.
     show_warnings : bool, optional
-        If ``True`` (default), print a warning when ``soln_init_value`` has
-        no effect, when the node set
-        has $\rho = 1$ exactly and so converges one order lower (see Notes),
-        when the Numba fallback is used, or when ``quadrature="product"``
-        has to step in NumPy because the loaded D extension predates its
-        block drivers.
+        If ``True`` (default), emit warnings through the `warnings` module:
+        a `voles.AccuracyWarning` when the node set has $\rho = 1$ exactly
+        and so converges one order lower (see Notes), when $g(0) \ne 0$, or
+        when $K(0)$ is too small for ``quadrature="collocation"``; a
+        `voles.PerformanceWarning` when the Numba fallback is used or when
+        ``quadrature="product"`` has to step in NumPy because the loaded D
+        extension predates its block drivers; and a `voles.VolesWarning`
+        when ``soln_init_value`` has no effect. ``False`` emits nothing; the
+        standard `warnings` filters work as well.
     quadrature : {"product", "collocation"}, optional
         How the integrals of the collocation equations are evaluated from the
         sampled kernel. ``"product"`` (default) replaces the kernel by a
@@ -1118,18 +1135,25 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
           of ``kernel_values``), inputs too short to form one mesh interval,
           matrix input with zero columns, or inputs
           so large that a solver buffer would exceed $2^{31}$ elements;
-        - a ``coll_divs`` that is not a positive integer, or ``coll_choices``
-          that is empty or not made of distinct integers in
-          ``1 .. coll_divs`` (floats are rejected, not truncated);
+        - a ``coll_divs`` below 1, or ``coll_choices`` that is empty or not
+          made of distinct integers in ``1 .. coll_divs``;
         - node sets with $|\rho_m| > 1$, for which the method diverges (see
           Notes; e.g. ``(coll_divs=3, [1])``, ``(4, [1, 2])``, ``(5, [1])``);
         - with ``force_continuous=True``: a missing ``soln_init_value``, or a
           node set whose last node is not the right endpoint or whose
           $|\rho_{m-1}|$ exceeds 1 (see Notes);
-        - an unknown ``quadrature``, a ``mesh_samples`` or
-          ``kernel_interp_degree`` that is not an integer or not admissible
+        - an unknown ``quadrature`` (matched case-insensitively), a
+          ``mesh_samples`` or ``kernel_interp_degree`` that is not admissible
           for the chosen quadrature, or ``kernel_interp_degree`` given with
-          ``quadrature="collocation"``.
+          ``quadrature="collocation"``;
+        - a ``time_step`` that is not positive and finite, or input data
+          containing NaN or infinity.
+    TypeError
+        For an argument of the wrong type: a float (even an integer-valued
+        one) or bool for ``coll_divs``, a ``coll_choices`` entry,
+        ``mesh_samples`` or ``kernel_interp_degree``; a non-number
+        ``time_step``; a non-string ``quadrature``; a flag (``show_warnings``,
+        ``return_function``, ``force_continuous``) that is not a bool.
     NotImplementedError
         For a collocation setting not compiled into the D extension, on the
         vector/matrix path (no fallback exists) or on the scalar path when
@@ -1137,6 +1161,9 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     numpy.linalg.LinAlgError
         If a collocation system is singular or nearly singular (e.g. a zero
         kernel).
+    RuntimeError
+        If the D extension reports an internal error. This is a bug in voles;
+        please report it.
 
     Notes
     -----
@@ -1175,14 +1202,14 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     product trapezoidal rule.
 
     The equation forces $g(0) = 0$; for $g(0) \ne 0$ there is no bounded
-    solution, and a warning is printed.
+    solution, and a `voles.AccuracyWarning` is emitted.
 
     The theory above assumes $K(0) \ne 0$ ($K(0)$ nonsingular for vector
     equations). With the default quadrature the scheme is also unstable when
     $K(0)$ is small next to the kernel's change over one mesh interval $H$
     (divergence was observed once $H |K'(0)| / |K(0)| \gtrsim 5$), and when
-    $K(0) = 0$ it diverges without bound as the mesh is refined. A warning is
-    printed when $|K(H) - K(0)| > 2 |K(0)|$ (vector: $\|K(0)^{-1}(K(H) -
+    $K(0) = 0$ it diverges without bound as the mesh is refined. A
+    `voles.AccuracyWarning` is emitted when $|K(H) - K(0)| > 2 |K(0)|$ (vector: $\|K(0)^{-1}(K(H) -
     K(0))\|_2 > 2$ or $K(0)$ singular). ``quadrature="product"`` does not
     have this restriction.
 
@@ -1208,8 +1235,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
     The solver dispatches at runtime to a D-extension routine specialised for
     the given collocation setting. For scalar equations, settings not compiled
     into the extension fall back to a Numba-JIT implementation (requires the
-    ``numba`` optional dependency); a warning is printed when the fallback is
-    used. For vector equations only the compiled settings are supported. The
+    ``numba`` optional dependency), with a `voles.PerformanceWarning`. For vector equations only the compiled settings are supported. The
     supported settings (with the non-convergent ones excluded) are listed in
     ``fast_coll_settings_VIE_1``.
 
@@ -1224,6 +1250,11 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
        equations of the first kind. *SIAM J. Numer. Anal.* 10 (1973) 647--664.
     '''
     return_function = _resolve_return_flag(return_function, return_polys)
+    show_warnings = _v.flag("show_warnings", show_warnings)
+    force_continuous = _v.flag("force_continuous", force_continuous)
+    for _name, _val in (("kernel_values", kernel_values), ("g_values", g_values),
+                        ("soln_init_value", soln_init_value)):
+        _v.finite(_name, _val)
     coll_divs, coll_choices = _resolve_coll_setting("vie1", coll_divs, coll_choices)
     if force_continuous and soln_init_value is None:
         raise ValueError("must specify soln_init_value when force_continuous=True")
@@ -1292,7 +1323,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                         raise ValueError(
                             f"soln_init_value must have shape ({d}, {m_cols}) for matrix-valued g_values")
                     if (not force_continuous) and show_warnings:
-                        print("warning: setting soln_init_value has no effect when force_continuous=False.")
+                        _warn("setting soln_init_value has no effect when force_continuous=False.", VolesWarning)
                 else:
                     init_cols = None
                 g_cols = g_values_[:N]
@@ -1324,7 +1355,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
 
         if soln_init_value is not None:
             if (not force_continuous) and show_warnings:
-                print("warning: setting soln_init_value has no effect when force_continuous=False.")
+                _warn("setting soln_init_value has no effect when force_continuous=False.", VolesWarning)
             soln_init_value_ = np.asarray(soln_init_value, dtype=float)
             if soln_init_value_.shape != (d,):
                 raise ValueError(
@@ -1364,8 +1395,8 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         soln_init_value_ = 0.0
     else:
         if (not force_continuous) and show_warnings:
-            print("warning: setting soln_init_value has no effect, since "
-                  "force_continuous is set to false.")
+            _warn("setting soln_init_value has no effect, since "
+                  "force_continuous is set to false.", VolesWarning)
             soln_init_value_ = 0.0
         else:
             soln_init_value_ = _scalar_init(soln_init_value)
@@ -1384,7 +1415,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         if fast:
             return _dlang_module.solve_vie1_d(*args)
         if show_warnings:
-            print("warning: falling back to slower python/numba code")
+            _warn("falling back to slower python/numba code", PerformanceWarning)
         return _numba_solvers.solve_VIE_1_jit(*args)
     return _with_tail("vie1_cont" if force_continuous else "vie1", _regular, kernel_values_,
                       g_values_, None, soln_init_value_, time_step, coll_divs, coll_choices,
@@ -1432,9 +1463,11 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
         Deprecated alias for ``return_function``; passing it emits a
         ``DeprecationWarning``.
     show_warnings : bool, optional
-        If ``True`` (default), print a warning when the Numba fallback is
-        used, or when ``quadrature="product"`` has to step in NumPy because
-        the loaded D extension predates its block driver.
+        If ``True`` (default), emit a `voles.PerformanceWarning` when the
+        Numba fallback is used, or when ``quadrature="product"`` has to step
+        in NumPy because the loaded D extension predates its block driver.
+        ``False`` emits nothing; the standard `warnings` filters work as
+        well, e.g. ``warnings.simplefilter("ignore", voles.VolesWarning)``.
 
     quadrature : {"product", "collocation"}, optional
         How the integrals are evaluated from the sampled kernel.
@@ -1485,18 +1518,27 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
         ``a_values`` must have the length of ``kernel_values``), inputs too
         short to form one mesh interval, matrix input
         with zero columns, inputs so large that a solver buffer would exceed
-        $2^{31}$ elements, a ``coll_divs`` that is not a positive integer or
-        ``coll_choices`` that is empty or not made of distinct integers in
-        ``0 .. coll_divs`` (floats are rejected, not truncated), a
-        non-positive ``time_step``, an unknown ``quadrature``, or a
-        ``mesh_samples`` / ``kernel_interp_degree`` that is not an integer or
-        not admissible for the chosen quadrature.
+        $2^{31}$ elements, a ``coll_divs`` below 1 or ``coll_choices``
+        that is empty or not made of distinct integers in ``0 .. coll_divs``,
+        a ``time_step`` that is not positive and finite, an unknown
+        ``quadrature`` (matched case-insensitively), a ``mesh_samples`` /
+        ``kernel_interp_degree`` that is not admissible for the chosen
+        quadrature, or input data containing NaN or infinity.
+    TypeError
+        For an argument of the wrong type: a float (even an integer-valued
+        one) or bool for ``coll_divs``, a ``coll_choices`` entry,
+        ``mesh_samples`` or ``kernel_interp_degree``; a non-number
+        ``time_step``; a non-string ``quadrature``; a flag (``show_warnings``,
+        ``return_function``) that is not a bool.
     NotImplementedError
         For a collocation setting not compiled into the D extension, on the
         vector/matrix path (no fallback exists) or on the scalar path when
         ``numba`` is not installed.
     numpy.linalg.LinAlgError
         If a collocation system is singular or nearly singular.
+    RuntimeError
+        If the D extension reports an internal error. This is a bug in voles;
+        please report it.
 
     Notes
     -----
@@ -1523,8 +1565,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
     The solver dispatches at runtime to a D-extension routine specialised for
     the given collocation setting. For scalar equations, settings not compiled
     into the extension fall back to a Numba-JIT implementation (requires the
-    ``numba`` optional dependency); a warning is printed when the fallback is
-    used. For vector equations only the compiled settings are supported. The
+    ``numba`` optional dependency), with a `voles.PerformanceWarning`. For vector equations only the compiled settings are supported. The
     compiled settings are listed in ``fast_coll_settings_VIE_2``.
 
     References
@@ -1534,6 +1575,9 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
        Section 2.2.
     '''
     return_function = _resolve_return_flag(return_function, return_polys)
+    show_warnings = _v.flag("show_warnings", show_warnings)
+    for _name, _val in (("kernel_values", kernel_values), ("g_values", g_values)):
+        _v.finite(_name, _val)
     coll_divs, coll_choices = _resolve_coll_setting("vie2", coll_divs, coll_choices)
     # ------------------------------------------------------------------ complex dispatch
     if _cplx.is_complex(kernel_values, g_values):
@@ -1597,7 +1641,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
                                        coll_choices=coll_choices,
                                        quadrature="collocation",
                                        return_function=return_function,
-                                       show_warnings=show_warnings and j == 0)
+                                       show_warnings=False)  # warn from the calling thread only
                 with ThreadPoolExecutor(max_workers=_column_workers(m_cols)) as ex:
                     results = list(ex.map(_col_vie2, range(m_cols)))
                 if return_function:
@@ -1647,7 +1691,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
         if fast:
             return _dlang_module.solve_vie2_d(*args)
         if show_warnings:
-            print("warning: falling back to slower python/numba code")
+            _warn("falling back to slower python/numba code", PerformanceWarning)
         return _numba_solvers.solve_VIE_2_jit(*args)
     return _with_tail("vie2", _regular, kernel_values_, g_values_, None, None, time_step,
                       coll_divs, coll_choices, M_reg, Qp, 0, return_function)

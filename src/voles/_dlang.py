@@ -238,7 +238,10 @@ def _check_return(ret: int, func_name: str) -> None:
             f"exceed 2^31 elements (>= 17 GB) and overflow the extension's "
             f"32-bit index arithmetic; reduce N or d"
         )
-    raise RuntimeError(f"{func_name} returned error code {ret}")
+    raise RuntimeError(
+        f"internal error: {func_name} returned error code {ret}. This is a bug in "
+        f"voles; please report it at https://github.com/trout314/voles/issues "
+        f"with the call that triggered it.")
 
 def solve_vie1_d(g_values, kernel_values, soln_init_value, time_step,
                  coll_divs, coll_choices, return_polys, force_continuous):

@@ -56,7 +56,7 @@ def test_node_sets_sorted_distinct_in_range(fn, p):
 def test_node_count_must_be_positive(fn):
     with pytest.raises(ValueError, match="integer"):
         fn(0)
-    with pytest.raises(ValueError, match="integer"):
+    with pytest.raises(TypeError, match="integer"):     # wrong type, not wrong value
         fn(2.5)
 
 

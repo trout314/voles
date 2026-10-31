@@ -19,6 +19,19 @@ Phase 0 findings:
 - (c) The 0.10 API also accepts `return_function=1`, `show_warnings="no"`,
   `optimal_graded_mesh(M=10.0)` and VIDE `soln_init_value=None` (both
   families). All F3/F5, fixed in Phase 1.
+
+**Phase 1 done 2026-10-31** (uncommitted at time of writing):
+- `_warnings.py` (3 classes; `_warn` walks frames to the caller) and
+  `_validate.py` (integer/flag/real/choice/finite)
+- all 16 print sites converted, and matrix workers never warn
+- F3/F4/F5/F6/F17/F24 and bug (a) fixed; an invalid `kernel_singularity` no
+  longer warns before raising
+- pytest `filterwarnings = ["error"]`, with a `voles_warnings` fixture
+  replacing `capsys`; new `tests/test_validation_policy.py`; 776 tests pass
+- battery vs 9ad2338: numerics bitwise identical in all 510 cases, warning
+  texts unchanged, 41 strict mismatches, every one a deliberate error-type
+  or rejection change
+- finite checks cost about 2 ms on a 660 ms matrix solve
 Inputs: `docs/dev/api-review-1.0.md` (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.
 

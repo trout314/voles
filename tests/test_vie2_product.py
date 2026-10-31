@@ -311,5 +311,5 @@ def test_non_integer_parameters_are_rejected(kwargs):
     base = dict(kernel_values=K, g_values=g, time_step=dt, coll_divs=2, coll_choices=[0, 1, 2],
                 quadrature="product", show_warnings=False)
     base.update(kwargs)
-    with pytest.raises(ValueError, match="integer"):
+    with pytest.raises(TypeError, match="integer"):
         solve_VIE_2(**base)

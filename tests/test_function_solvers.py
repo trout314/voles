@@ -13,6 +13,7 @@ from voles._callable_solvers import (
     function_solve_VIE_2, function_solve_VIDE, function_solve_VIE_1,
     optimal_graded_mesh,
 )
+from voles import AccuracyWarning
 
 
 def _collect_node_values(y, mesh_bps, coll_divs, coll_choices, ref):
@@ -184,7 +185,8 @@ def test_singular_graded_mesh_recovers_high_order(vie2_callable_abel):
                   kernel_singularity=p["kernel_singularity"])
 
     mesh_uniform = np.linspace(0, 1, M + 1)
-    y_uniform = function_solve_VIE_2(mesh_breakpoints=mesh_uniform, **common)
+    with pytest.warns(AccuracyWarning, match="mesh appears uniform"):
+        y_uniform = function_solve_VIE_2(mesh_breakpoints=mesh_uniform, **common)
     err_uniform = _collect_node_values(
         y_uniform, mesh_uniform, p["coll_divs"], p["coll_choices"], p["y_exact"])
 
@@ -240,9 +242,10 @@ def test_singular_at_nonzero_location():
     K = lambda u: 1.0 / np.sqrt(abs(u - 0.5)) + 1.0 if abs(u - 0.5) > 1e-12 else 1e6
     g = lambda t: t  # arbitrary smooth g; the test just checks finiteness
     mesh = np.linspace(0, 1, 21)
-    y = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
-                             coll_divs=2, coll_choices=[0, 1, 2],
-                             kernel_singularity=0.5)
+    with pytest.warns(AccuracyWarning, match="mesh appears uniform"):
+        y = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
+                                 coll_divs=2, coll_choices=[0, 1, 2],
+                                 kernel_singularity=0.5)
     assert np.all(np.isfinite(y))
 
 
@@ -251,9 +254,10 @@ def test_singular_multiple_locations():
     K = lambda u: (1.0 / np.sqrt(u) if u > 1e-12 else 0.0) + 1.0 / np.sqrt(abs(u - 0.5) + 1e-6)
     g = lambda t: t
     mesh = np.linspace(0, 1, 21)
-    y = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
-                             coll_divs=2, coll_choices=[0, 1, 2],
-                             kernel_singularity=[0.0, 0.5])
+    with pytest.warns(AccuracyWarning, match="mesh appears uniform"):
+        y = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
+                                 coll_divs=2, coll_choices=[0, 1, 2],
+                                 kernel_singularity=[0.0, 0.5])
     assert np.all(np.isfinite(y))
 
 
@@ -382,7 +386,7 @@ def test_validation_coll_divs_nonpositive(bad_divs):
 
 
 def test_validation_coll_choices_floats():
-    with pytest.raises(ValueError, match="integers"):
+    with pytest.raises(TypeError, match="integers"):
         function_solve_VIE_2(kernel=lambda u: 1.0,
                              mesh_breakpoints=np.linspace(0, 1, 5),
                              coll_divs=2, coll_choices=[1.0, 2.0])
@@ -419,7 +423,8 @@ def test_mesh_breakpoints_accepts_plain_list(solver_kwargs_fn):
 
 # ---------------------------------------------------------------------------
 # NaN handling: NaN from kernel propagates into the W tensor and the
-# post-build isfinite check raises; NaN from g propagates into the solution.
+# post-build isfinite check raises; a non-finite g(t) at a collocation time is
+# rejected up front (contract §6).
 # ---------------------------------------------------------------------------
 
 def test_nan_from_kernel_raises():
@@ -430,15 +435,15 @@ def test_nan_from_kernel_raises():
                              coll_divs=2, coll_choices=[0, 1, 2])
 
 
-def test_nan_from_g_propagates():
+def test_nan_from_g_is_rejected():
     def g_nan(t):
         if 0.3 < t < 0.4:
             return float("nan")
         return 0.0
-    y = function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=g_nan,
+    with pytest.raises(ValueError, match=r"g\(t\) returned a non-finite value \(nan\) at t=0\.3"):
+        function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=g_nan,
                              mesh_breakpoints=np.linspace(0, 1, 11),
                              coll_divs=2, coll_choices=[0, 1, 2])
-    assert np.any(~np.isfinite(y))
 
 
 # ---------------------------------------------------------------------------
@@ -1203,23 +1208,23 @@ def test_vie1_validation_force_continuous_no_init():
                              force_continuous=True)
 
 
-def test_vie1_warns_on_unused_soln_init(capsys):
+def test_vie1_warns_on_unused_soln_init(voles_warnings):
     """soln_init_value passed with force_continuous=False -> warning."""
     function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
                          mesh_breakpoints=np.linspace(0, 1, 5),
                          coll_divs=3, coll_choices=[1, 2, 3],
                          soln_init_value=1.0, force_continuous=False,
                          show_warnings=True)
-    assert "no effect" in capsys.readouterr().out.lower()
+    assert "no effect" in voles_warnings.text().lower()
 
 
-def test_vie1_silent_when_show_warnings_false(capsys):
+def test_vie1_silent_when_show_warnings_false(voles_warnings):
     function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
                          mesh_breakpoints=np.linspace(0, 1, 5),
                          coll_divs=3, coll_choices=[1, 2, 3],
                          soln_init_value=1.0, force_continuous=False,
                          show_warnings=False)
-    assert capsys.readouterr().out == ""
+    assert voles_warnings.text() == ""
 
 
 # ---------------------------------------------------------------------------
@@ -1288,28 +1293,28 @@ def test_graded_mesh_recovers_high_order_on_abel(vie2_callable_abel):
 # Foot-gun warning: kernel_singularity declared but mesh appears uniform.
 # ---------------------------------------------------------------------------
 
-def test_uniform_mesh_with_singularity_warns(capsys, vie2_callable_abel):
+def test_uniform_mesh_with_singularity_warns(voles_warnings, vie2_callable_abel):
     p = vie2_callable_abel
     function_solve_VIE_2(
         kernel=p["kernel"], g=p["g"],
         mesh_breakpoints=np.linspace(0, 1, 21),
         coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
         kernel_singularity=p["kernel_singularity"], show_warnings=True)
-    assert "optimal_graded_mesh" in capsys.readouterr().out
+    assert "optimal_graded_mesh" in voles_warnings.text()
 
 
-def test_graded_mesh_with_singularity_silent(capsys, vie2_callable_abel):
+def test_graded_mesh_with_singularity_silent(voles_warnings, vie2_callable_abel):
     p = vie2_callable_abel
     mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=20, order=len(p["coll_choices"]))
     function_solve_VIE_2(
         kernel=p["kernel"], g=p["g"], mesh_breakpoints=mesh,
         coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
         kernel_singularity=p["kernel_singularity"], show_warnings=True)
-    out = capsys.readouterr().out
+    out = voles_warnings.text()
     assert "optimal_graded_mesh" not in out
 
 
-def test_smooth_kernel_uniform_mesh_does_not_warn(capsys, vie2_callable_smooth):
+def test_smooth_kernel_uniform_mesh_does_not_warn(voles_warnings, vie2_callable_smooth):
     """The warning should fire ONLY when a singularity is declared."""
     p = vie2_callable_smooth
     function_solve_VIE_2(
@@ -1317,20 +1322,20 @@ def test_smooth_kernel_uniform_mesh_does_not_warn(capsys, vie2_callable_smooth):
         mesh_breakpoints=np.linspace(0, 1, 21),
         coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
         show_warnings=True)
-    assert capsys.readouterr().out == ""
+    assert voles_warnings.text() == ""
 
 
-def test_singularity_warning_silenced_by_show_warnings_false(capsys, vie2_callable_abel):
+def test_singularity_warning_silenced_by_show_warnings_false(voles_warnings, vie2_callable_abel):
     p = vie2_callable_abel
     function_solve_VIE_2(
         kernel=p["kernel"], g=p["g"],
         mesh_breakpoints=np.linspace(0, 1, 21),
         coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
         kernel_singularity=p["kernel_singularity"], show_warnings=False)
-    assert capsys.readouterr().out == ""
+    assert voles_warnings.text() == ""
 
 
-def test_uniform_mesh_with_singularity_warns_vie1(capsys, vie1_callable_abel):
+def test_uniform_mesh_with_singularity_warns_vie1(voles_warnings, vie1_callable_abel):
     """VIE-1 fires the same foot-gun warning as VIE-2."""
     p = vie1_callable_abel
     function_solve_VIE_1(
@@ -1338,10 +1343,10 @@ def test_uniform_mesh_with_singularity_warns_vie1(capsys, vie1_callable_abel):
         mesh_breakpoints=np.linspace(0, 1, 21),
         coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
         kernel_singularity=p["kernel_singularity"], show_warnings=True)
-    assert "optimal_graded_mesh" in capsys.readouterr().out
+    assert "optimal_graded_mesh" in voles_warnings.text()
 
 
-def test_uniform_mesh_with_singularity_warns_vide(capsys, vide_callable_abel):
+def test_uniform_mesh_with_singularity_warns_vide(voles_warnings, vide_callable_abel):
     """VIDE fires the same foot-gun warning as VIE-2."""
     p = vide_callable_abel
     function_solve_VIDE(
@@ -1350,7 +1355,7 @@ def test_uniform_mesh_with_singularity_warns_vide(capsys, vide_callable_abel):
         mesh_breakpoints=np.linspace(0, 1, 21),
         coll_divs=p["coll_divs"], coll_choices=p["coll_choices"],
         kernel_singularity=p["kernel_singularity"], show_warnings=True)
-    assert "optimal_graded_mesh" in capsys.readouterr().out
+    assert "optimal_graded_mesh" in voles_warnings.text()
 
 
 # ---------------------------------------------------------------------------
@@ -2728,7 +2733,7 @@ def test_singularity_bool_rejected():
     """bool is an int subclass, so kernel_singularity=True used to silently
     declare a singularity at location 1.0; it must be rejected instead."""
     for bad in (True, False, [True], {True: 0.5}):
-        with pytest.raises(ValueError, match="bool"):
+        with pytest.raises(TypeError, match="bool"):
             function_solve_VIE_2(**_smooth_vie2_kw(), kernel_singularity=bad)
 
 
@@ -2893,11 +2898,11 @@ def test_adaptive_singular_blocks_accurate_on_fine_graded_mesh():
 
 
 @pytest.mark.parametrize("offset, warns", [(0.5, True), (0.0, False), (1e-15, False)])
-def test_vie1_callable_warns_when_g_start_nonzero(offset, warns, capsys):
+def test_vie1_callable_warns_when_g_start_nonzero(offset, warns, voles_warnings):
     """A first-kind equation needs g(0) = 0; otherwise warn."""
     function_solve_VIE_1(kernel=lambda u: np.exp(-u), g=lambda s: np.sin(s) + offset,
                          mesh_breakpoints=np.linspace(0, 2, 11))
-    assert ("g(0) is not zero" in capsys.readouterr().out) == warns
+    assert ("g(0) is not zero" in voles_warnings.text()) == warns
 
 
 @pytest.mark.parametrize("bad", [np.inf, np.nan])
@@ -2911,19 +2916,19 @@ def test_mesh_breakpoints_must_be_finite(bad):
 
 @pytest.mark.parametrize("sing, n_outside", [(5.0, 1), (-1.0, 1), ([0.0, 5.0], 1),
                                              ({0.0: 0.5, 9.0: 0.5}, 1)])
-def test_singularity_outside_mesh_warns(sing, n_outside, capsys):
+def test_singularity_outside_mesh_warns(sing, n_outside, voles_warnings):
     kernel = lambda u: 1.0 / np.sqrt(np.maximum(np.abs(u), 1e-300))
     function_solve_VIE_2(kernel=kernel, g=np.cos, kernel_singularity=sing,
                          mesh_breakpoints=optimal_graded_mesh(alpha=0.5, T=1.0, M=8, order=3))
-    out = capsys.readouterr().out
+    out = voles_warnings.text()
     assert "lie outside [0, T]" in out
 
 
-def test_singularity_inside_mesh_no_outside_warning(capsys):
+def test_singularity_inside_mesh_no_outside_warning(voles_warnings):
     function_solve_VIE_2(kernel=lambda u: 1.0 / np.sqrt(np.maximum(u, 1e-300)), g=np.cos,
                          kernel_singularity={0.0: 0.5},
                          mesh_breakpoints=optimal_graded_mesh(alpha=0.5, T=1.0, M=8, order=3))
-    assert "lie outside" not in capsys.readouterr().out
+    assert "lie outside" not in voles_warnings.text()
 
 
 @pytest.mark.parametrize("solver", [function_solve_VIE_2, function_solve_VIE_1])
@@ -2962,11 +2967,11 @@ def test_vide_callable_rejects_vector_g_with_scalar_kernel():
 
 
 @pytest.mark.parametrize("bad", [["abc"], [[0.0, 0.5]]])
-def test_invalid_singularity_declaration_gets_the_descriptive_error(bad, capsys):
+def test_invalid_singularity_declaration_gets_the_descriptive_error(bad, voles_warnings):
     """With show_warnings=True the outside-[0, T] warning used to coerce the
     declaration first and raise numpy's own error (or an uncaught TypeError
     for a nested list)."""
-    with pytest.raises(ValueError, match="kernel_singularity locations must be real numbers"):
+    with pytest.raises(TypeError, match="kernel_singularity locations must be real numbers"):
         function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=np.cos, kernel_singularity=bad,
                              mesh_breakpoints=np.linspace(0, 1, 5), show_warnings=True)
 
@@ -2986,7 +2991,7 @@ def test_vector_builder_quad_vec_fallback_converges_on_zero_block():
     assert _QUAD_OPTS_DEFAULT["epsabs"] == 0.0          # the scalar quad path is unchanged
 
 
-def test_vie1_callable_g_start_warning_counts_g_calls(capsys):
+def test_vie1_callable_g_start_warning_counts_g_calls(voles_warnings):
     """The warning draws its scale from the solver's own samples and calls g
     once more, at t = 0, rather than at every breakpoint."""
     mesh = np.linspace(0, 2, 11)
@@ -3000,16 +3005,16 @@ def test_vie1_callable_g_start_warning_counts_g_calls(capsys):
     n_silent = len(calls)
     calls.clear()
     function_solve_VIE_1(**kw)
-    assert "g(0) is not zero" in capsys.readouterr().out
+    assert "g(0) is not zero" in voles_warnings.text()
     assert calls.count(0.0) == 1
     assert len(calls) == n_silent + 1
 
 
-def test_vie1_callable_matrix_g_start_warning_names_column(capsys):
+def test_vie1_callable_matrix_g_start_warning_names_column(voles_warnings):
     mesh = np.linspace(0, 2, 11)
     A = np.eye(2)
     def g(s):
         return np.array([[np.sin(s), np.sin(s) + 0.3, np.sin(s)],
                          [2 * np.sin(s), 2 * np.sin(s), 2 * np.sin(s)]])
     function_solve_VIE_1(kernel=lambda u: np.exp(-u) * A, g=g, mesh_breakpoints=mesh)
-    assert "g(0) is not zero in 1 of 3 columns; worst column 1" in capsys.readouterr().out
+    assert "g(0) is not zero in 1 of 3 columns; worst column 1" in voles_warnings.text()

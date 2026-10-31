@@ -336,7 +336,7 @@ def test_missing_a_is_not_materialised_and_agrees_with_zeros():
     assert np.max(np.abs(solve_VIDE(**kw) - y)) < 1e-3
 
 
-def test_stale_driver_fallback_is_per_driver(monkeypatch, capsys):
+def test_stale_driver_fallback_is_per_driver(monkeypatch, voles_warnings):
     """An extension with the VIE-1 drivers but not the VIDE one keeps the
     fast path for VIE-1 and announces the fallback for the VIDE only."""
     from voles import _dlang, solve_VIE_1
@@ -346,12 +346,12 @@ def test_stale_driver_fallback_is_per_driver(monkeypatch, capsys):
     t, K, a, g, y = exp_problem(dt, N)
     vals = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=1.0,
                       time_step=dt, coll_divs=q, coll_choices=[0, 1, 2], quadrature="product")
-    out = capsys.readouterr().out
+    out = voles_warnings.text()
     assert "volterra_solve_vide_blocks" in out and "falling back" in out
     assert np.max(np.abs(vals - y)) < 1e-6
     solve_VIE_1(kernel_values=np.exp(-t), g_values=1 - np.exp(-t), time_step=dt,
                 coll_divs=q, coll_choices=[1, 2], quadrature="product")
-    assert capsys.readouterr().out == ""
+    assert voles_warnings.text() == ""
 
 
 def test_numpy_fallback_raises_on_nearly_singular_local_system(monkeypatch):
