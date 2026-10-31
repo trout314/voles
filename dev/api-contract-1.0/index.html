@@ -1,0 +1,1999 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Collocation-method solvers for Volterra integral and integro-differential equations">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>voles 1.0 API contract - voles</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#voles-10-api-contract" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="voles" class="md-header__button md-logo" aria-label="voles" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            voles
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              voles 1.0 API contract
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/trout314/voles" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting_started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../api/vie1/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../examples/vie1/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="voles" class="md-nav__button md-logo" aria-label="voles" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    voles
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/trout314/voles" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Array-based solvers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Array-based solvers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vie1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve_VIE_1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vie2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve_VIE_2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve_VIDE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Callable-input solvers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Callable-input solvers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/function_vie1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    function_solve_VIE_1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/function_vie2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    function_solve_VIE_2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/function_vide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    function_solve_VIDE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/optimal_graded_mesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    optimal_graded_mesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/coll_nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collocation node helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/vie1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VIE Type 1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/vie2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VIE Type 2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/vide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VIDE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/product_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Product integration for sampled kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/function_solvers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Callable inputs and arbitrary mesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/matrix_vector/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector- and matrix-valued equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/complex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complex-valued equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/polynomial_solutions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polynomial solutions (return_function)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-public-names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Public names
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-the-three-equations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The three equations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-input-regimes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Input regimes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-solver-signatures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Solver signatures
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-collocation-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Collocation settings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Collocation settings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-sampled-regime-coll_setting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Sampled regime: coll_setting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-functional-regime-coll_nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Functional regime: coll_nodes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-admissibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 Admissibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-shapes-and-dtypes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Shapes and dtypes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-kernel-convention-and-reserved-extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Kernel convention and reserved extensions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-volterrasolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. VolterraSolution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. VolterraSolution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-grid-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.1 Grid output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#82-structure-identical-meaning-in-both-regimes-read-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.2 Structure (identical meaning in both regimes; read-only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#83-evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.3 Evaluation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#84-other-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.4 Other behaviour
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Errors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-warnings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Warnings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-stability-policy-from-100" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Stability policy (from 1.0.0)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-threads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Threads
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-transition-011-only-removed-in-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Transition (0.11 only; removed in 1.0)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="voles-10-api-contract">voles 1.0 API contract</h1>
+<p>Status: DRAFT 2026-10-31 (Phase 0 of <code>docs/dev/api-1.0-plan.md</code>). It becomes
+the user-facing "Conventions" and "Stability policy" pages in Phase 6.</p>
+<p>This document is normative. Anything it promises is covered by the stability
+policy (§11) from 1.0.0 on, and anything it doesn't promise isn't. Where the
+implementation disagrees with it, the implementation has a bug or this
+document needs a decision; it is never silently resolved in favour of the
+code.</p>
+<hr />
+<h2 id="1-public-names">1. Public names</h2>
+<p>The public API is exactly the names in <code>voles.__all__</code>, their documented
+parameters and attributes, and <code>voles.__version__</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Kind</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>solve_vie1</code>, <code>solve_vie2</code>, <code>solve_vide</code></td>
+<td>solver functions</td>
+</tr>
+<tr>
+<td><code>VolterraSolution</code></td>
+<td>class of the solvers' return value (users never construct it)</td>
+</tr>
+<tr>
+<td><code>VolesWarning</code>, <code>AccuracyWarning</code>, <code>PerformanceWarning</code></td>
+<td>warning classes</td>
+</tr>
+<tr>
+<td><code>optimal_graded_mesh</code></td>
+<td>mesh helper</td>
+</tr>
+<tr>
+<td><code>gauss_legendre_nodes</code>, <code>radau_iia_nodes</code>, <code>lobatto_nodes</code></td>
+<td>node helpers</td>
+</tr>
+</tbody>
+</table>
+<p>Anything else is private, including every module (all module names start
+with an underscore from 1.0), any name starting with an underscore, and the
+D extension's ABI. Importing the public names from submodules isn't
+supported; use <code>from voles import ...</code>.</p>
+<h2 id="2-the-three-equations">2. The three equations</h2>
+<p>With convolution kernels throughout (§7):</p>
+<div class="arithmatex">\[\text{VIE-1:}\quad g(t) = \int_0^t K(t-s)\,y(s)\,ds\]</div>
+<div class="arithmatex">\[\text{VIE-2:}\quad y(t) = g(t) + \int_0^t K(t-s)\,y(s)\,ds\]</div>
+<div class="arithmatex">\[\text{VIDE:}\quad y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds,\qquad y(0) = y_0\]</div>
+<ul>
+<li>Every parameter of every public function is keyword-only.</li>
+<li><code>g=None</code> means g ≡ 0, and VIDE <code>a=None</code> means a ≡ 0.</li>
+<li>VIDE <code>y0</code> is required, and <code>y0=None</code> raises <code>TypeError</code>.</li>
+</ul>
+<h2 id="3-input-regimes">3. Input regimes</h2>
+<p>Each solve runs in one of two regimes, determined by the types of the data
+inputs (<code>kernel</code>, <code>g</code>, and for VIDE <code>a</code>):</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>sampled</th>
+<th>functional</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Selected when</td>
+<td>at least one data input is an array (not <code>callable</code>) and none is callable</td>
+<td>every data input given is callable</td>
+</tr>
+<tr>
+<td>Grid</td>
+<td><code>dt</code> (sample spacing, default 1.0). Inputs are samples at t = 0, dt, …, (N−1)·dt, where N is the kernel's length. The solver builds a uniform mesh of <code>samples_per_interval</code> samples per interval, with a longer final interval when the samples don't divide evenly.</td>
+<td><code>mesh</code>, required: 1-D, finite, strictly increasing, <code>mesh[0] == 0</code></td>
+</tr>
+<tr>
+<td>Node set</td>
+<td><code>coll_setting</code> (§5.1)</td>
+<td><code>coll_nodes</code> (§5.2)</td>
+</tr>
+<tr>
+<td>Options that apply only here</td>
+<td><code>coll_setting</code>, <code>quadrature</code>, <code>samples_per_interval</code>, <code>kernel_interp_degree</code></td>
+<td><code>mesh</code>, <code>coll_nodes</code>, <code>kernel_singularity</code>, <code>reuse_adaptive_blocks</code></td>
+</tr>
+</tbody>
+</table>
+<p>Rules:</p>
+<ol>
+<li>"Callable" means <code>callable(x)</code> is true. NumPy arrays are not callable;
+   functions, <code>numpy.polynomial.Polynomial</code>, scipy interpolators,
+   <code>np.vectorize</code> objects and numba dispatchers are.</li>
+<li><strong>Mixed inputs</strong> (some data inputs callable, some arrays) raise
+   <code>NotImplementedError</code>. The combination is reserved (§7), and its message
+   says so.</li>
+<li>An option belonging to the other regime raises <code>ValueError</code> naming the
+   inferred regime and the reason. That includes <code>mesh</code> in the sampled
+   regime, <code>coll_setting</code> in the functional regime, and a <code>dt</code> other than
+   the default in the functional regime. An explicit <code>dt=1.0</code> alongside
+   <code>mesh</code> is indistinguishable from the default and is ignored.</li>
+<li><code>VolterraSolution.regime</code> records the regime (§8).</li>
+</ol>
+<h2 id="4-solver-signatures">4. Solver signatures</h2>
+<p>```python notest
+solve_vie1(*, kernel, g=None, continuous=False, y0=None,
+           dt=1.0, coll_setting=None, quadrature="product",
+           samples_per_interval=None, kernel_interp_degree=None,
+           mesh=None, coll_nodes=None,
+           kernel_singularity=None, reuse_adaptive_blocks=True) -&gt; VolterraSolution</p>
+<p>solve_vie2(*, kernel, g=None,
+           dt=1.0, coll_setting=None, quadrature="product",
+           samples_per_interval=None, kernel_interp_degree=None,
+           mesh=None, coll_nodes=None,
+           kernel_singularity=None, reuse_adaptive_blocks=True) -&gt; VolterraSolution</p>
+<p>solve_vide(*, kernel, a=None, g=None, y0,
+           dt=1.0, coll_setting=None, quadrature="product",
+           samples_per_interval=None, kernel_interp_degree=None,
+           mesh=None, coll_nodes=None,
+           kernel_singularity=None, reuse_adaptive_blocks=True) -&gt; VolterraSolution
+```</p>
+<p><strong>VIE-1 method choice.</strong>
+- <code>continuous=False</code> (default): the discontinuous collocation space
+  S⁽⁻¹⁾ₘ₋₁. Passing <code>y0</code> then raises <code>ValueError</code>.
+- <code>continuous=True</code>: the continuous space S⁽⁰⁾ₘ, which needs the initial
+  value: <code>y0</code> is required (<code>ValueError</code> if missing).
+- The two methods admit different node sets (§5.3).</p>
+<h2 id="5-collocation-settings">5. Collocation settings</h2>
+<h3 id="51-sampled-regime-coll_setting">5.1 Sampled regime: <code>coll_setting</code></h3>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>None</code></td>
+<td>the default: VIE-1 <code>(3, [1, 2, 3])</code>; VIE-2 and VIDE <code>(2, [0, 1, 2])</code></td>
+</tr>
+<tr>
+<td><code>divs</code> (int)</td>
+<td>every point the method admits: <code>(divs, [1, …, divs])</code> for VIE-1, <code>(divs, [0, …, divs])</code> otherwise</td>
+</tr>
+<tr>
+<td><code>(divs, choices)</code></td>
+<td>nodes cᵢ = choicesᵢ/divs; any length-2 sequence</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><code>divs</code> is a positive integer. <code>choices</code> is a non-empty sequence of
+  distinct integers in <code>0..divs</code> (<code>1..divs</code> for VIE-1), in any order, and is
+  sorted internally.</li>
+<li>Python and NumPy integers are accepted. <code>bool</code>, floats (even
+  integer-valued ones) and other types raise <code>TypeError</code>.</li>
+<li><code>divs</code> is not only the nodes' denominator: it also fixes the mesh
+  (<code>samples_per_interval</code> below). Settings with the same node positions but
+  different <code>divs</code> are different methods.</li>
+</ul>
+<p><strong>Mesh width</strong> (<code>samples_per_interval</code>, Q):</p>
+<table>
+<thead>
+<tr>
+<th><code>quadrature</code></th>
+<th>Allowed Q</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"product"</code> (default)</td>
+<td>any positive multiple of <code>divs</code></td>
+<td><code>divs²</code> for VIE-1; <code>divs</code> for VIE-2 and VIDE</td>
+</tr>
+<tr>
+<td><code>"collocation"</code></td>
+<td>exactly <code>divs²</code></td>
+<td><code>divs²</code></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>The VIE-1 default is wider because inverting a first-kind equation
+  amplifies data errors by about the inverse of the mesh width. The
+  Conventions page will carry a worked example of the trade-off.</li>
+<li><code>kernel_interp_degree</code> (default: the number of nodes) applies only to
+  <code>quadrature="product"</code>. With <code>"collocation"</code> it raises <code>ValueError</code>.</li>
+<li><code>quadrature</code> is matched case-insensitively.</li>
+<li>The kernel needs at least Q+1 samples.</li>
+</ul>
+<h3 id="52-functional-regime-coll_nodes">5.2 Functional regime: <code>coll_nodes</code></h3>
+<ul>
+<li>A non-empty 1-D sequence of distinct finite floats in [0, 1] ((0, 1] for
+  VIE-1), in any order, sorted internally.</li>
+<li><code>None</code> gives the same positions as the sampled default: VIE-1
+  {1/3, 2/3, 1}; VIE-2 and VIDE {0, 1/2, 1}.</li>
+<li>The node helpers return valid arrays, e.g.
+  <code>coll_nodes=voles.radau_iia_nodes(3)</code>.</li>
+</ul>
+<h3 id="53-admissibility">5.3 Admissibility</h3>
+<ul>
+<li>VIE-1 node sets must give a convergent method: |ρ| ≤ 1 with
+  ρ = (−1)ᵐ ∏ (1 − cᵢ)/cᵢ for the discontinuous method, and the product
+  over i &lt; m for the continuous one. Otherwise <code>ValueError</code>.</li>
+<li>The continuous method also requires c_m = 1.</li>
+<li>ρ = +1 is admitted at one order lower, with an <code>AccuracyWarning</code>. A bare
+  <code>divs</code> with <code>continuous=True</code> gives ρ = (−1)^divs, so this happens for
+  even <code>divs</code>.</li>
+<li>The ρ test is the only VIE-1 admissibility rule. It is evaluated exactly
+  in rational arithmetic in the sampled regime, and in floating point for
+  <code>coll_nodes</code>.</li>
+<li>Only <code>quadrature="collocation"</code> depends on which settings are compiled
+  into the extension (<code>divs</code> ≤ 4 in current builds); <code>"product"</code> accepts
+  every valid setting. An uncompiled setting under <code>"collocation"</code>:</li>
+<li>scalar problems run on the numba fallback with a <code>PerformanceWarning</code>
+    when numba is installed, and raise <code>NotImplementedError</code> otherwise;</li>
+<li>vector and matrix problems raise <code>NotImplementedError</code>.</li>
+</ul>
+<p>Both messages suggest <code>quadrature="product"</code>. (Today's messages don't, and
+  the scalar one points to <code>fast_coll_settings_*</code>; Phase 4 rewrites them.)</p>
+<h2 id="6-shapes-and-dtypes">6. Shapes and dtypes</h2>
+<p><strong>Time axis first, always.</strong> "Component shape" <code>cs</code> is <code>()</code> for scalar,
+<code>(d,)</code> for vector and <code>(d, m)</code> for matrix problems.</p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Sampled</th>
+<th>Functional (return value of the callable)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kernel</code></td>
+<td><code>(N,)</code> scalar, <code>(N, d, d)</code> vector/matrix</td>
+<td><code>K(u)</code> → scalar or <code>(d, d)</code></td>
+</tr>
+<tr>
+<td><code>g</code></td>
+<td><code>(N,)</code>, <code>(N, d)</code>, <code>(N, d, m)</code></td>
+<td><code>g(t)</code> → scalar, <code>(d,)</code>, <code>(d, m)</code></td>
+</tr>
+<tr>
+<td><code>a</code> (VIDE)</td>
+<td><code>(N,)</code> or <code>(N, d, d)</code></td>
+<td><code>a(t)</code> → scalar or <code>(d, d)</code></td>
+</tr>
+<tr>
+<td><code>y0</code></td>
+<td>scalar, <code>(d,)</code>, <code>(d, m)</code></td>
+<td>the same</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Matrix mode.</strong> The problem is matrix-valued exactly when some input has
+  a column axis (<code>g</code> of <code>(N, d, m)</code> or <code>(d, m)</code>, or <code>y0</code> of <code>(d, m)</code>).
+  Every input with a column axis must have the same m. An input without one
+  is shared by all m columns. The columns are independent problems with a
+  common kernel; they may be solved in parallel threads.</li>
+<li><strong>Callables</strong> must accept a scalar argument. The kernel is also tried
+  with a 1-D array, and if it returns the leading-axis-stacked results it is
+  used vectorised, which is much faster. <code>g</code> and <code>a</code> are currently called
+  pointwise; a future release may vectorise them the same way, detected
+  rather than assumed. Return shapes are detected by sampling.</li>
+<li><strong>Complex.</strong> Complex inputs (or callables returning complex values) give
+  a complex solution. Real inputs give a real solution.</li>
+<li><strong>dtypes.</strong> Integer and <code>float32</code> inputs are converted to <code>float64</code> (or
+  <code>complex128</code>). The output dtype is <code>float64</code> or <code>complex128</code>.</li>
+<li><strong>Rejected arrays.</strong> A 2-D sampled kernel is invalid (reserved, §7). A
+  sampled kernel of <code>(N, d, d')</code> with d ≠ d′ is invalid.</li>
+<li><strong>Non-finite values.</strong></li>
+<li>Arrays containing NaN or ±inf raise <code>ValueError</code>, naming the input and
+    the first bad index.</li>
+<li>Callable <code>g</code> and <code>a</code> are checked at the collocation times, with the same
+    error.</li>
+<li>Callable kernels are <strong>not</strong> checked: a weakly singular kernel
+    legitimately returns inf at u = 0, which the quadrature never samples.
+    Non-finite kernel values elsewhere give non-finite results.</li>
+</ul>
+<h2 id="7-kernel-convention-and-reserved-extensions">7. Kernel convention and reserved extensions</h2>
+<ul>
+<li>A callable kernel is called with one positional argument u (a scalar or
+  1-D array) and means K(t − s) evaluated at u = t − s ≥ 0. Kernel arity is
+  never inspected.</li>
+<li><strong>Reserved, not promised.</strong> The following may be added in 1.x without
+  breaking anything:</li>
+<li><strong>Non-convolution kernels</strong> K(t, s), through a new keyword argument. A
+    2-D sampled kernel is invalid in 1.0 so that it can carry this meaning
+    later.</li>
+<li><strong>Mixed inputs</strong>: e.g. an analytic, possibly singular kernel with a
+    sampled forcing, on the sample grid with <code>coll_setting</code>. These raise
+    <code>NotImplementedError</code> in 1.0.</li>
+<li><strong>Iterated solutions</strong>: an <code>iterated</code> keyword for <code>solve_vie2</code> and
+    <code>solve_vide</code>, returning the iterated collocation solution
+    u_it(t) = g(t) + ∫₀ᵗ K(t−s) uₕ(s) ds (and the VIDE analogue). The name
+    <code>iterated</code> is reserved.</li>
+<li><code>kernel_singularity</code> declares weak singularities of the kernel
+  (functional regime only). It accepts <code>None</code>, a location, a list of
+  locations, a dict <code>{location: alpha}</code>, or a callable t ↦ locations; bools
+  are rejected.</li>
+<li>Locations in the first three forms are in u = t − s. In the dict form
+    a non-<code>None</code> alpha ∈ (0, 1) declares K ∼ |u − u₀|^(−α) and enables
+    Gauss–Jacobi rules.</li>
+<li>The callable returns s-locations for collocation time t (an Abel kernel
+    is <code>lambda t: [t]</code>), which anticipates non-convolution kernels.</li>
+</ul>
+<h2 id="8-volterrasolution">8. <code>VolterraSolution</code></h2>
+<p>The solvers return a <code>VolterraSolution</code>, a continuous or discontinuous
+piecewise polynomial on <code>mesh</code>. Users don't construct it.</p>
+<h3 id="81-grid-output">8.1 Grid output</h3>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Shape</th>
+<th>Sampled regime</th>
+<th>Functional regime</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>t</code></td>
+<td><code>(K,)</code></td>
+<td>the sample times n·dt, n = 0…N−1</td>
+<td><code>mesh</code></td>
+</tr>
+<tr>
+<td><code>y</code></td>
+<td><code>(K, *cs)</code></td>
+<td>solution values at <code>t</code></td>
+<td>solution values at <code>t</code></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Invariant:</strong> <code>sol(sol.t)</code> equals <code>sol.y</code> to rounding.</li>
+<li><code>y</code> is writable; modifying it doesn't affect evaluation. <code>t</code> is
+  read-only.</li>
+</ul>
+<h3 id="82-structure-identical-meaning-in-both-regimes-read-only">8.2 Structure (identical meaning in both regimes; read-only)</h3>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Shape</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mesh</code></td>
+<td><code>(M+1,)</code></td>
+<td>breakpoints t₀ = 0 &lt; … &lt; t_M = T</td>
+</tr>
+<tr>
+<td><code>node_times</code></td>
+<td><code>(M, p)</code></td>
+<td>the collocation times actually used. On the sampled regime's final interval the nodes sit on that interval's own sample grid, so they can differ from <code>mesh[n] + nodes·hₙ</code>.</td>
+</tr>
+<tr>
+<td><code>node_values</code></td>
+<td><code>(M, p, *cs)</code></td>
+<td>the solution at <code>node_times</code> (the collocation values)</td>
+</tr>
+<tr>
+<td><code>coefficients</code></td>
+<td><code>(M, P, *cs)</code></td>
+<td>interval n's polynomial in the local variable x = (t − tₙ)/hₙ ∈ [0, 1], as monomial coefficients, lowest degree first</td>
+</tr>
+<tr>
+<td><code>nodes</code></td>
+<td><code>(p,)</code></td>
+<td>the nominal node positions in [0, 1], sorted</td>
+</tr>
+<tr>
+<td><code>coll_setting</code></td>
+<td>—</td>
+<td><code>(divs, choices)</code> with <code>choices</code> a sorted list, or <code>None</code> in the functional regime</td>
+</tr>
+<tr>
+<td><code>equation</code></td>
+<td>—</td>
+<td><code>"vie1"</code>, <code>"vie2"</code> or <code>"vide"</code></td>
+</tr>
+<tr>
+<td><code>regime</code></td>
+<td>—</td>
+<td><code>"sampled"</code> or <code>"functional"</code></td>
+</tr>
+<tr>
+<td><code>continuous</code></td>
+<td>—</td>
+<td><code>True</code> when the solution space is C⁰ (VIDE; VIE-1 with <code>continuous=True</code>)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="83-evaluation">8.3 Evaluation</h3>
+<p><code>sol(t, *, at_breakpoints="mean")</code>:</p>
+<ul>
+<li><strong>Shapes.</strong> A scalar <code>t</code> returns a Python <code>float</code> or <code>complex</code> for scalar
+  problems and an <code>ndarray</code> of shape <code>cs</code> otherwise. An array <code>t</code> returns
+  <code>(*t.shape, *cs)</code>.</li>
+<li><strong>Domain.</strong> t ∈ [0, T] up to a rounding-level tolerance; points outside
+  return NaN, never extrapolated values.</li>
+<li><strong>Breakpoints.</strong> At an interior breakpoint the two one-sided limits of a
+  discontinuous solution differ. <code>at_breakpoints</code> chooses <code>"mean"</code> (the
+  default), <code>"left"</code> or <code>"right"</code>. A point within a few ulps of a
+  breakpoint counts as that breakpoint. At t = 0 and t = T only one limit
+  exists and is used.</li>
+<li><strong>Choosing a convention.</strong> <code>"mean"</code> is the most accurate of the three for
+  most node sets. With VIE-2 and c_m = 1 (e.g. Radau IIA), <code>"left"</code> is
+  superconvergent and better. The Conventions page carries the measured
+  table.</li>
+</ul>
+<p><code>sol.to_ppoly()</code> returns an equivalent <code>scipy.interpolate.PPoly</code> (trailing
+axes <code>cs</code>). It is right-continuous at breakpoints and can differentiate,
+integrate and find roots. Complex solutions are supported if and only if
+PPoly supports them (to be verified in Phase 2; otherwise <code>TypeError</code>).</p>
+<h3 id="84-other-behaviour">8.4 Other behaviour</h3>
+<ul>
+<li><code>repr(sol)</code> is a one-line summary. Its exact text isn't part of the
+  contract.</li>
+<li>Solutions pickle. Pickles are <strong>not</strong> guaranteed to load in a different
+  minor version.</li>
+<li>No <code>len()</code>, indexing or iteration.</li>
+</ul>
+<h2 id="9-errors">9. Errors</h2>
+<table>
+<thead>
+<tr>
+<th>Exception</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TypeError</code></td>
+<td>an argument has the wrong type, e.g. a float where an int is required, a non-bool flag, a non-callable where a callable is required in the functional regime, a non-numeric array, <code>y0=None</code> where <code>y0</code> is required. Python's own <code>TypeError</code> for unknown or missing keywords.</td>
+</tr>
+<tr>
+<td><code>ValueError</code></td>
+<td>the type is right but the value is not: shapes, ranges, signs, inadmissible node sets, options from the other regime, inputs too short for the mesh, non-finite data, conflicting arguments</td>
+</tr>
+<tr>
+<td><code>NotImplementedError</code></td>
+<td>mixed inputs (§3); a setting that isn't compiled with no fallback for that problem shape (§5.3)</td>
+</tr>
+<tr>
+<td><code>numpy.linalg.LinAlgError</code></td>
+<td>a collocation system is singular or numerically singular</td>
+</tr>
+<tr>
+<td><code>ImportError</code></td>
+<td>the D extension can't be found or loaded</td>
+</tr>
+<tr>
+<td><code>RuntimeError</code></td>
+<td>an internal error. It always indicates a bug in voles, and its message asks for a report.</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Type versus value rule.</strong> Integers are <code>numbers.Integral</code> but not
+  <code>bool</code>. Flags are <code>bool</code> or <code>numpy.bool_</code>. Reals are <code>numbers.Real</code> but
+  not <code>bool</code>. Arrays are anything <code>numpy.asarray</code> turns into a numeric
+  array.</li>
+<li><strong>Integers aren't coerced.</strong> Floats are never truncated to ints (2.0 is a
+  <code>TypeError</code> where an int is required), because silently running a
+  different discretisation is worse than an error.</li>
+<li><strong>Messages</strong> name the offending parameter by its public name and, where
+  useful, its value and the expected form. Message text isn't part of the
+  contract.</li>
+</ul>
+<h2 id="10-warnings">10. Warnings</h2>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Base</th>
+<th>Emitted for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>VolesWarning</code></td>
+<td><code>UserWarning</code></td>
+<td>base class; also: <code>kernel_singularity</code> locations outside [0, T]</td>
+</tr>
+<tr>
+<td><code>AccuracyWarning</code></td>
+<td><code>VolesWarning</code></td>
+<td>ρ = +1 order reduction; VIE-1 with g(0) ≠ 0; VIE-1 with K(0) small or singular under collocation quadrature; a declared singularity on a uniform mesh</td>
+</tr>
+<tr>
+<td><code>PerformanceWarning</code></td>
+<td><code>VolesWarning</code></td>
+<td>the numba fallback; an extension build lacking a fast path</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Warnings are emitted with <code>warnings.warn</code>. Each points at the user's call,
+  is emitted at most once per solve call, and comes from the calling
+  thread, never a worker thread.</li>
+<li><code>warnings.simplefilter("ignore", voles.VolesWarning)</code> silences all of
+  them. <code>"error"</code> turns them into exceptions.</li>
+<li>voles never prints. Third-party warnings (e.g. scipy's
+  <code>IntegrationWarning</code> from adaptive quadrature) pass through unchanged.</li>
+<li>The set of conditions that warn may grow in a minor release; new
+  warnings are always <code>VolesWarning</code> subclasses.</li>
+</ul>
+<h2 id="11-stability-policy-from-100">11. Stability policy (from 1.0.0)</h2>
+<p>voles follows semantic versioning on the public API of §1.</p>
+<ul>
+<li><strong>Major releases</strong> may remove or incompatibly change public names,
+  parameters, defaults, return types or attributes.</li>
+<li><strong>Minor releases</strong> may:</li>
+<li>add names, keyword parameters with defaults, attributes and warning
+    conditions;</li>
+<li>change numerical results only as a documented accuracy or robustness
+    improvement, named in the changelog;</li>
+<li>deprecate. Deprecated features emit <code>DeprecationWarning</code> for at least
+    one minor release before removal in the next major release.</li>
+<li><strong>Patch releases</strong> fix bugs only. A fix may change a result that was
+  wrong.</li>
+<li><strong>Not covered:</strong> private names, message text, <code>repr</code> text, pickles across
+  minor versions, the D ABI, performance (though regressions are treated as
+  bugs), and bitwise reproducibility across platforms or builds.</li>
+<li><strong>Supported Python versions</strong> follow the classifiers in <code>pyproject.toml</code>.
+  Dropping a Python version that is past end-of-life is allowed in a minor
+  release.</li>
+</ul>
+<h2 id="12-threads">12. Threads</h2>
+<ul>
+<li>Solver calls are thread-safe. Concurrent calls from different Python
+  threads give the same results as serial calls.</li>
+<li>The extension releases the GIL during compiled work (<code>ctypes.CDLL</code>).</li>
+<li>Matrix-mode solves may use a thread pool internally, sized to the column
+  count and the CPU count.</li>
+</ul>
+<h2 id="13-transition-011-only-removed-in-10">13. Transition (0.11 only; removed in 1.0)</h2>
+<ul>
+<li>0.11.0 keeps <code>solve_VIE_1</code>, <code>solve_VIE_2</code>, <code>solve_VIDE</code>,
+  <code>function_solve_VIE_1</code>, <code>function_solve_VIE_2</code>, <code>function_solve_VIDE</code>,
+  <code>fast_coll_settings_*</code> and <code>voles.solvers</code> as deprecated wrappers.</li>
+<li>They return their 0.10 types.</li>
+<li>Their numerics are bitwise identical to 0.10, except for dense
+    evaluation at exact interior breakpoints (now the mean of the limits).</li>
+<li>Changes that affect 0.10 code directly, all listed in the 0.11
+  changelog:</li>
+<li>warnings instead of prints</li>
+<li><code>TypeError</code> for wrong-type arguments</li>
+<li><code>y0=None</code> rejected in VIDE</li>
+<li>non-finite data rejected</li>
+<li>The migration table is in <code>docs/dev/api-1.0-plan.md</code>, Appendix A, and
+  becomes the "Migration from 0.10" page.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

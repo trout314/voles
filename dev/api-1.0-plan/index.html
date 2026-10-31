@@ -1353,9 +1353,24 @@
 
 
 <h1 id="plan-the-10-api-merged-solver-families-review-fixes">Plan: the 1.0 API (merged solver families + review fixes)</h1>
-<p>Status: decisions settled 2026-10-31 (§2). One open item: whether to offer an
-<em>iterated</em> solution, which may change the default <code>at_breakpoints</code>
-convention (§2, D5). No code changes yet.
+<p>Status: all decisions settled 2026-10-31 (§2); the iterated solution is
+deferred to after 1.0. <strong>Phase 0 done 2026-10-31:</strong>
+- contract drafted in <code>docs/dev/api-contract-1.0.md</code>
+- battery <code>docs/dev/api_battery.py</code>: 510 cases, 3042 fields, 6 s;
+  deterministic on re-run. Reference from 9ad2338:
+  <code>~/.cache/voles_api_battery_9ad2338.npz</code>.
+- benchmark baseline: <code>~/.cache/voles_bench_baseline_9ad2338.json</code>
+  (91 benchmarks)</p>
+<p>Phase 0 findings:
+- (a) <strong>Bug:</strong> the callable family accepts a float <code>coll_divs</code>, e.g. 2.5
+  gives nodes {0, 0.4, 0.8} silently (<code>_resolve_node_pos</code> never checks the
+  type of <code>divs</code>). Fixed in Phase 1 with F3.
+- (b) <code>return_function=True</code> never changes the sample values: <code>values</code> and
+  <code>rf_values</code> agree bitwise in all 510 cases. So the new API can always
+  request coefficients without breaking the wrappers' bitwise promise.
+- (c) The 0.10 API also accepts <code>return_function=1</code>, <code>show_warnings="no"</code>,
+  <code>optimal_graded_mesh(M=10.0)</code> and VIDE <code>soln_init_value=None</code> (both
+  families). All F3/F5, fixed in Phase 1.
 Inputs: <code>docs/dev/api-review-1.0.md</code> (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.</p>
 <hr />
@@ -1540,6 +1555,27 @@ u_it(t) = g(t) + ∫₀ᵗ K(t−s) u_h(s) ds. It needs its own discussion:
 - whether it changes the `at_breakpoints` default.
 
 The design below leaves room for it as an addition.
+
+*Measured 2026-10-31* (brute-force quadrature on today's dense output; K = e⁻ᵘ,
+y = cos t on [0,4], m = 3, M = 8→32; scratchpad `iterated_orders.py`,
+`iterated_split.py`):
+
+| Method | uₕ uniform | u_it uniform | u_it at mesh points |
+|---|---|---|---|
+| VIE-2 Gauss | 3 | 4 | ≥ 6 (reaches 1e-15 by M = 32) |
+| VIE-2 Radau IIA | 3 | 4 | 5 |
+| VIE-2 {0,1/2,1} (default) | 3 | 4 | 4 (= uₕ there) |
+| VIE-2 {1/3,2/3,1} | 3 | 3 | — |
+| VIDE Gauss | 4 | 6 | 6 |
+| VIDE {0,1/2,1} (default) | 4 | 4 | — |
+
+VIE-2: one extra order uniformly when κ ≥ 1, and order m+κ at mesh points.
+VIDE with Gauss nodes: 2m uniformly. The rational node sets of the sampled
+regime gain at most one order.
+
+*Decided 2026-10-31:* the iterated solution comes **after 1.0**: functional
+regime, VIE-2 and VIDE, as an additive `iterated=` keyword. The name is
+reserved in the contract (§7), and the `&quot;mean&quot;` default stays.
 
 ---
 
@@ -1771,7 +1807,9 @@ ends with an offer to commit. Phases 1–3 change no public signature.</p>
 <li><code>time_step="0.1"</code> raises a voles <code>TypeError</code> instead of the <code>&gt;</code>
      comparison error</li>
 <li><code>show_warnings="no"</code> and <code>return_function=1</code> raise <code>TypeError</code></li>
-<li><strong>F5</strong>: <code>soln_init_value=None</code> on VIDE (both families) raises <code>TypeError</code>
+<li><strong>Phase 0 bug (a)</strong>: <code>_resolve_node_pos</code> validates <code>coll_divs</code> as a positive
+   integer (<code>TypeError</code> for 2.5 or 2.0), like the array family's <code>_as_int</code>.
+   <strong>F5</strong>: <code>soln_init_value=None</code> on VIDE (both families) raises <code>TypeError</code>
    ("y0 is required").</li>
 <li><strong>F4</strong>: <code>_dlang.py:246</code> raises <code>RuntimeError("internal error: &lt;fn&gt; returned
    code n; please report at &lt;issues URL&gt;")</code>, listed in the Raises sections.
