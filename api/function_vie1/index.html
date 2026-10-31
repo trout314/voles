@@ -1487,7 +1487,8 @@ and is generally the better default.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>See <code>function_solve_VIE_2</code>; also gates the warning printed when
+                <p>See <code>function_solve_VIE_2</code>; also gates the <code>voles.AccuracyWarning</code>
+for <span class="arithmatex">\(g(0) \ne 0\)</span> and the <code>voles.VolesWarning</code> emitted when
 <code>soln_init_value</code> is passed without <code>force_continuous</code>.</p>
               </div>
             </td>
@@ -1553,8 +1554,10 @@ for matrix-valued equations.</p>
               <div class="doc-md-description">
                 <p>As for <code>function_solve_VIE_2</code>; additionally <code>ValueError</code> for
 non-convergent node sets (see Notes), zero in <code>coll_choices</code> /
-<code>coll_nodes</code>, <code>force_continuous</code> without <span class="arithmatex">\(c_m = 1\)</span>, or
-<code>force_continuous</code> without <code>soln_init_value</code>.</p>
+<code>coll_nodes</code>, <code>force_continuous</code> without <span class="arithmatex">\(c_m = 1\)</span>,
+<code>force_continuous</code> without <code>soln_init_value</code>, or a non-finite
+<code>soln_init_value</code>; <code>TypeError</code> for a <code>force_continuous</code> that is
+not a bool.</p>
               </div>
             </td>
           </tr>
@@ -1565,7 +1568,7 @@ non-convergent node sets (see Notes), zero in <code>coll_choices</code> /
 <details class="note" open>
   <summary>Notes</summary>
   <p>The equation forces <span class="arithmatex">\(g(0) = 0\)</span>; for <span class="arithmatex">\(g(0) \ne 0\)</span> there is no bounded
-solution, and a warning is printed.</p>
+solution, and a <code>voles.AccuracyWarning</code> is emitted.</p>
 <p>Whether a given node set yields a convergent method depends on the nodes
 (Brunner 2004, smooth-kernel chapter). For a smooth kernel with
 <span class="arithmatex">\(|K(t, t)| \ge k_0 &gt; 0\)</span>, writing <span class="arithmatex">\(c_1 &lt; \dots &lt; c_m\)</span> for the nodes:</p>
@@ -1595,53 +1598,7 @@ skipped.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_callable_solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2541</span>
-<span class="normal">2542</span>
-<span class="normal">2543</span>
-<span class="normal">2544</span>
-<span class="normal">2545</span>
-<span class="normal">2546</span>
-<span class="normal">2547</span>
-<span class="normal">2548</span>
-<span class="normal">2549</span>
-<span class="normal">2550</span>
-<span class="normal">2551</span>
-<span class="normal">2552</span>
-<span class="normal">2553</span>
-<span class="normal">2554</span>
-<span class="normal">2555</span>
-<span class="normal">2556</span>
-<span class="normal">2557</span>
-<span class="normal">2558</span>
-<span class="normal">2559</span>
-<span class="normal">2560</span>
-<span class="normal">2561</span>
-<span class="normal">2562</span>
-<span class="normal">2563</span>
-<span class="normal">2564</span>
-<span class="normal">2565</span>
-<span class="normal">2566</span>
-<span class="normal">2567</span>
-<span class="normal">2568</span>
-<span class="normal">2569</span>
-<span class="normal">2570</span>
-<span class="normal">2571</span>
-<span class="normal">2572</span>
-<span class="normal">2573</span>
-<span class="normal">2574</span>
-<span class="normal">2575</span>
-<span class="normal">2576</span>
-<span class="normal">2577</span>
-<span class="normal">2578</span>
-<span class="normal">2579</span>
-<span class="normal">2580</span>
-<span class="normal">2581</span>
-<span class="normal">2582</span>
-<span class="normal">2583</span>
-<span class="normal">2584</span>
-<span class="normal">2585</span>
-<span class="normal">2586</span>
-<span class="normal">2587</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2587</span>
 <span class="normal">2588</span>
 <span class="normal">2589</span>
 <span class="normal">2590</span>
@@ -1951,7 +1908,60 @@ skipped.</p>
 <span class="normal">2894</span>
 <span class="normal">2895</span>
 <span class="normal">2896</span>
-<span class="normal">2897</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
+<span class="normal">2897</span>
+<span class="normal">2898</span>
+<span class="normal">2899</span>
+<span class="normal">2900</span>
+<span class="normal">2901</span>
+<span class="normal">2902</span>
+<span class="normal">2903</span>
+<span class="normal">2904</span>
+<span class="normal">2905</span>
+<span class="normal">2906</span>
+<span class="normal">2907</span>
+<span class="normal">2908</span>
+<span class="normal">2909</span>
+<span class="normal">2910</span>
+<span class="normal">2911</span>
+<span class="normal">2912</span>
+<span class="normal">2913</span>
+<span class="normal">2914</span>
+<span class="normal">2915</span>
+<span class="normal">2916</span>
+<span class="normal">2917</span>
+<span class="normal">2918</span>
+<span class="normal">2919</span>
+<span class="normal">2920</span>
+<span class="normal">2921</span>
+<span class="normal">2922</span>
+<span class="normal">2923</span>
+<span class="normal">2924</span>
+<span class="normal">2925</span>
+<span class="normal">2926</span>
+<span class="normal">2927</span>
+<span class="normal">2928</span>
+<span class="normal">2929</span>
+<span class="normal">2930</span>
+<span class="normal">2931</span>
+<span class="normal">2932</span>
+<span class="normal">2933</span>
+<span class="normal">2934</span>
+<span class="normal">2935</span>
+<span class="normal">2936</span>
+<span class="normal">2937</span>
+<span class="normal">2938</span>
+<span class="normal">2939</span>
+<span class="normal">2940</span>
+<span class="normal">2941</span>
+<span class="normal">2942</span>
+<span class="normal">2943</span>
+<span class="normal">2944</span>
+<span class="normal">2945</span>
+<span class="normal">2946</span>
+<span class="normal">2947</span>
+<span class="normal">2948</span>
+<span class="normal">2949</span>
+<span class="normal">2950</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@_escalate_complex_warning</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">function_solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                           <span class="n">mesh_breakpoints</span><span class="p">,</span>
                           <span class="n">coll_divs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1960,8 +1970,7 @@ skipped.</p>
                           <span class="n">return_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                           <span class="n">force_continuous</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                           <span class="n">reuse_adaptive_blocks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-                          <span class="n">show_warnings</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-                          <span class="n">_smooth_gl_order</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">):</span>
+                          <span class="n">show_warnings</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Solve the Volterra integral equation of the first kind</span>
 
 <span class="sd">    $$g(t) = \int_0^t K(t-s)\,y(s)\,ds$$</span>
@@ -2029,7 +2038,8 @@ skipped.</p>
 <span class="sd">    reuse_adaptive_blocks : bool, optional</span>
 <span class="sd">        See ``function_solve_VIE_2``.</span>
 <span class="sd">    show_warnings : bool, optional</span>
-<span class="sd">        See ``function_solve_VIE_2``; also gates the warning printed when</span>
+<span class="sd">        See ``function_solve_VIE_2``; also gates the `voles.AccuracyWarning`</span>
+<span class="sd">        for $g(0) \ne 0$ and the `voles.VolesWarning` emitted when</span>
 <span class="sd">        ``soln_init_value`` is passed without ``force_continuous``.</span>
 
 <span class="sd">    Returns</span>
@@ -2048,13 +2058,15 @@ skipped.</p>
 <span class="sd">    ValueError, TypeError, numpy.linalg.LinAlgError, ImportError</span>
 <span class="sd">        As for ``function_solve_VIE_2``; additionally ``ValueError`` for</span>
 <span class="sd">        non-convergent node sets (see Notes), zero in ``coll_choices`` /</span>
-<span class="sd">        ``coll_nodes``, ``force_continuous`` without $c_m = 1$, or</span>
-<span class="sd">        ``force_continuous`` without ``soln_init_value``.</span>
+<span class="sd">        ``coll_nodes``, ``force_continuous`` without $c_m = 1$,</span>
+<span class="sd">        ``force_continuous`` without ``soln_init_value``, or a non-finite</span>
+<span class="sd">        ``soln_init_value``; ``TypeError`` for a ``force_continuous`` that is</span>
+<span class="sd">        not a bool.</span>
 
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
 <span class="sd">    The equation forces $g(0) = 0$; for $g(0) \ne 0$ there is no bounded</span>
-<span class="sd">    solution, and a warning is printed.</span>
+<span class="sd">    solution, and a `voles.AccuracyWarning` is emitted.</span>
 
 <span class="sd">    Whether a given node set yields a convergent method depends on the nodes</span>
 <span class="sd">    (Brunner 2004, smooth-kernel chapter). For a smooth kernel with</span>
@@ -2083,6 +2095,12 @@ skipped.</p>
 <span class="sd">    accompany a declared ``kernel_singularity``, for which the check is already</span>
 <span class="sd">    skipped.</span>
 <span class="sd">    """</span>
+    <span class="n">return_function</span> <span class="o">=</span> <span class="n">_v</span><span class="o">.</span><span class="n">flag</span><span class="p">(</span><span class="s2">"return_function"</span><span class="p">,</span> <span class="n">return_function</span><span class="p">)</span>
+    <span class="n">force_continuous</span> <span class="o">=</span> <span class="n">_v</span><span class="o">.</span><span class="n">flag</span><span class="p">(</span><span class="s2">"force_continuous"</span><span class="p">,</span> <span class="n">force_continuous</span><span class="p">)</span>
+    <span class="n">reuse_adaptive_blocks</span> <span class="o">=</span> <span class="n">_v</span><span class="o">.</span><span class="n">flag</span><span class="p">(</span><span class="s2">"reuse_adaptive_blocks"</span><span class="p">,</span> <span class="n">reuse_adaptive_blocks</span><span class="p">)</span>
+    <span class="n">show_warnings</span> <span class="o">=</span> <span class="n">_v</span><span class="o">.</span><span class="n">flag</span><span class="p">(</span><span class="s2">"show_warnings"</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
+    <span class="n">_v</span><span class="o">.</span><span class="n">finite</span><span class="p">(</span><span class="s2">"soln_init_value"</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">)</span>
+    <span class="n">_smooth_gl_order</span> <span class="o">=</span> <span class="n">_SMOOTH_GL_ORDER</span>
     <span class="n">kernel_singularity</span> <span class="o">=</span> <span class="n">_empty_singularity_to_none</span><span class="p">(</span><span class="n">kernel_singularity</span><span class="p">)</span>
     <span class="n">mesh_breakpoints</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">mesh_breakpoints</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">mesh_breakpoints</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
@@ -2143,7 +2161,7 @@ skipped.</p>
     <span class="k">if</span> <span class="n">force_continuous</span> <span class="ow">and</span> <span class="n">soln_init_value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"must specify soln_init_value when force_continuous=True"</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">force_continuous</span> <span class="ow">and</span> <span class="n">soln_init_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">show_warnings</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">"warning: setting soln_init_value has no effect when force_continuous=False."</span><span class="p">)</span>
+        <span class="n">_warn</span><span class="p">(</span><span class="s2">"setting soln_init_value has no effect when force_continuous=False."</span><span class="p">,</span> <span class="n">VolesWarning</span><span class="p">)</span>
 
     <span class="c1"># Complex dispatch. soln_init_value only contributes to the complex check</span>
     <span class="c1"># when force_continuous=True (otherwise it has no effect on the result).</span>
@@ -2163,8 +2181,7 @@ skipped.</p>
             <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span>
             <span class="n">force_continuous</span><span class="o">=</span><span class="n">force_continuous</span><span class="p">,</span>
             <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span><span class="p">,</span>
-            <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">,</span>
-            <span class="n">_smooth_gl_order</span><span class="o">=</span><span class="n">_smooth_gl_order</span><span class="p">)</span>
+            <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="n">reuse_adaptive_blocks</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
             <span class="n">y_real</span><span class="p">,</span> <span class="n">y_func_real</span> <span class="o">=</span> <span class="n">result</span>
             <span class="k">return</span> <span class="p">(</span><span class="n">_recombine_complex_y</span><span class="p">(</span><span class="n">y_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">),</span>

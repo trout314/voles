@@ -1404,9 +1404,10 @@ solver quietly loses convergence order (and spends longer in adaptive
 fallbacks) instead. If the kernel ever evaluates to <code>inf</code>/<code>nan</code> at a
 quadrature node, a <code>ValueError</code> from the weight tensor's <code>np.isfinite</code> check
 points you to <code>kernel_singularity</code>, but do not rely on that safety net:
-declare every integrable singularity you know about. (The solver also prints
-a hint if you declare a singularity on a near-uniform mesh, suggesting
-<code>optimal_graded_mesh</code>; silence it with <code>show_warnings=False</code>.)</p>
+declare every integrable singularity you know about. (The solver also emits
+a <code>voles.AccuracyWarning</code> if you declare a singularity on a near-uniform mesh,
+suggesting <code>optimal_graded_mesh</code>; silence it with <code>show_warnings=False</code> or a
+<code>warnings</code> filter.)</p>
 <h2 id="known-power-law-declare-it-for-a-much-faster-build">Known power law? Declare it for a much faster build</h2>
 <p>If you also know the singularity's <em>exponent</em>, use the dict form
 <code>kernel_singularity={location: alpha}</code> for <span class="arithmatex">\(K(u) \sim |u - u_0|^{-\alpha}\)</span>.
