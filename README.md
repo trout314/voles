@@ -11,11 +11,11 @@
   <img src="docs/vole_chalkboard.png" alt="Volterra equation solvers mascot" width="400">
 </p>
 
-The Volterra Equation Solvers (VOLES) package is a collection of fast collocation-method solvers for Volterra integral and integro-differential equations. The algorithms used come from the book
+The Volterra Equation Solvers (VOLES) package is a collection of fast collocation-method solvers for Volterra integral and integro-differential equations. All solvers support real- and complex-valued data, scalar-, vector-, and matrix-valued equations, and singular kernels. The algorithms used come from the book
 
 > Brunner H. *Collocation Methods for Volterra Integral and Related Functional Differential Equations.* Cambridge University Press; 2004.
 
-The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code. All solvers support real- and complex-valued data, scalar-, vector-, and matrix-valued equations, and singular kernels. Currently, only convolution type kernels are supported, but this restriction is likely to be lifted in a future version.
+The solvers are implemented as a compiled extension written in the [D language](https://dlang.org). Performance should be on par with optimized C or FORTRAN code. Currently, only convolution type kernels are supported, but this restriction is likely to be lifted in a future version.
 
 ## Solvers
 
