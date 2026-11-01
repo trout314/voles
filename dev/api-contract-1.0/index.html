@@ -1923,11 +1923,19 @@ Outside [0, T] it returns NaN, like <code>sol(t)</code>.</p>
 <h2 id="13-transition-011-only-removed-in-10">13. Transition (0.11 only; removed in 1.0)</h2>
 <ul>
 <li>0.11.0 keeps <code>solve_VIE_1</code>, <code>solve_VIE_2</code>, <code>solve_VIDE</code>,
-  <code>function_solve_VIE_1</code>, <code>function_solve_VIE_2</code>, <code>function_solve_VIDE</code>,
-  <code>fast_coll_settings_*</code> and <code>voles.solvers</code> as deprecated wrappers.</li>
-<li>They return their 0.10 types.</li>
-<li>Their numerics are bitwise identical to 0.10, except for dense
-    evaluation at exact interior breakpoints (now the mean of the limits).</li>
+  <code>function_solve_VIE_1</code>, <code>function_solve_VIE_2</code>, <code>function_solve_VIDE</code> as
+  deprecated wrappers.</li>
+<li>Each call emits one <code>DeprecationWarning</code> showing the equivalent 1.0 call.</li>
+<li>Each calls the 0.10 engine directly, so it returns exactly the 0.10 types,
+    including the 0.10 solution object for <code>return_function=True</code>.</li>
+<li>Results and error messages are those of 0.10, bitwise; dense evaluation
+    is unchanged too.</li>
+<li>Also deprecated in 0.11, all with a <code>DeprecationWarning</code> and all removed
+  in 1.0:</li>
+<li><code>fast_coll_settings_*</code> (module attributes, no longer in <code>__all__</code>);</li>
+<li>the <code>voles.solvers</code> module (warns on import);</li>
+<li><code>optimal_graded_mesh(T=, M=)</code>, now <code>t_end=</code> and <code>n_intervals=</code>.</li>
+<li><code>import voles</code> and <code>from voles import *</code> emit no warnings.</li>
 <li>Changes that affect 0.10 code directly, all listed in the 0.11
   changelog:</li>
 <li>warnings instead of prints</li>

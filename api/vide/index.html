@@ -1243,6 +1243,8 @@
     <div class="doc doc-contents first">
 
         <p>Solve a Volterra integro-differential equation.</p>
+<p><strong>Deprecated since 0.11; removed in 1.0.</strong> Use <code>voles.solve_vide</code> instead; each call warns
+with the equivalent 1.0 call.</p>
 <p>Finds <span class="arithmatex">\(y(t)\)</span> satisfying</p>
 <div class="arithmatex">\[y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds, \quad y(0) = y_0\]</div>
 
@@ -1446,7 +1448,7 @@ well, e.g. <code>warnings.simplefilter("ignore", voles.VolesWarning)</code>.</p>
                 <code>quadrature</code>
             </td>
             <td>
-                  <code>(<span title="product">product</span>, <span title="collocation">collocation</span>)</code>
+                  <code>(&#39;product&#39;, &#39;collocation&#39;)</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1668,137 +1670,8 @@ compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
 </details>
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/voles/_sampled.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">342</span>
-<span class="normal">343</span>
-<span class="normal">344</span>
-<span class="normal">345</span>
-<span class="normal">346</span>
-<span class="normal">347</span>
-<span class="normal">348</span>
-<span class="normal">349</span>
-<span class="normal">350</span>
-<span class="normal">351</span>
-<span class="normal">352</span>
-<span class="normal">353</span>
-<span class="normal">354</span>
-<span class="normal">355</span>
-<span class="normal">356</span>
-<span class="normal">357</span>
-<span class="normal">358</span>
-<span class="normal">359</span>
-<span class="normal">360</span>
-<span class="normal">361</span>
-<span class="normal">362</span>
-<span class="normal">363</span>
-<span class="normal">364</span>
-<span class="normal">365</span>
-<span class="normal">366</span>
-<span class="normal">367</span>
-<span class="normal">368</span>
-<span class="normal">369</span>
-<span class="normal">370</span>
-<span class="normal">371</span>
-<span class="normal">372</span>
-<span class="normal">373</span>
-<span class="normal">374</span>
-<span class="normal">375</span>
-<span class="normal">376</span>
-<span class="normal">377</span>
-<span class="normal">378</span>
-<span class="normal">379</span>
-<span class="normal">380</span>
-<span class="normal">381</span>
-<span class="normal">382</span>
-<span class="normal">383</span>
-<span class="normal">384</span>
-<span class="normal">385</span>
-<span class="normal">386</span>
-<span class="normal">387</span>
-<span class="normal">388</span>
-<span class="normal">389</span>
-<span class="normal">390</span>
-<span class="normal">391</span>
-<span class="normal">392</span>
-<span class="normal">393</span>
-<span class="normal">394</span>
-<span class="normal">395</span>
-<span class="normal">396</span>
-<span class="normal">397</span>
-<span class="normal">398</span>
-<span class="normal">399</span>
-<span class="normal">400</span>
-<span class="normal">401</span>
-<span class="normal">402</span>
-<span class="normal">403</span>
-<span class="normal">404</span>
-<span class="normal">405</span>
-<span class="normal">406</span>
-<span class="normal">407</span>
-<span class="normal">408</span>
-<span class="normal">409</span>
-<span class="normal">410</span>
-<span class="normal">411</span>
-<span class="normal">412</span>
-<span class="normal">413</span>
-<span class="normal">414</span>
-<span class="normal">415</span>
-<span class="normal">416</span>
-<span class="normal">417</span>
-<span class="normal">418</span>
-<span class="normal">419</span>
-<span class="normal">420</span>
-<span class="normal">421</span>
-<span class="normal">422</span>
-<span class="normal">423</span>
-<span class="normal">424</span>
-<span class="normal">425</span>
-<span class="normal">426</span>
-<span class="normal">427</span>
-<span class="normal">428</span>
-<span class="normal">429</span>
-<span class="normal">430</span>
-<span class="normal">431</span>
-<span class="normal">432</span>
-<span class="normal">433</span>
-<span class="normal">434</span>
-<span class="normal">435</span>
-<span class="normal">436</span>
-<span class="normal">437</span>
-<span class="normal">438</span>
-<span class="normal">439</span>
-<span class="normal">440</span>
-<span class="normal">441</span>
-<span class="normal">442</span>
-<span class="normal">443</span>
-<span class="normal">444</span>
-<span class="normal">445</span>
-<span class="normal">446</span>
-<span class="normal">447</span>
-<span class="normal">448</span>
-<span class="normal">449</span>
-<span class="normal">450</span>
-<span class="normal">451</span>
-<span class="normal">452</span>
-<span class="normal">453</span>
-<span class="normal">454</span>
-<span class="normal">455</span>
-<span class="normal">456</span>
-<span class="normal">457</span>
-<span class="normal">458</span>
-<span class="normal">459</span>
-<span class="normal">460</span>
-<span class="normal">461</span>
-<span class="normal">462</span>
-<span class="normal">463</span>
-<span class="normal">464</span>
-<span class="normal">465</span>
-<span class="normal">466</span>
-<span class="normal">467</span>
-<span class="normal">468</span>
-<span class="normal">469</span>
-<span class="normal">470</span>
-<span class="normal">471</span>
+              <summary>Source code in <code>src/voles/_legacy.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">471</span>
 <span class="normal">472</span>
 <span class="normal">473</span>
 <span class="normal">474</span>
@@ -1965,44 +1838,15 @@ compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
 <span class="normal">635</span>
 <span class="normal">636</span>
 <span class="normal">637</span>
-<span class="normal">638</span>
-<span class="normal">639</span>
-<span class="normal">640</span>
-<span class="normal">641</span>
-<span class="normal">642</span>
-<span class="normal">643</span>
-<span class="normal">644</span>
-<span class="normal">645</span>
-<span class="normal">646</span>
-<span class="normal">647</span>
-<span class="normal">648</span>
-<span class="normal">649</span>
-<span class="normal">650</span>
-<span class="normal">651</span>
-<span class="normal">652</span>
-<span class="normal">653</span>
-<span class="normal">654</span>
-<span class="normal">655</span>
-<span class="normal">656</span>
-<span class="normal">657</span>
-<span class="normal">658</span>
-<span class="normal">659</span>
-<span class="normal">660</span>
-<span class="normal">661</span>
-<span class="normal">662</span>
-<span class="normal">663</span>
-<span class="normal">664</span>
-<span class="normal">665</span>
-<span class="normal">666</span>
-<span class="normal">667</span>
-<span class="normal">668</span>
-<span class="normal">669</span>
-<span class="normal">670</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">a_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<span class="normal">638</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">a_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
                <span class="n">coll_divs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                <span class="n">quadrature</span><span class="o">=</span><span class="s2">"product"</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">'''</span>
 <span class="sd">    Solve a Volterra integro-differential equation.</span>
+
+<span class="sd">    **Deprecated since 0.11; removed in 1.0.** Use `voles.solve_vide` instead; each call warns</span>
+<span class="sd">    with the equivalent 1.0 call.</span>
 
 <span class="sd">    Finds $y(t)$ satisfying</span>
 
@@ -2159,173 +2003,9 @@ compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
 <span class="sd">       Functional Differential Equations.* Cambridge University Press, 2004.</span>
 <span class="sd">       Chapter 3, pp. 160–167.</span>
 <span class="sd">    '''</span>
-    <span class="n">return_function</span> <span class="o">=</span> <span class="n">_resolve_return_flag</span><span class="p">(</span><span class="n">return_function</span><span class="p">,</span> <span class="n">return_polys</span><span class="p">)</span>
-    <span class="n">show_warnings</span> <span class="o">=</span> <span class="n">_v</span><span class="o">.</span><span class="n">flag</span><span class="p">(</span><span class="s2">"show_warnings"</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">soln_init_value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"solve_VIDE: soln_init_value is required (got None)"</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">_name</span><span class="p">,</span> <span class="n">_val</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">"kernel_values"</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">),</span> <span class="p">(</span><span class="s2">"a_values"</span><span class="p">,</span> <span class="n">a_values</span><span class="p">),</span>
-                        <span class="p">(</span><span class="s2">"g_values"</span><span class="p">,</span> <span class="n">g_values</span><span class="p">),</span> <span class="p">(</span><span class="s2">"soln_init_value"</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">)):</span>
-        <span class="n">_v</span><span class="o">.</span><span class="n">finite</span><span class="p">(</span><span class="n">_name</span><span class="p">,</span> <span class="n">_val</span><span class="p">)</span>
-    <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span> <span class="o">=</span> <span class="n">_resolve_coll_setting</span><span class="p">(</span><span class="s2">"vide"</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
-    <span class="c1"># ------------------------------------------------------------------ complex dispatch</span>
-    <span class="k">if</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">is_complex</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">,</span> <span class="n">a_values</span><span class="p">,</span> <span class="n">g_values</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">):</span>
-        <span class="n">K_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">)</span>
-        <span class="n">is_scalar</span> <span class="o">=</span> <span class="p">(</span><span class="n">K_arr</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span>
-        <span class="n">d_orig</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">is_scalar</span> <span class="k">else</span> <span class="n">K_arr</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-        <span class="n">K_real</span> <span class="o">=</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">_block_kernel</span><span class="p">(</span><span class="n">K_arr</span><span class="p">)</span>
-        <span class="n">a_real</span> <span class="o">=</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">_block_a</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">a_values</span><span class="p">))</span> <span class="k">if</span> <span class="n">a_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
-        <span class="n">g_real</span> <span class="o">=</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">_expand_g</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">g_values</span><span class="p">))</span> <span class="k">if</span> <span class="n">g_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
-        <span class="n">init_real</span> <span class="o">=</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">_expand_init</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">)</span>
-        <span class="n">result</span> <span class="o">=</span> <span class="n">solve_VIDE</span><span class="p">(</span>
-            <span class="n">kernel_values</span><span class="o">=</span><span class="n">K_real</span><span class="p">,</span> <span class="n">a_values</span><span class="o">=</span><span class="n">a_real</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="n">g_real</span><span class="p">,</span>
-            <span class="n">soln_init_value</span><span class="o">=</span><span class="n">init_real</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="n">coll_divs</span><span class="p">,</span>
-            <span class="n">coll_choices</span><span class="o">=</span><span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span>
-            <span class="n">show_warnings</span><span class="o">=</span><span class="n">show_warnings</span><span class="p">,</span> <span class="n">quadrature</span><span class="o">=</span><span class="n">quadrature</span><span class="p">,</span>
-            <span class="n">mesh_samples</span><span class="o">=</span><span class="n">mesh_samples</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="n">kernel_interp_degree</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
-            <span class="n">soln_real</span><span class="p">,</span> <span class="n">sf_real</span> <span class="o">=</span> <span class="n">result</span>
-            <span class="k">return</span> <span class="p">(</span><span class="n">_cplx</span><span class="o">.</span><span class="n">_recombine</span><span class="p">(</span><span class="n">soln_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">),</span>
-                    <span class="n">_complex_solution</span><span class="p">(</span><span class="n">sf_real</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">_cplx</span><span class="o">.</span><span class="n">_recombine</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">d_orig</span><span class="p">)</span>
-
-    <span class="n">kernel_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">kernel_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-    <span class="n">ndim</span> <span class="o">=</span> <span class="n">kernel_values_</span><span class="o">.</span><span class="n">ndim</span>
-
-    <span class="k">if</span> <span class="n">ndim</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">"kernel_values must be 1-D (scalar) or 3-D (N, d, d), got shape </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-
-    <span class="k">if</span> <span class="n">_use_product_quadrature</span><span class="p">(</span><span class="n">quadrature</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">_solve_vide_product_path</span><span class="p">(</span>
-            <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">a_values</span><span class="p">,</span> <span class="n">g_values</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span>
-            <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span><span class="p">,</span> <span class="n">show_warnings</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="p">)</span>
-    <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span> <span class="o">=</span> <span class="n">_validate_second_kind_coll_setting</span><span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span>
-    <span class="n">_check_time_step</span><span class="p">(</span><span class="n">time_step</span><span class="p">)</span>
-
-    <span class="n">N_orig</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">)</span>
-    <span class="n">M_reg</span><span class="p">,</span> <span class="n">Qp</span><span class="p">,</span> <span class="n">kernel_reg</span> <span class="o">=</span> <span class="n">_split_regular</span><span class="p">(</span><span class="n">kernel_values_</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">)</span>
-    <span class="n">N</span><span class="p">,</span> <span class="n">N_reg</span> <span class="o">=</span> <span class="n">N_orig</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_reg</span><span class="p">)</span>
-
-    <span class="c1"># ------------------------------------------------------------------ vector path</span>
-    <span class="k">if</span> <span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">d1</span><span class="p">,</span> <span class="n">d2</span> <span class="o">=</span> <span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span>
-        <span class="k">if</span> <span class="n">d1</span> <span class="o">!=</span> <span class="n">d2</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"kernel_values must have shape (N, d, d), got </span><span class="si">{</span><span class="n">kernel_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-        <span class="n">d</span> <span class="o">=</span> <span class="n">d1</span>
-
-        <span class="c1"># ---- matrix case: detect via soln_init_value shape (d, m_cols) ----</span>
-        <span class="n">soln_init_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">soln_init_values_</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
-            <span class="n">d_init</span><span class="p">,</span> <span class="n">m_cols</span> <span class="o">=</span> <span class="n">soln_init_values_</span><span class="o">.</span><span class="n">shape</span>
-            <span class="k">if</span> <span class="n">d_init</span> <span class="o">!=</span> <span class="n">d</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">"soln_init_value shape </span><span class="si">{</span><span class="n">soln_init_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with d=</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-            <span class="c1"># a and g are sampled alongside the kernel, so they must have its</span>
-            <span class="c1"># (untruncated) length, for a single solve and for every column.</span>
-            <span class="k">if</span> <span class="n">g_values</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">g_cols</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="n">m_cols</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">g_mat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">g_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">g_mat</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">g_mat</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">m_cols</span><span class="p">):</span>
-                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                            <span class="sa">f</span><span class="s2">"g_values shape </span><span class="si">{</span><span class="n">g_mat</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> incompatible with kernel_values shape "</span>
-                            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="p">(</span><span class="n">N_orig</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">)</span><span class="si">}</span><span class="s2"> and soln_init_value shape "</span>
-                            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">soln_init_values_</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">: expected (</span><span class="si">{</span><span class="n">N_orig</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">m_cols</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
-                    <span class="n">g_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">g_mat</span><span class="p">[:</span><span class="n">N</span><span class="p">,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m_cols</span><span class="p">)]</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="c1"># one right-hand side shared by all columns</span>
-                    <span class="n">g_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">_check_series</span><span class="p">(</span><span class="s2">"g_values"</span><span class="p">,</span> <span class="n">g_mat</span><span class="p">,</span> <span class="n">N_orig</span><span class="p">,</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span>
-                                            <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">))[:</span><span class="n">N</span><span class="p">]]</span> <span class="o">*</span> <span class="n">m_cols</span>
-            <span class="n">a_trunc</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">a_values</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">_check_series</span><span class="p">(</span>
-                <span class="s2">"a_values"</span><span class="p">,</span> <span class="n">a_values</span><span class="p">,</span> <span class="n">N_orig</span><span class="p">,</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">d</span><span class="p">))[:</span><span class="n">N</span><span class="p">]</span>
-            <span class="k">def</span><span class="w"> </span><span class="nf">_col_vide</span><span class="p">(</span><span class="n">j</span><span class="p">):</span>
-                <span class="c1"># column 0 carries any per-solve warnings; the others would</span>
-                <span class="c1"># only duplicate them m_cols times from interleaved threads</span>
-                <span class="k">return</span> <span class="n">solve_VIDE</span><span class="p">(</span><span class="n">kernel_values</span><span class="o">=</span><span class="n">kernel_values_</span><span class="p">,</span>
-                                  <span class="n">a_values</span><span class="o">=</span><span class="n">a_trunc</span><span class="p">,</span>
-                                  <span class="n">g_values</span><span class="o">=</span><span class="n">g_cols</span><span class="p">[</span><span class="n">j</span><span class="p">],</span>
-                                  <span class="n">soln_init_value</span><span class="o">=</span><span class="n">soln_init_values_</span><span class="p">[:,</span> <span class="n">j</span><span class="p">],</span>
-                                  <span class="n">time_step</span><span class="o">=</span><span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="n">coll_divs</span><span class="p">,</span>
-                                  <span class="n">coll_choices</span><span class="o">=</span><span class="n">coll_choices</span><span class="p">,</span>
-                                  <span class="n">quadrature</span><span class="o">=</span><span class="s2">"collocation"</span><span class="p">,</span>
-                                  <span class="n">return_function</span><span class="o">=</span><span class="n">return_function</span><span class="p">,</span>
-                                  <span class="n">show_warnings</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># warn from the calling thread only</span>
-            <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">_column_workers</span><span class="p">(</span><span class="n">m_cols</span><span class="p">))</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
-                <span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ex</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_col_vide</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="n">m_cols</span><span class="p">)))</span>
-            <span class="k">if</span> <span class="n">return_function</span><span class="p">:</span>
-                <span class="n">soln</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-                <span class="k">return</span> <span class="p">(</span><span class="n">soln</span><span class="p">,</span> <span class="n">_stack_column_solutions</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">],</span> <span class="n">d</span><span class="p">,</span> <span class="n">m_cols</span><span class="p">))</span>
-            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">g_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">g_values_</span> <span class="o">=</span> <span class="n">_check_series</span><span class="p">(</span><span class="s2">"g_values"</span><span class="p">,</span> <span class="n">g_values</span><span class="p">,</span> <span class="n">N_orig</span><span class="p">,</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">))[:</span><span class="n">N</span><span class="p">]</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">a_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">a_values_</span> <span class="o">=</span> <span class="n">_check_series</span><span class="p">(</span><span class="s2">"a_values"</span><span class="p">,</span> <span class="n">a_values</span><span class="p">,</span> <span class="n">N_orig</span><span class="p">,</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">d</span><span class="p">))[:</span><span class="n">N</span><span class="p">]</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">a_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">d</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-
-        <span class="n">given_shape</span> <span class="o">=</span> <span class="n">soln_init_values_</span><span class="o">.</span><span class="n">shape</span>
-        <span class="n">soln_init_values_</span> <span class="o">=</span> <span class="n">soln_init_values_</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
-        <span class="k">if</span> <span class="n">soln_init_values_</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">d</span><span class="p">,):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">"soln_init_value must have shape (</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">,) for a d=</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2"> vector equation "</span>
-                <span class="sa">f</span><span class="s2">"(or (</span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">, m) for m right-hand sides), got shape </span><span class="si">{</span><span class="n">given_shape</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_fast_settings_VIDE</span><span class="p">:</span>
-            <span class="c1"># NotImplementedError subclasses RuntimeError, so callers</span>
-            <span class="c1"># catching the historical RuntimeError still work; this matches</span>
-            <span class="c1"># the scalar path's error type for non-compiled settings.</span>
-            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) "</span>
-                <span class="sa">f</span><span class="s2">"not supported by D extension (no vector-path fallback)."</span><span class="p">)</span>
-
-        <span class="k">def</span><span class="w"> </span><span class="nf">_regular</span><span class="p">():</span>
-            <span class="n">k_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">kernel_reg</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-            <span class="n">g_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">g_values_</span><span class="p">[:</span><span class="n">N_reg</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-            <span class="n">a_c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">a_values_</span><span class="p">[:</span><span class="n">N_reg</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vide_vec_d</span><span class="p">(</span>
-                <span class="n">g_c</span><span class="p">,</span> <span class="n">k_c</span><span class="p">,</span> <span class="n">a_c</span><span class="p">,</span> <span class="n">soln_init_values_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span>
-                <span class="n">return_function</span> <span class="ow">or</span> <span class="n">Qp</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">_with_tail</span><span class="p">(</span><span class="s2">"vide"</span><span class="p">,</span> <span class="n">_regular</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">g_values_</span><span class="p">,</span> <span class="n">a_values_</span><span class="p">,</span>
-                          <span class="n">soln_init_values_</span><span class="p">,</span> <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">M_reg</span><span class="p">,</span> <span class="n">Qp</span><span class="p">,</span>
-                          <span class="n">d</span><span class="p">,</span> <span class="n">return_function</span><span class="p">)</span>
-
-    <span class="c1"># ------------------------------------------------------------------ scalar path</span>
-
-    <span class="k">if</span> <span class="n">g_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">g_values_</span> <span class="o">=</span> <span class="n">_check_series</span><span class="p">(</span><span class="s2">"g_values"</span><span class="p">,</span> <span class="n">g_values</span><span class="p">,</span> <span class="n">N_orig</span><span class="p">,</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,),</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,))[:</span><span class="n">N</span><span class="p">]</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">g_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
-
-    <span class="k">if</span> <span class="n">a_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">a_values_</span> <span class="o">=</span> <span class="n">_check_series</span><span class="p">(</span><span class="s2">"a_values"</span><span class="p">,</span> <span class="n">a_values</span><span class="p">,</span> <span class="n">N_orig</span><span class="p">,</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,),</span> <span class="p">(</span><span class="n">N_orig</span><span class="p">,))[:</span><span class="n">N</span><span class="p">]</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">a_values_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
-
-    <span class="n">fast</span> <span class="o">=</span> <span class="p">(</span><span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_fast_settings_VIDE</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">fast</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">_numba_available</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">"Collocation setting (coll_divs=</span><span class="si">{</span><span class="n">coll_divs</span><span class="si">}</span><span class="s2">, coll_choices=</span><span class="si">{</span><span class="n">coll_choices</span><span class="si">}</span><span class="s2">) is not "</span>
-            <span class="sa">f</span><span class="s2">"supported by the D extension. Install numba to enable the fallback solver, or "</span>
-            <span class="sa">f</span><span class="s2">"use a supported setting (see fast_coll_settings_VIDE)."</span>
-        <span class="p">)</span>
-    <span class="n">init</span> <span class="o">=</span> <span class="n">_scalar_init</span><span class="p">(</span><span class="n">soln_init_value</span><span class="p">)</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_regular</span><span class="p">():</span>
-        <span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="n">g_values_</span><span class="p">[:</span><span class="n">N_reg</span><span class="p">],</span> <span class="n">kernel_reg</span><span class="p">,</span> <span class="n">a_values_</span><span class="p">[:</span><span class="n">N_reg</span><span class="p">],</span> <span class="n">init</span><span class="p">,</span>
-                <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">return_function</span> <span class="ow">or</span> <span class="n">Qp</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">fast</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vide_d</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">show_warnings</span><span class="p">:</span>
-            <span class="n">_warn</span><span class="p">(</span><span class="s2">"falling back to slower python/numba code"</span><span class="p">,</span> <span class="n">PerformanceWarning</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">_numba_solvers</span><span class="o">.</span><span class="n">solve_vide_jit</span><span class="p">(</span><span class="o">*</span><span class="n">_numba_args</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">_with_tail</span><span class="p">(</span><span class="s2">"vide"</span><span class="p">,</span> <span class="n">_regular</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">g_values_</span><span class="p">,</span> <span class="n">a_values_</span><span class="p">,</span> <span class="n">init</span><span class="p">,</span>
-                      <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">M_reg</span><span class="p">,</span> <span class="n">Qp</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">return_function</span><span class="p">,</span>
-                      <span class="n">trim</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">locals</span><span class="p">())</span>
+    <span class="n">_deprecated_call</span><span class="p">(</span><span class="n">solve_VIDE</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_sampled</span><span class="o">.</span><span class="n">vide</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

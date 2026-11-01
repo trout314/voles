@@ -1442,7 +1442,30 @@ deferred to after 1.0. <strong>Phase 0 done 2026-10-31:</strong>
 <p>1711 tests pass (NumPy 1 and 2).
 - Overhead of the 1.0 path over the 0.10 <code>return_function=True</code> call:
   about 72 µs per call (N=82: 432 vs 360 µs; N=4001: about 2%). Revisit in
-  Phase 7.
+  Phase 7.</p>
+<p><strong>Phase 5 done 2026-10-31</strong> (lighter-engine variant):
+- Engine functions renamed <code>_sampled.vie1/vie2/vide</code> and
+  <code>_functional.vie1/vie2/vide</code>. Their recursive calls were renamed by AST
+  position, so the docstring examples are untouched.
+- <code>_legacy.py</code> has the six wrappers with the exact 0.10 headers and
+  docstrings, plus a deprecation notice. Each wrapper:
+  1. builds <code>kwargs = dict(locals())</code>;
+  2. warns once, using <code>_migrate.describe</code> of the non-default arguments;
+  3. calls the engine.
+- <code>__init__</code> imports them from <code>_legacy</code>.
+- <code>fast_coll_settings_*</code> warn through a module <code>__getattr__</code> and are out of
+  <code>__all__</code>.
+- <code>voles.solvers</code> warns on import.
+- <code>optimal_graded_mesh(t_end=, n_intervals=)</code>, with <code>T=</code>/<code>M=</code> deprecated.
+- <code>return_polys</code> now warns through <code>_warn</code>.
+- pytest ignores exactly the four 0.10 deprecation messages (pyproject),
+  until the legacy tests, docs and benchmarks migrate.
+- The battery is unchanged except the two ogm message renames: 43 strict
+  mismatches, all deliberate.
+- Parameters match v0.10.0 exactly, except <code>_smooth_gl_order</code> (F17).
+- <code>_warn</code>'s frame walk is now cached per filename. <code>abspath()</code> was calling
+  getcwd per frame; that cost 195 µs per deprecated call, and now 17 µs.
+- New <code>tests/test_legacy_shims.py</code> (30 tests); 1740 tests pass.
 Inputs: <code>docs/dev/api-review-1.0.md</code> (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.</p>
 <hr />
@@ -1572,7 +1595,11 @@ polynomial.
 - **The 0.11 wrappers** take the new convention for dense evaluation at
   exact interior breakpoints. This was accepted as an accuracy improvement;
   on sampled VIE-1 data the error at breakpoints goes from 2.8e-7 to
-  3.6e-9.
+  3.6e-9. *Superseded by the lighter engine (Phase 3/5):* the wrappers return
+  the unchanged 0.10 object, so 0.10 dense evaluation doesn't change at all.
+  `VolterraSolution`'s compatibility aliases were therefore dropped
+  (`mesh_breakpoints`, `polynomials`, `len`, indexing, iteration). The class
+  was never released, so no deprecation was needed.
 - **`to_ppoly()` is added. `to_polynomials()` and the `Polynomial` list are
   removed.** The list survives in 0.11 only behind the deprecated
   `.polynomials`, indexing and iteration aliases.
