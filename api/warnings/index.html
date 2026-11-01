@@ -1529,8 +1529,7 @@ voles warns. Make that an error:</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/voles/_warnings.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">21</span>
-<span class="normal">22</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">22</span>
 <span class="normal">23</span>
 <span class="normal">24</span>
 <span class="normal">25</span>
@@ -1563,7 +1562,8 @@ voles warns. Make that an error:</p>
 <span class="normal">52</span>
 <span class="normal">53</span>
 <span class="normal">54</span>
-<span class="normal">55</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">VolesWarning</span><span class="p">(</span><span class="ne">UserWarning</span><span class="p">):</span>
+<span class="normal">55</span>
+<span class="normal">56</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">VolesWarning</span><span class="p">(</span><span class="ne">UserWarning</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Base class of every warning voles emits.</span>
 
 <span class="sd">    Each diagnostic is issued once per solver call with `warnings.warn`,</span>
@@ -1652,11 +1652,11 @@ regime, or a mesh that doesn't suit the declared singularity).</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/voles/_warnings.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">58</span>
-<span class="normal">59</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">59</span>
 <span class="normal">60</span>
 <span class="normal">61</span>
-<span class="normal">62</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AccuracyWarning</span><span class="p">(</span><span class="n">VolesWarning</span><span class="p">):</span>
+<span class="normal">62</span>
+<span class="normal">63</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AccuracyWarning</span><span class="p">(</span><span class="n">VolesWarning</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""The requested method runs, but the result is less accurate than its</span>
 <span class="sd">    nominal order suggests (reduced order, an ill-posed start, an unstable</span>
 <span class="sd">    regime, or a mesh that doesn't suit the declared singularity)."""</span>
@@ -1715,11 +1715,11 @@ a fast path).</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>src/voles/_warnings.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">65</span>
-<span class="normal">66</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">66</span>
 <span class="normal">67</span>
 <span class="normal">68</span>
-<span class="normal">69</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PerformanceWarning</span><span class="p">(</span><span class="n">VolesWarning</span><span class="p">):</span>
+<span class="normal">69</span>
+<span class="normal">70</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">PerformanceWarning</span><span class="p">(</span><span class="n">VolesWarning</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""The result is correct, but it comes from a slower code path than the</span>
 <span class="sd">    one normally used (the numba fallback, or an extension build that lacks</span>
 <span class="sd">    a fast path)."""</span>

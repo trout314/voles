@@ -1517,10 +1517,11 @@ filterwarnings = [&quot;error::voles.AccuracyWarning&quot;]
 <p><code>warnings.catch_warnings</code> changes process-wide state and is not
 thread-safe; in threaded code set the filters once, at start-up.</p>
 <h2 id="deprecation-warnings">Deprecation warnings</h2>
-<p>The 0.10 functions issue a <code>DeprecationWarning</code> (not a <code>VolesWarning</code>)
-naming the equivalent 1.0 call; see
-<a href="../migration/">Migration from 0.10</a>. Python hides <code>DeprecationWarning</code> by
-default except in code run as <code>__main__</code>, and pytest shows it.</p>
+<p>voles 1.0 issues none. A feature deprecated in a later 1.x release will
+issue a <code>DeprecationWarning</code> (not a <code>VolesWarning</code>) for at least one minor
+release before it is removed; see <a href="../stability/">Stability policy</a>. Python
+hides <code>DeprecationWarning</code> by default except in code run as <code>__main__</code>, and
+pytest shows it.</p>
 
 
 

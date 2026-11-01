@@ -650,10 +650,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#behaviour-changes-in-011" class="md-nav__link">
+  <a href="#behaviour-changes-since-010" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Behaviour changes in 0.11
+        Behaviour changes since 0.10
       
     </span>
   </a>
@@ -1449,10 +1449,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#behaviour-changes-in-011" class="md-nav__link">
+  <a href="#behaviour-changes-since-010" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Behaviour changes in 0.11
+        Behaviour changes since 0.10
       
     </span>
   </a>
@@ -1480,28 +1480,34 @@
 
 
 <h1 id="migration-from-010">Migration from 0.10</h1>
-<p>voles 0.11 replaces the six 0.10 solvers with three, <code>solve_vie1</code>,
+<p>voles 1.0 replaces the six 0.10 solvers with three, <code>solve_vie1</code>,
 <code>solve_vie2</code> and <code>solve_vide</code>, which take either arrays or callables. The
-0.10 functions still work in 0.11, with a <code>DeprecationWarning</code>, and are
-removed in 1.0.</p>
-<p>Each deprecated call's warning shows the equivalent new call, built from
-the arguments you passed:</p>
+0.10 functions are gone in 1.0; this page maps each of them, and each
+argument, to its replacement.</p>
+<p>The easiest route is through 0.11, which has both APIs. There the 0.10
+functions still work, with a <code>DeprecationWarning</code> showing the equivalent new
+call, built from the arguments you passed:</p>
 <pre><code class="language-text">script.py:12: DeprecationWarning: solve_VIE_2() is deprecated since voles 0.11 and
 will be removed in 1.0; use voles.solve_vie2(kernel=&lt;array of shape (91,)&gt;,
 g=&lt;array of shape (91,)&gt;, dt=0.05, coll_setting=(3, [0, 1, 2, 3])) instead. ...
 </code></pre>
-<p>To find every old call in a code base, run its tests with
-<code>python -W error::DeprecationWarning</code> (or pytest's
-<code>-W error::DeprecationWarning</code>). The deprecated functions return exactly
-what they returned in 0.10: the same values, and the same <code>(values,
-solution)</code> pair for <code>return_function=True</code>. A few invalid inputs are
-handled differently; see <a href="#behaviour-changes-in-011">Behaviour changes in 0.11</a>.</p>
+<p>So:</p>
+<ol>
+<li><code>pip install "voles==0.11.*"</code>;</li>
+<li>run your tests with <code>python -W error::DeprecationWarning</code> (or pytest's
+   <code>-W error::DeprecationWarning</code>) and replace each call the warnings
+   point to. In 0.11 the deprecated functions return exactly what they
+   returned in 0.10, so the tests' expected values still hold;</li>
+<li>upgrade to 1.0.</li>
+</ol>
+<p>A few inputs that 0.10 accepted are errors now; see
+<a href="#behaviour-changes-since-010">Behaviour changes since 0.10</a>.</p>
 <h2 id="names">Names</h2>
 <table>
 <thead>
 <tr>
 <th>0.10</th>
-<th>0.11 and 1.0</th>
+<th>1.0</th>
 </tr>
 </thead>
 <tbody>
@@ -1567,7 +1573,7 @@ handled differently; see <a href="#behaviour-changes-in-011">Behaviour changes i
 </tr>
 <tr>
 <td><code>fast_coll_settings_VIE_1</code> etc.</td>
-<td>deprecated (they still work in 0.11, with a warning) and not needed: <code>quadrature="product"</code>, the default, accepts every setting</td>
+<td>removed, and not needed: <code>quadrature="product"</code>, the default, accepts every setting</td>
 </tr>
 <tr>
 <td><code>from voles.solvers import ...</code></td>
@@ -1589,7 +1595,7 @@ callables with <code>mesh</code>; an option of the other kind is an error (see
 <thead>
 <tr>
 <th>0.10</th>
-<th>0.11 and 1.0</th>
+<th>1.0</th>
 </tr>
 </thead>
 <tbody>
@@ -1699,20 +1705,23 @@ with warnings.catch_warnings():
     warnings.simplefilter(&quot;ignore&quot;, voles.VolesWarning)
     sol = voles.solve_vide(kernel=-np.ones_like(t), y0=1.0, dt=0.01)
 </code></pre>
-<h2 id="behaviour-changes-in-011">Behaviour changes in 0.11</h2>
-<p>These apply to the deprecated 0.10 functions too:</p>
+<h2 id="behaviour-changes-since-010">Behaviour changes since 0.10</h2>
+<p>Besides the names, these changed in 0.11 (for the 0.10 functions too) and
+hold in 1.0:</p>
 <ul>
 <li><strong>Diagnostics are warnings</strong> (<code>voles.AccuracyWarning</code>,
   <code>voles.PerformanceWarning</code>), not printed text; see <a href="../warnings/">Warnings</a>.</li>
 <li><strong>Wrong types raise <code>TypeError</code></strong>, where some raised <code>ValueError</code> or were
-  silently converted: a float where an integer is needed (<code>coll_divs=2.0</code>),
-  a non-bool flag, a non-numeric array.</li>
-<li><strong><code>solve_VIDE(soln_init_value=None)</code> is an error</strong>; it used to mean 0.</li>
+  silently converted: a float where an integer is needed
+  (<code>samples_per_interval=4.0</code>), a non-bool flag, a non-numeric array.</li>
+<li><strong>A VIDE needs <code>y0</code></strong>: <code>y0=None</code> is an error. In 0.10 a missing
+  <code>soln_init_value</code> meant 0.</li>
 <li><strong>NaN or inf in the data is an error</strong>, naming the input and the first
   bad index; it used to propagate into the solution.</li>
-<li>A VIE-1 <code>soln_init_value</code> without <code>force_continuous=True</code>, which had no
-  effect, warns. In the new API, <code>y0</code> without <code>continuous=True</code> is a
-  <code>ValueError</code>.</li>
+<li><strong>A VIE-1 <code>y0</code> without <code>continuous=True</code> is a <code>ValueError</code>.</strong> In 0.10,
+  <code>soln_init_value</code> without <code>force_continuous=True</code> had no effect.</li>
+<li><strong>Values at interior breakpoints</strong> are the mean of the one-sided limits;
+  see <a href="#return-values">Return values</a>.</li>
 </ul>
 
 

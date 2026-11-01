@@ -1769,7 +1769,20 @@ deferred to after 1.0. <strong>Phase 0 done 2026-10-31:</strong>
   +29–46 µs. That includes about 9 µs of machine drift. The rest is the
   1.0 validation, the solution object, and always requesting coefficients
   (N-dependent). It is not within noise; the target was not met, but what
-  remains is reported rather than micro-optimised.
+  remains is reported rather than micro-optimised.</p>
+<p><strong>Phase 8, step 5 (packaging and docs for 1.0) done 2026-11-01:</strong>
+- <code>py.typed</code>; the classifiers <code>Development Status :: 5 - Production/Stable</code>
+  and <code>Typing :: Typed</code>; <code>__version__ = "1.0.0"</code>.
+- Without <code>py.typed</code>, mypy treated every voles name as <code>Any</code>, so
+  <code>tests/test_typing.py</code> checked nothing on the installed package. It now
+  checks, and a new test runs mypy over <code>src/voles</code> itself (two annotation
+  fixes: <code>_dlang._lib</code>, <code>_functional._ComplexWarning</code>).
+- The API snapshot needed no update.
+- Docs: the migration guide is written for 1.0 (recommended route: run
+  under 0.11 with <code>-W error::DeprecationWarning</code>, then upgrade), and its
+  "Behaviour changes since 0.10" section replaces the 0.11 one. Also
+  updated: the README note, the stability page's "Before 1.0", the warnings
+  page's deprecation section, and the CHANGELOG heading <code>[1.0.0]</code>.
 Inputs: <code>docs/dev/api-review-1.0.md</code> (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.</p>
 <hr />
