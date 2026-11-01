@@ -1848,7 +1848,7 @@ def test_p_exceeds_compiled_max_raises():
     max_p = function_solve_max_p_d()
     coll_divs = max_p + 1
     coll_choices = list(range(coll_divs))  # length max_p + 1 > max_p
-    with pytest.raises(ValueError, match="exceeds the maximum"):
+    with pytest.raises(ValueError, match="exceed the maximum compiled into the extension"):
         solve_vie2(kernel=lambda u: np.exp(-u), g=lambda t: 1.0, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray(coll_choices) / coll_divs).node_values
 
 

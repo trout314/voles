@@ -1,27 +1,26 @@
 """The default settings: product quadrature (with the first-kind mesh kept at
-coll_divs**2 samples), reuse of adaptive blocks, and the node set implied by
-coll_divs or coll_choices given alone."""
+divs**2 samples), reuse of adaptive blocks, and the node set implied by a bare
+divs."""
 import numpy as np
 import pytest
 from voles import solve_vie1, solve_vie2, solve_vide
-from voles._sampled import _resolve_coll_setting
+from voles._api import _resolve_coll_setting
 from voles._functional import _resolve_node_pos
 from conftest import with_sol
 
 
 def test_coll_setting_resolution():
-    assert _resolve_coll_setting("vie1", None, None) == (3, [1, 2, 3])
-    assert _resolve_coll_setting("vie2", None, None) == (2, [0, 1, 2])
-    assert _resolve_coll_setting("vide", None, None) == (2, [0, 1, 2])
-    assert _resolve_coll_setting("vie1", 4, None) == (4, [1, 2, 3, 4])
-    assert _resolve_coll_setting("vie2", 4, None) == (4, [0, 1, 2, 3, 4])
-    assert _resolve_coll_setting("vide", 1, None) == (1, [0, 1])
-    assert _resolve_coll_setting("vie1", None, [2, 4]) == (4, [2, 4])
-    assert _resolve_coll_setting("vie2", 3, [1, 3]) == (3, [1, 3])
+    assert _resolve_coll_setting("vie1", None) == (3, [1, 2, 3])
+    assert _resolve_coll_setting("vie2", None) == (2, [0, 1, 2])
+    assert _resolve_coll_setting("vide", None) == (2, [0, 1, 2])
+    assert _resolve_coll_setting("vie1", 4) == (4, [1, 2, 3, 4])
+    assert _resolve_coll_setting("vie2", 4) == (4, [0, 1, 2, 3, 4])
+    assert _resolve_coll_setting("vide", 1) == (1, [0, 1])
+    assert _resolve_coll_setting("vie2", (3, [3, 1])) == (3, [1, 3])
     with pytest.raises(ValueError, match="at least one"):
-        _resolve_coll_setting("vie2", None, [])
-    with pytest.raises(ValueError, match="positive integer"):
-        _resolve_coll_setting("vie2", 0, None)
+        _resolve_coll_setting("vie2", (3, []))
+    with pytest.raises(ValueError, match="divs must be at least 1"):
+        _resolve_coll_setting("vie2", 0)
 
 
 def test_callable_node_resolution():

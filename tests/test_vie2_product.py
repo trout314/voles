@@ -269,7 +269,7 @@ def test_linalg_error_names_the_second_kind_solver(monkeypatch):
     monkeypatch.setattr(_product.ProductSetup, "__init__", zero_diagonal)
     dt, q = 0.05, 1
     N = n_samples(1, 5)
-    with pytest.raises(np.linalg.LinAlgError, match="solve_VIE_2"):
+    with pytest.raises(np.linalg.LinAlgError, match="solve_vie2"):
         run(solve_vie2, show_warnings=False, kernel=np.exp(-dt * np.arange(N)), g=np.ones(N), dt=dt, coll_setting=(q, [1]), quadrature="product").y
 
 

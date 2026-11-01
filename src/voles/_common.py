@@ -154,37 +154,6 @@ def _rho_exact(divs, choices, continuous):
     return rho
 
 
-def _check_vie1_setting(coll_divs, coll_choices, force_continuous):
-    """Reject collocation settings for which the requested VIE-1 method is not
-    defined or does not converge. ``coll_choices`` must be sorted and already
-    validated to hold distinct integers in ``1 .. coll_divs``."""
-    if len(coll_choices) == 0:
-        raise ValueError("coll_choices must contain at least one collocation node")
-    if force_continuous:
-        if coll_choices[-1] != coll_divs:
-            raise ValueError(
-                f"force_continuous=True requires the last collocation node to be the right "
-                f"endpoint of the mesh interval (max(coll_choices) == coll_divs); got "
-                f"coll_divs={coll_divs}, coll_choices={coll_choices}. This is a structural "
-                f"requirement of the continuous S_m^(0) method (Brunner 2004, Section 2.4.3).")
-        rho = _vie1_rho(coll_divs, coll_choices, continuous=True)
-        if abs(rho) > 1:
-            raise ValueError(
-                f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) does "
-                f"not produce a convergent continuous VIE-1 solver: |rho_(m-1)| = "
-                f"{float(abs(rho)):.4g} > 1 (Brunner 2004, Theorem 2.4.5). Use nodes with "
-                f"|rho_(m-1)| <= 1, e.g. coll_choices=list(range(1, coll_divs + 1)).")
-    else:
-        rho = _vie1_rho(coll_divs, coll_choices)
-        if abs(rho) > 1:
-            raise ValueError(
-                f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
-                f"does not produce a convergent VIE-1 solver and is not supported: "
-                f"|rho_m| = prod (1 - c_i)/c_i = {float(abs(rho)):.4g} > 1 (Brunner 2004, "
-                f"Theorem 2.4.2). Use nodes with |rho_m| <= 1; any node set containing the "
-                f"right endpoint (coll_divs in coll_choices) qualifies.")
-
-
 def _warn_g_start_columns(g0, scale):
     """Shared by the sampled and callable VIE-1 solvers. ``g0`` and ``scale``
     are max |g(0)| and max |g| per right-hand side: 0-d for scalar and vector

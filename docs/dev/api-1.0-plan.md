@@ -210,6 +210,37 @@ Phase 0 findings:
   required), the `[callable]`/`[numba]` extras, the pytest deprecation
   ignores, `test_legacy_shims.py`, `test_api_equivalence.py` and
   `docs/api/legacy.md`. The battery is unchanged bitwise.
+
+**Phase 8, step 4 (engine cleanup) done 2026-11-01:**
+- `_SolutionFunction`, `_polys_from_unit_coefs` and the `trim` plumbing are
+  gone. The engines return `(values, _Pieces)`, where `_Pieces` holds the
+  `_unit` coefficients, the mesh and `_d`/`_m` (`__slots__`, data only).
+- `_sampled`: the entry points were rewritten as lean functions over the 1.0
+  layer's validated, resolved inputs (`kernel, g, a, y0, dt, divs, choices,
+  quadrature, Q, p, continuous, diagnose`). Gone: the return_function and
+  return_polys flags, show_warnings, and every duplicated check. Kept
+  verbatim: `_with_tail` and the diagnostics. 1112 → 500 lines.
+  - One engine check remains, for a complex scalar problem (a 2×2 real
+    block) with an uncompiled setting under collocation quadrature; the
+    1.0 layer only sees d = 0 there.
+- `_functional`: lean `vie1/vie2/vide(kernel, g, [a, y0], mesh, nodes,
+  kernel_singularity, reuse_adaptive_blocks[, continuous])`. The callable
+  VIE-1 divergence check moved verbatim into `_api`
+  (`_check_vie1_nodes_converge`). The compiled p/d limits stay in the
+  engine (`_check_compiled_limits`, reworded). `kernel_singularity` is
+  still validated in the builders. 2626 → 2332 lines.
+- Dead code removed: `_common._check_vie1_setting` and the engine helpers.
+  Low-level modules (`_dlang`, `_product`, `_numba_solvers`) keep their
+  internal parameter names; their messages are unreachable from 1.0.
+- Acceptance:
+  - the battery matches bitwise: values, coefficients, node data and every
+    message;
+  - 1795 tests pass on NumPy 1.26 and 2.5.
+- Overhead against the Phase 0 baseline at N≈500: +51–68 µs (Phase 7) →
+  +29–46 µs. That includes about 9 µs of machine drift. The rest is the
+  1.0 validation, the solution object, and always requesting coefficients
+  (N-dependent). It is not within noise; the target was not met, but what
+  remains is reported rather than micro-optimised.
 Inputs: `docs/dev/api-review-1.0.md` (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.
 

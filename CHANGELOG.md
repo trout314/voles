@@ -30,6 +30,11 @@ The 0.10 API, deprecated in 0.11 (see the
 
 ### Changed
 - Python 3.14 is supported and tested in CI (Linux, macOS, Windows).
+- Internal: the solver engines no longer validate their arguments a second
+  time (the public functions do it once) and return the solution's
+  coefficients directly; the 0.10 solution object `_SolutionFunction` is
+  gone. Results are bitwise unchanged; the per-call overhead of a sampled
+  solve fell by about 20 µs.
 
 ### Fixed
 - `VolterraSolution.to_ppoly()` gave a `PPoly` whose `antiderivative()` and

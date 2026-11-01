@@ -24,8 +24,8 @@ DATA = pathlib.Path(__file__).parent / "data"
 
 def sampled(kind="vie2", N=1030, d=0, m=None, cplx=False, coll_setting=None,
             quadrature="product", Q=None):
-    """A sampled-regime solution via the 0.10 API. Default N leaves a short
-    final interval for every default mesh width."""
+    """A sampled-regime solution via the engine, and the engine's own output.
+    Default N leaves a short final interval for every default mesh width."""
     dt = 1.0 / (N - 1)
     t = np.arange(N) * dt
     if d == 0:
@@ -44,21 +44,20 @@ def sampled(kind="vie2", N=1030, d=0, m=None, cplx=False, coll_setting=None,
     defaults = {"vie1": (3, [1, 2, 3]), "vie1c": (3, [1, 2, 3]), "vie2": (2, [0, 1, 2]),
                 "vide": (2, [0, 1, 2])}
     divs, choices = coll_setting or defaults[kind]
-    kw = dict(kernel_values=K, g_values=g, time_step=dt, coll_divs=divs, coll_choices=choices,
-              quadrature=quadrature)
-    if Q is not None:
-        kw["mesh_samples"] = Q
-    y0 = (0.0 if d == 0 else (np.zeros(d) if m is None else np.zeros((d, m))))
-    if kind == "vie1c":
-        kw.update(force_continuous=True, soln_init_value=y0)
-    elif kind == "vide":
-        kw.update(a_values=(-0.5 * np.ones(N) if d == 0 else
-                            np.broadcast_to(-0.5 * np.eye(d), (N, d, d)).copy()),
-                  soln_init_value=y0 + 1.0)
     eq = "vie1" if kind.startswith("vie1") else kind
-    vals, leg = {"vie1": _sampled.vie1, "vie2": _sampled.vie2,
-                 "vide": _sampled.vide}[eq](return_function=True, **kw)
-    sol = _sampled.solve(eq, **kw)
+    kw = dict(kernel=K, g=g, dt=dt, divs=divs, choices=sorted(choices), quadrature=quadrature,
+              Q=Q or _sampled._samples_per_interval(eq, quadrature, None, divs),
+              p=len(choices) if quadrature == "product" else 0)
+    y0 = (0.0 if d == 0 else (np.zeros(d) if m is None else np.zeros((d, m))))
+    continuous = kind == "vie1c"
+    if eq == "vie1":
+        kw["y0"] = y0 if continuous else None
+    elif kind == "vide":
+        kw.update(a=(-0.5 * np.ones(N) if d == 0 else
+                     np.broadcast_to(-0.5 * np.eye(d), (N, d, d)).copy()), y0=y0 + 1.0)
+    engine_kw = dict(kw, continuous=continuous) if eq == "vie1" else kw
+    vals, leg = {"vie1": _sampled.vie1, "vie2": _sampled.vie2, "vide": _sampled.vide}[eq](**engine_kw)
+    sol = _sampled.solve(eq, continuous=continuous, **kw)
     return sol, vals, leg
 
 
@@ -78,16 +77,17 @@ def functional(kind="vie2", nodes=None, d=0, m=None, cplx=False, M=16):
             g = lambda t: np.outer([np.sin(2 * t) + 1.0, np.cos(t)], np.arange(1, m + 1))  # noqa
             y0 = np.ones((2, m))
     nodes = voles.gauss_legendre_nodes(3) if nodes is None else np.asarray(nodes)
-    kw = dict(kernel=kern, mesh_breakpoints=mesh, coll_nodes=nodes)
+    kw = dict(kernel=kern, mesh=mesh, nodes=np.sort(nodes), kernel_singularity=None,
+              reuse_adaptive_blocks=True)
     if kind == "vie1":
-        kw["g"] = lambda t: g(t) - g(0.0)                 # noqa: E731
+        kw.update(g=lambda t: g(t) - g(0.0), y0=None)       # noqa: E731
     elif kind == "vie2":
         kw["g"] = g
     else:
-        kw.update(g=g, soln_init_value=y0)
+        kw.update(g=g, a=None, y0=np.asarray(y0, dtype=float))
     fn = {"vie1": _functional.vie1, "vie2": _functional.vie2,
           "vide": _functional.vide}[kind]
-    vals, leg = fn(return_function=True, **kw)
+    vals, leg = fn(**(dict(kw, continuous=False) if kind == "vie1" else kw))
     sol = _functional.solve(kind, **kw)
     return sol, vals, leg
 
@@ -163,16 +163,6 @@ def test_functional_grid_is_the_mesh(key):
     assert sol.t is sol.mesh
     assert sol.y.shape == (len(sol.mesh),) + sol.coefficients.shape[2:]
     assert sol.regime == "functional" and sol.coll_setting is None
-
-
-def test_sampled_dense_output_matches_legacy_bitwise_off_breakpoints():
-    """The copy-free Horner loop does the same arithmetic as 0.10's."""
-    for key in ("vie1", "vie2-matrix", "vie1-complex"):
-        sol, _, leg = sampled(**SAMPLED_CASES[key])
-        bps = sol.mesh
-        x = np.array([0.1, 0.37, 0.5, 0.83])
-        tq = (bps[:-1, None] + x * np.diff(bps)[:, None]).ravel()
-        np.testing.assert_array_equal(sol(tq), leg(tq))
 
 
 # ---------------------------------------------------------- structure
@@ -392,15 +382,6 @@ def test_pickle_round_trip(which, key):
     np.testing.assert_array_equal(back.node_values, sol.node_values)
     assert (back.equation, back.regime, back.coll_setting) == (sol.equation, sol.regime,
                                                                 sol.coll_setting)
-
-
-def test_0_10_pickles_still_load():
-    """tests/data/solution_v0_10_0.pkl was written by voles 0.10.0's
-    _SolutionFunction."""
-    with open(DATA / "solution_v0_10_0.pkl", "rb") as f:
-        payload = pickle.load(f)
-    np.testing.assert_array_equal(payload["scalar"](payload["tq"]), payload["expect_scalar"])
-    np.testing.assert_array_equal(payload["matrix"](payload["tq2"]), payload["expect_matrix"])
 
 
 # ------------------------------------------------------------------ misc.

@@ -272,11 +272,11 @@ def _sampled_inputs(equation, kernel, g, a, y0, Q, p, continuous, a_const=None):
             if Y0.ndim == 1:                      # g has the columns; y0 is shared
                 Y0 = np.broadcast_to(Y0[:, None], (d, m))
             # a shared (N, d) g is accepted by the engine as it is
-    kw = dict(kernel_values=K, g_values=G)
+    kw = dict(kernel=K, g=G)
     if equation == "vide":
-        kw.update(a_values=A, soln_init_value=Y0)
-    elif equation == "vie1" and continuous:
-        kw["soln_init_value"] = Y0
+        kw.update(a=A, y0=Y0)
+    elif equation == "vie1":
+        kw["y0"] = Y0 if continuous else None
     return kw, d, m
 
 
@@ -330,11 +330,8 @@ def _solve_sampled(equation, *, kernel, g, a, y0, continuous, dt, coll_setting, 
     data, d, m = _sampled_inputs(equation, kernel, g, a, y0, Q, p, continuous, a_const)
     if quadrature == "collocation":
         _check_compiled(equation, divs, choices, d, m)
-    kw = dict(data, time_step=dt, coll_divs=divs, coll_choices=choices, quadrature=quadrature,
-              mesh_samples=samples_per_interval, kernel_interp_degree=kernel_interp_degree)
-    if equation == "vie1":
-        kw["force_continuous"] = continuous
-    return _sampled.solve(equation, **kw)
+    return _sampled.solve(equation, dt=dt, divs=divs, choices=choices, quadrature=quadrature,
+                          Q=Q, p=p, continuous=continuous, **data)
 
 
 def _validate_mesh(mesh):
@@ -374,6 +371,29 @@ def _warn_rho_one(node_pos, continuous):
               f"order {nominal - 1} rather than {nominal}.", AccuracyWarning)
 
 
+def _check_vie1_nodes_converge(node_pos, continuous, kernel_singularity):
+    """Reject callable-input VIE-1 node sets for which the method diverges
+    (|rho| > 1, in floating point). The criteria assume a smooth kernel
+    (Brunner 2004, Theorem 2.4.2(b)), so they are skipped when a weakly
+    singular kernel is declared."""
+    if _functional._empty_singularity_to_none(kernel_singularity) is not None:
+        return
+    if continuous:
+        rho = _functional._vie1_cont_amplification(node_pos)
+        if rho > 1.0 + 1e-9:
+            raise ValueError(
+                "Collocation nodes do not yield a convergent continuous (S_m^(0)) "
+                f"VIE-1 solver: the leading-node amplification |rho_{{m-1}}| = "
+                f"prod_(i<m) (1 - c_i)/c_i = {rho:.4g} exceeds 1 (Brunner Thm 2.4.5).")
+    elif not _functional._vie1_convergent(node_pos):
+        rho = _functional._vie1_amplification(node_pos)
+        raise ValueError(
+            f"Collocation nodes {np.array2string(node_pos, precision=6)} do not "
+            f"produce a convergent VIE-1 solver: the amplification factor "
+            f"|rho_m| = prod (1 - c_i)/c_i = {rho:.4g} exceeds 1. Choose nodes "
+            f"with a smaller amplification (e.g. include c = 1, as Radau IIA does).")
+
+
 def _solve_functional(equation, *, kernel, g, a, y0, continuous, mesh, coll_nodes,
                       kernel_singularity, reuse_adaptive_blocks, a_const=None):
     mesh = _validate_mesh(mesh)
@@ -390,6 +410,7 @@ def _solve_functional(equation, *, kernel, g, a, y0, continuous, mesh, coll_node
             f"got coll_nodes ending at {node_pos[-1]:.6g}. Append 1.0 to the nodes; this is a "
             f"structural requirement of the continuous method (Brunner 2004, Section 2.4.3)")
     if equation == "vie1":
+        _check_vie1_nodes_converge(node_pos, continuous, kernel_singularity)
         _warn_rho_one(node_pos, continuous)
     widths = np.diff(mesh)
     is_vector, d = _functional._detect_kernel_shape(kernel, float(widths[0]) * 0.5)
@@ -409,15 +430,13 @@ def _solve_functional(equation, *, kernel, g, a, y0, continuous, mesh, coll_node
                 g = _shared_g(g, d, m)
             if Y0 is not None and Y0.ndim == 1:
                 Y0 = np.broadcast_to(Y0[:, None], (d, m))
-    kw = dict(kernel=kernel, g=g, mesh_breakpoints=mesh, coll_nodes=node_pos,
+    kw = dict(kernel=kernel, g=g, mesh=mesh, nodes=node_pos,
               kernel_singularity=kernel_singularity, reuse_adaptive_blocks=reuse_adaptive_blocks)
     if equation == "vide":
-        kw.update(a=a, soln_init_value=Y0)
+        kw.update(a=a, y0=Y0)
     elif equation == "vie1":
-        kw["force_continuous"] = continuous
-        if continuous:
-            kw["soln_init_value"] = Y0
-    return _functional.solve(equation, **kw)
+        kw["y0"] = Y0 if continuous else None
+    return _functional.solve(equation, continuous=continuous, **kw)
 
 
 def _solve(equation, *, kernel, g, a=None, y0=None, continuous=False, dt, coll_setting,

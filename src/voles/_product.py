@@ -1,7 +1,7 @@
 r"""Product-integration quadrature for the sampled-data solvers.
 
-The default ``quadrature="collocation"`` scheme of :func:`voles.solve_VIE_1`
-(and likewise of :func:`voles.solve_VIE_2` and :func:`voles.solve_VIDE`)
+The ``quadrature="collocation"`` scheme of the sampled solvers
+(:func:`voles.solve_vie1`, :func:`voles.solve_vie2`, :func:`voles.solve_vide`)
 evaluates every integral in the collocation equations with the interpolatory
 rule on the method's own nodes (Brunner 2004, Section 2.4.5).  On the partial
 interval $[t_n, t_{n,i}]$ that rule samples the kernel at the scaled nodes
@@ -58,7 +58,7 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from numpy.polynomial import polynomial as npp
 
-from ._solution import _SolutionFunction
+from ._solution import _Pieces
 from ._warnings import _warn, PerformanceWarning
 
 from ._common import (_lagrange_basis_coefs, _vie1_cont_basis_coefs,
@@ -744,7 +744,7 @@ def _finish(setup, U, y, g_full, y0, return_function):
     values = values[:, 0] if d == 0 else values
     if not return_function:
         return values, None
-    return values, _SolutionFunction(unit_all[:, :, 0] if d == 0 else unit_all, bps, d=d)
+    return values, _Pieces(unit_all[:, :, 0] if d == 0 else unit_all, bps, d=d)
 
 
 def solve_vie1_product(kernel_values, g_values, time_step, coll_divs, coll_choices,
@@ -753,7 +753,7 @@ def solve_vie1_product(kernel_values, g_values, time_step, coll_divs, coll_choic
                        show_warnings=False, setup=None):
     """Solve the sampled-data VIE-1 with product-integration quadrature.
 
-    Parameters are validated by :func:`voles.solve_VIE_1`; ``kernel_values``
+    Parameters are validated by the 1.0 layer (`voles._api`); ``kernel_values``
     is ``(N,)`` or ``(N, d, d)`` with ``N = M*mesh_samples + 1``, ``g_values``
     is ``(N,)`` or ``(N, d)``, ``coll_choices`` sorted.  Returns
     ``(values, polys)`` where ``polys`` is ``None`` unless ``return_function``.
@@ -821,7 +821,7 @@ def solve_vie2_product(kernel_values, g_values, time_step, coll_divs, coll_choic
     if M == 0:
         U = np.zeros((0, setup.m * max(d, 1)))
     elif block_drivers_available("vie2", use_extension, show_warnings):
-        U = _dlang_module.solve_vie1_blocks_d(setup.lagB, g_coll, name="solve_VIE_2 product step")
+        U = _dlang_module.solve_vie1_blocks_d(setup.lagB, g_coll, name="solve_vie2 product step")
     else:
         U = step_blocks_numpy(setup.lagB, g_coll)
     return _finish(setup, U, None, g_values, None, return_function)

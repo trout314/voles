@@ -245,7 +245,7 @@ def _check_return(ret: int, func_name: str) -> None:
 
 def solve_vie1_d(g_values, kernel_values, soln_init_value, time_step,
                  coll_divs, coll_choices, return_polys, force_continuous):
-    """Call the D stub for solve_VIE_1. Returns (soln_values, poly_coefs_or_None)."""
+    """Call the D stub for the sampled VIE-1. Returns (soln_values, poly_coefs_or_None)."""
 
     g = np.ascontiguousarray(g_values, dtype=np.float64)
     k = np.ascontiguousarray(kernel_values, dtype=np.float64)
@@ -407,7 +407,7 @@ def solve_vie2_vec_d(g_values, kernel_values, time_step, coll_divs, coll_choices
 
 def solve_vie2_d(g_values, kernel_values, time_step, coll_divs,
                  coll_choices, return_polys):
-    """Call the D stub for solve_VIE_2. Returns (soln_values, poly_coefs_or_None)."""
+    """Call the D stub for the sampled VIE-2. Returns (soln_values, poly_coefs_or_None)."""
 
     g = np.ascontiguousarray(g_values, dtype=np.float64)
     k = np.ascontiguousarray(kernel_values, dtype=np.float64)
@@ -448,7 +448,7 @@ def solve_vie2_d(g_values, kernel_values, time_step, coll_divs,
 
 def solve_vide_d(g_values, kernel_values, a_values, soln_init_value, time_step,
                  coll_divs, coll_choices, return_polys):
-    """Call the D stub for solve_VIDE. Returns (soln_values, poly_coefs_or_None)."""
+    """Call the D stub for the sampled VIDE. Returns (soln_values, poly_coefs_or_None)."""
 
     g = np.ascontiguousarray(g_values, dtype=np.float64)
     k = np.ascontiguousarray(kernel_values, dtype=np.float64)

@@ -52,14 +52,14 @@ Docstring Examples are doctested by `tests/test_docstring_examples.py` (print ro
 
 ### Source layout: `src/voles/`
 
-- **`_api.py`** — the 1.0 public solvers `solve_vie1/2/vide`: validate every argument with 1.0 names (regime from input types: arrays → sampled/`dt`, callables → functional/`mesh`), apply the shape/matrix rule, then call the engine entry `_sampled.solve` / `_functional.solve`.
-- **`_sampled.py`** — sampled-data engine `vie1`, `vie2`, `vide` (the 0.10 `solve_VIE_*`, 0.10 kwarg names, with their own checks). Validates, dispatches to D extension or Numba fallback, handles scalar/vector/matrix/complex cases, threading for matrix columns. `solve(equation, **kw)` returns a `VolterraSolution`.
-- **`_functional.py`** — callable-input engine `vie1`, `vie2`, `vide` (the 0.10 `function_solve_*`), `optimal_graded_mesh`, the node helpers; `solve(...)` as above.
+- **`_api.py`** — the public solvers `solve_vie1/2/vide`, and the ONLY place arguments are validated (1.0 names; regime from input types: arrays → sampled/`dt`, callables → functional/`mesh`; shape/matrix rule; VIE-1 admissibility). It resolves the node setting, mesh width `Q` and interpolation degree `p`, then calls `_sampled.solve` / `_functional.solve`.
+- **`_sampled.py`** — sampled-data engine `vie1`, `vie2`, `vide`: trust their (validated, resolved) inputs, dispatch complex → real block form, matrix → threaded columns, product (`_product`) vs collocation (D extension or Numba fallback), issue the solve-time diagnostics (`diagnose=False` in worker threads). Each returns `(values, _Pieces)`; `solve(equation, **kw)` returns a `VolterraSolution`.
+- **`_functional.py`** — callable-input engine `vie1`, `vie2`, `vide` (same contract: validated inputs `mesh`, `nodes`, `kernel_singularity`; returns `(node_values, _Pieces)`), the weight-tensor builders, `optimal_graded_mesh`, the node helpers; `solve(...)` as above. `kernel_singularity` is validated here (in the builders), and the compiled node/dimension limits are checked here.
 - The 0.10 API (`solve_VIE_*`, `function_solve_*`) was removed in 1.0. `docs/dev/migrate_0_10.py` translates a 0.10 call to its 1.0 equivalent (used by the battery). Bitwise regression: `docs/dev/battery.py` (local); cross-platform frozen values: `tests/test_reference_values.py`.
 - **`_common.py`** — helpers both engines share (collocation basis, VIE-1 ρ rule, thread count); neither engine imports the other.
-- **`_solution.py`** — `VolterraSolution` (the 1.0 solution object) and the legacy `_SolutionFunction`.
+- **`_solution.py`** — `VolterraSolution` (the solution object), its builders, and `_Pieces` (what the engines return: local coefficients + mesh).
 - **`_validate.py`, `_warnings.py`** — the type-vs-value validation rule and the `VolesWarning` classes/`_warn` helper.
-- The 1.0 API work is planned in `docs/dev/api-1.0-plan.md` (contract: `docs/dev/api-contract-1.0.md`; bitwise regression battery: `docs/dev/api_battery.py`).
+- The 1.0 API work is planned in `docs/dev/api-1.0-plan.md` (contract: `docs/dev/api-contract-1.0.md`).
 - **`_dlang.py`** — ctypes wrapper loading the platform-specific shared library. Defines C function signatures and provides `solve_vie{1,2}_d()`, `solve_vie{1,2}_vec_d()`, `solve_vide_d()`, `solve_vide_vec_d()`. Also exposes `supported_coll_settings_d()` to query compiled settings.
 - **`_numba_solvers.py`** — Numba JIT fallback for scalar equations when the requested collocation setting isn't compiled into the D extension. Uses `@ncjit` decorator.
 - **`dlang/source/volterra_solvers.d`** — Core computational engine. Compile-time template specialization for collocation settings, LU factorization, polynomial evaluation/integration, separate paths for scalar/vector/matrix.
@@ -67,7 +67,7 @@ Docstring Examples are doctested by `tests/test_docstring_examples.py` (print ro
 
 ### Dispatch flow
 1. `_api.solve_*` classifies the regime from the input types, validates every argument (1.0 names, `_validate` rules), resolves `coll_setting`/`coll_nodes` and the shapes, and calls `_sampled.solve` or `_functional.solve`.
-2. The engine (`_sampled.vie*` / `_functional.vie*`) repeats its own 0.10 checks, determines scalar vs vector vs matrix, and returns values plus the legacy `_SolutionFunction`; `solve` wraps them in a `VolterraSolution`.
+2. The engine (`_sampled.vie*` / `_functional.vie*`) trusts its inputs, determines scalar vs vector vs matrix, and returns the values plus `_Pieces`; `solve` wraps them in a `VolterraSolution`. Low-level modules (`_dlang`, `_product`, `_numba_solvers`) keep their internal parameter names (`kernel_values`, `coll_divs`, ...).
 3. For vector/matrix: reshapes to call the vector D extension per column (matrix columns processed in parallel threads).
 4. With `quadrature="collocation"`, checks whether the setting is compiled into the D extension (`supported_coll_settings_d()`), and falls back to the Numba JIT solvers if not (scalar only; vector/matrix require the D extension). Product quadrature (the default) needs no compiled setting.
 

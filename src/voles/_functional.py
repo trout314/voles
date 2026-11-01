@@ -26,15 +26,14 @@ import contextlib
 import functools
 import warnings
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
 
-from ._common import (_column_workers, _check_vie1_setting, _warn_g_start_columns,
+from ._common import (_column_workers, _warn_g_start_columns,
                       _scalar_init, _lagrange_basis_coefs, _lagrange_antideriv_coefs, _vide_basis_coefs, _eval_poly_at, _vie1_cont_basis_coefs, _vie1_cont_advance)
 
 import numpy as np
 from numpy.polynomial import polynomial as npp
 
-from ._solution import _SolutionFunction, _complex_solution
+from ._solution import _Pieces, _complex_solution
 from . import _validate as _v
 from ._warnings import _warn, AccuracyWarning, PerformanceWarning, VolesWarning
 
@@ -1509,7 +1508,7 @@ def _lagrange_solution(y: np.ndarray, mesh_breakpoints: np.ndarray,
     y = np.asarray(y, dtype=float)
     unit = np.zeros((y.shape[0], basis.shape[1]) + y.shape[2:])
     unit = _combine_basis(y, basis, unit)
-    return _SolutionFunction.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
+    return _Pieces.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
 
 
 def _detect_kernel_shape(kernel, sample_u: float):
@@ -1662,81 +1661,32 @@ def _recombine_complex_y(y_real: np.ndarray, d_orig: int) -> np.ndarray:
 
 
 @_escalate_complex_warning
-def vie2(*, kernel, g=None, mesh_breakpoints,
-                          coll_divs: int = None, coll_choices: list[int] = None,
-                          coll_nodes=None,
-                          kernel_singularity=None,
-                          return_function: bool = False,
-                          reuse_adaptive_blocks: bool = True,
-                          show_warnings: bool = True):
-    """Engine for the 0.10 ``function_solve_VIE_2`` (see `voles._legacy.function_solve_VIE_2` for the documentation). Called by the deprecated wrapper and by
-    `solve`; internal recursion calls this function directly."""
-    return_function = _v.flag("return_function", return_function)
-    reuse_adaptive_blocks = _v.flag("reuse_adaptive_blocks", reuse_adaptive_blocks)
-    show_warnings = _v.flag("show_warnings", show_warnings)
-    _smooth_gl_order = _SMOOTH_GL_ORDER
+def vie2(*, kernel, g, mesh, nodes, kernel_singularity, reuse_adaptive_blocks):
+    """y = g + K * y on ``mesh`` with collocation ``nodes`` (the 1.0 layer's
+    validated inputs). Returns ``(node_values, pieces)``."""
     kernel_singularity = _empty_singularity_to_none(kernel_singularity)
-    mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
-    if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
-        raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
-    if not np.all(np.isfinite(mesh_breakpoints)):
-        raise ValueError("mesh_breakpoints must be finite (no inf or NaN)")
-    if not np.all(np.diff(mesh_breakpoints) > 0):
-        raise ValueError("mesh_breakpoints must be strictly increasing")
-    if mesh_breakpoints[0] != 0.0:
-        raise ValueError("mesh_breakpoints[0] must be 0")
-
-    node_pos, _, _ = _resolve_node_pos(
-        coll_nodes, coll_divs, coll_choices,
-        default_divs=2, default_choices=[0, 1, 2],
-        exclude_zero=False, fname="function_solve_VIE_2")
-
-    if not callable(kernel):
-        raise TypeError("kernel must be callable")
-    if g is not None and not callable(g):
-        raise TypeError("g must be callable or None")
-
-    # Complex dispatch: block-decompose to a real problem of doubled dimension.
+    mesh_breakpoints, node_pos = mesh, nodes
     if _samples_indicate_complex([kernel, g], mesh_breakpoints, None):
-        sample_u = float(np.diff(mesh_breakpoints)[0]) * 0.5
-        d_orig = _detect_complex_d_orig(kernel, sample_u)
-        result = vie2(
-            kernel=_block_wrap_kernel(kernel, d_orig),
-            g=_block_wrap_g(g, d_orig),
-            mesh_breakpoints=mesh_breakpoints,
-            coll_nodes=node_pos,
-            kernel_singularity=kernel_singularity,
-            return_function=return_function, show_warnings=show_warnings,
+        d_orig = _detect_complex_d_orig(kernel, float(np.diff(mesh_breakpoints)[0]) * 0.5)
+        y_real, pieces = vie2(
+            kernel=_block_wrap_kernel(kernel, d_orig), g=_block_wrap_g(g, d_orig),
+            mesh=mesh_breakpoints, nodes=node_pos, kernel_singularity=kernel_singularity,
             reuse_adaptive_blocks=reuse_adaptive_blocks)
-        if return_function:
-            y_real, y_func_real = result
-            return (_recombine_complex_y(y_real, d_orig),
-                    _complex_solution(y_func_real, d_orig))
-        return _recombine_complex_y(result, d_orig)
+        return _recombine_complex_y(y_real, d_orig), _complex_solution(pieces, d_orig)
 
     M = len(mesh_breakpoints) - 1
     p = len(node_pos)
     widths = np.diff(mesh_breakpoints)
-
     # Detect scalar vs vector kernel by sampling at a non-singular point.
-    sample_u = float(widths[0]) * 0.5
-    is_vector, d = _detect_kernel_shape(kernel, sample_u)
-
-    _maybe_warn_mesh_uniform_with_singularity(
-        mesh_breakpoints, kernel_singularity, show_warnings)
-
+    is_vector, d = _detect_kernel_shape(kernel, float(widths[0]) * 0.5)
+    _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints, kernel_singularity, True)
     from . import _dlang as _dlang_module
-    max_p = _dlang_module.function_solve_max_p_d()
-    if p > max_p:
-        raise ValueError(
-            f"number of collocation nodes p = {p} exceeds the maximum compiled "
-            f"into the D extension ({max_p}). Use fewer collocation nodes.")
+    _check_compiled_limits(_dlang_module, p, d if is_vector else 0)
 
     if not is_vector:
-        W = _build_w_scalar(kernel, mesh_breakpoints, node_pos,
-                            kernel_singularity, _smooth_gl_order,
-                            reuse_adaptive_blocks=reuse_adaptive_blocks,
-            warn_fallbacks=show_warnings)
+        W = _build_w_scalar(kernel, mesh_breakpoints, node_pos, kernel_singularity,
+                            _SMOOTH_GL_ORDER, reuse_adaptive_blocks=reuse_adaptive_blocks,
+                            warn_fallbacks=True)
         g_arr = np.zeros((M, p), dtype=np.float64)
         if g is not None:
             for n in range(M):
@@ -1746,51 +1696,39 @@ def vie2(*, kernel, g=None, mesh_breakpoints,
                     t_ni = t_n + node_pos[i] * h_n
                     g_arr[n, i] = _scalar_g_value(g(t_ni), t_ni)
         y = _dlang_module.function_solve_vie2_d(W, g_arr)
-
-        if return_function:
-            return y, _lagrange_solution(y, mesh_breakpoints, node_pos)
-        return y
-
-    # ----- Vector / matrix path -----
-    max_d = _dlang_module.function_solve_max_d_d()
-    if d > max_d:
-        raise ValueError(
-            f"kernel dimension d = {d} exceeds the maximum compiled into the "
-            f"D extension ({max_d}).")
+        return y, _lagrange_solution(y, mesh_breakpoints, node_pos)
 
     # The weight tensor depends only on the kernel, so it is built once and
     # shared across all right-hand sides in the matrix case.
-    W = _build_w_vector(kernel, mesh_breakpoints, node_pos,
-                        kernel_singularity, _smooth_gl_order, d,
-                        reuse_adaptive_blocks=reuse_adaptive_blocks,
-            warn_fallbacks=show_warnings)
-
-    sample_t = float(mesh_breakpoints[0] + node_pos[0] * widths[0])
-    m = _detect_g_matrix_cols(g, d, sample_t)
-
+    W = _build_w_vector(kernel, mesh_breakpoints, node_pos, kernel_singularity,
+                        _SMOOTH_GL_ORDER, d, reuse_adaptive_blocks=reuse_adaptive_blocks,
+                        warn_fallbacks=True)
+    m = _detect_g_matrix_cols(g, d, float(mesh_breakpoints[0] + node_pos[0] * widths[0]))
     if m is not None:
-        # Matrix-valued problem: m simultaneous right-hand sides sharing W.
-        G = _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths,
-                                     M, p, d, m)
+        G = _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths, M, p, d, m)
 
         def _col_solve(j):
-            g_arr_j = np.ascontiguousarray(G[:, :, :, j])
-            return _dlang_module.function_solve_vie2_vec_d(W, g_arr_j)
-
+            return _dlang_module.function_solve_vie2_vec_d(W, np.ascontiguousarray(G[:, :, :, j]))
         with ThreadPoolExecutor(max_workers=_column_workers(m)) as ex:
             cols = list(ex.map(_col_solve, range(m)))
         y = np.stack(cols, axis=3)  # (M, p, d, m)
-
-        if return_function:
-            return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d, m=m)
-        return y
-
+        return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d, m=m)
     g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
     y = _dlang_module.function_solve_vie2_vec_d(W, g_arr)
+    return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d)
 
-    if return_function:
-        return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d)
-    return y
+
+def _check_compiled_limits(dl, p, d):
+    """The node count and system size compiled into the extension."""
+    if p > dl.function_solve_max_p_d():
+        raise ValueError(
+            f"{p} collocation nodes exceed the maximum compiled into the extension "
+            f"({dl.function_solve_max_p_d()}). Use fewer collocation nodes.")
+    if d and d > dl.function_solve_max_d_d():
+        raise ValueError(
+            f"a system of d = {d} equations exceeds the maximum compiled into the extension "
+            f"({dl.function_solve_max_d_d()}) for callable inputs; sampled inputs have no "
+            f"such limit.")
 
 
 # ---------------------------------------------------------------------------
@@ -1814,87 +1752,32 @@ def _vide_solution(y_prime: np.ndarray, y_boundary: np.ndarray,
     unit = np.zeros((M, anti.shape[1]) + y_prime.shape[2:])
     unit[:, 0] = np.asarray(y_boundary, dtype=float)[:M]   # constant: y_n
     unit = _combine_basis(y_prime, anti, unit, scale=h)
-    return _SolutionFunction.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
+    return _Pieces.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
 
 
 @_escalate_complex_warning
-def vide(*, kernel, a=None, g=None, soln_init_value,
-                         mesh_breakpoints,
-                         coll_divs: int = None, coll_choices: list[int] = None,
-                         coll_nodes=None,
-                         kernel_singularity=None,
-                         return_function: bool = False,
-                         reuse_adaptive_blocks: bool = True,
-                         show_warnings: bool = True):
-    """Engine for the 0.10 ``function_solve_VIDE`` (see `voles._legacy.function_solve_VIDE` for the documentation). Called by the deprecated wrapper and by
-    `solve`; internal recursion calls this function directly."""
-    return_function = _v.flag("return_function", return_function)
-    reuse_adaptive_blocks = _v.flag("reuse_adaptive_blocks", reuse_adaptive_blocks)
-    show_warnings = _v.flag("show_warnings", show_warnings)
-    if soln_init_value is None:
-        raise TypeError("function_solve_VIDE: soln_init_value is required (got None)")
-    _v.finite("soln_init_value", soln_init_value)
-    _smooth_gl_order = _SMOOTH_GL_ORDER
+def vide(*, kernel, a, g, y0, mesh, nodes, kernel_singularity, reuse_adaptive_blocks):
+    """y' = a y + g + K * y, y(0) = y0, on ``mesh`` with collocation ``nodes``
+    (the 1.0 layer's validated inputs). Returns ``(node_values, pieces)``."""
     kernel_singularity = _empty_singularity_to_none(kernel_singularity)
-    mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
-    if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
-        raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
-    if not np.all(np.isfinite(mesh_breakpoints)):
-        raise ValueError("mesh_breakpoints must be finite (no inf or NaN)")
-    if not np.all(np.diff(mesh_breakpoints) > 0):
-        raise ValueError("mesh_breakpoints must be strictly increasing")
-    if mesh_breakpoints[0] != 0.0:
-        raise ValueError("mesh_breakpoints[0] must be 0")
-
-    node_pos, _, _ = _resolve_node_pos(
-        coll_nodes, coll_divs, coll_choices,
-        default_divs=2, default_choices=[0, 1, 2],
-        exclude_zero=False, fname="function_solve_VIDE")
-
-    if not callable(kernel):
-        raise TypeError("kernel must be callable")
-    if g is not None and not callable(g):
-        raise TypeError("g must be callable or None")
-    if a is not None and not callable(a):
-        raise TypeError("a must be callable or None")
-
-    # Complex dispatch.
+    mesh_breakpoints, node_pos, soln_init_value = mesh, nodes, y0
     if _samples_indicate_complex([kernel, g, a], mesh_breakpoints, soln_init_value):
-        sample_u = float(np.diff(mesh_breakpoints)[0]) * 0.5
-        d_orig = _detect_complex_d_orig(kernel, sample_u)
-        result = vide(
-            kernel=_block_wrap_kernel(kernel, d_orig),
-            a=_block_wrap_a(a, d_orig),
-            g=_block_wrap_g(g, d_orig),
-            soln_init_value=_block_expand_init(soln_init_value, d_orig),
-            mesh_breakpoints=mesh_breakpoints,
-            coll_nodes=node_pos,
-            kernel_singularity=kernel_singularity,
-            return_function=return_function, show_warnings=show_warnings,
+        d_orig = _detect_complex_d_orig(kernel, float(np.diff(mesh_breakpoints)[0]) * 0.5)
+        y_real, pieces = vide(
+            kernel=_block_wrap_kernel(kernel, d_orig), a=_block_wrap_a(a, d_orig),
+            g=_block_wrap_g(g, d_orig), y0=_block_expand_init(soln_init_value, d_orig),
+            mesh=mesh_breakpoints, nodes=node_pos, kernel_singularity=kernel_singularity,
             reuse_adaptive_blocks=reuse_adaptive_blocks)
-        if return_function:
-            y_real, y_func_real = result
-            return (_recombine_complex_y(y_real, d_orig),
-                    _complex_solution(y_func_real, d_orig))
-        return _recombine_complex_y(result, d_orig)
+        return _recombine_complex_y(y_real, d_orig), _complex_solution(pieces, d_orig)
 
     M = len(mesh_breakpoints) - 1
     p = len(node_pos)
     widths = np.diff(mesh_breakpoints)
-
     from . import _dlang as _dlang_module
-    max_p = _dlang_module.function_solve_max_p_d()
-    if p > max_p:
-        raise ValueError(
-            f"number of collocation nodes p = {p} exceeds the maximum compiled "
-            f"into the D extension ({max_p}).")
-
     # Detect scalar vs vector by sampling kernel at a non-singular point.
-    sample_u = float(widths[0]) * 0.5
-    is_vector, d = _detect_kernel_shape(kernel, sample_u)
-
-    _maybe_warn_mesh_uniform_with_singularity(
-        mesh_breakpoints, kernel_singularity, show_warnings)
+    is_vector, d = _detect_kernel_shape(kernel, float(widths[0]) * 0.5)
+    _check_compiled_limits(_dlang_module, p, d if is_vector else 0)
+    _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints, kernel_singularity, True)
 
     # Precomputed scalar tables: alpha[i,k] = I_k(c_i); w[k] = I_k(1)
     anti = _lagrange_antideriv_coefs(node_pos)  # (p, p+1)
@@ -1902,10 +1785,8 @@ def vide(*, kernel, a=None, g=None, soln_init_value,
     for i in range(p):
         for k in range(p):
             alpha[i, k] = _eval_poly_at(anti[k], node_pos[i])
-    w_vec = np.array([_eval_poly_at(anti[k], 1.0) for k in range(p)],
-                     dtype=np.float64)
+    w_vec = np.array([_eval_poly_at(anti[k], 1.0) for k in range(p)], dtype=np.float64)
 
-    # Sample g and a at collocation points
     def _sample_callable_scalar(f, name):
         out = np.zeros((M, p), dtype=np.float64)
         if f is None:
@@ -1918,101 +1799,53 @@ def vide(*, kernel, a=None, g=None, soln_init_value,
                 out[n, i] = _scalar_callable_value(f(t_ni), t_ni, name)
         return out
 
+    vide_basis = _vide_basis_coefs(node_pos)
     if not is_vector:
-        vide_basis = _vide_basis_coefs(node_pos)
         W = _build_w_with_basis_scalar(
-            kernel, mesh_breakpoints, node_pos,
-            kernel_singularity, _smooth_gl_order, vide_basis,
-            reuse_adaptive_blocks=reuse_adaptive_blocks,
-            warn_fallbacks=show_warnings)
+            kernel, mesh_breakpoints, node_pos, kernel_singularity, _SMOOTH_GL_ORDER,
+            vide_basis, reuse_adaptive_blocks=reuse_adaptive_blocks, warn_fallbacks=True)
         g_arr = _sample_callable_scalar(g, "g")
         a_arr = _sample_callable_scalar(a, "a")
         y_prime, y_boundary = _dlang_module.function_solve_vide_d(
             W, g_arr, a_arr, alpha, w_vec, widths, _scalar_init(soln_init_value))
-
-        # Reconstruct y at collocation nodes: y_{n,i} = y_n + h_n * sum_k Y'_{n,k} alpha[i,k]
+        # y at the nodes: y_{n,i} = y_n + h_n * sum_k Y'_{n,k} alpha[i,k]
         y_at_coll = np.zeros((M, p), dtype=np.float64)
         for n in range(M):
             y_at_coll[n, :] = y_boundary[n] + widths[n] * (alpha @ y_prime[n])
-
-        if return_function:
-            return y_at_coll, _vide_solution(y_prime, y_boundary,
-                                             mesh_breakpoints, node_pos)
-        return y_at_coll
-
-    # ----- Vector / matrix path -----
-    max_d = _dlang_module.function_solve_max_d_d()
-    if d > max_d:
-        raise ValueError(
-            f"kernel dimension d = {d} exceeds the maximum compiled into the "
-            f"D extension ({max_d}).")
+        return y_at_coll, _vide_solution(y_prime, y_boundary, mesh_breakpoints, node_pos)
 
     # W and a(t) depend only on the kernel and a, not on the right-hand side,
     # so both are built once and shared across all columns in the matrix case.
-    vide_basis = _vide_basis_coefs(node_pos)
     W = _build_w_with_basis_vector(
-        kernel, mesh_breakpoints, node_pos,
-        kernel_singularity, _smooth_gl_order, d, vide_basis,
-        reuse_adaptive_blocks=reuse_adaptive_blocks,
-            warn_fallbacks=show_warnings)
+        kernel, mesh_breakpoints, node_pos, kernel_singularity, _SMOOTH_GL_ORDER, d,
+        vide_basis, reuse_adaptive_blocks=reuse_adaptive_blocks, warn_fallbacks=True)
     a_arr = _sample_a_at_coll(a, mesh_breakpoints, node_pos, widths, M, p, d)
-
-    # Matrix-valued problem is signalled by a 2-D (d, m) initial value.
     init_arr = np.asarray(soln_init_value, dtype=np.float64)
-    if init_arr.ndim == 2:
-        if init_arr.shape[0] != d:
-            raise ValueError(
-                f"soln_init_value shape {tuple(init_arr.shape)} incompatible "
-                f"with kernel dimension d = {d}.")
+    if init_arr.ndim == 2:                  # (d, m): m right-hand sides sharing W
         m = init_arr.shape[1]
-        G = _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths,
-                                     M, p, d, m)
+        G = _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths, M, p, d, m)
 
         def _col_solve(j):
-            g_arr_j = np.ascontiguousarray(G[:, :, :, j])
             return _dlang_module.function_solve_vide_vec_d(
-                W, g_arr_j, a_arr, alpha, w_vec, widths,
+                W, np.ascontiguousarray(G[:, :, :, j]), a_arr, alpha, w_vec, widths,
                 np.ascontiguousarray(init_arr[:, j]))
-
         with ThreadPoolExecutor(max_workers=_column_workers(m)) as ex:
             results = list(ex.map(_col_solve, range(m)))
-
-        # y_prime_j: (M, p, d); y_boundary_j: (M+1, d). Stack on a new last axis.
         y_prime = np.stack([r[0] for r in results], axis=3)      # (M, p, d, m)
         y_boundary = np.stack([r[1] for r in results], axis=2)   # (M+1, d, m)
-
         y_at_coll = np.zeros((M, p, d, m), dtype=np.float64)
         for n in range(M):
-            # alpha (p,p) @ y_prime[n] (p,d,m) over the p axis -> (p,d,m)
             y_at_coll[n] = y_boundary[n] + widths[n] * np.tensordot(
                 alpha, y_prime[n], axes=([1], [0]))
-
-        if return_function:
-            return y_at_coll, _vide_solution(y_prime, y_boundary,
-                                             mesh_breakpoints, node_pos, d=d, m=m)
-        return y_at_coll
-
-    # Vector path
-    if init_arr.shape != (d,):
-        raise ValueError(
-            f"soln_init_value must have shape ({d},) for vector kernel; "
-            f"got shape {tuple(init_arr.shape)}")
-
+        return y_at_coll, _vide_solution(y_prime, y_boundary, mesh_breakpoints, node_pos,
+                                         d=d, m=m)
     g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
-
     y_prime, y_boundary = _dlang_module.function_solve_vide_vec_d(
         W, g_arr, a_arr, alpha, w_vec, widths, init_arr)
-
-    # Reconstruct y at collocation: y[n,i] = y_n + h_n * sum_k alpha[i,k] Y'_{n,k}
     y_at_coll = np.zeros((M, p, d), dtype=np.float64)
     for n in range(M):
-        # alpha (p,p) @ y_prime[n] (p,d) -> (p,d)
         y_at_coll[n, :, :] = y_boundary[n] + widths[n] * (alpha @ y_prime[n])
-
-    if return_function:
-        return y_at_coll, _vide_solution(y_prime, y_boundary,
-                                         mesh_breakpoints, node_pos, d=d)
-    return y_at_coll
+    return y_at_coll, _vide_solution(y_prime, y_boundary, mesh_breakpoints, node_pos, d=d)
 
 
 # ---------------------------------------------------------------------------
@@ -2346,7 +2179,7 @@ def _vie1_cont_solution(U, boundary, mesh_breakpoints, node_pos, d=0, m=0):
     b = np.asarray(boundary, dtype=float)[:M]
     unit = b[:, None] * lag[0].reshape((1, -1) + extra)
     unit = _combine_basis(U, lag[1:], unit)
-    return _SolutionFunction.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
+    return _Pieces.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
 
 
 def _warn_vie1_g_start_callable(g, g_samples, show_warnings):
@@ -2371,126 +2204,30 @@ def _warn_vie1_g_start_callable(g, g_samples, show_warnings):
 
 
 @_escalate_complex_warning
-def vie1(*, kernel, g=None, soln_init_value=None,
-                          mesh_breakpoints,
-                          coll_divs: int = None, coll_choices: list[int] = None,
-                          coll_nodes=None,
-                          kernel_singularity=None,
-                          return_function: bool = False,
-                          force_continuous: bool = False,
-                          reuse_adaptive_blocks: bool = True,
-                          show_warnings: bool = True):
-    """Engine for the 0.10 ``function_solve_VIE_1`` (see `voles._legacy.function_solve_VIE_1` for the documentation). Called by the deprecated wrapper and by
-    `solve`; internal recursion calls this function directly."""
-    return_function = _v.flag("return_function", return_function)
-    force_continuous = _v.flag("force_continuous", force_continuous)
-    reuse_adaptive_blocks = _v.flag("reuse_adaptive_blocks", reuse_adaptive_blocks)
-    show_warnings = _v.flag("show_warnings", show_warnings)
-    _v.finite("soln_init_value", soln_init_value)
-    _smooth_gl_order = _SMOOTH_GL_ORDER
+def vie1(*, kernel, g, y0, mesh, nodes, kernel_singularity, reuse_adaptive_blocks, continuous):
+    """g = K * y on ``mesh`` with collocation ``nodes`` (the 1.0 layer's
+    validated inputs; ``continuous``: the S_m^(0) method with y(0) = y0).
+    Returns ``(node_values, pieces)``."""
     kernel_singularity = _empty_singularity_to_none(kernel_singularity)
-    mesh_breakpoints = np.asarray(mesh_breakpoints, dtype=float)
-    if mesh_breakpoints.ndim != 1 or len(mesh_breakpoints) < 2:
-        raise ValueError("mesh_breakpoints must be 1-D with at least two entries")
-    if not np.all(np.isfinite(mesh_breakpoints)):
-        raise ValueError("mesh_breakpoints must be finite (no inf or NaN)")
-    if not np.all(np.diff(mesh_breakpoints) > 0):
-        raise ValueError("mesh_breakpoints must be strictly increasing")
-    if mesh_breakpoints[0] != 0.0:
-        raise ValueError("mesh_breakpoints[0] must be 0")
-
-    node_pos, _divs, _choices = _resolve_node_pos(
-        coll_nodes, coll_divs, coll_choices,
-        default_divs=3, default_choices=[1, 2, 3],
-        exclude_zero=True, fname="function_solve_VIE_1")
-
-    # The continuous S_m^(0) representation extrapolates through the right
-    # endpoint, so c_m = 1 is a structural requirement of the method itself,
-    # independent of kernel smoothness — it must hold even when a singular
-    # kernel is declared (only the amplification criteria below assume
-    # smoothness).
-    if force_continuous and abs(node_pos[-1] - 1.0) > 1e-12:
-        raise ValueError(
-            "force_continuous (continuous S_m^(0) collocation) requires the "
-            "last collocation node to be the right endpoint c_m = 1; got "
-            f"c_m = {node_pos[-1]:.6g}. Append 1.0 to your nodes.")
-
-    # Reject node sets for which the chosen VIE-1 method does not converge.
-    # The criteria assume a smooth kernel (Brunner Thm 2.4.2(b): |K(t,t)|>=k0>0),
-    # so they are skipped when a weakly-singular kernel is declared.
-    if kernel_singularity is None:
-        if _choices is not None:
-            # Rational nodes k/coll_divs: the exact criterion shared with the
-            # array-input solve_VIE_1 (no tolerance needed at |rho| = 1).
-            _check_vie1_setting(_divs, _choices, force_continuous)
-        elif force_continuous:
-            # Continuous S_m^(0): converges iff c_m = 1 and |rho_{m-1}| <= 1.
-            rho = _vie1_cont_amplification(node_pos)
-            if rho > 1.0 + 1e-9:
-                raise ValueError(
-                    "Collocation nodes do not yield a convergent continuous (S_m^(0)) "
-                    f"VIE-1 solver: the leading-node amplification |rho_{{m-1}}| = "
-                    f"prod_(i<m) (1 - c_i)/c_i = {rho:.4g} exceeds 1 (Brunner Thm 2.4.5).")
-        elif not _vie1_convergent(node_pos):
-            # Discontinuous S_{m-1}^{(-1)}: converges iff |rho_m| <= 1.
-            rho = _vie1_amplification(node_pos)
-            raise ValueError(
-                f"Collocation nodes {np.array2string(node_pos, precision=6)} do not "
-                f"produce a convergent VIE-1 solver: the amplification factor "
-                f"|rho_m| = prod (1 - c_i)/c_i = {rho:.4g} exceeds 1. Choose nodes "
-                f"with a smaller amplification (e.g. include c = 1, as Radau IIA does).")
-
-    if not callable(kernel):
-        raise TypeError("kernel must be callable")
-    if g is not None and not callable(g):
-        raise TypeError("g must be callable or None")
-
-    if force_continuous and soln_init_value is None:
-        raise ValueError("must specify soln_init_value when force_continuous=True")
-    if not force_continuous and soln_init_value is not None and show_warnings:
-        _warn("setting soln_init_value has no effect when force_continuous=False.", VolesWarning)
-
-    # Complex dispatch. soln_init_value only contributes to the complex check
-    # when force_continuous=True (otherwise it has no effect on the result).
-    init_for_complex = soln_init_value if force_continuous else None
-    if _samples_indicate_complex([kernel, g], mesh_breakpoints, init_for_complex):
-        sample_u = float(np.diff(mesh_breakpoints)[0]) * 0.5
-        d_orig = _detect_complex_d_orig(kernel, sample_u)
-        init_wrapped = (_block_expand_init(soln_init_value, d_orig)
-                        if force_continuous else None)
-        result = vie1(
-            kernel=_block_wrap_kernel(kernel, d_orig),
-            g=_block_wrap_g(g, d_orig),
-            soln_init_value=init_wrapped,
-            mesh_breakpoints=mesh_breakpoints,
-            coll_nodes=node_pos,
-            kernel_singularity=kernel_singularity,
-            return_function=return_function,
-            force_continuous=force_continuous,
-            show_warnings=show_warnings,
-            reuse_adaptive_blocks=reuse_adaptive_blocks)
-        if return_function:
-            y_real, y_func_real = result
-            return (_recombine_complex_y(y_real, d_orig),
-                    _complex_solution(y_func_real, d_orig))
-        return _recombine_complex_y(result, d_orig)
+    mesh_breakpoints, node_pos, soln_init_value = mesh, nodes, y0
+    # y0 only contributes to the complex check for the continuous method.
+    if _samples_indicate_complex([kernel, g], mesh_breakpoints,
+                                 soln_init_value if continuous else None):
+        d_orig = _detect_complex_d_orig(kernel, float(np.diff(mesh_breakpoints)[0]) * 0.5)
+        y_real, pieces = vie1(
+            kernel=_block_wrap_kernel(kernel, d_orig), g=_block_wrap_g(g, d_orig),
+            y0=_block_expand_init(soln_init_value, d_orig) if continuous else None,
+            mesh=mesh_breakpoints, nodes=node_pos, kernel_singularity=kernel_singularity,
+            reuse_adaptive_blocks=reuse_adaptive_blocks, continuous=continuous)
+        return _recombine_complex_y(y_real, d_orig), _complex_solution(pieces, d_orig)
 
     M = len(mesh_breakpoints) - 1
     p = len(node_pos)
     widths = np.diff(mesh_breakpoints)
-
     from . import _dlang as _dlang_module
-    max_p = _dlang_module.function_solve_max_p_d()
-    if p > max_p:
-        raise ValueError(
-            f"number of collocation nodes p = {p} exceeds the maximum compiled "
-            f"into the D extension ({max_p}).")
-
-    sample_u = float(widths[0]) * 0.5
-    is_vector, d = _detect_kernel_shape(kernel, sample_u)
-
-    _maybe_warn_mesh_uniform_with_singularity(
-        mesh_breakpoints, kernel_singularity, show_warnings)
+    is_vector, d = _detect_kernel_shape(kernel, float(widths[0]) * 0.5)
+    _check_compiled_limits(_dlang_module, p, d if is_vector else 0)
+    _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints, kernel_singularity, True)
 
     if not is_vector:
         g_arr = np.zeros((M, p), dtype=np.float64)
@@ -2501,154 +2238,94 @@ def vie1(*, kernel, g=None, soln_init_value=None,
                 for i in range(p):
                     t_ni = t_n + node_pos[i] * h_n
                     g_arr[n, i] = _scalar_g_value(g(t_ni), t_ni)
-        _warn_vie1_g_start_callable(g, g_arr, show_warnings)
-        if force_continuous:
+        _warn_vie1_g_start_callable(g, g_arr, True)
+        if continuous:
             # Brunner S_m^(0): degree-m polynomial on {0} ∪ node_pos, with the
             # boundary value carried forward for continuity. Extended weight
             # tensor against the augmented basis (value cols + boundary col).
-            cont_basis = _vie1_cont_basis_coefs(node_pos)
             W = _build_w_with_basis_scalar(
-                kernel, mesh_breakpoints, node_pos,
-                kernel_singularity, _smooth_gl_order, cont_basis,
-                reuse_adaptive_blocks=reuse_adaptive_blocks,
-            warn_fallbacks=show_warnings)
+                kernel, mesh_breakpoints, node_pos, kernel_singularity, _SMOOTH_GL_ORDER,
+                _vie1_cont_basis_coefs(node_pos), reuse_adaptive_blocks=reuse_adaptive_blocks,
+                warn_fallbacks=True)
             adv_U, adv_0 = _vie1_cont_advance(node_pos)
             y, boundary = _dlang_module.function_solve_vie1_cont_d(
                 W, g_arr, adv_U, adv_0, _scalar_init(soln_init_value))
-            if return_function:
-                return y, _vie1_cont_solution(y, boundary, mesh_breakpoints, node_pos)
-            return y
-
-        W = _build_w_scalar(kernel, mesh_breakpoints, node_pos,
-                            kernel_singularity, _smooth_gl_order,
-                            reuse_adaptive_blocks=reuse_adaptive_blocks,
-            warn_fallbacks=show_warnings)
+            return y, _vie1_cont_solution(y, boundary, mesh_breakpoints, node_pos)
+        W = _build_w_scalar(kernel, mesh_breakpoints, node_pos, kernel_singularity,
+                            _SMOOTH_GL_ORDER, reuse_adaptive_blocks=reuse_adaptive_blocks,
+                            warn_fallbacks=True)
         y = _dlang_module.function_solve_vie1_d(W, g_arr)
-        if return_function:
-            return y, _lagrange_solution(y, mesh_breakpoints, node_pos)
-        return y
-
-    # ----- Vector / matrix path -----
-    max_d = _dlang_module.function_solve_max_d_d()
-    if d > max_d:
-        raise ValueError(
-            f"kernel dimension d = {d} exceeds the maximum compiled into the "
-            f"D extension ({max_d}).")
+        return y, _lagrange_solution(y, mesh_breakpoints, node_pos)
 
     # W depends only on the kernel; built once and shared across columns. The
     # continuous (S_m^(0)) method uses the augmented value+boundary basis.
-    if force_continuous:
-        cont_basis = _vie1_cont_basis_coefs(node_pos)
-        W = _build_w_with_basis_vector(kernel, mesh_breakpoints, node_pos,
-                                       kernel_singularity, _smooth_gl_order, d,
-                                       cont_basis,
-                                       reuse_adaptive_blocks=reuse_adaptive_blocks,
-            warn_fallbacks=show_warnings)
+    if continuous:
+        W = _build_w_with_basis_vector(
+            kernel, mesh_breakpoints, node_pos, kernel_singularity, _SMOOTH_GL_ORDER, d,
+            _vie1_cont_basis_coefs(node_pos), reuse_adaptive_blocks=reuse_adaptive_blocks,
+            warn_fallbacks=True)
         adv_U, adv_0 = _vie1_cont_advance(node_pos)
     else:
-        W = _build_w_vector(kernel, mesh_breakpoints, node_pos,
-                            kernel_singularity, _smooth_gl_order, d,
-                            reuse_adaptive_blocks=reuse_adaptive_blocks,
-            warn_fallbacks=show_warnings)
-
-    sample_t = float(mesh_breakpoints[0] + node_pos[0] * widths[0])
-    m = _detect_g_matrix_cols(g, d, sample_t)
-
+        W = _build_w_vector(kernel, mesh_breakpoints, node_pos, kernel_singularity,
+                            _SMOOTH_GL_ORDER, d, reuse_adaptive_blocks=reuse_adaptive_blocks,
+                            warn_fallbacks=True)
+    m = _detect_g_matrix_cols(g, d, float(mesh_breakpoints[0] + node_pos[0] * widths[0]))
     if m is not None:
-        # Matrix-valued problem: m simultaneous right-hand sides sharing W.
-        if force_continuous:
+        G = _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths, M, p, d, m)
+        _warn_vie1_g_start_callable(g, G, True)
+        if continuous:
             init_mat = np.asarray(soln_init_value, dtype=np.float64)
-            if init_mat.shape != (d, m):
-                raise ValueError(
-                    f"soln_init_value must have shape ({d}, {m}) for a "
-                    f"matrix-valued problem with force_continuous=True; "
-                    f"got shape {tuple(init_mat.shape)}")
 
-        G = _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths,
-                                     M, p, d, m)
-        _warn_vie1_g_start_callable(g, G, show_warnings)
-
-        if force_continuous:
             def _col_solve(j):
-                g_arr_j = np.ascontiguousarray(G[:, :, :, j])
                 return _dlang_module.function_solve_vie1_cont_vec_d(
-                    W, g_arr_j, adv_U, adv_0,
+                    W, np.ascontiguousarray(G[:, :, :, j]), adv_U, adv_0,
                     np.ascontiguousarray(init_mat[:, j]))
             with ThreadPoolExecutor(max_workers=_column_workers(m)) as ex:
                 results = list(ex.map(_col_solve, range(m)))
-            y = np.stack([r[0] for r in results], axis=3)        # (M, p, d, m)
-            if return_function:
-                boundary = np.stack([r[1] for r in results], axis=2)  # (M+1, d, m)
-                return y, _vie1_cont_solution(y, boundary, mesh_breakpoints,
-                                              node_pos, d=d, m=m)
-            return y
+            y = np.stack([r[0] for r in results], axis=3)             # (M, p, d, m)
+            boundary = np.stack([r[1] for r in results], axis=2)      # (M+1, d, m)
+            return y, _vie1_cont_solution(y, boundary, mesh_breakpoints, node_pos, d=d, m=m)
 
         def _col_solve(j):
-            g_arr_j = np.ascontiguousarray(G[:, :, :, j])
-            return _dlang_module.function_solve_vie1_vec_d(W, g_arr_j)
-
+            return _dlang_module.function_solve_vie1_vec_d(W, np.ascontiguousarray(G[:, :, :, j]))
         with ThreadPoolExecutor(max_workers=_column_workers(m)) as ex:
             cols = list(ex.map(_col_solve, range(m)))
         y = np.stack(cols, axis=3)  # (M, p, d, m)
-
-        if return_function:
-            return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d, m=m)
-        return y
-
+        return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d, m=m)
     g_arr = _sample_g_at_coll_vec(g, mesh_breakpoints, node_pos, widths, M, p, d)
-    _warn_vie1_g_start_callable(g, g_arr, show_warnings)
-
-    if force_continuous:
-        init_vec = np.asarray(soln_init_value, dtype=np.float64)
-        if init_vec.shape != (d,):
-            raise ValueError(
-                f"soln_init_value must have shape ({d},) for vector kernel; "
-                f"got shape {tuple(init_vec.shape)}")
+    _warn_vie1_g_start_callable(g, g_arr, True)
+    if continuous:
         y, boundary = _dlang_module.function_solve_vie1_cont_vec_d(
-            W, g_arr, adv_U, adv_0, init_vec)
-        if return_function:
-            return y, _vie1_cont_solution(y, boundary, mesh_breakpoints,
-                                          node_pos, d=d)
-        return y
-
+            W, g_arr, adv_U, adv_0, np.asarray(soln_init_value, dtype=np.float64))
+        return y, _vie1_cont_solution(y, boundary, mesh_breakpoints, node_pos, d=d)
     y = _dlang_module.function_solve_vie1_vec_d(W, g_arr)
-
-    if return_function:
-        return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d)
-    return y
+    return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d)
 
 
 # ---------------------------------------------------------------------------
-# Engine entry point (1.0 plan, Phase 3)
+# Entry point for the 1.0 layer
 # ---------------------------------------------------------------------------
 
-_ENGINE = {"vie1": vie1, "vie2": vie2,
-           "vide": vide}
-_DEFAULT_SETTING = {"vie1": (3, [1, 2, 3], True), "vie2": (2, [0, 1, 2], False),
-                    "vide": (2, [0, 1, 2], False)}
+_ENGINE = {"vie1": vie1, "vie2": vie2, "vide": vide}
 
 
-def solve(equation, **engine_kw):
+def solve(equation, *, continuous=False, **engine_kw):
     """Solve with the callable-input engine and return a `VolterraSolution`.
 
-    ``engine_kw`` are the engine's (0.10) keyword arguments; the engine
-    validates them. The node positions are resolved with the engine's own
-    `_resolve_node_pos`, and checked against the shape of its output."""
+    ``engine_kw`` are the entry point's keyword arguments (the 1.0 layer's
+    validated inputs); the result is checked against the shape of the
+    engine's output."""
     from ._solution import _from_functional_engine
-    node_values, engine_sol = _ENGINE[equation](return_function=True, **engine_kw)
-    divs, choices, exclude_zero = _DEFAULT_SETTING[equation]
-    node_pos, _, _ = _resolve_node_pos(
-        engine_kw.get("coll_nodes"), engine_kw.get("coll_divs"), engine_kw.get("coll_choices"),
-        default_divs=divs, default_choices=choices, exclude_zero=exclude_zero,
-        fname={"vie1": "function_solve_VIE_1", "vie2": "function_solve_VIE_2",
-               "vide": "function_solve_VIDE"}[equation])
-    M = len(engine_sol.mesh_breakpoints) - 1
+    if equation == "vie1":
+        engine_kw["continuous"] = continuous
+    node_values, pieces = _ENGINE[equation](**engine_kw)
+    node_pos = engine_kw["nodes"]
+    M = len(pieces.mesh_breakpoints) - 1
     if np.shape(node_values)[:2] != (M, len(node_pos)):
         raise RuntimeError(
             f"internal error: the engine returned node values of shape "
             f"{np.shape(node_values)} for {M} intervals and {len(node_pos)} nodes. This is a "
             f"bug in voles; please report it.")
-    continuous = equation == "vide" or (equation == "vie1"
-                                        and bool(engine_kw.get("force_continuous", False)))
-    return _from_functional_engine(node_values, engine_sol, equation=equation,
-                                   continuous=continuous, node_pos=node_pos)
+    return _from_functional_engine(node_values, pieces, equation=equation,
+                                   continuous=equation == "vide" or continuous,
+                                   node_pos=node_pos)
