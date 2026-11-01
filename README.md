@@ -52,7 +52,7 @@ Solver: `solve_vide` ([API reference](https://trout314.github.io/voles/api/vide/
 
 ### Mesh helper: `optimal_graded_mesh`
 
-For a kernel with a weak singularity at zero, $K(u) \sim u^{-\alpha}$ with known $\alpha \in [0, 1)$. Returns the graded mesh $t_n = T (n/M)^r$, $n = 0, \ldots, M$, with grading exponent $r = p / (1 - \alpha)$, where $p$ (`order`) should be the number of collocation nodes. Pass it as `mesh=` with callable inputs, and declare the singularity with `kernel_singularity={0.0: alpha}`, to get the method's full convergence order. (For $\alpha = 0$ it returns a uniform mesh.)
+For a kernel with a weak singularity at zero, $K(u) \sim u^{-\alpha}$ with known $\alpha \in [0, 1)$. Returns the graded mesh $t_n = T (n/M)^r$, $n = 0, \ldots, M$, with grading exponent $r = p / (1 - \alpha)$, where $p$ (`order`) should be the number of collocation nodes. Pass it as `mesh=` with callable inputs, and declare the singularity with `kernel_singularity={0.0: alpha}`, to get the method's full convergence order. (For $\alpha = 0$ it returns a uniform mesh.) Declaring the exponent, not just the location (`kernel_singularity=0.0`), is also much faster: the blocks the singularity touches use Gauss–Jacobi rules instead of adaptive quadrature. Together with a kernel that accepts arrays, the solve is 12–20× faster in the [benchmarks](https://trout314.github.io/voles/benchmarks/).
 
 API reference: [api/optimal_graded_mesh/](https://trout314.github.io/voles/api/optimal_graded_mesh/)
 
@@ -154,7 +154,7 @@ The figure below shows an actual `voles` solution to a first-kind VIE ($g(t) = \
 
 The collocation setting (`coll_setting`) affects the constant factor but not the asymptotic scaling in N, d, and m.
 
-**Callable inputs.** With M mesh intervals and p collocation nodes per interval, the precomputed weight tensor couples every interval pair, so time and memory scale as O(M² p² d²). On a *uniform* mesh with a convolution kernel the tensor is Toeplitz and is assembled from a single integrated row, reducing the number of numerical integrations — the dominant cost in practice — from O(M²) to O(M); declaring a power-law singularity with the dict form of `kernel_singularity` keeps this fast path for singular kernels too.
+**Callable inputs.** With M mesh intervals and p collocation nodes per interval, the precomputed weight tensor couples every interval pair, so time and memory scale as O(M² p² d²). On a *uniform* mesh with a convolution kernel the tensor is Toeplitz and is assembled from a single integrated row, reducing the number of numerical integrations — the dominant cost in practice — from O(M²) to O(M); declaring a power-law singularity with the dict form of `kernel_singularity` keeps this fast path for singular kernels too, and on any mesh replaces adaptive quadrature in the singular blocks with Gauss–Jacobi rules (typically 3–10× faster).
 
 **Measured timings** for both kinds of input (regenerated automatically on each push) live on the [benchmarks page of the documentation](https://trout314.github.io/voles/benchmarks/).
 

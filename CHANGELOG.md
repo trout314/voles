@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Documentation
+- The pages and docstrings about weakly singular kernels say what declaring
+  the exponent (`kernel_singularity={0.0: alpha}`, not only the location)
+  buys: Gauss–Jacobi rules instead of adaptive quadrature, typically 3–10×
+  faster, and more with a kernel that accepts arrays.
+- New benchmark row "VIE-2 (weakly singular, exponent declared)": the same
+  Abel problem as the existing weakly singular row, set up as recommended
+  (vectorised kernel, declared exponent); 12–20× faster. The benchmarks page
+  explains what the two rows measure.
+
 ## [0.11.0] - 2026-11-01
 
 0.11 is the transition release towards 1.0. It adds the 1.0 API, three

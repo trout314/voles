@@ -48,6 +48,7 @@ CALLABLE = {
         ("VIE-2 (vector, d=3)",     "test_fn_vie2_vec"),
         ("VIDE",                    "test_fn_vide"),
         ("VIE-2 (weakly singular)", "test_fn_vie2_sing"),
+        ("VIE-2 (weakly singular, exponent declared)", "test_fn_vie2_sing_fast"),
     ],
 }
 

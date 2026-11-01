@@ -1986,6 +1986,11 @@ def optimal_graded_mesh(*, alpha: float, t_end: Optional[float] = None,
     2004, ch. 6). At ``alpha == 0`` the kernel is non-singular and the
     solution smooth, so a uniform mesh ($r = 1$) is returned instead.
 
+    Pair the mesh with ``kernel_singularity={0.0: alpha}`` in the solver.
+    Declaring the exponent, not only the location, lets the singular blocks
+    use Gauss–Jacobi rules instead of adaptive quadrature, which is
+    typically 3–10× faster.
+
     Parameters
     ----------
     alpha : float

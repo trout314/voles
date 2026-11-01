@@ -126,8 +126,11 @@ For a weakly singular kernel $K(u) \sim u^{-\alpha}$ (e.g. Abel-type),
 declare the singularity and use `optimal_graded_mesh` to recover the full
 collocation convergence order. With the exponent known, the dict form
 `kernel_singularity={0.0: 0.5}` switches the singular blocks from adaptive
-quadrature to much faster deterministic Gauss–Jacobi rules (with an
-automatic fallback if the declared exponent turns out to be wrong):
+quadrature to deterministic Gauss–Jacobi rules, with an automatic fallback
+if the declared exponent turns out to be wrong. That is typically 3–10×
+faster than declaring only the location (`kernel_singularity=0.0`); a
+kernel that accepts arrays, like the one below, helps further (12–20×
+faster together, see [Benchmarks](benchmarks.md)):
 
 ```python
 import numpy as np

@@ -60,9 +60,20 @@ With **callable inputs** (`mesh=`) the solvers integrate the kernel
 numerically (Python + adaptive quadrature), so they are benchmarked on much
 smaller problems, sized by the number of mesh intervals $M$ (each carrying
 `len(coll_nodes)` collocation nodes). The smooth rows use uniform meshes, on
-which the weights are assembled from one row (Toeplitz structure). The
-*weakly singular* row uses an Abel kernel $K(u) = u^{-1/2}$ on a graded mesh,
-with the singularity declared by location only (adaptive quadrature):
+which the weights are assembled from one row (Toeplitz structure).
+
+The two *weakly singular* rows solve the same Abel problem, $K(u) = u^{-1/2}$
+on a graded mesh, and show what the problem setup costs:
+
+- **VIE-2 (weakly singular)** is the slowest supported path: a kernel that
+  only accepts scalars (`1.0 / np.sqrt(u) if u > 0 else 0.0`) and the
+  singularity declared by location only (`kernel_singularity=0.0`). Every
+  block the singularity touches is then integrated by adaptive quadrature,
+  one scalar kernel call at a time, which is most of the cost.
+- **VIE-2 (weakly singular, exponent declared)** is the setup the docs
+  recommend: a vectorised kernel (`u**-0.5`) and the exponent declared
+  (`kernel_singularity={0.0: 0.5}`), so those blocks use Gauss–Jacobi rules.
+  It is 12–20× faster, with the same accuracy.
 
 <!-- CALLABLE_BENCHMARKS:START -->
 | Solver \ M | 25 | 50 | 100 | 200 |
@@ -72,4 +83,5 @@ with the singularity declared by location only (adaptive quadrature):
 | VIE-2 (vector, d=3) | 1.62 | 2.16 | 3.38 | 7.39 |
 | VIDE | 2.03 | 2.81 | 4.41 | 8.77 |
 | VIE-2 (weakly singular) | 181 | 431 | 1131 | 3328 |
+| VIE-2 (weakly singular, exponent declared) | — | — | — | — |
 <!-- CALLABLE_BENCHMARKS:END -->

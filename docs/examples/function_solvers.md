@@ -67,6 +67,11 @@ not rely on that safety net: declare every integrable singularity you know
 about. Declaring a singularity on a near-uniform mesh gives a
 `voles.AccuracyWarning` suggesting `optimal_graded_mesh`.
 
+A location alone (`kernel_singularity=0.0`) works for any integrable
+singularity, but the blocks it touches are integrated by adaptive
+quadrature, which dominates the cost. If you know the exponent, declare it
+as in the next section: the same solve is then several times faster.
+
 ## Known power law? Declare it for a much faster build
 
 If you also know the singularity's *exponent*, use the dict form
@@ -76,7 +81,17 @@ Gauss–Jacobi rules with the singular factor absorbed into the quadrature
 weight. On the Abel problem above, with 30 intervals, this makes the solve
 about 8× faster on the graded mesh (16 ms instead of 132 ms), with the same
 accuracy. On a uniform mesh the default `reuse_adaptive_blocks=True` already
-recovers most of that (16 ms), and the dict form halves it again (8 ms):
+recovers most of that (16 ms), and the dict form halves it again (8 ms).
+
+Write the kernel so it accepts an array of lags, as `u**-0.5` does: the
+solver then evaluates it on whole blocks of points at once. With a kernel
+that only takes scalars (`1.0 / np.sqrt(u) if u > 0 else 0.0`) the
+declared-exponent solve on a 50-interval graded mesh takes about 4× longer
+(130 ms instead of 30 ms). With only the location declared, the adaptive
+quadrature dominates whichever form the kernel has. The
+two weakly singular rows on the [Benchmarks](../benchmarks.md) page compare
+the slowest setup (scalar kernel, location only) with the recommended one
+(12–20× faster):
 
 ```python
 import numpy as np

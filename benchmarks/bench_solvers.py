@@ -591,3 +591,22 @@ def test_fn_vie2_sing_200(benchmark):
     k, g, mesh = _fn_vie2_singular(200)
     benchmark(solve_vie2, kernel=k, g=g, mesh=mesh,
               coll_nodes=np.array([0, 1, 2]) / 2, kernel_singularity=0.0)
+
+
+# The same Abel problem set up as the docs recommend: a vectorised kernel and
+# the exponent declared (dict form), so the singular blocks use Gauss-Jacobi
+# rules instead of adaptive quadrature. One warmup round keeps the one-time
+# Gauss-Jacobi table construction out of the statistics.
+def _fn_vie2_singular_fast(M):
+    kernel = lambda u: np.asarray(u, dtype=float) ** -0.5
+    g = lambda t: np.sqrt(t) - 0.5 * np.pi * t
+    mesh = optimal_graded_mesh(alpha=0.5, t_end=1.0, n_intervals=M, order=3)
+    return kernel, g, mesh
+
+for _size in (25, 50, 100, 200):
+    def _t(benchmark, _M=_size):
+        k, g, mesh = _fn_vie2_singular_fast(_M)
+        benchmark(solve_vie2, kernel=k, g=g, mesh=mesh,
+                  coll_nodes=np.array([0, 1, 2]) / 2, kernel_singularity={0.0: 0.5})
+    _register(f"test_fn_vie2_sing_fast_{_size}", _t,
+              pytest.mark.benchmark(min_rounds=3, warmup=True, warmup_iterations=1))
