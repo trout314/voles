@@ -970,34 +970,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../api/legacy/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Deprecated 0.10 solvers
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -1736,7 +1708,38 @@ deferred to after 1.0. <strong>Phase 0 done 2026-10-31:</strong>
   pyright CI step; <code>py.typed</code> waits for 1.0 as planned.
 - F32: <code>tests/test_public_api.py</code> and <code>tests/data/public_api.json</code>
   (regenerate with <code>--update</code>).
-- Benchmarks moved to the 1.0 API (held back from the Phase 6 commit).
+- Benchmarks moved to the 1.0 API (held back from the Phase 6 commit).</p>
+<p><strong>Phase 8, steps 1–3 done 2026-11-01</strong> (step 4, the engine cleanup, next):
+- Safety nets:
+  - <code>docs/dev/battery.py</code>: every battery case through the 1.0 API,
+    translated by <code>docs/dev/migrate_0_10.py</code>, bitwise. The reference is
+    <code>~/.cache/voles_battery_6d15e66.npz</code>: 510 cases, 3,931 fields, and a
+    second run matches it.
+  - <code>tests/test_reference_values.py</code> and <code>tests/data/reference_values.npz</code>
+    (109 kB): 16 fixed samples of y/node values and coefficients per case,
+    plus the error type, at rtol 1e-9. This is the cross-platform
+    replacement for the 0.10-vs-1.0 equivalence test.
+- Tests migrated by an AST codemod (scratchpad <code>migrate_tests.py</code>,
+  <code>migrate_helpers.py</code>): about 700 call sites in 20 files.
+  - conftest helpers: <code>values_of</code>, <code>with_sol</code>, <code>as_returned</code>, <code>run</code>
+    (show_warnings), <code>values_fn</code>, <code>polynomials</code>, and <code>PolyView</code> (the 0.10
+    list interface over a <code>VolterraSolution</code>, for tests written against
+    it).
+  - <code>test_validation_policy.py</code> and the top of <code>test_input_validation.py</code>
+    were rewritten for 1.0 messages.
+  - Obsolete 0.10-only tests were deleted: coll_divs/coll_choices with
+    callables, show_warnings semantics, return_polys, and y0 without
+    continuous (now a ValueError test).
+- Bugs found by the migration:
+  - <code>to_ppoly().antiderivative()</code>/<code>.roots()</code> failed on the read-only mesh;
+  - non-numeric <code>coll_nodes</code> raised ValueError instead of TypeError.
+  - The script itself dropped <code>soln_init_value</code> when <code>force_continuous</code>
+    was inside <code>**kw</code>, in two places; both were fixed by hand.
+- Deleted: <code>_legacy.py</code>, <code>solvers.py</code>, <code>_migrate.py</code> (moved to docs/dev),
+  <code>fast_coll_settings_*</code>, ogm <code>T</code>/<code>M</code> (<code>t_end</code>/<code>n_intervals</code> are now
+  required), the <code>[callable]</code>/<code>[numba]</code> extras, the pytest deprecation
+  ignores, <code>test_legacy_shims.py</code>, <code>test_api_equivalence.py</code> and
+  <code>docs/api/legacy.md</code>. The battery is unchanged bitwise.
 Inputs: <code>docs/dev/api-review-1.0.md</code> (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.</p>
 <hr />

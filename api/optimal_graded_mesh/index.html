@@ -1045,34 +1045,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../legacy/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Deprecated 0.10 solvers
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -1455,7 +1427,7 @@
 
 
 </h2>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">optimal_graded_mesh</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">t_end</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">n_intervals</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">order</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">optimal_graded_mesh</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">t_end</span><span class="p">,</span> <span class="n">n_intervals</span><span class="p">,</span> <span class="n">order</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents first">
@@ -1515,7 +1487,7 @@ typically 3–10× faster.</p>
               </div>
             </td>
             <td>
-                  <code>None</code>
+                <em>required</em>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1532,7 +1504,7 @@ typically 3–10× faster.</p>
               </div>
             </td>
             <td>
-                  <code>None</code>
+                <em>required</em>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1550,42 +1522,6 @@ pass the number of collocation nodes the solver uses.</p>
             </td>
             <td>
                 <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>T</code>
-            </td>
-            <td>
-                  <code>(<span title="float">float</span>, <span title="int">int</span>)</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Deprecated spellings of <code>t_end</code> and <code>n_intervals</code> (0.10); they
-still work in 0.11, with a <code>DeprecationWarning</code>, and are removed in
-1.0.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>M</code>
-            </td>
-            <td>
-                  <code>(<span title="float">float</span>, <span title="int">int</span>)</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Deprecated spellings of <code>t_end</code> and <code>n_intervals</code> (0.10); they
-still work in 0.11, with a <code>DeprecationWarning</code>, and are removed in
-1.0.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
             </td>
           </tr>
       </tbody>
@@ -1643,8 +1579,7 @@ finite, or <code>n_intervals</code> / <code>order</code> is less than 1.</p>
             <td>
               <div class="doc-md-description">
                 <p>If <code>alpha</code> or <code>t_end</code> is not a real number, <code>n_intervals</code> /
-<code>order</code> is not an integer, or <code>t_end</code> / <code>n_intervals</code> is
-missing (or given together with its deprecated spelling).</p>
+<code>order</code> is not an integer, or an argument is missing.</p>
               </div>
             </td>
           </tr>
@@ -1754,18 +1689,8 @@ solution of <span class="arithmatex">\(y(t) = 1 + \int_0^t (t-s)^{-1/2} y(s)\,ds
 <span class="normal">2099</span>
 <span class="normal">2100</span>
 <span class="normal">2101</span>
-<span class="normal">2102</span>
-<span class="normal">2103</span>
-<span class="normal">2104</span>
-<span class="normal">2105</span>
-<span class="normal">2106</span>
-<span class="normal">2107</span>
-<span class="normal">2108</span>
-<span class="normal">2109</span>
-<span class="normal">2110</span>
-<span class="normal">2111</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">optimal_graded_mesh</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">t_end</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-                        <span class="n">n_intervals</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-                        <span class="n">T</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">M</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">2102</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">optimal_graded_mesh</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">t_end</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">n_intervals</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+                        <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Return a graded mesh of ``n_intervals + 1`` breakpoints suitable for a</span>
 <span class="sd">    weakly singular convolution kernel $K(u) \sim u^{-\alpha}$,</span>
 <span class="sd">    $\alpha \in [0, 1)$.</span>
@@ -1794,11 +1719,6 @@ solution of <span class="arithmatex">\(y(t) = 1 + \int_0^t (t-s)^{-1/2} y(s)\,ds
 <span class="sd">    order : int</span>
 <span class="sd">        Order of the collocation method (positive). For a matched mesh,</span>
 <span class="sd">        pass the number of collocation nodes the solver uses.</span>
-<span class="sd">    T, M : float, int</span>
-<span class="sd">        Deprecated spellings of ``t_end`` and ``n_intervals`` (0.10); they</span>
-<span class="sd">        still work in 0.11, with a `DeprecationWarning`, and are removed in</span>
-<span class="sd">        1.0.</span>
-
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    ndarray of shape (n_intervals + 1,)</span>
@@ -1812,8 +1732,7 @@ solution of <span class="arithmatex">\(y(t) = 1 + \int_0^t (t-s)^{-1/2} y(s)\,ds
 <span class="sd">        finite, or ``n_intervals`` / ``order`` is less than 1.</span>
 <span class="sd">    TypeError</span>
 <span class="sd">        If ``alpha`` or ``t_end`` is not a real number, ``n_intervals`` /</span>
-<span class="sd">        ``order`` is not an integer, or ``t_end`` / ``n_intervals`` is</span>
-<span class="sd">        missing (or given together with its deprecated spelling).</span>
+<span class="sd">        ``order`` is not an integer, or an argument is missing.</span>
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
@@ -1835,8 +1754,6 @@ solution of <span class="arithmatex">\(y(t) = 1 + \int_0^t (t-s)^{-1/2} y(s)\,ds
 <span class="sd">    &gt;&gt;&gt; print(f"relative error {abs(sol(1.0) / erfcx(-np.sqrt(np.pi)) - 1):.1e}")</span>
 <span class="sd">    relative error 1.3e-05</span>
 <span class="sd">    """</span>
-    <span class="n">t_end</span> <span class="o">=</span> <span class="n">_renamed</span><span class="p">(</span><span class="s2">"t_end"</span><span class="p">,</span> <span class="n">t_end</span><span class="p">,</span> <span class="s2">"T"</span><span class="p">,</span> <span class="n">T</span><span class="p">)</span>
-    <span class="n">n_intervals</span> <span class="o">=</span> <span class="n">_renamed</span><span class="p">(</span><span class="s2">"n_intervals"</span><span class="p">,</span> <span class="n">n_intervals</span><span class="p">,</span> <span class="s2">"M"</span><span class="p">,</span> <span class="n">M</span><span class="p">)</span>
     <span class="n">alpha</span> <span class="o">=</span> <span class="n">_v</span><span class="o">.</span><span class="n">real</span><span class="p">(</span><span class="s2">"alpha"</span><span class="p">,</span> <span class="n">alpha</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="mf">0.0</span> <span class="o">&lt;=</span> <span class="n">alpha</span> <span class="o">&lt;</span> <span class="mf">1.0</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"alpha must satisfy 0 &lt;= alpha &lt; 1, got </span><span class="si">{</span><span class="n">alpha</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>

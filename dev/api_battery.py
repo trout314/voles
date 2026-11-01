@@ -1,5 +1,9 @@
 """Bitwise regression battery for the 1.0 API work (docs/dev/api-1.0-plan.md).
 
+SINCE 1.0 (the 0.10 API is gone) this file only supplies the case lists and
+comparison helpers to docs/dev/battery.py, which runs every case through the
+1.0 API; its own save/compare modes call the 0.10 functions and no longer run.
+
   python docs/dev/api_battery.py save    ~/.cache/voles_api_battery_<commit>.npz
   python docs/dev/api_battery.py compare ~/.cache/voles_api_battery_<commit>.npz
   python docs/dev/api_battery.py list                 # case names only

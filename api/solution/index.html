@@ -1071,34 +1071,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../legacy/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Deprecated 0.10 solvers
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -2122,7 +2094,9 @@ breakpoint; <code>sol(t)</code> gives their mean unless asked otherwise:</p>
 <span class="normal">565</span>
 <span class="normal">566</span>
 <span class="normal">567</span>
-<span class="normal">568</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">VolterraSolution</span><span class="p">:</span>
+<span class="normal">568</span>
+<span class="normal">569</span>
+<span class="normal">570</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">VolterraSolution</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""The solution of a Volterra equation, as returned by the solvers.</span>
 
 <span class="sd">    A piecewise polynomial on ``mesh`` (continuous or discontinuous at the</span>
@@ -2474,7 +2448,9 @@ breakpoint; <code>sol(t)</code> gives their mean unless asked otherwise:</p>
         <span class="n">scale</span> <span class="o">=</span> <span class="n">h</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">**</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">P</span><span class="p">)[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:]</span>             <span class="c1"># (M, P): 1 / h^k</span>
         <span class="n">scaled</span> <span class="o">=</span> <span class="n">c</span> <span class="o">*</span> <span class="n">scale</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">scale</span><span class="o">.</span><span class="n">shape</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">))</span>
         <span class="n">pc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">moveaxis</span><span class="p">(</span><span class="n">scaled</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)[::</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>   <span class="c1"># (P, M, *shape)</span>
-        <span class="k">return</span> <span class="n">PPoly</span><span class="p">(</span><span class="n">pc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mesh</span><span class="p">,</span> <span class="n">extrapolate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="c1"># Copies: scipy's Cython routines (antiderivative, roots) need writable</span>
+        <span class="c1"># buffers, and the solution's arrays are read-only.</span>
+        <span class="k">return</span> <span class="n">PPoly</span><span class="p">(</span><span class="n">pc</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_mesh</span><span class="p">),</span> <span class="n">extrapolate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="n">M</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_mesh</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
@@ -2765,7 +2741,9 @@ polynomial there), and returns NaN outside <code>[0, T]</code>.</p>
 <span class="normal">554</span>
 <span class="normal">555</span>
 <span class="normal">556</span>
-<span class="normal">557</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_ppoly</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PPoly</span><span class="p">:</span>
+<span class="normal">557</span>
+<span class="normal">558</span>
+<span class="normal">559</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">to_ppoly</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PPoly</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""The solution as a `scipy.interpolate.PPoly`.</span>
 
 <span class="sd">    Useful for derivatives (``.derivative()``), antiderivatives and</span>
@@ -2781,7 +2759,9 @@ polynomial there), and returns NaN outside <code>[0, T]</code>.</p>
     <span class="n">scale</span> <span class="o">=</span> <span class="n">h</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">**</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">P</span><span class="p">)[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:]</span>             <span class="c1"># (M, P): 1 / h^k</span>
     <span class="n">scaled</span> <span class="o">=</span> <span class="n">c</span> <span class="o">*</span> <span class="n">scale</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">scale</span><span class="o">.</span><span class="n">shape</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">))</span>
     <span class="n">pc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">moveaxis</span><span class="p">(</span><span class="n">scaled</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)[::</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>   <span class="c1"># (P, M, *shape)</span>
-    <span class="k">return</span> <span class="n">PPoly</span><span class="p">(</span><span class="n">pc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mesh</span><span class="p">,</span> <span class="n">extrapolate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="c1"># Copies: scipy's Cython routines (antiderivative, roots) need writable</span>
+    <span class="c1"># buffers, and the solution's arrays are read-only.</span>
+    <span class="k">return</span> <span class="n">PPoly</span><span class="p">(</span><span class="n">pc</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_mesh</span><span class="p">),</span> <span class="n">extrapolate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
