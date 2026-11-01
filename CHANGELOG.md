@@ -8,8 +8,21 @@
   K(0) too small for collocation quadrature, a singularity declared on a
   uniform mesh) and `voles.PerformanceWarning` (the Numba fallback, an
   extension build without the lag-block drivers).
+- **`voles.VolterraSolution`**, the 1.0 solution object. The solvers don't
+  return it yet. It has:
+  - the grid output `t`/`y`;
+  - `mesh`, `node_times`, `node_values` and `coefficients`;
+  - dense evaluation `sol(t, at_breakpoints="mean"|"left"|"right")`;
+  - `to_ppoly()` (a `scipy.interpolate.PPoly`, for derivatives and
+    integrals);
+  - pickling and a readable `repr`.
+
+  Dense evaluation no longer copies the coefficients per point: peak memory
+  is about a third of the 0.10 object's on a matrix-valued solution.
 
 ### Fixed
+- The Numba fallback passed `coll_choices` as a Python list, which Numba
+  deprecates ("reflected list"); it is now an int64 array.
 - **`function_solve_*` accepted a float `coll_divs`.** `coll_divs=2.5`
   silently ran with nodes {0, 0.4, 0.8}. It now raises `TypeError`, as the
   array-based solvers already did for floats.

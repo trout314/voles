@@ -32,6 +32,25 @@ Phase 0 findings:
   texts unchanged, 41 strict mismatches, every one a deliberate error-type
   or rejection change
 - finite checks cost about 2 ms on a 660 ms matrix solve
+- CI on cf03239 then failed on two things the local setup (NumPy 1.26,
+  warm numba cache) couldn't show:
+  - Numba's `NumbaPendingDeprecationWarning` for a list `coll_choices`:
+    fixed by passing an int64 array;
+  - NumPy-2 scalar reprs in the non-finite message: fixed with Python
+    scalars.
+
+  Both were verified in a scratch NumPy 2.5 / SciPy 1.18 / numba 0.68 venv
+  with a cold cache: 890 tests pass.
+
+**Phase 2 done 2026-10-31**:
+- `VolterraSolution` in `_solution.py`, exported, with the copy-free
+  in-place Horner loop (bitwise equal to 0.10 off breakpoints; peak memory
+  134 → 43 MiB in a 400k-point matrix evaluation)
+- `at_breakpoints` with few-ulp snapping; `to_ppoly()`, complex supported
+- 0.11 deprecated aliases; legacy `_SolutionFunction` untouched; a genuine
+  0.10.0 pickle fixture in `tests/data/`
+- adapters `_from_legacy_sampled/_functional` (removed in Phase 3)
+- `tests/test_solution.py`: 114 tests
 Inputs: `docs/dev/api-review-1.0.md` (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.
 

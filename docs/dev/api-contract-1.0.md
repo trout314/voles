@@ -279,8 +279,9 @@ piecewise polynomial on `mesh`. Users don't construct it.
 
 `sol.to_ppoly()` returns an equivalent `scipy.interpolate.PPoly` (trailing
 axes `cs`). It is right-continuous at breakpoints and can differentiate,
-integrate and find roots. Complex solutions are supported if and only if
-PPoly supports them (to be verified in Phase 2; otherwise `TypeError`).
+integrate and find roots. Complex solutions are supported (PPoly evaluates,
+differentiates and integrates complex coefficients; `.roots()` is real-only).
+Outside [0, T] it returns NaN, like `sol(t)`.
 
 ### 8.4 Other behaviour
 

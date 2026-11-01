@@ -6,6 +6,7 @@ from ._callable_solvers import (
 )
 from ._dlang import supported_coll_settings_d as _supported_coll_settings_d
 from ._warnings import VolesWarning, AccuracyWarning, PerformanceWarning
+from ._solution import VolterraSolution
 
 _all = _supported_coll_settings_d()
 
@@ -26,6 +27,7 @@ __all__ = [
     "gauss_legendre_nodes", "radau_iia_nodes", "lobatto_nodes",
     "fast_coll_settings_VIE_1", "fast_coll_settings_VIE_2", "fast_coll_settings_VIDE",
     "VolesWarning", "AccuracyWarning", "PerformanceWarning",
+    "VolterraSolution",
 ]
 from importlib.metadata import version
 __version__ = version("voles")
