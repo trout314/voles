@@ -85,7 +85,10 @@ def finite(name, values):
     ok = np.isfinite(arr)
     if ok.all():
         return
-    bad = np.unravel_index(int(np.argmin(ok.ravel())), arr.shape) if arr.ndim else ()
+    # Python ints and a Python scalar, so the message reads the same under
+    # NumPy 1 and NumPy 2 (whose scalar reprs are np.int64(7), np.float64(nan)).
+    bad = (tuple(int(i) for i in np.unravel_index(int(np.argmin(ok.ravel())), arr.shape))
+           if arr.ndim else ())
     where = f" at index {bad if len(bad) != 1 else bad[0]}" if arr.ndim else ""
-    raise ValueError(f"{name} contains a non-finite value ({arr[bad]!r}){where}; "
+    raise ValueError(f"{name} contains a non-finite value ({arr[bad].item()!r}){where}; "
                      f"inputs must be finite")

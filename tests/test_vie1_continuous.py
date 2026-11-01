@@ -106,7 +106,7 @@ def test_continuous_one_node_is_product_trapezoidal_rule_numba():
     h = 0.05
     t = h * np.arange(41)
     kernel, g = np.exp(t), np.sin(t)
-    soln, _ = _numba_solvers.solve_VIE_1_jit(g, kernel, 1.0, h, 1, [1], False, True)
+    soln, _ = _numba_solvers.solve_VIE_1_jit(g, kernel, 1.0, h, 1, np.array([1]), False, True)
     assert np.max(np.abs(soln - _product_trapezoid(kernel, g, h, 1.0))) < 1e-10
 
 
@@ -243,7 +243,7 @@ def test_continuous_numba_matches_d_extension():
                          time_step=d["time_step"], quadrature="collocation", coll_divs=3, coll_choices=[1, 2, 3],
                          force_continuous=True, soln_init_value=d["exact"][0])
     soln_nb, _ = _numba_solvers.solve_VIE_1_jit(
-        d["g"], d["kernel"], float(d["exact"][0]), d["time_step"], 3, [1, 2, 3],
+        d["g"], d["kernel"], float(d["exact"][0]), d["time_step"], 3, np.array([1, 2, 3]),
         False, True)
     assert np.max(np.abs(soln_d - soln_nb)) < 1e-10
 

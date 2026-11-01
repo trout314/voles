@@ -26,6 +26,15 @@ def _column_workers(m_cols):
     return min(m_cols, os.cpu_count() or 1)
 
 
+def _numba_args(args, choices_pos):
+    """``args`` for a Numba fallback driver, with ``coll_choices`` (at
+    ``choices_pos``) as an int64 array: Numba deprecates passing Python lists
+    ("reflected lists") to jitted functions."""
+    args = list(args)
+    args[choices_pos] = np.asarray(args[choices_pos], dtype=np.int64)
+    return args
+
+
 def _resolve_return_flag(return_function, return_polys):
     """Reconcile the public ``return_function`` flag with the deprecated
     ``return_polys`` alias, returning a single effective boolean.
@@ -756,7 +765,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             return _dlang_module.solve_vide_d(*args)
         if show_warnings:
             _warn("falling back to slower python/numba code", PerformanceWarning)
-        return _numba_solvers.solve_VIDE_jit(*args)
+        return _numba_solvers.solve_VIDE_jit(*_numba_args(args, 6))
     return _with_tail("vide", _regular, kernel_values_, g_values_, a_values_, init,
                       time_step, coll_divs, coll_choices, M_reg, Qp, 0, return_function,
                       trim=False)
@@ -1416,7 +1425,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             return _dlang_module.solve_vie1_d(*args)
         if show_warnings:
             _warn("falling back to slower python/numba code", PerformanceWarning)
-        return _numba_solvers.solve_VIE_1_jit(*args)
+        return _numba_solvers.solve_VIE_1_jit(*_numba_args(args, 5))
     return _with_tail("vie1_cont" if force_continuous else "vie1", _regular, kernel_values_,
                       g_values_, None, soln_init_value_, time_step, coll_divs, coll_choices,
                       M_reg, Qp, 0, return_function)
@@ -1692,6 +1701,6 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
             return _dlang_module.solve_vie2_d(*args)
         if show_warnings:
             _warn("falling back to slower python/numba code", PerformanceWarning)
-        return _numba_solvers.solve_VIE_2_jit(*args)
+        return _numba_solvers.solve_VIE_2_jit(*_numba_args(args, 4))
     return _with_tail("vie2", _regular, kernel_values_, g_values_, None, None, time_step,
                       coll_divs, coll_choices, M_reg, Qp, 0, return_function)
