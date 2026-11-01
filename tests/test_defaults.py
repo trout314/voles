@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 from voles import (solve_VIE_1, solve_VIE_2, solve_VIDE,
                    function_solve_VIE_1, function_solve_VIE_2)
-from voles.solvers import _resolve_coll_setting
-from voles._callable_solvers import _resolve_node_pos
+from voles._sampled import _resolve_coll_setting
+from voles._functional import _resolve_node_pos
 
 
 def test_coll_setting_resolution():

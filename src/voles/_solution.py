@@ -493,14 +493,15 @@ class VolterraSolution:
 
 
 # ---------------------------------------------------------------------------
-# Adapters from the 0.10 solvers' output (until Phase 3 gives the cores a
-# common return type)
+# Builders from the engines' output: values (sampled) or node values
+# (functional) plus the engine's `_SolutionFunction`. Used by
+# `_sampled.solve` and `_functional.solve`, which supply the metadata.
 # ---------------------------------------------------------------------------
 
-def _from_legacy_sampled(values, legacy, *, equation, continuous, coll_setting,
+def _from_sampled_engine(values, legacy, *, equation, continuous, coll_setting,
                          samples_per_interval, dt):
-    """`VolterraSolution` from an array-family ``(values, _SolutionFunction)``
-    pair, given the resolved setting and mesh width it was solved with."""
+    """`VolterraSolution` from the sampled engine's ``(values,
+    _SolutionFunction)`` pair, given the resolved setting and mesh width."""
     from ._product import mesh_split, snap_nodes
     divs, choices = coll_setting[0], sorted(int(c) for c in coll_setting[1])
     Q = int(samples_per_interval)
@@ -521,8 +522,8 @@ def _from_legacy_sampled(values, legacy, *, equation, continuous, coll_setting,
         trim=legacy._trim)
 
 
-def _from_legacy_functional(node_values, legacy, *, equation, continuous, node_pos):
-    """`VolterraSolution` from a callable-family ``(node_values,
+def _from_functional_engine(node_values, legacy, *, equation, continuous, node_pos):
+    """`VolterraSolution` from the callable engine's ``(node_values,
     _SolutionFunction)`` pair and the node positions it was solved with."""
     mesh = np.asarray(legacy.mesh_breakpoints, dtype=float)
     node_pos = np.asarray(node_pos, dtype=float)

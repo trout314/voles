@@ -50,14 +50,19 @@ Test tolerance is `1e-3`. No linter/formatter is configured.
 
 ### Source layout: `src/voles/`
 
-- **`solvers.py`** — Public API (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`). Validates inputs, truncates to compatible lengths, dispatches to D extension or Numba fallback. Handles scalar/vector/matrix cases, threading for matrix columns, and optional piecewise polynomial output.
+- **`_sampled.py`** — sampled-data engine: `solve_VIE_1`, `solve_VIE_2`, `solve_VIDE` (the 0.10 public API, re-exported from `voles`). Validates inputs, dispatches to D extension or Numba fallback, handles scalar/vector/matrix/complex cases, threading for matrix columns, and optional piecewise polynomial output. `solve(equation, **kw)` is the engine entry that returns a `VolterraSolution`. (`voles/solvers.py` is only a re-export stub.)
+- **`_functional.py`** — callable-input engine: `function_solve_VIE_1/2/VIDE`, `optimal_graded_mesh`, the node helpers; `solve(equation, **kw)` entry as above.
+- **`_common.py`** — helpers both engines share (collocation basis, VIE-1 ρ rule, thread count); neither engine imports the other.
+- **`_solution.py`** — `VolterraSolution` (the 1.0 solution object) and the legacy `_SolutionFunction`.
+- **`_validate.py`, `_warnings.py`** — the type-vs-value validation rule and the `VolesWarning` classes/`_warn` helper.
+- The 1.0 API work is planned in `docs/dev/api-1.0-plan.md` (contract: `docs/dev/api-contract-1.0.md`; bitwise regression battery: `docs/dev/api_battery.py`).
 - **`_dlang.py`** — ctypes wrapper loading the platform-specific shared library. Defines C function signatures and provides `solve_vie{1,2}_d()`, `solve_vie{1,2}_vec_d()`, `solve_vide_d()`, `solve_vide_vec_d()`. Also exposes `supported_coll_settings_d()` to query compiled settings.
 - **`_numba_solvers.py`** — Numba JIT fallback for scalar equations when the requested collocation setting isn't compiled into the D extension. Uses `@ncjit` decorator.
 - **`dlang/source/volterra_solvers.d`** — Core computational engine. Compile-time template specialization for collocation settings, LU factorization, polynomial evaluation/integration, separate paths for scalar/vector/matrix.
 - **No GC in the D extension.** Every exported entry point is `@nogc` (the compiler enforces it); scratch memory uses `buffers.HeapArray!T` (`dlang/source/buffers.d`: malloc-backed, non-copyable, `T.init`-filled like `new T[n]`, converts to `T[]`), and `volterra_rt_init` disables automatic collections. This is what lets Python threads call the solvers without registering with druntime, whose stop-the-world collector mishandles threads it doesn't own (a Windows guard-page hang and a Linux TLS-range segfault, both 2026-10). Don't reintroduce `new`, `.length =` on dynamic arrays, `~`, or heap closures in solver code; `ldc2 -vgc -o- -I. dlang/source/*.d` should list only compile-time array literals.
 
 ### Dispatch flow
-1. `solvers.py` validates inputs and determines scalar vs vector vs matrix
+1. `_sampled.py` / `_functional.py` validate inputs and determine scalar vs vector vs matrix
 2. For vector/matrix: reshapes to call the vector D extension per-column (matrix columns processed in parallel threads)
 3. Checks if requested collocation parameters are compiled in D extension via `supported_coll_settings_d()`
 4. Falls back to Numba JIT solvers if not (scalar only; vector/matrix require the D extension)

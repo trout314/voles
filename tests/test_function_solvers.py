@@ -9,7 +9,7 @@ continue to pass after the D port.
 import numpy as np
 import pytest
 
-from voles._callable_solvers import (
+from voles._functional import (
     function_solve_VIE_2, function_solve_VIDE, function_solve_VIE_1,
     optimal_graded_mesh,
 )
@@ -498,7 +498,7 @@ def test_scipy_missing_friendly_import_error(monkeypatch, vie2_callable_abel):
             "`pip install volterra-equation-solvers[callable]`.")
 
     monkeypatch.setattr(
-        "voles._callable_solvers._import_scipy_quad",
+        "voles._functional._import_scipy_quad",
         raise_import)
 
     with pytest.raises(ImportError, match=r"\[callable\]"):
@@ -747,7 +747,7 @@ def test_complex_late_detection_raises_clear_error(monkeypatch):
     escalation should catch the lossy cast and raise a clean ValueError --
     not silently produce a real-valued wrong answer.
     """
-    import voles._callable_solvers as cs
+    import voles._functional as cs
     # Force sampling to say "no complex detected" -- simulates a kernel whose
     # complex range escaped the 5 sample points.
     monkeypatch.setattr(cs, "_samples_indicate_complex",
@@ -762,7 +762,7 @@ def test_complex_late_detection_raises_clear_error(monkeypatch):
 
 
 def test_complex_late_detection_raises_for_vie1(monkeypatch):
-    import voles._callable_solvers as cs
+    import voles._functional as cs
     monkeypatch.setattr(cs, "_samples_indicate_complex",
                         lambda *args, **kwargs: False)
     K = lambda u: 1.0 + 0.001j
@@ -773,7 +773,7 @@ def test_complex_late_detection_raises_for_vie1(monkeypatch):
 
 
 def test_complex_late_detection_raises_for_vide(monkeypatch):
-    import voles._callable_solvers as cs
+    import voles._functional as cs
     monkeypatch.setattr(cs, "_samples_indicate_complex",
                         lambda *args, **kwargs: False)
     K = lambda u: 1.0 + 0.001j
@@ -2639,7 +2639,7 @@ def test_reuse_quad_opts_strictly_tighten_scipy_defaults():
     blocks *less* accurate than the values they replace."""
     import inspect
     from scipy.integrate import quad, quad_vec
-    from voles._callable_solvers import _QUAD_OPTS_REUSE, _QUAD_VEC_OPTS_REUSE
+    from voles._functional import _QUAD_OPTS_REUSE, _QUAD_VEC_OPTS_REUSE
 
     def default_of(fn, name):
         return inspect.signature(fn).parameters[name].default
@@ -2942,7 +2942,7 @@ def test_vector_g_with_scalar_kernel_message(solver):
 def test_late_complex_g_gets_clear_error(monkeypatch):
     """A complex g that sampling missed now reaches the complex-escalation
     error instead of float()'s TypeError."""
-    import voles._callable_solvers as cs
+    import voles._functional as cs
     monkeypatch.setattr(cs, "_samples_indicate_complex", lambda *a, **k: False)
     with pytest.raises(ValueError, match="multi-point sampling"):
         function_solve_VIE_2(kernel=lambda u: np.exp(-u), g=lambda t: t + 0.5j,
@@ -2980,7 +2980,7 @@ def test_vector_builder_quad_vec_fallback_converges_on_zero_block():
     """quad_vec's convergence test is strict, so epsabs=0 made an identically
     zero block run to the subdivision limit (thousands of evaluations) and
     end with status 1; the vector builder keeps a 1e-200 floor instead."""
-    from voles._callable_solvers import (_QUAD_VEC_OPTS_DEFAULT, _QUAD_OPTS_DEFAULT,
+    from voles._functional import (_QUAD_VEC_OPTS_DEFAULT, _QUAD_OPTS_DEFAULT,
                                          _import_scipy_quad_vec)
     calls = []
     def zero_block(s):

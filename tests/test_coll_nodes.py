@@ -4,7 +4,7 @@ helper functions, across the three callable-input solvers."""
 import numpy as np
 import pytest
 
-from voles._callable_solvers import (
+from voles._functional import (
     function_solve_VIE_1, function_solve_VIE_2, function_solve_VIDE,
     gauss_legendre_nodes, radau_iia_nodes, lobatto_nodes,
     optimal_graded_mesh,

@@ -51,6 +51,23 @@ Phase 0 findings:
   0.10.0 pickle fixture in `tests/data/`
 - adapters `_from_legacy_sampled/_functional` (removed in Phase 3)
 - `tests/test_solution.py`: 114 tests
+
+**Phase 3 done 2026-10-31** (lighter-engine variant):
+- `_common.py` holds 11 shared helpers; neither engine imports the other.
+- `git mv` to `_sampled.py` / `_functional.py`; `voles/solvers.py` is a
+  re-export stub.
+- D1 renames of 12 private function names (`_build_W_*` → `_build_w_*`,
+  `solve_VIE_*_jit` → `solve_vie*_jit`, …). The numba matrix builders `A`,
+  `BN`, `CN`, `G`, … keep their maths names.
+- `_samples_per_interval` is the single mesh-width rule, used by the engine
+  and by the entries.
+- The entries `_sampled.solve` / `_functional.solve` return a
+  `VolterraSolution`, with a consistency check against the engine's mesh.
+  The Phase 2 adapters became their builders.
+- New `tests/test_engine.py` (282 tests): bitwise identical to the engine
+  across equations × quadratures × shapes × lengths × settings.
+- 1172 tests pass (NumPy 1.26, and NumPy 2.5 with a cold numba cache); the
+  battery is unchanged; the strict docs build is clean.
 Inputs: `docs/dev/api-review-1.0.md` (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.
 
@@ -493,6 +510,35 @@ for the deliberate F3/F5 changes, each listed in the commit message.
    - a 0.10 pickle fixture loads
 
 ### Phase 3: separate validation from the cores (no signature changes)
+
+> **Revised 2026-10-31 (Aaron chose the lighter engine):** the six existing
+> functions stay as a private *engine*, internal checks included; they are
+> not split into normalise + pure core. Reading them showed validation
+> interleaved with the dispatch tree (complex recursion, product vs
+> collocation, matrix per-column recursion, vector vs scalar), so the split
+> would be a rewrite of about 4,500 lines with every message to keep exact.
+>
+> What Phase 3 does instead:
+> 1. shared helpers move to `_common.py`, so neither core imports the other;
+> 2. `git mv` to `_sampled.py` / `_functional.py`, with a `voles/solvers.py`
+>    re-export stub;
+> 3. the D1 renames of private function names;
+> 4. one engine entry per regime, `_sampled.solve(equation, **engine_kw)` and
+>    `_functional.solve(...)`, returning a `VolterraSolution`. Its metadata
+>    (resolved setting, mesh width, final-interval nodes) comes from the same
+>    resolution helpers the engine uses, and is checked against the engine's
+>    mesh.
+>
+> Consequences:
+> - Phase 4's new API validates everything up front, with new names, so users
+>   never reach the engine's checks; the validation-table test enforces this.
+> - Phase 5's wrappers call the engine directly, so the 0.10 API stays bitwise
+>   identical **including error messages**, which is better than the original
+>   plan.
+> - Cost: two validation layers until 1.0, and the engine's unreachable
+>   messages keep 0.10 names until Phase 8.
+>
+> The original text follows for reference.
 
 This is the largest internal change. Today each public function validates and
 computes in one body (`solve_VIE_1` is ~390 lines). After this phase:

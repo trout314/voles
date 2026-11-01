@@ -79,6 +79,11 @@
   kernels are not checked: a weakly singular kernel legitimately returns inf
   at u = 0.
 - `quadrature` is matched case-insensitively (`"Product"` works).
+- Internal modules were reorganised for the 1.0 API: the solvers now live in
+  the private `voles._sampled` and `voles._functional`, with shared helpers in
+  `voles._common`. `voles.solvers` still re-exports `solve_VIE_1`,
+  `solve_VIE_2` and `solve_VIDE`, but no longer its private helpers.
+  Import the public names from `voles`.
 - The private `_smooth_gl_order` keyword is gone from the `function_solve_*`
   signatures.
 - An internal error code from the D extension now raises a `RuntimeError`

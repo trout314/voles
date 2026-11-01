@@ -1,5 +1,5 @@
-from .solvers import solve_VIE_1, solve_VIE_2, solve_VIDE
-from ._callable_solvers import (
+from ._sampled import solve_VIE_1, solve_VIE_2, solve_VIDE
+from ._functional import (
     function_solve_VIE_1, function_solve_VIE_2, function_solve_VIDE,
     optimal_graded_mesh,
     gauss_legendre_nodes, radau_iia_nodes, lobatto_nodes,

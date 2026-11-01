@@ -61,8 +61,8 @@ from numpy.polynomial import polynomial as npp
 from ._solution import _SolutionFunction
 from ._warnings import _warn, PerformanceWarning
 
-from ._callable_solvers import (_lagrange_basis_coefs, _vie1_cont_basis_coefs,
-                                _vie1_cont_advance)
+from ._common import (_lagrange_basis_coefs, _vie1_cont_basis_coefs,
+                      _vie1_cont_advance)
 
 
 # ---------------------------------------------------------------------------

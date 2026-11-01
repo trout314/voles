@@ -1,6 +1,4 @@
-import os
 import warnings
-from fractions import Fraction
 
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
@@ -9,21 +7,7 @@ from . import _complex as _cplx
 from ._solution import _SolutionFunction, _complex_solution
 from . import _validate as _v
 from ._warnings import _warn, AccuracyWarning, PerformanceWarning, VolesWarning
-
-
-def _column_workers(m_cols):
-    """Thread count for the matrix-column fan-out.
-
-    Columns are independent solves, each with its own D-side lag table, so
-    one thread per column both oversubscribes the CPU and multiplies peak
-    memory when m_cols is large; cap at the core count. Zero columns is a
-    caller error (an executor would reject max_workers=0 with a confusing
-    message).
-    """
-    if m_cols == 0:
-        raise ValueError(
-            "matrix-valued input has zero columns (trailing axis of length 0)")
-    return min(m_cols, os.cpu_count() or 1)
+from ._common import (_column_workers, _vie1_rho, _check_vie1_setting, _warn_g_start_columns, _scalar_init)
 
 
 def _numba_args(args, choices_pos):
@@ -73,60 +57,6 @@ def _stack_column_solutions(col_funcs, d, m_cols):
     unit = np.stack([f._unit for f in col_funcs], axis=-1)   # (M, P, d, m)
     return _SolutionFunction.from_unit_coefs(unit, first.mesh_breakpoints, d=d, m=m_cols,
                                              trim=first._trim)
-
-
-def _vie1_rho(coll_divs, coll_choices, continuous=False):
-    r"""Exact amplification factor of a VIE-1 collocation method on the nodes
-    $c_i$ = ``coll_choices[i] / coll_divs`` (``coll_choices`` sorted), as a
-    `fractions.Fraction`.
-
-    Discontinuous ($S_{m-1}^{(-1)}$) method: Brunner's
-    $\rho_m = (-1)^m \prod_{i=1}^{m} (1 - c_i)/c_i$ (Brunner 2004, Theorem
-    2.4.2). Continuous ($S_m^{(0)}$) method with $c_m = 1$:
-    $\rho_{m-1} = (-1)^m \prod_{i<m} (1 - c_i)/c_i$ (Theorem 2.4.5). Either
-    method converges iff $|\rho| \le 1$ (with one order lost at $\rho = 1$).
-
-    The nodes are rational, so the test ``abs(rho) > 1`` is exact: no
-    tolerance is needed at the boundary $|\rho| = 1$. This is the single
-    implementation of the criterion for ``coll_divs``/``coll_choices`` node
-    sets; `_callable_solvers` uses it too and keeps a floating-point version
-    only for arbitrary ``coll_nodes``."""
-    nodes = coll_choices[:-1] if continuous else coll_choices
-    rho = Fraction((-1) ** len(coll_choices))
-    for k in nodes:
-        rho *= Fraction(int(coll_divs) - int(k), int(k))
-    return rho
-
-
-def _check_vie1_setting(coll_divs, coll_choices, force_continuous):
-    """Reject collocation settings for which the requested VIE-1 method is not
-    defined or does not converge. ``coll_choices`` must be sorted and already
-    validated to hold distinct integers in ``1 .. coll_divs``."""
-    if len(coll_choices) == 0:
-        raise ValueError("coll_choices must contain at least one collocation node")
-    if force_continuous:
-        if coll_choices[-1] != coll_divs:
-            raise ValueError(
-                f"force_continuous=True requires the last collocation node to be the right "
-                f"endpoint of the mesh interval (max(coll_choices) == coll_divs); got "
-                f"coll_divs={coll_divs}, coll_choices={coll_choices}. This is a structural "
-                f"requirement of the continuous S_m^(0) method (Brunner 2004, Section 2.4.3).")
-        rho = _vie1_rho(coll_divs, coll_choices, continuous=True)
-        if abs(rho) > 1:
-            raise ValueError(
-                f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) does "
-                f"not produce a convergent continuous VIE-1 solver: |rho_(m-1)| = "
-                f"{float(abs(rho)):.4g} > 1 (Brunner 2004, Theorem 2.4.5). Use nodes with "
-                f"|rho_(m-1)| <= 1, e.g. coll_choices=list(range(1, coll_divs + 1)).")
-    else:
-        rho = _vie1_rho(coll_divs, coll_choices)
-        if abs(rho) > 1:
-            raise ValueError(
-                f"Collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
-                f"does not produce a convergent VIE-1 solver and is not supported: "
-                f"|rho_m| = prod (1 - c_i)/c_i = {float(abs(rho)):.4g} > 1 (Brunner 2004, "
-                f"Theorem 2.4.2). Use nodes with |rho_m| <= 1; any node set containing the "
-                f"right endpoint (coll_divs in coll_choices) qualifies.")
 
 
 def _as_int(name, value):
@@ -187,26 +117,6 @@ def _validate_second_kind_coll_setting(coll_divs, coll_choices):
     return int(coll_divs), sorted(int(c) for c in choices)
 
 
-def _warn_g_start_columns(g0, scale):
-    """Shared by the sampled and callable VIE-1 solvers. ``g0`` and ``scale``
-    are max |g(0)| and max |g| per right-hand side: 0-d for scalar and vector
-    problems, shape (m,) for matrix problems."""
-    g0 = np.atleast_1d(np.asarray(g0, dtype=float))
-    scale = np.atleast_1d(np.asarray(scale, dtype=float))
-    bad = np.isfinite(g0) & (g0 > 1e-6 * scale)
-    if not bad.any():
-        return
-    rule = (" A first-kind equation g(t) = int_0^t K(t-s) y(s) ds requires g(0) = 0; "
-            "otherwise it has no bounded solution and values near t = 0 are meaningless.")
-    if g0.size == 1:
-        _warn(f"g(0) is not zero (max |g(0)| = {g0[0]:.3g}, "
-              f"max |g| = {scale[0]:.3g})." + rule, AccuracyWarning)
-    else:
-        j = int(np.argmax(np.where(bad, g0 / np.maximum(scale, 1e-300), -np.inf)))
-        _warn(f"g(0) is not zero in {int(bad.sum())} of {g0.size} columns; "
-              f"worst column {j}: max |g(0)| = {g0[j]:.3g}, max |g| = {scale[j]:.3g}." + rule, AccuracyWarning)
-
-
 def _warn_vie1_g_start(g_values, kernel_values_, show_warnings):
     """A first-kind equation forces g(0) = 0 (the integral vanishes at t = 0);
     with g(0) != 0 there is no bounded solution and the solver returns
@@ -261,18 +171,6 @@ def _warn_vie1_kernel_start(kernel_values_, samples_per_mesh, show_warnings):
         _warn(f"{which}. The first-kind collocation scheme is unstable in "
               f"this regime and can return values that grow without bound. Use "
               f"quadrature='product' (stable here), or a finer time_step if K(0) != 0.", AccuracyWarning)
-
-
-def _scalar_init(value):
-    """``soln_init_value`` of a scalar equation as a float. Any single-element
-    array-like is accepted (``0.5``, ``[0.5]``, ``np.array([0.5])``), so a
-    value computed as a length-1 array does not trip a bare float()."""
-    arr = np.asarray(value, dtype=float)
-    if arr.size != 1:
-        raise ValueError(
-            f"soln_init_value must be a single number for a scalar equation, "
-            f"got shape {arr.shape}")
-    return float(arr.reshape(()))
 
 
 _DEFAULT_COLL = {"vie1": (3, [1, 2, 3]), "vie2": (2, [0, 1, 2]), "vide": (2, [0, 1, 2])}
@@ -369,7 +267,7 @@ def _split_regular(kernel_values_, coll_divs):
     Raises ValueError if the data cannot form one interval."""
     from . import _product
     N = len(kernel_values_)
-    Q = coll_divs ** 2
+    Q = _samples_per_interval(None, "collocation", None, coll_divs)
     if N < Q + 1:
         raise ValueError(
             f"kernel_values has length {N}, which leaves zero mesh intervals for "
@@ -388,7 +286,7 @@ def _with_tail(kind, regular, kernel_full, g_full, a_full, init, time_step, coll
     coefficient array whenever a tail is needed. Returns the values on the
     whole sample grid and, if asked, the solution object."""
     from . import _product
-    Q = coll_divs ** 2
+    Q = _samples_per_interval(None, "collocation", None, coll_divs)
     if M:
         values, poly_coefs = regular()
     else:
@@ -765,7 +663,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             return _dlang_module.solve_vide_d(*args)
         if show_warnings:
             _warn("falling back to slower python/numba code", PerformanceWarning)
-        return _numba_solvers.solve_VIDE_jit(*_numba_args(args, 6))
+        return _numba_solvers.solve_vide_jit(*_numba_args(args, 6))
     return _with_tail("vide", _regular, kernel_values_, g_values_, a_values_, init,
                       time_step, coll_divs, coll_choices, M_reg, Qp, 0, return_function,
                       trim=False)
@@ -773,8 +671,24 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
 
 
 
+def _samples_per_interval(equation, quadrature, mesh_samples, coll_divs):
+    """The mesh width in samples, Q: the single source of this rule for the
+    engine and for `solve`.
+
+    ``quadrature="collocation"`` fixes Q = coll_divs**2. With ``"product"``,
+    an explicit ``mesh_samples`` is used as given (validated by the caller);
+    otherwise Q = coll_divs**2 for the first kind (inverting it amplifies data
+    error by about 1/H, so the default is wider) and coll_divs otherwise (the
+    finest mesh)."""
+    if quadrature == "collocation":
+        return coll_divs ** 2
+    if mesh_samples is not None:
+        return int(mesh_samples)
+    return coll_divs ** 2 if equation == "vie1" else coll_divs
+
+
 def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh_samples,
-                        kernel_interp_degree, show_warnings, default_mesh=None):
+                        kernel_interp_degree, show_warnings, equation):
     """Resolve mesh_samples / kernel_interp_degree and split the data into
     M regular intervals of Q samples plus (Qp > 0) one final interval of Qp
     samples. ``coll_divs``/``coll_choices`` are already validated.
@@ -782,10 +696,9 @@ def _product_mesh_setup(kernel_values_, time_step, coll_divs, coll_choices, mesh
     from . import _product
     q = coll_divs
     m = len(coll_choices)
-    if mesh_samples is None:
-        Q = q if default_mesh is None else default_mesh
-    else:
-        Q = _as_int("mesh_samples", mesh_samples)
+    if mesh_samples is not None:
+        _as_int("mesh_samples", mesh_samples)
+    Q = _samples_per_interval(equation, "product", mesh_samples, q)
     if Q < 1 or Q % q != 0:
         raise ValueError(
             f"with quadrature='product', mesh_samples must be a positive multiple of "
@@ -826,7 +739,7 @@ def _solve_vie2_product_path(kernel_values_, g_values, time_step, coll_divs, col
     q, coll_choices = _validate_second_kind_coll_setting(coll_divs, coll_choices)
     Q, p, N_orig, d, M, Qp = _product_mesh_setup(
         kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
-        show_warnings)
+        show_warnings, "vie2")
     K, N = kernel_values_, N_orig
     setup = _product.ProductSetup("vie2", K, time_step, q, coll_choices, Q, p)
 
@@ -870,7 +783,7 @@ def _solve_vide_product_path(kernel_values_, a_values, g_values, soln_init_value
     q, coll_choices = _validate_second_kind_coll_setting(coll_divs, coll_choices)
     Q, p, N_orig, d, M, Qp = _product_mesh_setup(
         kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
-        show_warnings)
+        show_warnings, "vide")
     K, N = kernel_values_, N_orig
     init = np.asarray(soln_init_value, dtype=float)
 
@@ -949,7 +862,7 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
     # finest one; mesh_samples=coll_divs selects the finest mesh explicitly.
     Q, p, N_orig, d, M, Qp = _product_mesh_setup(
         kernel_values_, time_step, q, coll_choices, mesh_samples, kernel_interp_degree,
-        show_warnings, default_mesh=q * q)
+        show_warnings, "vie1")
     K, N = kernel_values_, N_orig
     kind = "vie1_cont" if force_continuous else "vie1"
     setup = _product.ProductSetup(kind, K, time_step, q, coll_choices, Q, p)
@@ -1425,7 +1338,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
             return _dlang_module.solve_vie1_d(*args)
         if show_warnings:
             _warn("falling back to slower python/numba code", PerformanceWarning)
-        return _numba_solvers.solve_VIE_1_jit(*_numba_args(args, 5))
+        return _numba_solvers.solve_vie1_jit(*_numba_args(args, 5))
     return _with_tail("vie1_cont" if force_continuous else "vie1", _regular, kernel_values_,
                       g_values_, None, soln_init_value_, time_step, coll_divs, coll_choices,
                       M_reg, Qp, 0, return_function)
@@ -1701,6 +1614,45 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
             return _dlang_module.solve_vie2_d(*args)
         if show_warnings:
             _warn("falling back to slower python/numba code", PerformanceWarning)
-        return _numba_solvers.solve_VIE_2_jit(*_numba_args(args, 4))
+        return _numba_solvers.solve_vie2_jit(*_numba_args(args, 4))
     return _with_tail("vie2", _regular, kernel_values_, g_values_, None, None, time_step,
                       coll_divs, coll_choices, M_reg, Qp, 0, return_function)
+
+
+# ---------------------------------------------------------------------------
+# Engine entry point (1.0 plan, Phase 3)
+# ---------------------------------------------------------------------------
+
+_ENGINE = {"vie1": solve_VIE_1, "vie2": solve_VIE_2, "vide": solve_VIDE}
+
+
+def solve(equation, **engine_kw):
+    """Solve with the sampled-data engine and return a `VolterraSolution`.
+
+    ``engine_kw`` are the engine's (0.10) keyword arguments; the engine
+    validates them. The solution's metadata (the resolved collocation
+    setting, the mesh width and the final interval's nodes) is derived with
+    the same helpers the engine uses, and checked against the mesh the engine
+    actually built."""
+    from ._product import mesh_split
+    from ._solution import _from_sampled_engine
+    values, engine_sol = _ENGINE[equation](return_function=True, **engine_kw)
+    divs, choices = _resolve_coll_setting(equation, engine_kw.get("coll_divs"),
+                                          engine_kw.get("coll_choices"))
+    divs, choices = int(divs), sorted(int(c) for c in choices)
+    quadrature = _v.choice("quadrature", engine_kw.get("quadrature", "product"),
+                           ("collocation", "product"))
+    Q = _samples_per_interval(equation, quadrature, engine_kw.get("mesh_samples"), divs)
+    dt = float(engine_kw.get("time_step", 1.0))
+    continuous = equation == "vide" or (equation == "vie1"
+                                        and bool(engine_kw.get("force_continuous", False)))
+    sol = _from_sampled_engine(values, engine_sol, equation=equation, continuous=continuous,
+                               coll_setting=(divs, choices), samples_per_interval=Q, dt=dt)
+    M_reg, Qp = mesh_split(len(values), Q)
+    mesh = sol.mesh
+    if len(mesh) - 1 != M_reg + (1 if Qp else 0) or (M_reg and mesh[1] != Q * dt):
+        raise RuntimeError(
+            f"internal error: solution metadata (Q={Q}, {M_reg} regular intervals, final "
+            f"interval of {Qp} samples) disagrees with the engine's mesh of "
+            f"{len(mesh) - 1} intervals. This is a bug in voles; please report it.")
+    return sol

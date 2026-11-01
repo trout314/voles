@@ -106,7 +106,7 @@ def test_continuous_one_node_is_product_trapezoidal_rule_numba():
     h = 0.05
     t = h * np.arange(41)
     kernel, g = np.exp(t), np.sin(t)
-    soln, _ = _numba_solvers.solve_VIE_1_jit(g, kernel, 1.0, h, 1, np.array([1]), False, True)
+    soln, _ = _numba_solvers.solve_vie1_jit(g, kernel, 1.0, h, 1, np.array([1]), False, True)
     assert np.max(np.abs(soln - _product_trapezoid(kernel, g, h, 1.0))) < 1e-10
 
 
@@ -242,7 +242,7 @@ def test_continuous_numba_matches_d_extension():
     soln_d = solve_VIE_1(kernel_values=d["kernel"], g_values=d["g"],
                          time_step=d["time_step"], quadrature="collocation", coll_divs=3, coll_choices=[1, 2, 3],
                          force_continuous=True, soln_init_value=d["exact"][0])
-    soln_nb, _ = _numba_solvers.solve_VIE_1_jit(
+    soln_nb, _ = _numba_solvers.solve_vie1_jit(
         d["g"], d["kernel"], float(d["exact"][0]), d["time_step"], 3, np.array([1, 2, 3]),
         False, True)
     assert np.max(np.abs(soln_d - soln_nb)) < 1e-10
@@ -353,7 +353,7 @@ def test_discontinuous_rejects_divergent_uncompiled_setting():
 
 def test_rho_criterion_is_exact_and_reproduces_the_old_blacklist():
     from fractions import Fraction
-    from voles.solvers import _vie1_rho, _VIE1_NONCONVERGENT
+    from voles._sampled import _vie1_rho, _VIE1_NONCONVERGENT
     assert _VIE1_NONCONVERGENT == {(3, (1,)), (4, (1,)), (4, (1, 2))}
     assert _vie1_rho(3, [1, 2]) == 1                      # boundary, admitted
     assert _vie1_rho(5, [1]) == -4

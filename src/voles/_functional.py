@@ -27,8 +27,8 @@ import functools
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 
-from .solvers import (_column_workers, _check_vie1_setting, _warn_g_start_columns,
-                      _scalar_init)
+from ._common import (_column_workers, _check_vie1_setting, _warn_g_start_columns,
+                      _scalar_init, _lagrange_basis_coefs, _lagrange_antideriv_coefs, _vide_basis_coefs, _eval_poly_at, _vie1_cont_basis_coefs, _vie1_cont_advance)
 
 import numpy as np
 from numpy.polynomial import polynomial as npp
@@ -175,65 +175,6 @@ def _reuse_quad_warnings_suppressed(active):
 # ---------------------------------------------------------------------------
 # Lagrange basis construction (normalized [0, 1] coordinates)
 # ---------------------------------------------------------------------------
-
-def _lagrange_basis_coefs(node_pos: np.ndarray) -> np.ndarray:
-    """Return coefficient array (p, p) for the Lagrange basis polynomials
-    L_k(x) on the normalized [0, 1] interval, given the collocation node
-    positions `node_pos` (a float array in [0, 1]).
-
-    Row k holds the polynomial coefficients (lowest-degree first) of L_k, the
-    basis polynomial that is 1 at node k and 0 at the other nodes.
-    """
-    nodes = np.asarray(node_pos, dtype=float)
-    p = len(nodes)
-    basis = np.zeros((p, p))
-    for k in range(p):
-        coef = np.array([1.0])
-        for kp in range(p):
-            if kp == k:
-                continue
-            coef = npp.polymul(coef, [-nodes[kp], 1.0])
-            coef = coef / (nodes[k] - nodes[kp])
-        basis[k, :len(coef)] = coef
-    return basis
-
-
-def _lagrange_antideriv_coefs(node_pos: np.ndarray) -> np.ndarray:
-    """Return (p, p+1) coefficient array of the antiderivative-of-Lagrange basis
-    polynomials I_k(x) = integral from 0 to x of L_k(u) du.
-
-    Used by the VIDE solver: y on an interval of width h is represented as
-        y(s) = y_n + h * sum_k Y'_k * I_k((s - t_n) / h)
-    where Y'_k are the (unknown) values of y' at the collocation nodes.
-    """
-    lag = _lagrange_basis_coefs(node_pos)
-    p = lag.shape[0]
-    anti = np.zeros((p, p + 1))
-    for k in range(p):
-        for j in range(p):
-            anti[k, j + 1] = lag[k, j] / (j + 1)
-    return anti
-
-
-def _vide_basis_coefs(node_pos: np.ndarray) -> np.ndarray:
-    """Return (p+1, p+1) extended basis used to build the VIDE weight tensor.
-
-    First p rows are the antiderivative-of-Lagrange basis (one per Y'_k); the
-    last row is the constant function `1`, used for the y_n boundary-value
-    contribution to the kernel integral.
-    """
-    anti = _lagrange_antideriv_coefs(node_pos)
-    p = anti.shape[0]
-    basis = np.zeros((p + 1, p + 1))
-    basis[:p] = anti
-    basis[p, 0] = 1.0
-    return basis
-
-
-def _eval_poly_at(coefs: np.ndarray, x: float) -> float:
-    """Evaluate polynomial with coefficients `coefs` (lowest-degree first) at x."""
-    return float(npp.polyval(x, coefs))
-
 
 # ---------------------------------------------------------------------------
 # Collocation-node resolution
@@ -543,7 +484,7 @@ def _detect_kernel_vectorized(kernel, sample_u: float, is_vector: bool, d: int) 
     return arr.shape == expected
 
 
-def _toeplitz_W_rows(widths: np.ndarray, is_convolution: bool) -> bool:
+def _toeplitz_w_rows(widths: np.ndarray, is_convolution: bool) -> bool:
     """Return True when the weight tensor is Toeplitz in (n, l), so blocks of
     equal lag are the same integral.
 
@@ -605,13 +546,13 @@ def _pending_lags(dirty_lags: np.ndarray, n: int) -> list:
     return (n - prefix).tolist()
 
 
-def _assemble_W_rows(W, M, toeplitz, reuse_sing, integrate_row):
+def _assemble_w_rows(W, M, toeplitz, reuse_sing, integrate_row):
     """Shared row-assembly policy for the scalar and vector W builders.
 
     On the Toeplitz fast path: integrate the last row (which contains every
-    lag), band-copy it with _fill_toeplitz_W, then recompute the
+    lag), band-copy it with _fill_toeplitz_w, then recompute the
     non-reusable entries of every other row exactly as the general path
-    would (see _toeplitz_W_rows for the reuse policy). With ``reuse_sing``
+    would (see _toeplitz_w_rows for the reuse policy). With ``reuse_sing``
     the declared-singularity entries also keep their one tightened-tolerance
     value; two-order fallback entries are always repaired per row, so the
     reuse flag cannot change results for kernels with no declared
@@ -624,9 +565,9 @@ def _assemble_W_rows(W, M, toeplitz, reuse_sing, integrate_row):
         for n in range(M):
             integrate_row(n)
         return
-    # (_toeplitz_W_rows returns False for M < 2, so M >= 2 here.)
+    # (_toeplitz_w_rows returns False for M < 2, so M >= 2 here.)
     ok_off, ok_diag, sing_off, sing_diag = integrate_row(M - 1, record=True)
-    _fill_toeplitz_W(W, M)
+    _fill_toeplitz_w(W, M)
     skip_off = ok_off | sing_off if reuse_sing else ok_off
     skip_diag = ok_diag | sing_diag if reuse_sing else ok_diag
     # Lags whose blocks are not fully reusable, computed once (lag 0 is the
@@ -641,7 +582,7 @@ def _assemble_W_rows(W, M, toeplitz, reuse_sing, integrate_row):
                       skip_diag=skip_diag)
 
 
-def _fill_toeplitz_W(W: np.ndarray, M: int) -> None:
+def _fill_toeplitz_w(W: np.ndarray, M: int) -> None:
     """Provisionally fill rows 0..M-2 of a Toeplitz weight tensor from the
     integrated row M-1: blocks of equal lag are equal, so
 
@@ -650,7 +591,7 @@ def _fill_toeplitz_W(W: np.ndarray, M: int) -> None:
 
     Entries with l > n stay zero. One contiguous slice copy per row. Entries
     whose row-(M-1) values involved adaptive quadrature are overwritten by an
-    exact per-row recomputation afterwards (see _toeplitz_W_rows).
+    exact per-row recomputation afterwards (see _toeplitz_w_rows).
     """
     top = W[M - 1]
     for n in range(M - 1):
@@ -659,7 +600,7 @@ def _fill_toeplitz_W(W: np.ndarray, M: int) -> None:
         W[n, :, n] = top[:, M - 1]
 
 
-def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
+def _build_w_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                                 node_pos: np.ndarray,
                                 kernel_singularity,
                                 smooth_gl_order: int, basis: np.ndarray,
@@ -685,14 +626,14 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
     singular_locs, is_convolution = _normalize_kernel_singularity(kernel_singularity)
 
     # Uniform mesh + convolution kernel: W is Toeplitz in (n, l) (see
-    # _toeplitz_W_rows). With reuse_adaptive_blocks the declared-singularity
+    # _toeplitz_w_rows). With reuse_adaptive_blocks the declared-singularity
     # entries of the one integrated row are reused everywhere, so they are
     # computed at tightened tolerance: the reused value is then closer to the
     # exact integral than the default-tolerance per-row values it replaces.
     # Two-order fallback quadratures always use the default options (see the
     # module-level _QUAD_OPTS_* constants), keeping the flag a strict no-op
     # for kernels with no declared singularity.
-    toeplitz = _toeplitz_W_rows(widths, is_convolution)
+    toeplitz = _toeplitz_w_rows(widths, is_convolution)
     reuse_sing = reuse_adaptive_blocks and toeplitz
     sing_quad_opts = _QUAD_OPTS_REUSE if reuse_sing else _QUAD_OPTS_DEFAULT
 
@@ -896,7 +837,7 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         """Integrate row n of W, exactly as the general path does.
 
         skip_off[i, m] / skip_diag[i] mark entries already holding a reusable
-        GL-clean value for lag m = n - l (see _toeplitz_W_rows); dirty_lags
+        GL-clean value for lag m = n - l (see _toeplitz_w_rows); dirty_lags
         is the sorted array of lags not fully clean across nodes, letting
         whole blocks be skipped without a per-row mask scan (_pending_lags).
         With record=True, return boolean masks marking which entries
@@ -1010,8 +951,8 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         return ok_off, ok_diag, sing_off, sing_diag
 
     # Uniform mesh + convolution kernel: W is Toeplitz in (n, l); see
-    # _assemble_W_rows for the shared reuse policy.
-    _assemble_W_rows(W, M, toeplitz, reuse_sing, integrate_row)
+    # _assemble_w_rows for the shared reuse policy.
+    _assemble_w_rows(W, M, toeplitz, reuse_sing, integrate_row)
 
     if not np.isfinite(W).all():
         raise ValueError(
@@ -1023,24 +964,24 @@ def _build_W_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
     return W
 
 
-def _build_W_scalar(kernel, mesh_breakpoints, node_pos,
+def _build_w_scalar(kernel, mesh_breakpoints, node_pos,
                     kernel_singularity, smooth_gl_order,
                     smooth_check_tol=1e-9, reuse_adaptive_blocks=False):
     """VIE-2 weight tensor: Lagrange basis, shape (M, p, M, p)."""
     basis = _lagrange_basis_coefs(node_pos)
-    return _build_W_with_basis_scalar(kernel, mesh_breakpoints, node_pos,
+    return _build_w_with_basis_scalar(kernel, mesh_breakpoints, node_pos,
                                        kernel_singularity,
                                        smooth_gl_order, basis, smooth_check_tol,
                                        reuse_adaptive_blocks)
 
 
-def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
+def _build_w_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                                 node_pos: np.ndarray,
                                 kernel_singularity, smooth_gl_order: int,
                                 d: int, basis: np.ndarray,
                                 smooth_check_tol: float = 1e-9,
                                 reuse_adaptive_blocks: bool = False) -> np.ndarray:
-    """Vector analogue of _build_W_with_basis_scalar. Returns (M, p, M, n_basis, d, d)."""
+    """Vector analogue of _build_w_with_basis_scalar. Returns (M, p, M, n_basis, d, d)."""
     M = len(mesh_breakpoints) - 1
     node_pos = np.asarray(node_pos, dtype=float)
     p = len(node_pos)
@@ -1051,7 +992,7 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
     # Same Toeplitz / adaptive-reuse setup as the scalar builder, except that
     # both option sets keep quad_vec's tiny absolute floor (see the
     # module-level _QUAD_VEC_OPTS_DEFAULT note).
-    toeplitz = _toeplitz_W_rows(widths, is_convolution)
+    toeplitz = _toeplitz_w_rows(widths, is_convolution)
     reuse_sing = reuse_adaptive_blocks and toeplitz
     sing_quad_opts = _QUAD_VEC_OPTS_REUSE if reuse_sing else _QUAD_VEC_OPTS_DEFAULT
 
@@ -1366,8 +1307,8 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         return ok_off, ok_diag, sing_off, sing_diag
 
     # Uniform mesh + convolution kernel: same Toeplitz / adaptive-reuse
-    # policy as the scalar builder (see _assemble_W_rows).
-    _assemble_W_rows(W, M, toeplitz, reuse_sing, integrate_row)
+    # policy as the scalar builder (see _assemble_w_rows).
+    _assemble_w_rows(W, M, toeplitz, reuse_sing, integrate_row)
 
     if not np.isfinite(W).all():
         raise ValueError(
@@ -1379,12 +1320,12 @@ def _build_W_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
     return W
 
 
-def _build_W_vector(kernel, mesh_breakpoints, node_pos,
+def _build_w_vector(kernel, mesh_breakpoints, node_pos,
                     kernel_singularity, smooth_gl_order, d,
                     smooth_check_tol=1e-9, reuse_adaptive_blocks=False):
     """VIE-2 vector weight tensor: Lagrange basis, shape (M, p, M, p, d, d)."""
     basis = _lagrange_basis_coefs(node_pos)
-    return _build_W_with_basis_vector(kernel, mesh_breakpoints, node_pos,
+    return _build_w_with_basis_vector(kernel, mesh_breakpoints, node_pos,
                                        kernel_singularity,
                                        smooth_gl_order, d, basis, smooth_check_tol,
                                        reuse_adaptive_blocks)
@@ -1893,7 +1834,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
             f"into the D extension ({max_p}). Use fewer collocation nodes.")
 
     if not is_vector:
-        W = _build_W_scalar(kernel, mesh_breakpoints, node_pos,
+        W = _build_w_scalar(kernel, mesh_breakpoints, node_pos,
                             kernel_singularity, _smooth_gl_order,
                             reuse_adaptive_blocks=reuse_adaptive_blocks)
         g_arr = np.zeros((M, p), dtype=np.float64)
@@ -1919,7 +1860,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
 
     # The weight tensor depends only on the kernel, so it is built once and
     # shared across all right-hand sides in the matrix case.
-    W = _build_W_vector(kernel, mesh_breakpoints, node_pos,
+    W = _build_w_vector(kernel, mesh_breakpoints, node_pos,
                         kernel_singularity, _smooth_gl_order, d,
                         reuse_adaptive_blocks=reuse_adaptive_blocks)
 
@@ -2152,7 +2093,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
 
     if not is_vector:
         vide_basis = _vide_basis_coefs(node_pos)
-        W = _build_W_with_basis_scalar(
+        W = _build_w_with_basis_scalar(
             kernel, mesh_breakpoints, node_pos,
             kernel_singularity, _smooth_gl_order, vide_basis,
             reuse_adaptive_blocks=reuse_adaptive_blocks)
@@ -2181,7 +2122,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     # W and a(t) depend only on the kernel and a, not on the right-hand side,
     # so both are built once and shared across all columns in the matrix case.
     vide_basis = _vide_basis_coefs(node_pos)
-    W = _build_W_with_basis_vector(
+    W = _build_w_with_basis_vector(
         kernel, mesh_breakpoints, node_pos,
         kernel_singularity, _smooth_gl_order, d, vide_basis,
         reuse_adaptive_blocks=reuse_adaptive_blocks)
@@ -2519,32 +2460,6 @@ def _vie1_cont_amplification(node_pos: np.ndarray) -> float:
     return float(np.prod((1.0 - c[:-1]) / c[:-1]))
 
 
-def _vie1_cont_basis_coefs(node_pos: np.ndarray) -> np.ndarray:
-    """Augmented Lagrange basis for the continuous (S_m^(0)) VIE-1 method.
-
-    Returns a (p+1, p+1) coefficient array whose rows are the Lagrange basis
-    polynomials on the augmented node set {0} ∪ node_pos, ordered as
-    [Lt_1, ..., Lt_p, Lt_0]: the p value-node functions (1 at c_k) first, then
-    the boundary function (1 at 0) last. This matches the extended weight
-    tensor's column convention (value columns 0..p-1, boundary column p),
-    mirroring the VIDE _vide_basis_coefs layout.
-    """
-    aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
-    lag = _lagrange_basis_coefs(aug)            # row j is 1 at aug[j]
-    return np.vstack([lag[1:], lag[0:1]])
-
-
-def _vie1_cont_advance(node_pos: np.ndarray):
-    """Return (adv_U, adv_0): boundary-advance weights Lt_{k+1}(1) (k=0..p-1)
-    and Lt_0(1), so that y_{n+1} = y_n*adv_0 + sum_k U_{n,k}*adv_U[k]."""
-    aug = np.concatenate(([0.0], np.asarray(node_pos, dtype=float)))
-    lag = _lagrange_basis_coefs(aug)
-    adv_0 = _eval_poly_at(lag[0], 1.0)
-    adv_U = np.array([_eval_poly_at(lag[j + 1], 1.0)
-                      for j in range(len(node_pos))], dtype=np.float64)
-    return adv_U, adv_0
-
-
 def _vie1_cont_solution(U, boundary, mesh_breakpoints, node_pos, d=0, m=0):
     """Solution function for the continuous VIE-1 method (degree m pieces).
 
@@ -2843,7 +2758,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
             # boundary value carried forward for continuity. Extended weight
             # tensor against the augmented basis (value cols + boundary col).
             cont_basis = _vie1_cont_basis_coefs(node_pos)
-            W = _build_W_with_basis_scalar(
+            W = _build_w_with_basis_scalar(
                 kernel, mesh_breakpoints, node_pos,
                 kernel_singularity, _smooth_gl_order, cont_basis,
                 reuse_adaptive_blocks=reuse_adaptive_blocks)
@@ -2854,7 +2769,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                 return y, _vie1_cont_solution(y, boundary, mesh_breakpoints, node_pos)
             return y
 
-        W = _build_W_scalar(kernel, mesh_breakpoints, node_pos,
+        W = _build_w_scalar(kernel, mesh_breakpoints, node_pos,
                             kernel_singularity, _smooth_gl_order,
                             reuse_adaptive_blocks=reuse_adaptive_blocks)
         y = _dlang_module.function_solve_vie1_d(W, g_arr)
@@ -2873,13 +2788,13 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     # continuous (S_m^(0)) method uses the augmented value+boundary basis.
     if force_continuous:
         cont_basis = _vie1_cont_basis_coefs(node_pos)
-        W = _build_W_with_basis_vector(kernel, mesh_breakpoints, node_pos,
+        W = _build_w_with_basis_vector(kernel, mesh_breakpoints, node_pos,
                                        kernel_singularity, _smooth_gl_order, d,
                                        cont_basis,
                                        reuse_adaptive_blocks=reuse_adaptive_blocks)
         adv_U, adv_0 = _vie1_cont_advance(node_pos)
     else:
-        W = _build_W_vector(kernel, mesh_breakpoints, node_pos,
+        W = _build_w_vector(kernel, mesh_breakpoints, node_pos,
                             kernel_singularity, _smooth_gl_order, d,
                             reuse_adaptive_blocks=reuse_adaptive_blocks)
 
@@ -2948,3 +2863,38 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
     if return_function:
         return y, _lagrange_solution(y, mesh_breakpoints, node_pos, d=d)
     return y
+
+
+# ---------------------------------------------------------------------------
+# Engine entry point (1.0 plan, Phase 3)
+# ---------------------------------------------------------------------------
+
+_ENGINE = {"vie1": function_solve_VIE_1, "vie2": function_solve_VIE_2,
+           "vide": function_solve_VIDE}
+_DEFAULT_SETTING = {"vie1": (3, [1, 2, 3], True), "vie2": (2, [0, 1, 2], False),
+                    "vide": (2, [0, 1, 2], False)}
+
+
+def solve(equation, **engine_kw):
+    """Solve with the callable-input engine and return a `VolterraSolution`.
+
+    ``engine_kw`` are the engine's (0.10) keyword arguments; the engine
+    validates them. The node positions are resolved with the engine's own
+    `_resolve_node_pos`, and checked against the shape of its output."""
+    from ._solution import _from_functional_engine
+    node_values, engine_sol = _ENGINE[equation](return_function=True, **engine_kw)
+    divs, choices, exclude_zero = _DEFAULT_SETTING[equation]
+    node_pos, _, _ = _resolve_node_pos(
+        engine_kw.get("coll_nodes"), engine_kw.get("coll_divs"), engine_kw.get("coll_choices"),
+        default_divs=divs, default_choices=choices, exclude_zero=exclude_zero,
+        fname=_ENGINE[equation].__name__)
+    M = len(engine_sol.mesh_breakpoints) - 1
+    if np.shape(node_values)[:2] != (M, len(node_pos)):
+        raise RuntimeError(
+            f"internal error: the engine returned node values of shape "
+            f"{np.shape(node_values)} for {M} intervals and {len(node_pos)} nodes. This is a "
+            f"bug in voles; please report it.")
+    continuous = equation == "vide" or (equation == "vie1"
+                                        and bool(engine_kw.get("force_continuous", False)))
+    return _from_functional_engine(node_values, engine_sol, equation=equation,
+                                   continuous=continuous, node_pos=node_pos)

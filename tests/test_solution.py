@@ -1,10 +1,10 @@
 """VolterraSolution: the 1.0 solution object (contract §8).
 
-Solutions here are built from real 0.10-API solves through the private
-adapters in voles._solution, which Phase 3 of the 1.0 plan replaces by the
-solver cores' common return type. What is tested is the object itself:
-grid output, structure, evaluation, breakpoint conventions, to_ppoly,
-pickling and the 0.11 compatibility aliases.
+Solutions here come from the engines' entry points (voles._sampled.solve,
+voles._functional.solve), which the 1.0 solvers call. Each builder also makes
+the same solve through the 0.10 API, for comparison. What is tested is the
+object itself: grid output, structure, evaluation, breakpoint conventions,
+to_ppoly, pickling and the 0.11 compatibility aliases.
 """
 import pathlib
 import pickle
@@ -15,7 +15,7 @@ import pytest
 
 import voles
 from voles import VolterraSolution
-from voles._solution import _from_legacy_functional, _from_legacy_sampled
+from voles import _functional, _sampled
 
 DATA = pathlib.Path(__file__).parent / "data"
 
@@ -44,26 +44,21 @@ def sampled(kind="vie2", N=1030, d=0, m=None, cplx=False, coll_setting=None,
     defaults = {"vie1": (3, [1, 2, 3]), "vie1c": (3, [1, 2, 3]), "vie2": (2, [0, 1, 2]),
                 "vide": (2, [0, 1, 2])}
     divs, choices = coll_setting or defaults[kind]
-    if Q is None:
-        Q = divs ** 2 if (kind.startswith("vie1") or quadrature == "collocation") else divs
     kw = dict(kernel_values=K, g_values=g, time_step=dt, coll_divs=divs, coll_choices=choices,
-              quadrature=quadrature, return_function=True)
-    if quadrature == "product":
+              quadrature=quadrature)
+    if Q is not None:
         kw["mesh_samples"] = Q
     y0 = (0.0 if d == 0 else (np.zeros(d) if m is None else np.zeros((d, m))))
-    if kind == "vie1":
-        vals, leg = voles.solve_VIE_1(**kw)
-    elif kind == "vie1c":
-        vals, leg = voles.solve_VIE_1(force_continuous=True, soln_init_value=y0, **kw)
-    elif kind == "vie2":
-        vals, leg = voles.solve_VIE_2(**kw)
-    else:
-        vals, leg = voles.solve_VIDE(a_values=(-0.5 * np.ones(N) if d == 0 else
-                                               np.broadcast_to(-0.5 * np.eye(d), (N, d, d)).copy()),
-                                     soln_init_value=y0 + 1.0, **kw)
+    if kind == "vie1c":
+        kw.update(force_continuous=True, soln_init_value=y0)
+    elif kind == "vide":
+        kw.update(a_values=(-0.5 * np.ones(N) if d == 0 else
+                            np.broadcast_to(-0.5 * np.eye(d), (N, d, d)).copy()),
+                  soln_init_value=y0 + 1.0)
     eq = "vie1" if kind.startswith("vie1") else kind
-    sol = _from_legacy_sampled(vals, leg, equation=eq, continuous=kind in ("vie1c", "vide"),
-                               coll_setting=(divs, choices), samples_per_interval=Q, dt=dt)
+    vals, leg = {"vie1": voles.solve_VIE_1, "vie2": voles.solve_VIE_2,
+                 "vide": voles.solve_VIDE}[eq](return_function=True, **kw)
+    sol = _sampled.solve(eq, **kw)
     return sol, vals, leg
 
 
@@ -83,19 +78,17 @@ def functional(kind="vie2", nodes=None, d=0, m=None, cplx=False, M=16):
             g = lambda t: np.outer([np.sin(2 * t) + 1.0, np.cos(t)], np.arange(1, m + 1))  # noqa
             y0 = np.ones((2, m))
     nodes = voles.gauss_legendre_nodes(3) if nodes is None else np.asarray(nodes)
+    kw = dict(kernel=kern, mesh_breakpoints=mesh, coll_nodes=nodes)
     if kind == "vie1":
-        vals, leg = voles.function_solve_VIE_1(kernel=kern, g=lambda t: g(t) - g(0.0),
-                                               mesh_breakpoints=mesh, coll_nodes=nodes,
-                                               return_function=True)
+        kw["g"] = lambda t: g(t) - g(0.0)                 # noqa: E731
     elif kind == "vie2":
-        vals, leg = voles.function_solve_VIE_2(kernel=kern, g=g, mesh_breakpoints=mesh,
-                                               coll_nodes=nodes, return_function=True)
+        kw["g"] = g
     else:
-        vals, leg = voles.function_solve_VIDE(kernel=kern, g=g, soln_init_value=y0,
-                                              mesh_breakpoints=mesh, coll_nodes=nodes,
-                                              return_function=True)
-    sol = _from_legacy_functional(vals, leg, equation=kind, continuous=kind == "vide",
-                                  node_pos=nodes)
+        kw.update(g=g, soln_init_value=y0)
+    fn = {"vie1": voles.function_solve_VIE_1, "vie2": voles.function_solve_VIE_2,
+          "vide": voles.function_solve_VIDE}[kind]
+    vals, leg = fn(return_function=True, **kw)
+    sol = _functional.solve(kind, **kw)
     return sol, vals, leg
 
 

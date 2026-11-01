@@ -328,7 +328,7 @@ def poly_piece_f_continuous(rel_x, mesh_indx, solution_U, coll_info, init_val):
     return value
 
 @ncjit
-def VIDE_poly_piece_coefs(mesh_indx, solution_Y, coll_info, init_value, dt):
+def vide_poly_piece_coefs(mesh_indx, solution_Y, coll_info, init_value, dt):
     nodes = list(coll_info.params)
     coefs = np.zeros((len(nodes) + 1))
     coefs[0] = init_value
@@ -338,7 +338,7 @@ def VIDE_poly_piece_coefs(mesh_indx, solution_Y, coll_info, init_value, dt):
     return coefs
 
 @ncjit
-def poly_piece_VIDE_f(rel_x, mesh_indx, solution_Y, coll_info, init_value, dt):
+def poly_piece_vide_f(rel_x, mesh_indx, solution_Y, coll_info, init_value, dt):
     coll_params = coll_info.params
     num_coll_params = len(coll_params)
     value = init_value
@@ -348,7 +348,7 @@ def poly_piece_VIDE_f(rel_x, mesh_indx, solution_Y, coll_info, init_value, dt):
 
 
 @ncjit
-def solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step,
+def solve_vide_jit(g_values, kernel_values, a_values, soln_init_value, time_step,
                coll_divs, coll_choices, return_polys):
     coll_info = get_coll_info(coll_divs, coll_choices)
     num_coll_params = len(coll_info.params)
@@ -370,16 +370,16 @@ def solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step
                         - dt*(An(n, a_values, coll_info) \
                     + dt*CN(kernel_values, coll_info))
         solution_Y[n] = np.linalg.solve(coef_matrix, rhs_vector)
-        boundary_vals[n+1] = poly_piece_VIDE_f(1.0, n, solution_Y, coll_info, boundary_vals[n], dt)
+        boundary_vals[n+1] = poly_piece_vide_f(1.0, n, solution_Y, coll_info, boundary_vals[n], dt)
 
     soln_values = np.zeros_like(g_values)
 
     soln_polys = []
     for n in range(mesh_divs):
         if return_polys:
-            soln_polys.append(VIDE_poly_piece_coefs(n, solution_Y , coll_info, boundary_vals[n], dt))
+            soln_polys.append(vide_poly_piece_coefs(n, solution_Y , coll_info, boundary_vals[n], dt))
         for i in range(coll_divs**2 + 1):
-            poly_val = poly_piece_VIDE_f(i*(1.0/coll_divs**2), n,
+            poly_val = poly_piece_vide_f(i*(1.0/coll_divs**2), n,
                                          solution_Y, coll_info, boundary_vals[n], dt)
             soln_values[n*coll_divs**2 + i] += poly_val
 
@@ -394,7 +394,7 @@ def solve_VIDE_jit(g_values, kernel_values, a_values, soln_init_value, time_step
 
 
 @ncjit
-def solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step, coll_divs,
+def solve_vie1_jit(g_values, kernel_values, soln_init_value, time_step, coll_divs,
                     coll_choices, return_polys, force_continuous):
     coll_info = get_coll_info(coll_divs, coll_choices)
     num_coll_params = len(coll_info.params)
@@ -457,7 +457,7 @@ def solve_VIE_1_jit(g_values, kernel_values, soln_init_value, time_step, coll_di
 
 
 @ncjit
-def solve_VIE_2_jit(g_values, kernel_values, time_step, coll_divs,
+def solve_vie2_jit(g_values, kernel_values, time_step, coll_divs,
                     coll_choices, return_polys):
     coll_info = get_coll_info(coll_divs, coll_choices)
     num_coll_params = len(coll_choices)
