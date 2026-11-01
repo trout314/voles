@@ -1415,7 +1415,34 @@ deferred to after 1.0. <strong>Phase 0 done 2026-10-31:</strong>
 - New <code>tests/test_engine.py</code> (282 tests): bitwise identical to the engine
   across equations × quadratures × shapes × lengths × settings.
 - 1172 tests pass (NumPy 1.26, and NumPy 2.5 with a cold numba cache); the
-  battery is unchanged; the strict docs build is clean.
+  battery is unchanged; the strict docs build is clean.</p>
+<p><strong>Phase 4 done 2026-10-31</strong>:
+- <code>_api.py</code>: <code>solve_vie1/2/vide</code> with type hints and numpydoc (Examples
+  come in Phase 6). Validation uses 1.0 names, in this order:
+  1. the regime is classified, with mixed inputs → NotImplementedError;
+  2. options from the other regime → ValueError;
+  3. <code>coll_setting</code> is resolved with the exact VIE-1 ρ rule;
+  4. mesh width and kernel degree, then shapes (2-D kernel reserved);
+  5. the matrix rule, with shared inputs broadcast (sampled) or <code>g</code>
+     wrapped (functional);
+  6. compiled-setting checks.</p>
+<p>It then calls <code>_sampled.solve</code> / <code>_functional.solve</code>.
+- <code>_migrate.translate</code> / <code>describe</code>: 0.10 call → 1.0 call; Phase 5 uses it
+  for the deprecation messages.
+- Engine warning texts made API-neutral (17 battery text changes).
+- Builder trimmed (no vstack/tile, no copies of owned arrays; the mesh is
+  still copied because it may alias the user's array).
+- Tests:
+  - <code>test_api.py</code> (104): a table of invalid calls with expected types, and
+    no 0.10 names in any message;
+  - <code>test_api_shapes.py</code> (17): every matrix column equals its vector solve,
+    including shared inputs;
+  - <code>test_api_equivalence.py</code> (419): all 418 valid battery cases bitwise
+    equal through the 1.0 API.</p>
+<p>1711 tests pass (NumPy 1 and 2).
+- Overhead of the 1.0 path over the 0.10 <code>return_function=True</code> call:
+  about 72 µs per call (N=82: 432 vs 360 µs; N=4001: about 2%). Revisit in
+  Phase 7.
 Inputs: <code>docs/dev/api-review-1.0.md</code> (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.</p>
 <hr />
