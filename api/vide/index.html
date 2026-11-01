@@ -68,7 +68,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#solve_vide" class="md-skip">
+        <a href="#voles.solve_vide" class="md-skip">
           Skip to content
         </a>
       
@@ -765,8 +765,6 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
-        
-      
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
           
@@ -808,8 +806,6 @@
 <nav class="md-nav md-nav--secondary" aria-label="Table of contents">
   
   
-  
-    
   
   
     <label class="md-nav__title" for="__toc">
@@ -1383,8 +1379,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1423,14 +1417,19 @@
   
 
 
-<h1 id="solve_vide">solve_vide</h1>
-
+  <h1>solve_vide</h1>
 
 <div class="doc doc-object doc-function">
 
 
+<h2 id="voles.solve_vide" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">solve_vide</span>
 
-<a id="voles.solve_vide"></a>
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">solve_vide</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">y0</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_setting</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">quadrature</span><span class="o">=</span><span class="s1">'product'</span><span class="p">,</span> <span class="n">samples_per_interval</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mesh</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
     <div class="doc doc-contents first">
 
         <p>Solve a Volterra integro-differential equation.</p>
@@ -1703,7 +1702,7 @@ across mesh intervals. Default True.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><a class="autorefs autorefs-internal" title="voles._solution.VolterraSolution" href="../solution/#voles.VolterraSolution">VolterraSolution</a></code>
+                  <code><a class="autorefs autorefs-internal" title="VolterraSolution (voles._solution.VolterraSolution)" href="../solution/#voles.VolterraSolution">VolterraSolution</a></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1785,7 +1784,7 @@ samples for one mesh interval.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><a class="autorefs autorefs-internal" title="voles._warnings.AccuracyWarning" href="../warnings/#voles.AccuracyWarning">AccuracyWarning</a></code>
+                  <code><a class="autorefs autorefs-internal" title="AccuracyWarning (voles._warnings.AccuracyWarning)" href="../warnings/#voles.AccuracyWarning">AccuracyWarning</a></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1795,11 +1794,21 @@ samples for one mesh interval.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                  <code><a class="autorefs autorefs-internal" title="voles._warnings.PerformanceWarning" href="../warnings/#voles.PerformanceWarning">PerformanceWarning</a></code>
+                  <code><a class="autorefs autorefs-internal" title="PerformanceWarning (voles._warnings.PerformanceWarning)" href="../warnings/#voles.PerformanceWarning">PerformanceWarning</a></code>
             </td>
             <td>
               <div class="doc-md-description">
                 <p>The numba fallback is used.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="VolesWarning (voles._warnings.VolesWarning)" href="../warnings/#voles.VolesWarning">VolesWarning</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>kernel_singularity</code> location outside <span class="arithmatex">\([0, T]\)</span>.</p>
               </div>
             </td>
           </tr>
@@ -1810,12 +1819,12 @@ samples for one mesh interval.</p>
 <details class="see-also" open>
   <summary>See Also</summary>
   <ul>
-<li><a class="autorefs autorefs-internal" href="../vie1/#voles.solve_vie1">solve_vie1</a>, <a class="autorefs autorefs-internal" href="../vie2/#voles.solve_vie2">solve_vie2</a>: the other two
+<li><a class="autorefs autorefs-internal" title="solve_vie1" href="../vie1/#voles.solve_vie1">solve_vie1</a>, <a class="autorefs autorefs-internal" title="solve_vie2" href="../vie2/#voles.solve_vie2">solve_vie2</a>: the other two
   equations.</li>
-<li><a class="autorefs autorefs-internal" href="../solution/#voles.VolterraSolution">VolterraSolution</a>: the returned object.</li>
-<li><a class="autorefs autorefs-internal" href="../optimal_graded_mesh/#voles.optimal_graded_mesh">optimal_graded_mesh</a>: a mesh for a weakly singular
+<li><a class="autorefs autorefs-internal" title="VolterraSolution" href="../solution/#voles.VolterraSolution">VolterraSolution</a>: the returned object.</li>
+<li><a class="autorefs autorefs-internal" title="optimal_graded_mesh" href="../optimal_graded_mesh/#voles.optimal_graded_mesh">optimal_graded_mesh</a>: a mesh for a weakly singular
   kernel.</li>
-<li><a class="autorefs autorefs-internal" href="../coll_nodes/#voles.gauss_legendre_nodes">gauss_legendre_nodes</a>: node sets for <code>coll_nodes</code>.</li>
+<li><a class="autorefs autorefs-internal" title="gauss_legendre_nodes" href="../coll_nodes/#voles.gauss_legendre_nodes">gauss_legendre_nodes</a>: node sets for <code>coll_nodes</code>.</li>
 </ul>
 </details>
 
@@ -1853,33 +1862,7 @@ an error. Mixing callable and sampled inputs is not supported yet.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_api.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">728</span>
-<span class="normal">729</span>
-<span class="normal">730</span>
-<span class="normal">731</span>
-<span class="normal">732</span>
-<span class="normal">733</span>
-<span class="normal">734</span>
-<span class="normal">735</span>
-<span class="normal">736</span>
-<span class="normal">737</span>
-<span class="normal">738</span>
-<span class="normal">739</span>
-<span class="normal">740</span>
-<span class="normal">741</span>
-<span class="normal">742</span>
-<span class="normal">743</span>
-<span class="normal">744</span>
-<span class="normal">745</span>
-<span class="normal">746</span>
-<span class="normal">747</span>
-<span class="normal">748</span>
-<span class="normal">749</span>
-<span class="normal">750</span>
-<span class="normal">751</span>
-<span class="normal">752</span>
-<span class="normal">753</span>
-<span class="normal">754</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">754</span>
 <span class="normal">755</span>
 <span class="normal">756</span>
 <span class="normal">757</span>
@@ -2002,7 +1985,36 @@ an error. Mixing callable and sampled inputs is not supported yet.</p>
 <span class="normal">874</span>
 <span class="normal">875</span>
 <span class="normal">876</span>
-<span class="normal">877</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_vide</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="normal">877</span>
+<span class="normal">878</span>
+<span class="normal">879</span>
+<span class="normal">880</span>
+<span class="normal">881</span>
+<span class="normal">882</span>
+<span class="normal">883</span>
+<span class="normal">884</span>
+<span class="normal">885</span>
+<span class="normal">886</span>
+<span class="normal">887</span>
+<span class="normal">888</span>
+<span class="normal">889</span>
+<span class="normal">890</span>
+<span class="normal">891</span>
+<span class="normal">892</span>
+<span class="normal">893</span>
+<span class="normal">894</span>
+<span class="normal">895</span>
+<span class="normal">896</span>
+<span class="normal">897</span>
+<span class="normal">898</span>
+<span class="normal">899</span>
+<span class="normal">900</span>
+<span class="normal">901</span>
+<span class="normal">902</span>
+<span class="normal">903</span>
+<span class="normal">904</span>
+<span class="normal">905</span>
+<span class="normal">906</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_vide</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">y0</span><span class="p">:</span> <span class="n">ArrayLike</span><span class="p">,</span>
                <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_setting</span><span class="p">:</span> <span class="n">CollSetting</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">quadrature</span><span class="p">:</span> <span class="n">Quadrature</span> <span class="o">=</span> <span class="s2">"product"</span><span class="p">,</span>
@@ -2106,6 +2118,8 @@ an error. Mixing callable and sampled inputs is not supported yet.</p>
 <span class="sd">        A singularity declared on a uniform mesh.</span>
 <span class="sd">    PerformanceWarning</span>
 <span class="sd">        The numba fallback is used.</span>
+<span class="sd">    VolesWarning</span>
+<span class="sd">        A ``kernel_singularity`` location outside $[0, T]$.</span>
 
 <span class="sd">    See Also</span>
 <span class="sd">    --------</span>
@@ -2124,6 +2138,7 @@ an error. Mixing callable and sampled inputs is not supported yet.</p>
 <span class="sd">    (``mesh``, ``coll_nodes``, ``kernel_singularity``,</span>
 <span class="sd">    ``reuse_adaptive_blocks`` apply). An option from the other regime is</span>
 <span class="sd">    an error. Mixing callable and sampled inputs is not supported yet.</span>
+
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
 <span class="sd">    Sampled data: $y' = \int_0^t y(s)\,ds$ with $y(0) = 1$ is</span>

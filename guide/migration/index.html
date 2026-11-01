@@ -1493,8 +1493,9 @@ g=&lt;array of shape (91,)&gt;, dt=0.05, coll_setting=(3, [0, 1, 2, 3])) instead
 <p>To find every old call in a code base, run its tests with
 <code>python -W error::DeprecationWarning</code> (or pytest's
 <code>-W error::DeprecationWarning</code>). The deprecated functions return exactly
-what they returned in 0.10: the same values, the same <code>(values, solution)</code>
-pair for <code>return_function=True</code>, and the same errors.</p>
+what they returned in 0.10: the same values, and the same <code>(values,
+solution)</code> pair for <code>return_function=True</code>. A few invalid inputs are
+handled differently; see <a href="#behaviour-changes-in-011">Behaviour changes in 0.11</a>.</p>
 <h2 id="names">Names</h2>
 <table>
 <thead>
@@ -1566,7 +1567,7 @@ pair for <code>return_function=True</code>, and the same errors.</p>
 </tr>
 <tr>
 <td><code>fast_coll_settings_VIE_1</code> etc.</td>
-<td>removed; <code>quadrature="product"</code> (the default) accepts every setting</td>
+<td>deprecated (they still work in 0.11, with a warning) and not needed: <code>quadrature="product"</code>, the default, accepts every setting</td>
 </tr>
 <tr>
 <td><code>from voles.solvers import ...</code></td>

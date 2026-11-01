@@ -1532,17 +1532,25 @@
 
 
 <h1 id="deprecated-010-solvers">Deprecated 0.10 solvers</h1>
-<p>These six functions are the 0.10 API. They still work in 0.11, exactly as
-in 0.10, but each call issues a <code>DeprecationWarning</code> naming the equivalent
-new call, and they are removed in 1.0. See
+<p>These six functions are the 0.10 API. They still work in 0.11 and return
+what they returned in 0.10, but each call issues a <code>DeprecationWarning</code>
+naming the equivalent new call, and they are removed in 1.0. A few invalid
+inputs are handled differently from 0.10 (diagnostics are warnings, wrong
+types raise <code>TypeError</code>, non-finite data is rejected). See
 <a href="../../guide/migration/">Migration from 0.10</a>.</p>
 
 
 <div class="doc doc-object doc-function">
 
 
+<h2 id="voles.solve_VIE_1" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">solve_VIE_1</span>
 
-<a id="voles.solve_VIE_1"></a>
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">force_continuous</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">quadrature</span><span class="o">=</span><span class="s1">'product'</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
     <div class="doc doc-contents first">
 
         <p>Solve a Volterra integral equation of the first kind.</p>
@@ -2574,8 +2582,14 @@ supported settings (with the non-convergent ones excluded) are listed in
 <div class="doc doc-object doc-function">
 
 
+<h2 id="voles.solve_VIE_2" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">solve_VIE_2</span>
 
-<a id="voles.solve_VIE_2"></a>
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">solve_VIE_2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">quadrature</span><span class="o">=</span><span class="s1">'product'</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
     <div class="doc doc-contents first">
 
         <p>Solve a Volterra integral equation of the second kind.</p>
@@ -3296,8 +3310,14 @@ compiled settings are listed in <code>fast_coll_settings_VIE_2</code>.</p>
 <div class="doc doc-object doc-function">
 
 
+<h2 id="voles.solve_VIDE" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">solve_VIDE</span>
 
-<a id="voles.solve_VIDE"></a>
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">a_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">quadrature</span><span class="o">=</span><span class="s1">'product'</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
     <div class="doc doc-contents first">
 
         <p>Solve a Volterra integro-differential equation.</p>
@@ -4073,8 +4093,14 @@ compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
 <div class="doc doc-object doc-function">
 
 
+<h2 id="voles.function_solve_VIE_1" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">function_solve_VIE_1</span>
 
-<a id="voles.function_solve_VIE_1"></a>
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">function_solve_VIE_1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">force_continuous</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
     <div class="doc doc-contents first">
 
         <p>Solve the Volterra integral equation of the first kind</p>
@@ -4721,8 +4747,14 @@ skipped.</p>
 <div class="doc doc-object doc-function">
 
 
+<h2 id="voles.function_solve_VIE_2" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">function_solve_VIE_2</span>
 
-<a id="voles.function_solve_VIE_2"></a>
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">function_solve_VIE_2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
     <div class="doc doc-contents first">
 
         <p>Solve the scalar Volterra integral equation of the second kind</p>
@@ -5432,8 +5464,14 @@ CPU count).</p>
 <div class="doc doc-object doc-function">
 
 
+<h2 id="voles.function_solve_VIDE" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">function_solve_VIDE</span>
 
-<a id="voles.function_solve_VIDE"></a>
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">function_solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">mesh_breakpoints</span><span class="p">,</span> <span class="n">coll_divs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_nodes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">reuse_adaptive_blocks</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
     <div class="doc doc-contents first">
 
         <p>Solve the scalar Volterra integro-differential equation</p>

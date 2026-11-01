@@ -1654,7 +1654,7 @@ how the problem is posed:</p>
 </tr>
 <tr>
 <td>Options of this regime only</td>
-<td><code>coll_setting</code>, <code>quadrature</code>, <code>samples_per_interval</code>, <code>kernel_interp_degree</code></td>
+<td><code>dt</code>, <code>coll_setting</code>, <code>quadrature</code>, <code>samples_per_interval</code>, <code>kernel_interp_degree</code></td>
 <td><code>mesh</code>, <code>coll_nodes</code>, <code>kernel_singularity</code>, <code>reuse_adaptive_blocks</code></td>
 </tr>
 </tbody>
@@ -1756,9 +1756,17 @@ the node set's amplification factor satisfies |ρ| ≤ 1, where</p>
 <div class="arithmatex">\[\rho = (-1)^p \prod_{i=1}^{p} \frac{1 - c_i}{c_i}\]</div>
 <p>for the default discontinuous method (Brunner 2004, Theorem 2.4.2), and the
 same product over i &lt; p, with c_p = 1, for <code>continuous=True</code> (Theorem
-2.4.5). Other node sets are a <code>ValueError</code>. ρ = 1 converges one order lower
-and gives an <code>AccuracyWarning</code>. Radau IIA nodes have ρ = 0 and give the full
-order p; Gauss–Legendre nodes have |ρ| = 1 and lose an order.</p>
+2.4.5). Other node sets are a <code>ValueError</code>. A node set with −1 ≤ ρ &lt; 1 has
+the method's full order; ρ = +1 converges one order lower and gives an
+<code>AccuracyWarning</code>.</p>
+<ul>
+<li>Radau IIA nodes have ρ = 0 and the full order p, which makes them the
+  usual choice for the discontinuous method. They don't suit
+  <code>continuous=True</code>: there |ρ| = p, so that method diverges for every
+  p ≥ 2. The default nodes {1/3, 2/3, 1} work for both methods.</li>
+<li>Gauss–Legendre nodes are symmetric, so ρ = (−1)ᵖ: odd p keeps the full
+  order, even p loses one.</li>
+</ul>
 <h2 id="shapes">Shapes</h2>
 <p>The time axis comes first. The component shape <code>cs</code> is <code>()</code> for a scalar
 problem, <code>(d,)</code> for a system of d equations, and <code>(d, m)</code> for m right-hand
@@ -1809,8 +1817,10 @@ sides solved together.</p>
   are converted to <code>float64</code>.</li>
 <li><strong>Non-finite data</strong> (NaN or inf in an array, or returned by <code>g</code> or <code>a</code> at
   a collocation time) is a <code>ValueError</code> naming the input and the first bad
-  index. Callable kernels are not checked: a weakly singular kernel may
-  return inf at u = 0, which the quadrature never samples.</li>
+  index. Callable kernels are not checked point by point, since a weakly
+  singular kernel may return inf at u = 0, which the quadrature never
+  samples. A kernel that is non-finite where the quadrature does sample it
+  gives a <code>ValueError</code> suggesting <code>kernel_singularity</code>.</li>
 <li>A 2-D sampled kernel is rejected; that shape is reserved for
   non-convolution kernels K(t, s) in a later release.</li>
 </ul>

@@ -1499,19 +1499,27 @@ inputs the nodes must sit on samples and are given as integers through
 <div class="doc doc-object doc-function">
 
 
+<h2 id="voles.gauss_legendre_nodes" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">gauss_legendre_nodes</span>
 
-<a id="voles.gauss_legendre_nodes"></a>
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">gauss_legendre_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+</code></pre></div>
+
     <div class="doc doc-contents first">
 
         <p>Return the <code>p</code> Gauss-Legendre collocation nodes on <span class="arithmatex">\([0, 1]\)</span>.</p>
 <p>These interior nodes (none at 0 or 1) give the maximal collocation order.
-For <strong>VIE-2 / VIDE</strong> the solution superconverges to order <span class="arithmatex">\(2p\)</span> at the mesh
-points. For <strong>VIE-1</strong> (first kind) there is no mesh-point
-superconvergence, and Gauss nodes are the <em>borderline</em> case of the
-convergence criterion: being symmetric about <span class="arithmatex">\(1/2\)</span> they give
-amplification <span class="arithmatex">\(|\rho_p| = 1\)</span> exactly, which costs one global order
-(order <span class="arithmatex">\(p - 1\)</span> instead of <span class="arithmatex">\(p\)</span>; see <code>function_solve_VIE_1</code> Notes).
-Prefer <code>radau_iia_nodes</code> for VIE-1.</p>
+For a <strong>VIDE</strong> the solution superconverges to order <span class="arithmatex">\(2p\)</span> at the mesh
+points. For <strong>VIE-2</strong> the collocation solution itself does not: at an
+interior breakpoint the mean of its one-sided limits (the default of
+<code>VolterraSolution</code>) gains one order for <span class="arithmatex">\(p = 3\)</span> (see the Conventions
+page, "Values at breakpoints"). For <strong>VIE-1</strong> (first kind) Gauss nodes,
+being symmetric about <span class="arithmatex">\(1/2\)</span>, have amplification factor
+<span class="arithmatex">\(\rho_p = (-1)^p\)</span>: odd <span class="arithmatex">\(p\)</span> keeps the full order <span class="arithmatex">\(p\)</span>, even <span class="arithmatex">\(p\)</span> costs one
+order (see <code>voles.solve_vie1</code>, Notes). <code>radau_iia_nodes</code> have the full
+order for every <span class="arithmatex">\(p\)</span>.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1607,17 +1615,21 @@ Prefer <code>radau_iia_nodes</code> for VIE-1.</p>
 <span class="normal">2121</span>
 <span class="normal">2122</span>
 <span class="normal">2123</span>
-<span class="normal">2124</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">gauss_legendre_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">2124</span>
+<span class="normal">2125</span>
+<span class="normal">2126</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">gauss_legendre_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Return the ``p`` Gauss-Legendre collocation nodes on $[0, 1]$.</span>
 
 <span class="sd">    These interior nodes (none at 0 or 1) give the maximal collocation order.</span>
-<span class="sd">    For **VIE-2 / VIDE** the solution superconverges to order $2p$ at the mesh</span>
-<span class="sd">    points. For **VIE-1** (first kind) there is no mesh-point</span>
-<span class="sd">    superconvergence, and Gauss nodes are the *borderline* case of the</span>
-<span class="sd">    convergence criterion: being symmetric about $1/2$ they give</span>
-<span class="sd">    amplification $|\rho_p| = 1$ exactly, which costs one global order</span>
-<span class="sd">    (order $p - 1$ instead of $p$; see ``function_solve_VIE_1`` Notes).</span>
-<span class="sd">    Prefer ``radau_iia_nodes`` for VIE-1.</span>
+<span class="sd">    For a **VIDE** the solution superconverges to order $2p$ at the mesh</span>
+<span class="sd">    points. For **VIE-2** the collocation solution itself does not: at an</span>
+<span class="sd">    interior breakpoint the mean of its one-sided limits (the default of</span>
+<span class="sd">    `VolterraSolution`) gains one order for $p = 3$ (see the Conventions</span>
+<span class="sd">    page, "Values at breakpoints"). For **VIE-1** (first kind) Gauss nodes,</span>
+<span class="sd">    being symmetric about $1/2$, have amplification factor</span>
+<span class="sd">    $\rho_p = (-1)^p$: odd $p$ keeps the full order $p$, even $p$ costs one</span>
+<span class="sd">    order (see `voles.solve_vie1`, Notes). ``radau_iia_nodes`` have the full</span>
+<span class="sd">    order for every $p$.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -1647,18 +1659,29 @@ Prefer <code>radau_iia_nodes</code> for VIE-1.</p>
 <div class="doc doc-object doc-function">
 
 
+<h2 id="voles.radau_iia_nodes" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">radau_iia_nodes</span>
 
-<a id="voles.radau_iia_nodes"></a>
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">radau_iia_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+</code></pre></div>
+
     <div class="doc doc-contents first">
 
         <p>Return the <code>p</code> Radau IIA collocation nodes on <span class="arithmatex">\([0, 1]\)</span>.</p>
 <p>The Radau IIA nodes include the right endpoint (<code>1.0</code>) and exclude 0.
-For <strong>VIE-2 / VIDE</strong> they give mesh-point superconvergence of order
-<span class="arithmatex">\(2p - 1\)</span>; the right-endpoint node also makes them a common choice for stiff
-VIDEs. For <strong>VIE-1</strong> they are the recommended family: the endpoint node
-makes the amplification factor <span class="arithmatex">\(\rho_p = 0\)</span>, giving the full global order
-<span class="arithmatex">\(p\)</span> -- one order better than Gauss-Legendre nodes, whose <span class="arithmatex">\(|\rho_p| = 1\)</span>
-reduces VIE-1 to order <span class="arithmatex">\(p - 1\)</span> (see <code>voles.solve_vie1</code>, Notes).</p>
+They give mesh-point superconvergence of order <span class="arithmatex">\(2p - 1\)</span>: for a <strong>VIDE</strong>
+directly, and for <strong>VIE-2</strong> in the left limit at each breakpoint, which
+is the collocation value at the last node
+(<code>sol(t, at_breakpoints="left")</code>; the default mean has order <span class="arithmatex">\(p\)</span>). The
+right-endpoint node also makes them a common choice for stiff VIDEs. For
+the default (discontinuous) <strong>VIE-1</strong> method they are the recommended
+family: the endpoint node makes the amplification factor <span class="arithmatex">\(\rho_p = 0\)</span>,
+giving the full order <span class="arithmatex">\(p\)</span> for every <span class="arithmatex">\(p\)</span> (Gauss-Legendre nodes have
+<span class="arithmatex">\(\rho_p = (-1)^p\)</span> and lose an order for even <span class="arithmatex">\(p\)</span>). They do not suit
+<code>continuous=True</code>, where <span class="arithmatex">\(|\rho_{p-1}| = p\)</span> and the method diverges for
+<span class="arithmatex">\(p \ge 2\)</span> (see <code>voles.solve_vie1</code>, Notes).</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1725,9 +1748,7 @@ ascending.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_functional.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2127</span>
-<span class="normal">2128</span>
-<span class="normal">2129</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2129</span>
 <span class="normal">2130</span>
 <span class="normal">2131</span>
 <span class="normal">2132</span>
@@ -1765,16 +1786,28 @@ ascending.</p>
 <span class="normal">2164</span>
 <span class="normal">2165</span>
 <span class="normal">2166</span>
-<span class="normal">2167</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">radau_iia_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">2167</span>
+<span class="normal">2168</span>
+<span class="normal">2169</span>
+<span class="normal">2170</span>
+<span class="normal">2171</span>
+<span class="normal">2172</span>
+<span class="normal">2173</span>
+<span class="normal">2174</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">radau_iia_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Return the ``p`` Radau IIA collocation nodes on $[0, 1]$.</span>
 
 <span class="sd">    The Radau IIA nodes include the right endpoint (``1.0``) and exclude 0.</span>
-<span class="sd">    For **VIE-2 / VIDE** they give mesh-point superconvergence of order</span>
-<span class="sd">    $2p - 1$; the right-endpoint node also makes them a common choice for stiff</span>
-<span class="sd">    VIDEs. For **VIE-1** they are the recommended family: the endpoint node</span>
-<span class="sd">    makes the amplification factor $\rho_p = 0$, giving the full global order</span>
-<span class="sd">    $p$ -- one order better than Gauss-Legendre nodes, whose $|\rho_p| = 1$</span>
-<span class="sd">    reduces VIE-1 to order $p - 1$ (see `voles.solve_vie1`, Notes).</span>
+<span class="sd">    They give mesh-point superconvergence of order $2p - 1$: for a **VIDE**</span>
+<span class="sd">    directly, and for **VIE-2** in the left limit at each breakpoint, which</span>
+<span class="sd">    is the collocation value at the last node</span>
+<span class="sd">    (``sol(t, at_breakpoints="left")``; the default mean has order $p$). The</span>
+<span class="sd">    right-endpoint node also makes them a common choice for stiff VIDEs. For</span>
+<span class="sd">    the default (discontinuous) **VIE-1** method they are the recommended</span>
+<span class="sd">    family: the endpoint node makes the amplification factor $\rho_p = 0$,</span>
+<span class="sd">    giving the full order $p$ for every $p$ (Gauss-Legendre nodes have</span>
+<span class="sd">    $\rho_p = (-1)^p$ and lose an order for even $p$). They do not suit</span>
+<span class="sd">    ``continuous=True``, where $|\rho_{p-1}| = p$ and the method diverges for</span>
+<span class="sd">    $p \ge 2$ (see `voles.solve_vie1`, Notes).</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -1815,8 +1848,14 @@ ascending.</p>
 <div class="doc doc-object doc-function">
 
 
+<h2 id="voles.lobatto_nodes" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">lobatto_nodes</span>
 
-<a id="voles.lobatto_nodes"></a>
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">lobatto_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+</code></pre></div>
+
     <div class="doc doc-contents first">
 
         <p>Return the <code>p</code> Gauss-Lobatto collocation nodes on <span class="arithmatex">\([0, 1]\)</span> (<code>p &gt;= 2</code>).</p>
@@ -1889,14 +1928,7 @@ sorted ascending.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_functional.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2170</span>
-<span class="normal">2171</span>
-<span class="normal">2172</span>
-<span class="normal">2173</span>
-<span class="normal">2174</span>
-<span class="normal">2175</span>
-<span class="normal">2176</span>
-<span class="normal">2177</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2177</span>
 <span class="normal">2178</span>
 <span class="normal">2179</span>
 <span class="normal">2180</span>
@@ -1928,7 +1960,14 @@ sorted ascending.</p>
 <span class="normal">2206</span>
 <span class="normal">2207</span>
 <span class="normal">2208</span>
-<span class="normal">2209</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">lobatto_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">2209</span>
+<span class="normal">2210</span>
+<span class="normal">2211</span>
+<span class="normal">2212</span>
+<span class="normal">2213</span>
+<span class="normal">2214</span>
+<span class="normal">2215</span>
+<span class="normal">2216</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">lobatto_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Return the ``p`` Gauss-Lobatto collocation nodes on $[0, 1]$ (``p &gt;= 2``).</span>
 
 <span class="sd">    The Lobatto nodes include both endpoints (``0.0`` and ``1.0``) and have</span>

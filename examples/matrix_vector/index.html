@@ -1490,8 +1490,8 @@ print(f&quot;Max error: {np.max(np.abs(sol.y - exact)):.2e}&quot;)
 print(sol(0.55))                                            # an array of shape (2,)
 </code></pre>
 <h2 id="several-right-hand-sides-at-once">Several right-hand sides at once</h2>
-<p>Three initial values for the same VIDE system, <span class="arithmatex">\(y' = \int_0^t K(t-s) y(s)\,ds\)</span>
-with a shared vector forcing: <code>y0</code> of shape <code>(d, m)</code> makes the problem
+<p>Three initial values for the same VIDE system,
+<span class="arithmatex">\(y' = g(t) + \int_0^t K(t-s) y(s)\,ds\)</span>, with a shared vector forcing <span class="arithmatex">\(g\)</span>: <code>y0</code> of shape <code>(d, m)</code> makes the problem
 matrix-valued, and the <code>(N, d)</code> forcing is used for every column.</p>
 <pre><code class="language-python">import numpy as np
 import voles

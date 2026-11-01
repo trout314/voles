@@ -1583,11 +1583,13 @@ compiled path:</p>
   fresh environment) is excluded from the timings via a warmup round.</li>
 </ul>
 <h2 id="callable-inputs">Callable inputs</h2>
-<p>With <strong>callable inputs</strong> (<code>mesh=</code>) the solvers run the general path (Python +
-adaptive quadrature, no Toeplitz reuse), so they are benchmarked on much
+<p>With <strong>callable inputs</strong> (<code>mesh=</code>) the solvers integrate the kernel
+numerically (Python + adaptive quadrature), so they are benchmarked on much
 smaller problems, sized by the number of mesh intervals <span class="arithmatex">\(M\)</span> (each carrying
-<code>len(coll_nodes)</code> collocation nodes). The <em>weakly singular</em> row uses an Abel
-kernel <span class="arithmatex">\(K(u) = u^{-1/2}\)</span> on a graded mesh with the singularity declared:</p>
+<code>len(coll_nodes)</code> collocation nodes). The smooth rows use uniform meshes, on
+which the weights are assembled from one row (Toeplitz structure). The
+<em>weakly singular</em> row uses an Abel kernel <span class="arithmatex">\(K(u) = u^{-1/2}\)</span> on a graded mesh,
+with the singularity declared by location only (adaptive quadrature):</p>
 <!-- CALLABLE_BENCHMARKS:START -->
 <table>
 <thead>

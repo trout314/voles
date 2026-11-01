@@ -1584,10 +1584,10 @@ about. Declaring a singularity on a near-uniform mesh gives a
 <code>kernel_singularity={location: alpha}</code> for <span class="arithmatex">\(K(u) \sim |u - u_0|^{-\alpha}\)</span>.
 Blocks touching the singularity are then integrated by deterministic
 Gauss–Jacobi rules with the singular factor absorbed into the quadrature
-weight. On the Abel problem above this makes the weight-tensor build several
-times faster on a graded mesh, and an order of magnitude faster on a uniform
-mesh (where the deterministic rules can be reused across the Toeplitz
-assembly), with the same accuracy:</p>
+weight. On the Abel problem above, with 30 intervals, this makes the solve
+about 8× faster on the graded mesh (16 ms instead of 132 ms), with the same
+accuracy. On a uniform mesh the default <code>reuse_adaptive_blocks=True</code> already
+recovers most of that (16 ms), and the dict form halves it again (8 ms):</p>
 <pre><code class="language-python">import numpy as np
 import voles
 
@@ -1616,11 +1616,16 @@ kernel = lambda u: np.exp(-u)
 g = lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t))  # exact y(t) = sin(t)
 
 sol = voles.solve_vie2(kernel=kernel, g=g, mesh=np.linspace(0, 1, 21),
-                       coll_nodes=voles.gauss_legendre_nodes(3))   # superconvergent
+                       coll_nodes=voles.gauss_legendre_nodes(3))
 </code></pre>
-<p>Gauss–Legendre nodes give mesh-point superconvergence for VIE-2 and VIDE.
-For VIE-1 prefer <code>radau_iia_nodes</code>: the right-endpoint node gives the full
-collocation order (see the <code>solve_vie1</code> notes on convergence).</p>
+<p>Gauss–Legendre nodes give mesh-point superconvergence (order 2p) for the
+VIDE. For VIE-2 the collocation solution is not superconvergent at the mesh
+points, but with Radau IIA nodes its left limit there is (order 2p − 1,
+<code>sol(t, at_breakpoints="left")</code>); see
+<a href="../../guide/conventions/#values-at-breakpoints">Values at breakpoints</a>. For
+VIE-1 prefer <code>radau_iia_nodes</code> with the default discontinuous method: they
+have the full order for every p, while Gauss–Legendre nodes lose an order
+for even p (see <a href="../../guide/conventions/#collocation-nodes">VIE-1 admissibility</a>).</p>
 <h2 id="vector-valued-kernel">Vector-valued kernel</h2>
 <p>A <code>kernel(u)</code> returning a <code>(d, d)</code> matrix and a <code>g(t)</code> returning <code>(d,)</code>:</p>
 <pre><code class="language-python">import numpy as np
@@ -1670,8 +1675,8 @@ print(sol(np.linspace(0, 1, 5)).shape)    # (5, 2, 2)
 and initial values work here too.</p>
 <p><code>solve_vie1</code> and <code>solve_vide</code> take callables the same way. <code>solve_vide</code>
 also takes an <code>a</code> callable and requires <code>y0</code>; <code>solve_vie1</code> has the optional
-<code>continuous=True</code> method, which needs <code>y0</code> (of shape <code>(d, m)</code> in the matrix
-case).</p>
+<code>continuous=True</code> method, which needs <code>y0</code>: <code>(d, m)</code> in the matrix case, or
+<code>(d,)</code> to share one initial value across the columns.</p>
 
 
 
