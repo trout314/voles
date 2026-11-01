@@ -2019,13 +2019,23 @@ def optimal_graded_mesh(*, alpha: float, t_end: float = None, n_intervals: int =
 
     Examples
     --------
-    Grade for the same order as the solver's collocation method::
+    >>> import voles
+    >>> voles.optimal_graded_mesh(alpha=0.5, t_end=1.0, n_intervals=4, order=2)
+    array([0.        , 0.00390625, 0.0625    , 0.31640625, 1.        ])
 
-        nodes = voles.radau_iia_nodes(3)
-        mesh = optimal_graded_mesh(alpha=0.5, t_end=1.0, n_intervals=30,
-                                   order=len(nodes))
-        sol = voles.solve_vie2(kernel=..., g=..., mesh=mesh, coll_nodes=nodes,
-                               kernel_singularity={0.0: 0.5})
+    Grade for the same order as the solver's collocation method. The
+    solution of $y(t) = 1 + \int_0^t (t-s)^{-1/2} y(s)\,ds$ is
+    $\operatorname{erfcx}(-\sqrt{\pi t})$:
+
+    >>> import numpy as np
+    >>> from scipy.special import erfcx
+    >>> nodes = voles.radau_iia_nodes(3)
+    >>> mesh = voles.optimal_graded_mesh(alpha=0.5, t_end=1.0, n_intervals=60,
+    ...                                  order=len(nodes))
+    >>> sol = voles.solve_vie2(kernel=lambda u: u**-0.5, g=lambda t: np.ones_like(t),
+    ...                        mesh=mesh, coll_nodes=nodes, kernel_singularity={0.0: 0.5})
+    >>> print(f"relative error {abs(sol(1.0) / erfcx(-np.sqrt(np.pi)) - 1):.1e}")
+    relative error 1.3e-05
     """
     t_end = _renamed("t_end", t_end, "T", T)
     n_intervals = _renamed("n_intervals", n_intervals, "M", M)
@@ -2100,6 +2110,12 @@ def gauss_legendre_nodes(p: int) -> np.ndarray:
     -------
     ndarray of shape (p,)
         Node positions in $(0, 1)$, sorted ascending.
+
+    Examples
+    --------
+    >>> import voles
+    >>> voles.gauss_legendre_nodes(2)
+    array([0.21132487, 0.78867513])
     """
     p = _check_node_count(p, minimum=1, name="Gauss-Legendre")
     x, _ = np.polynomial.legendre.leggauss(p)
@@ -2115,7 +2131,7 @@ def radau_iia_nodes(p: int) -> np.ndarray:
     VIDEs. For **VIE-1** they are the recommended family: the endpoint node
     makes the amplification factor $\rho_p = 0$, giving the full global order
     $p$ -- one order better than Gauss-Legendre nodes, whose $|\rho_p| = 1$
-    reduces VIE-1 to order $p - 1$ (see ``function_solve_VIE_1`` Notes).
+    reduces VIE-1 to order $p - 1$ (see `voles.solve_vie1`, Notes).
 
     Parameters
     ----------
@@ -2127,6 +2143,12 @@ def radau_iia_nodes(p: int) -> np.ndarray:
     ndarray of shape (p,)
         Node positions in $(0, 1]$ (the last is exactly ``1.0``), sorted
         ascending.
+
+    Examples
+    --------
+    >>> import voles
+    >>> voles.radau_iia_nodes(2)
+    array([0.33333333, 1.        ])
     """
     p = _check_node_count(p, minimum=1, name="Radau IIA")
     # On [-1, 1] the Radau IIA nodes are the roots of P_{p-1}(x) - P_p(x); one
@@ -2160,6 +2182,12 @@ def lobatto_nodes(p: int) -> np.ndarray:
     ndarray of shape (p,)
         Node positions in $[0, 1]$ (the first is ``0.0`` and the last ``1.0``),
         sorted ascending.
+
+    Examples
+    --------
+    >>> import voles
+    >>> voles.lobatto_nodes(3)
+    array([0. , 0.5, 1. ])
     """
     p = _check_node_count(p, minimum=2, name="Lobatto")
     if p == 2:

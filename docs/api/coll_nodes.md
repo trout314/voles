@@ -1,8 +1,9 @@
 # Collocation node helpers
 
-Node sets for the `coll_nodes` parameter of the callable-input solvers.
-Positions are floats in $[0, 1]$; the helpers below build the classical
-families. `coll_nodes` is mutually exclusive with `coll_divs`/`coll_choices`.
+Node sets for the `coll_nodes` parameter (callable inputs). Positions are
+floats in [0, 1]; these helpers build the classical families. For sampled
+inputs the nodes must sit on samples and are given as integers through
+`coll_setting`; see [Conventions](../guide/conventions.md#collocation-nodes).
 
 ::: voles.gauss_legendre_nodes
 
@@ -12,16 +13,9 @@ families. `coll_nodes` is mutually exclusive with `coll_divs`/`coll_choices`.
 
 ## Compiled collocation settings
 
-With the default product quadrature the array-based solvers accept any
-`(coll_divs, coll_choices)` setting. With `quadrature="collocation"` they
-dispatch to D-extension routines compiled for a fixed list of settings; other
-settings then need the optional `numba` dependency (scalar equations only) and
-otherwise raise `NotImplementedError`. The compiled lists are importable as
-`fast_coll_settings_VIE_1`, `fast_coll_settings_VIE_2`, and
-`fast_coll_settings_VIDE` — each a list of `(coll_divs, coll_choices)` pairs
-(the VIE-1 list excludes the known non-convergent settings).
-
-```python
-from voles import fast_coll_settings_VIE_2
-print(fast_coll_settings_VIE_2[:3])
-```
+With the default `quadrature="product"` the solvers accept every valid
+`coll_setting`. With `quadrature="collocation"` they run routines compiled
+into the extension for a fixed list of settings (`divs` ≤ 4 in current
+builds); any other setting runs on the optional numba fallback (scalar
+problems only, with a `PerformanceWarning`) or raises
+`NotImplementedError`.

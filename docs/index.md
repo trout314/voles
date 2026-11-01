@@ -6,24 +6,26 @@ Collocation-method solvers for Volterra integral and integro-differential equati
 
 ## Solvers
 
-Two families of solvers are provided. The **array-based** family is the
-fastest path when the kernel and forcing are already sampled on a uniform
-grid; the **callable-input** family accepts callables, supports arbitrary
-meshes, and handles weakly singular kernels.
+| Equation | Solver |
+|----------|--------|
+| $g(t) = \int_0^t K(t-s)y(s)ds$ | [`solve_vie1`](api/vie1.md) |
+| $y(t) = g(t) + \int_0^t K(t-s)y(s)ds$ | [`solve_vie2`](api/vie2.md) |
+| $y'(t) = a(t)y(t) + g(t) + \int_0^t K(t-s)y(s)ds$ | [`solve_vide`](api/vide.md) |
 
-| Equation | Array-based | Callable-input |
-|----------|-------------|----------------|
-| $g(t) = \int_0^t K(t-s)y(s)ds$ | `solve_VIE_1` | `function_solve_VIE_1` |
-| $y(t) = g(t) + \int_0^t K(t-s)y(s)ds$ | `solve_VIE_2` | `function_solve_VIE_2` |
-| $y'(t) = a(t)y(t) + g(t) + \int_0^t K(t-s)y(s)ds$ | `solve_VIDE` | `function_solve_VIDE` |
+Each takes its inputs either as **arrays** of samples on a uniform grid
+(`dt=`), the fastest path for sampled data, or as **callables** on a mesh you
+choose (`mesh=`), which also handles weakly singular kernels. Both return a
+[`VolterraSolution`](api/solution.md). The rules are on the
+[Conventions](guide/conventions.md) page.
 
-The callable-input solvers also expose `optimal_graded_mesh(alpha=..., T=...,
-M=..., order=...)` for building a Brunner-graded mesh suitable for kernels
-with a $u^{-\alpha}$ singularity — and, when the exponent $\alpha$ is known,
-the dict form `kernel_singularity={0.0: alpha}` switches the singular blocks
-to fast deterministic Gauss–Jacobi quadrature. Collocation nodes can be given
-directly via `coll_nodes`, with `gauss_legendre_nodes`, `radau_iia_nodes`,
-and `lobatto_nodes` helpers for the classical families.
+For a kernel $K(u) \sim u^{-\alpha}$, `optimal_graded_mesh(alpha=..., t_end=...,
+n_intervals=..., order=...)` builds a Brunner-graded mesh, and declaring the
+exponent with `kernel_singularity={0.0: alpha}` switches the singular blocks
+to fast deterministic Gauss–Jacobi quadrature. Collocation nodes for callable
+inputs can be given via `coll_nodes`, with `gauss_legendre_nodes`,
+`radau_iia_nodes` and `lobatto_nodes` for the classical families.
+
+Upgrading from 0.10? See [Migration from 0.10](guide/migration.md).
 
 ## Installation
 
@@ -45,13 +47,13 @@ LaTeX source files are provided alongside the PDFs.
 
 ```python
 import numpy as np
-from voles import solve_VIE_2
+import voles
 
 # y(t) = sin(t) satisfies this VIE-2
-time_step = 0.05
-times = np.arange(0, 9.05, time_step)
-kernel = np.exp(-times)
-g = np.sin(times) - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
+dt = 0.05
+t = np.arange(0, 9.05, dt)
+g = np.sin(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
 
-soln = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=time_step)
+sol = voles.solve_vie2(kernel=np.exp(-t), g=g, dt=dt)
+print(sol.y[:3], sol(0.123))
 ```

@@ -85,7 +85,15 @@ def _short(value):
 def describe(name, kwargs):
     """The equivalent 1.0 call as text, e.g. for a deprecation message."""
     new_name, out, dropped = translate(name, kwargs)
-    args = ", ".join(f"{k}={_short(v)}" for k, v in out.items())
+    shown = {k: _short(v) for k, v in out.items()}
+    if "coll_nodes" in out and ("coll_divs" in kwargs or "coll_choices" in kwargs):
+        # Exact, not the rounded floats: copying 0.333333 would change the method.
+        divs = kwargs.get("coll_divs")
+        if divs is None:
+            divs = max(int(c) for c in kwargs["coll_choices"])
+        ints = [int(round(c * int(divs))) for c in out["coll_nodes"].tolist()]
+        shown["coll_nodes"] = f"np.array({ints}) / {int(divs)}"
+    args = ", ".join(f"{k}={v}" for k, v in shown.items())
     text = f"voles.{new_name}({args})"
     notes = []
     if "show_warnings" in dropped and not dropped["show_warnings"]:

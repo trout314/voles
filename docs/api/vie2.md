@@ -1,3 +1,3 @@
-# solve_VIE_2
+# solve_vie2
 
-::: voles.solve_VIE_2
+::: voles.solve_vie2

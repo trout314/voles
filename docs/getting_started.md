@@ -5,158 +5,144 @@
 <!-- Single-sourced from README.md so the two never drift. -->
 --8<-- "README.md:install"
 
-## Input format
+## Two ways to give the inputs
 
-The two solver families take different input shapes — see the relevant section below.
+Each solver accepts the kernel and the other input functions in one of two
+forms, chosen by their types (see [Conventions](guide/conventions.md) for the
+full rules):
 
-### Array-based solvers (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`)
+- **Arrays** of samples at t = 0, dt, 2·dt, …, with the spacing given as
+  `dt`. The kernel array holds K(u) at the lags u = 0, dt, …; the
+  convolution lag is u = t − s. The solver builds a uniform mesh from the
+  samples. The collocation nodes sit on samples and are chosen with
+  `coll_setting=(divs, choices)`, meaning nodes at `choices / divs` within
+  each interval. By default the integrals use product quadrature, which
+  works for every setting; see
+  [Product integration](examples/product_integration.md).
+- **Callables** `kernel(u)`, `g(t)`, `a(t)`, with the mesh breakpoints given
+  as `mesh=` (a 1-D array from 0 to T). Resolution is set by the mesh, which
+  need not be uniform; the nodes are floats, `coll_nodes=`.
 
-The key input is `kernel_values`: an array of kernel values `K(u)` sampled from `u=0` in steps of `time_step` (here `u = t - s` is the convolution lag appearing in `K(t-s)`). The mesh is `coll_divs²` samples wide and any length of at least `coll_divs² + 1` is accepted: when the data do not end on a mesh point, the last mesh interval is stretched (to at most twice the regular width, with its collocation nodes snapped to samples) to absorb the leftover samples, and the solution is returned at every sample with the method's convergence order intact. A length smaller than `coll_divs² + 1` — too short to form a single mesh interval — raises a `ValueError`. By default the solvers use product integration (`quadrature="product"`): the kernel's piecewise-polynomial interpolant is integrated exactly, every sample of the data is used, and any `(coll_divs, coll_choices)` setting works. The mesh is `mesh_samples` samples wide; the default is `coll_divs` for `solve_VIE_2` and `solve_VIDE` and `coll_divs**2` for `solve_VIE_1`, whose inversion amplifies data errors by about the inverse of the mesh width. `quadrature="collocation"` selects the collocation-node rule instead, which runs in compiled code specialised per setting and is a few times faster; its mesh is `coll_divs**2` samples wide, and a setting outside the compiled lists `fast_coll_settings_VIE_1` / `fast_coll_settings_VIE_2` / `fast_coll_settings_VIDE` then needs the optional `numba` dependency (scalar equations only). See [Product integration for sampled kernels](examples/product_integration.md).
+Every solver returns a [`VolterraSolution`](api/solution.md): `sol.t` and
+`sol.y` are the solution on the input grid (the sample times, or the mesh
+breakpoints), and `sol(t)` evaluates it anywhere in [0, T].
 
-### Callable-input solvers (`function_solve_*`)
-
-You pass the kernel, forcing, and (for VIDE) coefficient `a` as Python callables, plus a 1-D `mesh_breakpoints` array starting at 0. There's no fixed-length constraint; resolution is controlled by how many breakpoints you pass. See the Callable-Input Solvers section below.
-
-## solve_VIE_1
+## solve_vie1
 
 Solves $g(t) = \int_0^t K(t-s)y(s)ds$ for unknown $y(t)$.
 
 ```python
 import numpy as np
-from voles import solve_VIE_1
+import voles
 
-time_step = 0.1
-times = np.arange(0, 9.1, time_step)   # 91 points = 10×3² + 1
-kernel = np.exp(times)                  # K(u) = e^u
-g = np.sin(times)
-g[0] = 0.0                              # g(0) must be 0 for Type-1 VIEs
+dt = 0.01
+t = np.arange(0, 3.005, dt)            # 301 samples
+g = np.sin(t)                          # g(0) must be 0 for a first-kind equation
 
-soln = solve_VIE_1(
-    kernel_values=kernel,
-    g_values=g,
-    time_step=time_step,
-    coll_divs=3,
-    coll_choices=[1, 2, 3],
-)
-# exact solution: cos(t) - sin(t)
+sol = voles.solve_vie1(kernel=np.exp(t), g=g, dt=dt, coll_setting=(3, [1, 2, 3]))
+print(f"max error {np.max(np.abs(sol.y - (np.cos(t) - np.sin(t)))):.1e}")
 ```
 
-## solve_VIE_2
+The default nodes for VIE-1 are `(3, [1, 2, 3])`, so `coll_setting` could be
+left out here. Node sets for which the first-kind method diverges are
+rejected. The default mesh is 3² = 9 samples wide, wider than for the other
+two equations, because a first-kind equation amplifies noise in g by about
+the inverse of the mesh width; see
+[Conventions](guide/conventions.md#vie-1-mesh-width-and-noisy-data).
+
+## solve_vie2
 
 Solves $y(t) = g(t) + \int_0^t K(t-s)y(s)ds$ for unknown $y(t)$.
 
 ```python
 import numpy as np
-from voles import solve_VIE_2
+import voles
 
-time_step = 0.05
-times = np.arange(0, 4.55, time_step)  # 91 points = 10×3² + 1
-kernel = np.exp(-times)
-g = np.sin(times) - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
+dt = 0.05
+t = np.arange(0, 4.55, dt)             # 91 samples
+g = np.sin(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
 
-soln = solve_VIE_2(
-    kernel_values=kernel,
-    g_values=g,
-    time_step=time_step,
-    coll_divs=3,
-    coll_choices=[0, 1, 2, 3],
-)
-# exact solution: sin(t)
+sol = voles.solve_vie2(kernel=np.exp(-t), g=g, dt=dt, coll_setting=3)
+print(f"max error {np.max(np.abs(sol.y - np.sin(t))):.1e}")
 ```
 
-## solve_VIDE
+`coll_setting=3` is short for `(3, [0, 1, 2, 3])`: every point the method
+admits.
+
+## solve_vide
 
 Solves $y'(t) = a(t)y(t) + g(t) + \int_0^t K(t-s)y(s)ds$ for unknown $y(t)$.
 
 ```python
 import numpy as np
-from voles import solve_VIDE
+import voles
 
-time_step = 0.01
-times = np.arange(0, 0.91, time_step)  # 91 points = 10×3² + 1
-kernel = np.exp(-times)
-a = 1.0 / (1.0 + times**2)
-g = (np.cos(times) - 0.5*(np.exp(-times) + np.sin(times) - np.cos(times))
-     - np.sin(times) / (1.0 + times**2))
+dt = 0.01
+t = np.arange(0, 0.91, dt)             # 91 samples
+a = 1.0 / (1.0 + t**2)
+g = (np.cos(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
+     - np.sin(t) / (1.0 + t**2))
 
-soln = solve_VIDE(
-    kernel_values=kernel,
-    g_values=g,
-    a_values=a,
-    soln_init_value=0.0,
-    time_step=time_step,
-    coll_divs=3,
-    coll_choices=[1, 2, 3],
-)
-# exact solution: sin(t)
+sol = voles.solve_vide(kernel=np.exp(-t), a=a, g=g, y0=0.0, dt=dt)
+print(f"max error {np.max(np.abs(sol.y - np.sin(t))):.1e}")
 ```
 
-## Returning a callable solution
-
-Pass `return_function=True` to also get a callable solution object. Call it at any time in the solved interval $[0, T]$ to evaluate the piecewise polynomial (times outside give NaN); it also indexes and iterates like a list of per-interval `numpy.polynomial.Polynomial` objects (matching the callable-input solvers' `return_function`):
+## Using the solution
 
 ```python
 import numpy as np
-from voles import solve_VIE_2
+import voles
 
-time_step = 0.05
-times = np.arange(0, 4.55, time_step)  # 91 points = 10×3² + 1
-kernel = np.exp(-times)
-g = np.sin(times) - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
+dt = 0.05
+t = np.arange(0, 4.55, dt)
+g = np.sin(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
+sol = voles.solve_vie2(kernel=np.exp(-t), g=g, dt=dt)
 
-soln_values, solution = solve_VIE_2(
-    kernel_values=kernel, g_values=g, time_step=time_step,
-    coll_divs=3, coll_choices=[0, 1, 2, 3],
-    return_function=True,
-)
-
-solution(0.42)             # evaluate the piecewise polynomial at any time in [0, T]
-first_interval = solution[0]   # indexes/iterates like the per-interval polynomials
-for poly in solution:          # each is a numpy.polynomial.Polynomial
-    pass
+sol(0.42)                              # a float: anywhere in [0, T]
+sol(np.linspace(0, 4.5, 200))          # an array
+sol(5.0)                               # nan: outside [0, T]
+sol.to_ppoly().derivative()(0.42)      # y'(0.42), through scipy's PPoly
+print(sol)
 ```
 
-`return_polys=True` remains as a deprecated alias.
+See [Working with the solution](examples/polynomial_solutions.md) for the
+collocation data, the coefficients and the values at breakpoints.
 
-## Callable-input solvers
+## Callable inputs
 
-The companion `function_solve_VIE_1`, `function_solve_VIE_2`, and `function_solve_VIDE` accept the kernel, forcing, and (for VIDE) coefficient `a` as Python callables instead of pre-sampled arrays, run on an arbitrary mesh you supply via `mesh_breakpoints`, and natively handle weakly singular convolution kernels. Same equations, same scalar / vector / matrix shape support.
+The same problem with callables, on a mesh you choose:
 
 ```python
 import numpy as np
-from voles import function_solve_VIE_2
+import voles
 
-# Same problem as solve_VIE_2 above; kernel and g are callables now.
-kernel = lambda u: np.exp(-u)
-g      = lambda t: np.sin(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
-
-mesh = np.linspace(0, 4.5, 91)
-soln_values, y = function_solve_VIE_2(
-    kernel=kernel, g=g, mesh_breakpoints=mesh,
-    coll_divs=3, coll_choices=[0, 1, 2, 3],
-    return_function=True,
-)
-# y is callable: y(0.37) → scalar, y(np.linspace(0, 4.5, 200)) → array
+sol = voles.solve_vie2(kernel=lambda u: np.exp(-u),
+                       g=lambda t: np.sin(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t)),
+                       mesh=np.linspace(0, 4.5, 91))
+print(sol(0.37), np.sin(0.37))
 ```
 
-For weakly singular kernels $K(u) \sim u^{-\alpha}$ (e.g. Abel-type), declare the singularity and use `optimal_graded_mesh` to recover the full collocation convergence order:
+For a weakly singular kernel $K(u) \sim u^{-\alpha}$ (e.g. Abel-type),
+declare the singularity and use `optimal_graded_mesh` to recover the full
+collocation convergence order. With the exponent known, the dict form
+`kernel_singularity={0.0: 0.5}` switches the singular blocks from adaptive
+quadrature to much faster deterministic Gauss–Jacobi rules (with an
+automatic fallback if the declared exponent turns out to be wrong):
 
 ```python
 import numpy as np
-from voles import function_solve_VIE_2, optimal_graded_mesh
+import voles
 
-kernel = lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0
-g      = lambda t: np.sqrt(t) - 0.5 * np.pi * t   # exact y(t) = sqrt(t)
+kernel = lambda u: u**-0.5
+g = lambda t: np.sqrt(t) - 0.5 * np.pi * t        # exact y(t) = sqrt(t)
 
-coll_choices = [0, 1, 2]
-mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30, order=len(coll_choices))
-soln = function_solve_VIE_2(
-    kernel=kernel, g=g, mesh_breakpoints=mesh,
-    coll_divs=2, coll_choices=coll_choices,
-    kernel_singularity=0.0,
-)
+nodes = voles.radau_iia_nodes(3)
+mesh = voles.optimal_graded_mesh(alpha=0.5, t_end=1.0, n_intervals=30, order=len(nodes))
+sol = voles.solve_vie2(kernel=kernel, g=g, mesh=mesh, coll_nodes=nodes,
+                       kernel_singularity={0.0: 0.5})
+tt = np.linspace(0, 1, 101)
+print(f"max error {np.max(np.abs(sol(tt) - np.sqrt(tt))):.1e}")
 ```
 
-If you also know the power law, declare it with the dict form — `kernel_singularity={0.0: 0.5}` for $K(u) \sim u^{-1/2}$ — and the singular blocks switch from adaptive quadrature to much faster deterministic Gauss–Jacobi rules (with an automatic fallback if the declared exponent turns out to be wrong). Collocation nodes can also be given directly via `coll_nodes`, e.g. `coll_nodes=gauss_legendre_nodes(3)`; see the [callable-solver examples](examples/function_solvers.md).
-
-See the [Callable Inputs and Arbitrary Mesh](examples/function_solvers.md) example for the full walkthrough including vector and matrix-valued cases.
+See [Callable inputs and arbitrary meshes](examples/function_solvers.md) for
+more, including vector- and matrix-valued problems.

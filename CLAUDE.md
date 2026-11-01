@@ -44,7 +44,9 @@ pytest tests/test_vie1.py -v  # single test file
 pytest tests/ -k "test_name"  # single test by name
 ```
 
-Test tolerance is `1e-3`. No linter/formatter is configured.
+Test tolerance is `1e-3`. No linter/formatter is configured. pytest runs with `filterwarnings = ["error"]`.
+
+Docstring Examples are doctested by `tests/test_docstring_examples.py` (print rounded values); the docs' code blocks run with `pytest --markdown-docs docs/ README.md`. User guide pages live in `docs/guide/`.
 
 ## Architecture
 
@@ -64,15 +66,15 @@ Test tolerance is `1e-3`. No linter/formatter is configured.
 - **No GC in the D extension.** Every exported entry point is `@nogc` (the compiler enforces it); scratch memory uses `buffers.HeapArray!T` (`dlang/source/buffers.d`: malloc-backed, non-copyable, `T.init`-filled like `new T[n]`, converts to `T[]`), and `volterra_rt_init` disables automatic collections. This is what lets Python threads call the solvers without registering with druntime, whose stop-the-world collector mishandles threads it doesn't own (a Windows guard-page hang and a Linux TLS-range segfault, both 2026-10). Don't reintroduce `new`, `.length =` on dynamic arrays, `~`, or heap closures in solver code; `ldc2 -vgc -o- -I. dlang/source/*.d` should list only compile-time array literals.
 
 ### Dispatch flow
-1. `_sampled.py` / `_functional.py` validate inputs and determine scalar vs vector vs matrix
-2. For vector/matrix: reshapes to call the vector D extension per-column (matrix columns processed in parallel threads)
-3. Checks if requested collocation parameters are compiled in D extension via `supported_coll_settings_d()`
-4. Falls back to Numba JIT solvers if not (scalar only; vector/matrix require the D extension)
+1. `_api.solve_*` classifies the regime from the input types, validates every argument (1.0 names, `_validate` rules), resolves `coll_setting`/`coll_nodes` and the shapes, and calls `_sampled.solve` or `_functional.solve`.
+2. The engine (`_sampled.vie*` / `_functional.vie*`) repeats its own 0.10 checks, determines scalar vs vector vs matrix, and returns values plus the legacy `_SolutionFunction`; `solve` wraps them in a `VolterraSolution`.
+3. For vector/matrix: reshapes to call the vector D extension per column (matrix columns processed in parallel threads).
+4. With `quadrature="collocation"`, checks whether the setting is compiled into the D extension (`supported_coll_settings_d()`), and falls back to the Numba JIT solvers if not (scalar only; vector/matrix require the D extension). Product quadrature (the default) needs no compiled setting.
 
 ### Three solver types
-- **VIE-1**: g(t) = integral of K(t-s)·y(s)ds — collocation excludes point 0
-- **VIE-2**: y(t) = g(t) + integral of K(t-s)·y(s)ds — collocation includes point 0
-- **VIDE**: y'(t) = a(t)·y(t) + g(t) + integral of K(t-s)·y(s)ds, y(0)=y₀
+- **VIE-1** (`solve_vie1`): g(t) = integral of K(t-s)·y(s)ds — no collocation node at c = 0
+- **VIE-2** (`solve_vie2`): y(t) = g(t) + integral of K(t-s)·y(s)ds — nodes may include c = 0
+- **VIDE** (`solve_vide`): y'(t) = a(t)·y(t) + g(t) + integral of K(t-s)·y(s)ds, y(0)=y₀
 
 ## CI/CD
 

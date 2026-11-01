@@ -32,24 +32,29 @@ plugins:
 nav:
   - Home: index.md
   - Getting Started: getting_started.md
+  - User Guide:
+      - Conventions: guide/conventions.md
+      - Warnings: guide/warnings.md
+      - Migration from 0.10: guide/migration.md
+      - Stability policy: guide/stability.md
   - API Reference:
-      - Array-based solvers:
-          - solve_VIE_1: api/vie1.md
-          - solve_VIE_2: api/vie2.md
-          - solve_VIDE: api/vide.md
-      - Callable-input solvers:
-          - function_solve_VIE_1: api/function_vie1.md
-          - function_solve_VIE_2: api/function_vie2.md
-          - function_solve_VIDE: api/function_vide.md
+      - Solvers:
+          - solve_vie1: api/vie1.md
+          - solve_vie2: api/vie2.md
+          - solve_vide: api/vide.md
+      - VolterraSolution: api/solution.md
+      - Warnings: api/warnings.md
+      - Helpers:
           - optimal_graded_mesh: api/optimal_graded_mesh.md
           - Collocation node helpers: api/coll_nodes.md
+      - Deprecated 0.10 solvers: api/legacy.md
   - Examples:
       - VIE Type 1: examples/vie1.md
       - VIE Type 2: examples/vie2.md
       - VIDE: examples/vide.md
       - Product integration for sampled kernels: examples/product_integration.md
-      - Callable inputs and arbitrary mesh: examples/function_solvers.md
+      - Callable inputs and arbitrary meshes: examples/function_solvers.md
       - Vector- and matrix-valued equations: examples/matrix_vector.md
       - Complex-valued equations: examples/complex.md
-      - Polynomial solutions (return_function): examples/polynomial_solutions.md
+      - Working with the solution: examples/polynomial_solutions.md
   - Benchmarks: benchmarks.md

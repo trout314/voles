@@ -1,3 +1,3 @@
-# solve_VIDE
+# solve_vide
 
-::: voles.solve_VIDE
+::: voles.solve_vide

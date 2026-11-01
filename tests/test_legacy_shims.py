@@ -86,6 +86,17 @@ def test_message_shows_only_what_the_caller_set(record):
     assert "warnings.simplefilter('ignore', voles.VolesWarning)" in msg
 
 
+def test_message_gives_exact_functional_nodes(record):
+    """Rounded floats would be a different method if copied."""
+    voles.function_solve_VIE_2(kernel=np.exp, g=np.cos, mesh_breakpoints=MESH, coll_divs=3,
+                               coll_choices=[3, 0, 1])
+    voles.function_solve_VIE_1(kernel=np.exp, g=np.sin, mesh_breakpoints=MESH, coll_divs=3)
+    msgs = [str(w.message) for w in deprecations(record)]
+    assert "coll_nodes=np.array([0, 1, 3]) / 3" in msgs[0]
+    assert "coll_nodes=np.array([1, 2, 3]) / 3" in msgs[1]
+    assert "guide/migration" in msgs[0]
+
+
 def test_message_survives_odd_arguments(record):
     """The suggested call is best effort; the 0.10 call's own error wins."""
     with pytest.raises(TypeError):

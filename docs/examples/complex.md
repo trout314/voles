@@ -1,21 +1,29 @@
 # Example: Complex-Valued Equations
 
-Both solver families accept complex-valued inputs. Pass complex NumPy arrays
-for the kernel, forcing function, and (for VIDE) initial value, and the solver
-returns a complex-valued solution. This works for scalar, vector, and matrix
-cases alike (and for the callable-input family too — pass callables that return
-complex values).
+Pass complex arrays for the kernel, the forcing function and (for the VIDE)
+the initial value, and the solution is complex. This works for scalar,
+vector, and matrix problems alike, and for callables that return complex
+values.
 
 ```python
 import numpy as np
-from voles import solve_VIE_2
+import voles
 
-time_step = 0.05
-times = np.arange(0, 2.05, time_step)      # 41 points = 10×2² + 1
-kernel = np.exp(-1j * times)               # complex kernel
-g = np.ones_like(times, dtype=complex)
+dt = 0.05
+t = np.arange(41) * dt
+sol = voles.solve_vie2(kernel=np.exp(-1j * t), g=np.ones_like(t), dt=dt)
+print(sol.y.dtype, type(sol(0.5)))      # complex128 <class 'complex'>
+```
 
-soln = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=time_step)
-# soln is a complex-valued array
-print(soln.dtype)
+A complex oscillator as a VIDE with callables: $y' = i\omega y$, $y(0) = 1$,
+has the solution $e^{i\omega t}$.
+
+```python
+import numpy as np
+import voles
+
+omega = 2.0
+sol = voles.solve_vide(kernel=lambda u: np.zeros_like(u), a=lambda t: 1j * omega,
+                       y0=1.0, mesh=np.linspace(0, 3, 61))
+print(f"max error {abs(sol(2.0) - np.exp(2j * omega)):.1e}")
 ```

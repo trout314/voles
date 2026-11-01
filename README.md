@@ -19,13 +19,12 @@ The solvers are implemented as a compiled extension written in the [D language](
 
 ## Solvers
 
-Two solver families are provided.
+One solver per equation. Each takes its inputs in either of two forms:
 
-- The **array-input** family (`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`) take the kernel and other input functions as arrays of values given on a uniform time grid. They do not support singular kernels.
+- **arrays** of samples on a uniform time grid, with spacing `dt`. The fastest path when the data are already sampled (measured or simulated);
+- **callables** `kernel(u)`, `g(t)`, `a(t)`, solved on a mesh of breakpoints you choose (`mesh=`). This form also handles weakly singular kernels.
 
-- The **callable-input** family (`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`) accept the kernel and other input functions as Python callables, and allow arbitrary collocation mesh intervals. These solvers support kernels with one or more integrable singularities.
-
-Note that the callable-input family of solvers require the package `scipy`, which is included by default.
+All three return a `VolterraSolution`: the solution on the input grid (`sol.t`, `sol.y`), a callable piecewise polynomial `sol(t)` for any t in $[0, T]$, and the collocation data.
 
 ### Type-1 Volterra integral equation (VIE-1)
 
@@ -33,10 +32,7 @@ Given functions $K$ and $g$, solve for the unknown function $y(t)$ in:
 
 $$g(t) = \int_0^t K(t-s)\\, y(s)\\, ds$$
 
-| Solver | Inputs | Reference |
-|---|---|---|
-| `solve_VIE_1` | sampled arrays, uniform grid | [api/vie1/](https://trout314.github.io/voles/api/vie1/) |
-| `function_solve_VIE_1` | callables, arbitrary mesh | [api/function_vie1/](https://trout314.github.io/voles/api/function_vie1/) |
+Solver: `solve_vie1` ([API reference](https://trout314.github.io/voles/api/vie1/)).
 
 ### Type-2 Volterra integral equation (VIE-2)
 
@@ -44,10 +40,7 @@ Given functions $K$ and $g$, solve for the function $y(t)$ in:
 
 $$y(t) = g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
-| Solver | Inputs | Reference |
-|---|---|---|
-| `solve_VIE_2` | sampled arrays, uniform grid | [api/vie2/](https://trout314.github.io/voles/api/vie2/) |
-| `function_solve_VIE_2` | callables, arbitrary mesh | [api/function_vie2/](https://trout314.github.io/voles/api/function_vie2/) |
+Solver: `solve_vie2` ([API reference](https://trout314.github.io/voles/api/vie2/)).
 
 ### Volterra integro-differential equation (VIDE)
 
@@ -55,16 +48,15 @@ Given functions $K$, $a$, $g$, and initial value $y(0)$, solve for the function 
 
 $$y'(t) = a(t)\\, y(t) + g(t) + \int_0^t K(t-s)\\, y(s)\\, ds$$
 
-| Solver | Inputs | Reference |
-|---|---|---|
-| `solve_VIDE` | sampled arrays, uniform grid | [api/vide/](https://trout314.github.io/voles/api/vide/) |
-| `function_solve_VIDE` | callables, arbitrary mesh | [api/function_vide/](https://trout314.github.io/voles/api/function_vide/) |
+Solver: `solve_vide` ([API reference](https://trout314.github.io/voles/api/vide/)).
 
 ### Mesh helper: `optimal_graded_mesh`
 
-This function should be used when the kernel has a single weak singularity at time zero with a known singular exponent.  Returns the graded mesh points $t_n = T (n/M)^r$ for $n=0,1,\ldots, M$ where $M$ is the desired number of mesh intervals. The grading exponent is $r = p / (1 - \alpha)$ where $p$ is the method order set by the parameter `order`, and $\alpha \in [0, 1)$ is the singular exponent for the kernel, set via the parameter `alpha`. To get an optimal mesh for a given set of collocation parameters, one should set `order=len(coll_choices)`. These meshes are designed for convolution kernels with $K(u) \sim u^{-\alpha}$ near $u\sim 0$ for $\alpha \in [0, 1)$. (For $\alpha = 0$ it returns a uniform mesh). Feeding the result to a callable-input solver via `mesh_breakpoints` gives optimal convergence in such situations.
+For a kernel with a weak singularity at zero, $K(u) \sim u^{-\alpha}$ with known $\alpha \in [0, 1)$. Returns the graded mesh $t_n = T (n/M)^r$, $n = 0, \ldots, M$, with grading exponent $r = p / (1 - \alpha)$, where $p$ (`order`) should be the number of collocation nodes. Pass it as `mesh=` with callable inputs, and declare the singularity with `kernel_singularity={0.0: alpha}`, to get the method's full convergence order. (For $\alpha = 0$ it returns a uniform mesh.)
 
 API reference: [api/optimal_graded_mesh/](https://trout314.github.io/voles/api/optimal_graded_mesh/)
+
+> **Upgrading from 0.10?** The six 0.10 functions (`solve_VIE_1`, …, `function_solve_VIDE`) still work in 0.11 with a `DeprecationWarning` that shows the equivalent new call; they are removed in 1.0. See [Migration from 0.10](https://trout314.github.io/voles/guide/migration/).
 
 ## Installation
 
@@ -85,8 +77,8 @@ pip install voles --no-deps && pip install numpy   # leanest: numpy only, no sci
 ```
 
 **What the optional pieces buy you:**
-- `scipy` (core dependency) — required for the callable-input `function_solve_*` family.
-- `numba` (added by `[full]`) — only needed for the array-based solvers with `quadrature="collocation"` and a collocation setting not compiled into the D extension; the default product quadrature needs neither.
+- `scipy` (core dependency) — required for callable inputs and for `VolterraSolution.to_ppoly()`.
+- `numba` (added by `[full]`) — only needed for sampled inputs with `quadrature="collocation"` and a collocation setting not compiled into the D extension; the default product quadrature needs neither.
 
 To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](https://github.com/trout314/voles/blob/main/CONTRIBUTING.md).
 <!-- --8<-- [end:install] -->
@@ -97,41 +89,51 @@ To build from source (e.g. on an unsupported platform), see [CONTRIBUTING.md](ht
 
 ```python
 import numpy as np
-from voles import solve_VIE_2
+import voles
 
-# y(t) = sin(t) satisfies this VIE-2 with K(s) = exp(-s)
-time_step = 0.05
-times = np.arange(0, 2.1, time_step)   # 42 points
-kernel = np.exp(-times)
-g = np.sin(times) - 0.5*(np.exp(-times) + np.sin(times) - np.cos(times))
+# y(t) = sin(t) satisfies this VIE-2 with K(u) = exp(-u)
+dt = 0.05
+t = np.arange(0, 2.1, dt)   # 42 samples
+g = np.sin(t) - 0.5*(np.exp(-t) + np.sin(t) - np.cos(t))
 
-soln = solve_VIE_2(
-    kernel_values=kernel,
-    g_values=g,
-    time_step=time_step,
-)
-print(f"Max error: {max(abs(soln - np.sin(times))):.2e}")
+sol = voles.solve_vie2(kernel=np.exp(-t), g=g, dt=dt)
+print(f"Max error: {np.max(np.abs(sol.y - np.sin(t))):.2e}")
+print(f"y(1.234) = {sol(1.234):.6f}, exact {np.sin(1.234):.6f}")
 ```
 
-All solvers accept `return_function=True` to also return a callable solution object (`return_polys=True` is a deprecated alias). The object evaluates the piecewise polynomial solution at any time in the solved interval $[0, T]$ (NaN outside it) and also indexes/iterates like a list of `numpy.polynomial.Polynomial` objects.
+The same problem with callables, on a mesh of your choice:
 
-The array-input solvers accept any input length that covers at least one mesh interval and return the solution at every sample: when the data do not end on a mesh point, the last mesh interval is stretched (to at most twice the regular width) to absorb the leftover samples, which keeps the convergence order. See the API reference for each solver for details.
+```python
+import numpy as np
+import voles
+
+sol = voles.solve_vie2(kernel=lambda u: np.exp(-u),
+                       g=lambda t: np.sin(t) - 0.5*(np.exp(-t) + np.sin(t) - np.cos(t)),
+                       mesh=np.linspace(0, 2, 21))
+print(f"y(1.234) = {sol(1.234):.6f}")
+```
+
+Sampled inputs may have any length that covers at least one mesh interval: when the samples don't end on a mesh point, the last interval is stretched (to at most twice the regular width) to absorb the leftovers, keeping the convergence order. The [Conventions](https://trout314.github.io/voles/guide/conventions/) page has the full rules: regimes, shapes, collocation settings and evaluation.
+
+## The solution object
+
+`VolterraSolution` holds the piecewise polynomial: `sol(t)` evaluates it anywhere in $[0, T]$ (NaN outside), `sol.y` holds its values on the input grid `sol.t`, `sol.node_values` the collocation values, and `sol.coefficients` each interval's polynomial. `sol.to_ppoly()` returns it as a `scipy.interpolate.PPoly`, for derivatives, integrals and roots. See [Working with the solution](https://trout314.github.io/voles/examples/polynomial_solutions/).
 
 ## Vector and Matrix Valued Equations
 
-All solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ is a $d$-dimensional vector, $g(t)$ is also a $d$-dimensional vector and $K(t)$ and $a(t)$ are $d \times d$ matrices. When $y(t)$ is a $d \times m$ matrix, $g(t)$ is also a $d \times m$ matrix and $K(t)$ and $a(t)$ are $d \times d$ matrices. The solvers detect which case is appropriate automatically: for the array-based family from the shapes of the input arrays, and for the callable family from the shape returned by `g(t)` or the shape of `soln_init_value` for the VIDE solver. The callable family builds the kernel weight tensor once and shares it across the $m$ columns, so a matrix solve is much cheaper than $m$ separate calls.
+All solvers can solve for vector-valued and matrix-valued functions $y(t)$. When $y(t)$ is a $d$-dimensional vector, $g(t)$ is also a $d$-dimensional vector and $K(t)$ and $a(t)$ are $d \times d$ matrices. When $y(t)$ is a $d \times m$ matrix — $m$ right-hand sides solved together — $g(t)$ or $y(0)$ is a $d \times m$ matrix; an input without the column axis is shared by all $m$ columns. The case is detected from the shapes of the arrays, or of the callables' return values. The kernel's work is shared across the $m$ columns, so a matrix solve is much cheaper than $m$ separate calls.
 
-See the worked examples: [vector- and matrix-valued equations](https://trout314.github.io/voles/examples/matrix_vector/), and the [callable-solver examples](https://trout314.github.io/voles/examples/function_solvers/) for the matrix-valued callable case.
+See the worked examples: [vector- and matrix-valued equations](https://trout314.github.io/voles/examples/matrix_vector/).
 
 ## Complex-Valued Equations
 
-Both solver families accept complex-valued inputs. Pass complex NumPy arrays (or, for the callable family, callables returning complex values) for the kernel, forcing function, and (for VIDE) initial value, and the solver returns a complex-valued solution. This works for scalar, vector, and matrix cases alike. See the [complex-valued equations example](https://trout314.github.io/voles/examples/complex/).
+Pass complex arrays (or callables returning complex values) for the kernel, forcing function, and (for the VIDE) initial value, and the solution is complex. This works for scalar, vector, and matrix cases alike. See the [complex-valued equations example](https://trout314.github.io/voles/examples/complex/).
 
 ## How the Collocation Method Works
 
 The solvers approximate each component of $y(t)$ as a piecewise polynomial. The time axis is divided into mesh intervals, and on each interval the solution is represented by a polynomial whose coefficients are determined by requiring the Volterra equation to hold exactly at a set of collocation points within that interval.
 
-Because the solution on each mesh interval is an explicit polynomial, the solver can optionally return it (see Polynomial Solutions below). This is useful for evaluating the solution at arbitrary times, differentiating, integrating, and so on.
+Because the solution on each mesh interval is an explicit polynomial, it can be evaluated at arbitrary times, differentiated, integrated, and so on (see The solution object above).
 
 ## Piecewise Polynomial Illustration
 
@@ -139,13 +141,9 @@ The figure below shows an actual `voles` solution to a first-kind VIE ($g(t) = \
 
 ![Piecewise polynomial illustration](docs/piecewise_polynomial.png)
 
-## Polynomial Solutions
-
-Passing `return_function=True` to any solver returns a `(soln_values, solution)` tuple (`return_polys=True` is a deprecated alias). `solution(t)` evaluates the piecewise polynomial at any time in $[0, T]$ (NaN outside), and `solution` also indexes/iterates like a list of `numpy.polynomial.Polynomial` objects covering successive mesh intervals — these can be evaluated at any point, differentiated, integrated, and so on. See the [polynomial-solutions example](https://trout314.github.io/voles/examples/polynomial_solutions/) for a worked case that evaluates the solution and its derivative off the time grid.
-
 ## Benchmarks
 
-**Array-input solvers.** On their uniform grid the history sums are accumulated with a blocked-FFT scheme (Hairer–Lubich–Schlichte), so the runtime is quasilinear — not quadratic — in the number of input points N; d is the number of rows in the solution and m the number of columns:
+**Sampled inputs.** On the uniform grid the history sums are accumulated with a blocked-FFT scheme (Hairer–Lubich–Schlichte), so the runtime is quasilinear — not quadratic — in the number of input points N; d is the number of rows in the solution and m the number of columns:
 
 | | Scalar | Vector (d×1) | Matrix (d×m)* |
 |---|---|---|---|
@@ -154,11 +152,11 @@ Passing `return_function=True` to any solver returns a `(soln_values, solution)`
 
 \* The m columns of the solution are independent and run in parallel threads (capped at the CPU count).
 
-The `coll_divs` and `coll_choices` parameters affect the constant factor but not the asymptotic scaling in N, d, and m.
+The collocation setting (`coll_setting`) affects the constant factor but not the asymptotic scaling in N, d, and m.
 
-**Callable-input solvers.** With M mesh intervals and p collocation nodes per interval, the precomputed weight tensor couples every interval pair, so time and memory scale as O(M² p² d²). On a *uniform* mesh with a convolution kernel the tensor is Toeplitz and is assembled from a single integrated row, reducing the number of numerical integrations — the dominant cost in practice — from O(M²) to O(M); declaring a power-law singularity with the dict form of `kernel_singularity` keeps this fast path for singular kernels too.
+**Callable inputs.** With M mesh intervals and p collocation nodes per interval, the precomputed weight tensor couples every interval pair, so time and memory scale as O(M² p² d²). On a *uniform* mesh with a convolution kernel the tensor is Toeplitz and is assembled from a single integrated row, reducing the number of numerical integrations — the dominant cost in practice — from O(M²) to O(M); declaring a power-law singularity with the dict form of `kernel_singularity` keeps this fast path for singular kernels too.
 
-**Measured timings** for both solver families (regenerated automatically on each push) live on the [benchmarks page of the documentation](https://trout314.github.io/voles/benchmarks/).
+**Measured timings** for both kinds of input (regenerated automatically on each push) live on the [benchmarks page of the documentation](https://trout314.github.io/voles/benchmarks/).
 
 See the [Getting Started](https://trout314.github.io/voles/getting_started/) page for complete examples.
 

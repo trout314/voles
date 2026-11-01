@@ -19,19 +19,54 @@ __all__ = ["VolesWarning", "AccuracyWarning", "PerformanceWarning"]
 
 
 class VolesWarning(UserWarning):
-    """Base class of every warning voles emits."""
+    r"""Base class of every warning voles emits.
+
+    Each diagnostic is issued once per solver call with `warnings.warn`,
+    attributed to the line that called the solver, so the standard
+    `warnings` filters apply. Python shows a given warning once per
+    calling line by default.
+
+    See Also
+    --------
+    - [AccuracyWarning][voles.AccuracyWarning], [PerformanceWarning][voles.PerformanceWarning]:
+      the two kinds.
+
+    Examples
+    --------
+    A first-kind equation with $g(0) \ne 0$ has no bounded solution, so
+    voles warns. Make that an error:
+
+    >>> import warnings
+    >>> import numpy as np
+    >>> import voles
+    >>> with warnings.catch_warnings():
+    ...     warnings.simplefilter("error", voles.AccuracyWarning)
+    ...     voles.solve_vie1(kernel=np.ones(10), g=np.ones(10))
+    Traceback (most recent call last):
+        ...
+    voles.AccuracyWarning: g(0) is not zero ...
+
+    or silence every voles diagnostic in a block:
+
+    >>> with warnings.catch_warnings():
+    ...     warnings.simplefilter("ignore", voles.VolesWarning)
+    ...     sol = voles.solve_vie1(kernel=np.ones(10), g=np.ones(10))
+    """
+    __module__ = "voles"
 
 
 class AccuracyWarning(VolesWarning):
     """The requested method runs, but the result is less accurate than its
     nominal order suggests (reduced order, an ill-posed start, an unstable
     regime, or a mesh that doesn't suit the declared singularity)."""
+    __module__ = "voles"
 
 
 class PerformanceWarning(VolesWarning):
     """The result is correct, but it comes from a slower code path than the
     one normally used (the numba fallback, or an extension build that lacks
     a fast path)."""
+    __module__ = "voles"
 
 
 _PKG_DIR = os.path.dirname(os.path.abspath(__file__)) + os.sep

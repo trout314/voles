@@ -48,7 +48,8 @@ def _deprecated_call(fn, kwargs):
     except Exception:
         instead = f"voles.{_NEW[name]}()"
     _warn(f"{name}() is deprecated since voles 0.11 and will be removed in 1.0; use "
-          f"{instead} instead. See the migration table in the changelog.", DeprecationWarning)
+          f"{instead} instead. See https://trout314.github.io/voles/guide/migration/",
+          DeprecationWarning)
 
 
 def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step=1.0,

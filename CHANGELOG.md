@@ -25,11 +25,14 @@
   K(0) too small for collocation quadrature, a singularity declared on a
   uniform mesh) and `voles.PerformanceWarning` (the Numba fallback, an
   extension build without the lag-block drivers).
-- **`voles.VolterraSolution`**, the 1.0 solution object. The solvers don't
-  return it yet. It has:
+- **`voles.VolterraSolution`**, the solution object every new solver
+  returns. It has:
   - the grid output `t`/`y`;
   - `mesh`, `node_times`, `node_values` and `coefficients`;
-  - dense evaluation `sol(t, at_breakpoints="mean"|"left"|"right")`;
+  - dense evaluation `sol(t, at_breakpoints="mean"|"left"|"right")`. At an
+    interior breakpoint, where a discontinuous solution has two one-sided
+    limits, it gives their mean by default (the 0.10 object gave the right
+    limit; the sampled values were already the mean);
   - `to_ppoly()` (a `scipy.interpolate.PPoly`, for derivatives and
     integrals);
   - pickling and a readable `repr`.
@@ -39,7 +42,8 @@
   solvers still return their 0.10 solution object.
 
 ### Deprecated
-These still work in 0.11, exactly as in 0.10, and are removed in 1.0:
+These still work in 0.11, exactly as in 0.10, and are removed in 1.0 (see
+the [migration guide](https://trout314.github.io/voles/guide/migration/)):
 - **`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`** and
   **`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`**:
   use `solve_vie1`, `solve_vie2`, `solve_vide`. Each call warns with the
@@ -51,6 +55,24 @@ These still work in 0.11, exactly as in 0.10, and are removed in 1.0:
   default) accepts every valid setting. They are no longer in `__all__`.
 - **The `voles.solvers` module**: import from `voles`.
 - **`optimal_graded_mesh(T=, M=)`**: renamed `t_end=` and `n_intervals=`.
+- **The `[callable]` and `[numba]` extras** will be removed in 1.0: scipy is
+  a core dependency, and `voles[full]` installs numba. Use `voles` or
+  `voles[full]`.
+
+### Documentation
+- New user guide: **Conventions** (input regimes, shapes, collocation
+  settings, evaluation and the breakpoint convention, with measured orders,
+  and the VIE-1 mesh-width/noise trade-off with measurements), **Warnings**,
+  **Migration from 0.10** and **Stability policy**.
+- README, Getting Started, the home page, all eight example pages and the
+  API reference use the new solvers. "Polynomial solutions" is now "Working
+  with the solution" (`to_ppoly`, coefficients, breakpoints). The 0.10
+  functions are documented together on a "Deprecated 0.10 solvers" page.
+- The public docstrings have runnable Examples (run by the test suite),
+  linked See Also sections, and Raises/Warns sections.
+- The benchmarks call the new solvers; their names, and so the published
+  history, are unchanged. The small-N timings include the new layer's
+  per-call overhead (about 70 µs).
 
 ### Fixed
 - The Numba fallback passed `coll_choices` as a Python list, which Numba

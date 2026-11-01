@@ -523,7 +523,12 @@ def solve_vie1(*, kernel: Data, g: Optional[Data] = None, continuous: bool = Fal
 
     See Also
     --------
-    solve_vie2, solve_vide, VolterraSolution, optimal_graded_mesh
+    - [solve_vie2][voles.solve_vie2], [solve_vide][voles.solve_vide]: the other two
+      equations.
+    - [VolterraSolution][voles.VolterraSolution]: the returned object.
+    - [optimal_graded_mesh][voles.optimal_graded_mesh]: a mesh for a weakly singular
+      kernel.
+    - [radau_iia_nodes][voles.radau_iia_nodes]: node sets for ``coll_nodes``.
 
     Notes
     -----
@@ -538,6 +543,31 @@ def solve_vie1(*, kernel: Data, g: Optional[Data] = None, continuous: bool = Fal
     $|\rho_m| = \prod_i (1 - c_i)/c_i \le 1$, and the continuous one iff
     $|\rho_{m-1}| \le 1$ with $c_m = 1$ (Brunner 2004, Theorems 2.4.2 and
     2.4.5); $\rho = 1$ costs one order.
+    Examples
+    --------
+    Sampled data: with $K = 1$ and $g(t) = \sin t$ the solution is
+    $y = \cos t$.
+
+    >>> import numpy as np
+    >>> import voles
+    >>> t = np.linspace(0, 2, 201)
+    >>> sol = voles.solve_vie1(kernel=np.ones_like(t), g=np.sin(t), dt=t[1])
+    >>> sol
+    <VolterraSolution vie1, sampled, 22 intervals on [0, 2], degree 2, ...>
+    >>> sol.y.shape
+    (201,)
+    >>> print(f"{sol(1.0):.6f}  {np.cos(1.0):.6f}")
+    0.540303  0.540302
+
+    Callables: Abel's equation, $K(u) = u^{-1/2}$ and $g(t) = \pi t / 2$,
+    whose solution $y = \sqrt{t}$ has an unbounded derivative at 0. Declare
+    the singularity and grade the mesh to match it:
+
+    >>> mesh = voles.optimal_graded_mesh(alpha=0.5, t_end=1.0, n_intervals=16, order=3)
+    >>> sol = voles.solve_vie1(kernel=lambda u: u**-0.5, g=lambda t: np.pi / 2 * t,
+    ...                        mesh=mesh, kernel_singularity={0.0: 0.5})
+    >>> print(f"{sol(0.25):.4f}")
+    0.5000
     """
     return _solve("vie1", kernel=kernel, g=g, y0=y0, continuous=continuous, dt=dt,
                   coll_setting=coll_setting, quadrature=quadrature,
@@ -644,7 +674,12 @@ def solve_vie2(*, kernel: Data, g: Optional[Data] = None,
 
     See Also
     --------
-    solve_vie1, solve_vide, VolterraSolution, optimal_graded_mesh
+    - [solve_vie1][voles.solve_vie1], [solve_vide][voles.solve_vide]: the other two
+      equations.
+    - [VolterraSolution][voles.VolterraSolution]: the returned object.
+    - [optimal_graded_mesh][voles.optimal_graded_mesh]: a mesh for a weakly singular
+      kernel.
+    - [gauss_legendre_nodes][voles.gauss_legendre_nodes]: node sets for ``coll_nodes``.
 
     Notes
     -----
@@ -654,6 +689,29 @@ def solve_vie2(*, kernel: Data, g: Optional[Data] = None,
     (``mesh``, ``coll_nodes``, ``kernel_singularity``,
     ``reuse_adaptive_blocks`` apply). An option from the other regime is
     an error. Mixing callable and sampled inputs is not supported yet.
+    Examples
+    --------
+    Sampled data: $y(t) = 1 + \int_0^t y(s)\,ds$ has the solution $e^t$.
+
+    >>> import numpy as np
+    >>> import voles
+    >>> t = np.linspace(0, 1, 101)
+    >>> sol = voles.solve_vie2(kernel=np.ones_like(t), g=np.ones_like(t), dt=t[1])
+    >>> sol
+    <VolterraSolution vie2, sampled, 50 intervals on [0, 1], degree 2, ...>
+    >>> print(f"{sol(1.0):.8f}  {np.e:.8f}")
+    2.71828183  2.71828183
+
+    Callables, on a mesh of your choice: $K(u) = e^{-u}$ and $g = 1$ give
+    $y = 1 + t$, which the quadratic collocation polynomials represent
+    exactly.
+
+    >>> sol = voles.solve_vie2(kernel=lambda u: np.exp(-u), g=lambda t: np.ones_like(t),
+    ...                        mesh=np.linspace(0, 1, 11))
+    >>> sol.t.shape, sol.node_values.shape
+    ((11,), (10, 3))
+    >>> print(f"{sol(0.55):.6f}")
+    1.550000
     """
     return _solve("vie2", kernel=kernel, g=g, dt=dt, coll_setting=coll_setting,
                   quadrature=quadrature, samples_per_interval=samples_per_interval,
@@ -769,7 +827,12 @@ def solve_vide(*, kernel: Data, a: Optional[Data] = None, g: Optional[Data] = No
 
     See Also
     --------
-    solve_vie1, solve_vie2, VolterraSolution, optimal_graded_mesh
+    - [solve_vie1][voles.solve_vie1], [solve_vie2][voles.solve_vie2]: the other two
+      equations.
+    - [VolterraSolution][voles.VolterraSolution]: the returned object.
+    - [optimal_graded_mesh][voles.optimal_graded_mesh]: a mesh for a weakly singular
+      kernel.
+    - [gauss_legendre_nodes][voles.gauss_legendre_nodes]: node sets for ``coll_nodes``.
 
     Notes
     -----
@@ -779,6 +842,28 @@ def solve_vide(*, kernel: Data, a: Optional[Data] = None, g: Optional[Data] = No
     (``mesh``, ``coll_nodes``, ``kernel_singularity``,
     ``reuse_adaptive_blocks`` apply). An option from the other regime is
     an error. Mixing callable and sampled inputs is not supported yet.
+    Examples
+    --------
+    Sampled data: $y' = \int_0^t y(s)\,ds$ with $y(0) = 1$ is
+    $y'' = y$, $y'(0) = 0$, so $y = \cosh t$.
+
+    >>> import numpy as np
+    >>> import voles
+    >>> t = np.linspace(0, 1, 101)
+    >>> sol = voles.solve_vide(kernel=np.ones_like(t), y0=1.0, dt=t[1])
+    >>> print(f"{sol(1.0):.8f}  {np.cosh(1.0):.8f}")
+    1.54308063  1.54308063
+
+    Callables: $y' = -\int_0^t y(s)\,ds$ with $y(0) = 1$ gives
+    $y = \cos t$. The solution is continuous, and its derivative comes from
+    `VolterraSolution.to_ppoly`:
+
+    >>> sol = voles.solve_vide(kernel=lambda u: -np.ones_like(u), y0=1.0,
+    ...                        mesh=np.linspace(0, np.pi, 21))
+    >>> sol.continuous
+    True
+    >>> print(f"{sol(np.pi / 3):.4f}  {sol.to_ppoly().derivative()(np.pi / 3):.4f}")
+    0.5000  -0.8660
     """
     return _solve("vide", kernel=kernel, g=g, a=a, y0=y0, dt=dt, coll_setting=coll_setting,
                   quadrature=quadrature, samples_per_interval=samples_per_interval,

@@ -122,6 +122,30 @@ Phase 0 findings:
 - `_warn`'s frame walk is now cached per filename. `abspath()` was calling
   getcwd per frame; that cost 195 µs per deprecated call, and now 17 µs.
 - New `tests/test_legacy_shims.py` (30 tests); 1740 tests pass.
+
+**Phase 6 done 2026-10-31:**
+- Cross-references: with griffe 2.2 / mkdocstrings-python 2.0.7 a numpydoc
+  `See Also` is free Markdown; only autorefs `[name][voles.name]` link.
+  The solver and class docstrings use that, as a list.
+- Runnable Examples on the three solvers, `VolterraSolution`, `VolesWarning`,
+  `optimal_graded_mesh` and the node helpers (rounded output), run by
+  `tests/test_docstring_examples.py` within the normal suite. The warning
+  classes have `__module__ = "voles"`.
+- User guide `docs/guide/`: conventions (regimes, shapes, nodes, the
+  breakpoint table plus a Radau "left" demo, the VIE-1 noise table measured
+  on the 1.0 API), warnings, migration, stability.
+- README, index, getting_started, all eight examples, the API pages (old
+  URLs `api/vie1/` etc. now show `solve_vie1`; the six 0.10 functions are on
+  `api/legacy.md`), and the nav moved to the 1.0 API.
+- Deprecation messages: translated `coll_nodes` is shown exactly
+  (`np.array([1, 2, 3]) / 3`, not rounded floats) and links the migration
+  page.
+- Benchmarks call the 1.0 API with the same names; `make_table.py` labels.
+  Measured overhead of the 1.0 path at small N: 175 vs 101 µs (vie1, N=500),
+  1936 vs 1796 µs (vie2, N=8000), mostly `_from_sampled_engine` and the
+  coefficient request. That's for Phase 7.
+- CONTRIBUTING, CLAUDE.md and the CHANGELOG (Documentation section, the F34
+  extras notice, the breakpoint mean) are updated.
 Inputs: `docs/dev/api-review-1.0.md` (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.
 

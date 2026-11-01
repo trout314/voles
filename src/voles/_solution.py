@@ -198,7 +198,7 @@ def _read_only(a, dtype=None, copy=True):
 
 
 class VolterraSolution:
-    """The solution of a Volterra equation, as returned by the solvers.
+    r"""The solution of a Volterra equation, as returned by the solvers.
 
     A piecewise polynomial on ``mesh`` (continuous or discontinuous at the
     breakpoints), together with its values on the grid the problem was posed
@@ -242,6 +242,47 @@ class VolterraSolution:
     Here ``shape`` is ``()`` for scalar problems, ``(d,)`` for vector
     problems and ``(d, m)`` for m right-hand sides. The dtype is complex for
     complex problems.
+
+    See Also
+    --------
+    - [solve_vie1][voles.solve_vie1], [solve_vie2][voles.solve_vie2],
+      [solve_vide][voles.solve_vide]: the solvers that return it.
+    - [to_ppoly][voles.VolterraSolution.to_ppoly]: derivatives, integrals and roots.
+
+    Examples
+    --------
+    $g(t) = \int_0^t e^{-(t-s)} y(s)\,ds$ with $g = \sin t$ has the solution
+    $y = \cos t + \sin t$. Solve it on four intervals:
+
+    >>> import numpy as np
+    >>> import voles
+    >>> sol = voles.solve_vie1(kernel=lambda u: np.exp(-u), g=np.sin,
+    ...                        mesh=np.linspace(0, 1, 5))
+    >>> sol.mesh
+    array([0.  , 0.25, 0.5 , 0.75, 1.  ])
+    >>> sol.coefficients.shape, sol.node_times.shape
+    ((4, 3), (4, 3))
+
+    Evaluate anywhere in $[0, T]$; outside it the result is NaN:
+
+    >>> print(f"{sol(0.3):.5f}  {np.cos(0.3) + np.sin(0.3):.5f}")
+    1.25088  1.25086
+    >>> sol(1.5)
+    nan
+
+    This (discontinuous) solution has two one-sided limits at each interior
+    breakpoint; ``sol(t)`` gives their mean unless asked otherwise:
+
+    >>> for side in ("left", "mean", "right"):
+    ...     print(side, f"{sol(0.5, at_breakpoints=side):.5f}")
+    left 1.35708
+    mean 1.35703
+    right 1.35697
+
+    Integrals and derivatives through `scipy.interpolate.PPoly`:
+
+    >>> print(f"{sol.to_ppoly().integrate(0, 1):.6f}  {np.sin(1) - np.cos(1) + 1:.6f}")
+    1.301168  1.301169
     """
 
     def __init__(self, *args, **kwargs):

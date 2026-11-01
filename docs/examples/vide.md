@@ -8,35 +8,21 @@ with $a(t) = \frac{1}{1+t^2}$, $K(u) = e^{-u}$, and $g(t)$ chosen so the exact s
 
 ```python
 import numpy as np
-from voles import solve_VIDE
+import voles
 
-time_step = 0.01
-coll_divs = 3
-num_pts = 10 * coll_divs**2 + 1   # 91
-times = np.array([i * time_step for i in range(num_pts)])
+dt = 0.01
+t = np.arange(91) * dt                 # 91 samples
+a = 1.0 / (1.0 + t**2)
+g = (np.cos(t)
+     - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
+     - np.sin(t) / (1.0 + t**2))
 
-kernel = np.exp(-times)
-a = 1.0 / (1.0 + times**2)
-g = (np.cos(times)
-     - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
-     - np.sin(times) / (1.0 + times**2))
+sol = voles.solve_vide(kernel=np.exp(-t), a=a, g=g, y0=0.0,      # sin(0) = 0
+                       dt=dt, coll_setting=(3, [1, 2, 3]))
 
-soln_vals, solution = solve_VIDE(
-    g_values=g,
-    kernel_values=kernel,
-    a_values=a,
-    soln_init_value=0.0,   # sin(0) = 0
-    coll_divs=coll_divs,
-    coll_choices=[1, 2, 3],
-    time_step=time_step,
-    return_function=True,
-)
+print(f"Max error: {np.max(np.abs(sol.y - np.sin(t))):.2e}")
+assert np.max(np.abs(sol.y - np.sin(t))) < 1e-3
 
-exact = np.sin(times)
-print(f"Max error: {np.max(np.abs(soln_vals - exact)):.2e}")
-assert np.max(np.abs(soln_vals - exact)) < 1e-3
-
-# `solution` is callable at any time in [0, T], and also indexes/iterates like the
-# per-interval polynomials (solution[n], for poly in solution, ...).
-print(f"y(0.5) = {solution(0.5):.6f}  (exact {np.sin(0.5):.6f})")
+# The VIDE solution is continuous; evaluate it anywhere in [0, T].
+print(f"y(0.5) = {sol(0.5):.6f}  (exact {np.sin(0.5):.6f})")
 ```
