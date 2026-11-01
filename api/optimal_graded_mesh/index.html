@@ -1441,6 +1441,10 @@ collocation method (the number of collocation nodes per interval). This
 recovers the optimal convergence order for Abel-type kernels (Brunner
 2004, ch. 6). At <code>alpha == 0</code> the kernel is non-singular and the
 solution smooth, so a uniform mesh (<span class="arithmatex">\(r = 1\)</span>) is returned instead.</p>
+<p>Pair the mesh with <code>kernel_singularity={0.0: alpha}</code> in the solver.
+Declaring the exponent, not only the location, lets the singular blocks
+use Gauss–Jacobi rules instead of adaptive quadrature, which is
+typically 3–10× faster.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1726,7 +1730,12 @@ solution of <span class="arithmatex">\(y(t) = 1 + \int_0^t (t-s)^{-1/2} y(s)\,ds
 <span class="normal">2056</span>
 <span class="normal">2057</span>
 <span class="normal">2058</span>
-<span class="normal">2059</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">optimal_graded_mesh</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">t_end</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="normal">2059</span>
+<span class="normal">2060</span>
+<span class="normal">2061</span>
+<span class="normal">2062</span>
+<span class="normal">2063</span>
+<span class="normal">2064</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">optimal_graded_mesh</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">t_end</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                         <span class="n">n_intervals</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
                         <span class="n">T</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">M</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Return a graded mesh of ``n_intervals + 1`` breakpoints suitable for a</span>
@@ -1739,6 +1748,11 @@ solution of <span class="arithmatex">\(y(t) = 1 + \int_0^t (t-s)^{-1/2} y(s)\,ds
 <span class="sd">    recovers the optimal convergence order for Abel-type kernels (Brunner</span>
 <span class="sd">    2004, ch. 6). At ``alpha == 0`` the kernel is non-singular and the</span>
 <span class="sd">    solution smooth, so a uniform mesh ($r = 1$) is returned instead.</span>
+
+<span class="sd">    Pair the mesh with ``kernel_singularity={0.0: alpha}`` in the solver.</span>
+<span class="sd">    Declaring the exponent, not only the location, lets the singular blocks</span>
+<span class="sd">    use Gauss–Jacobi rules instead of adaptive quadrature, which is</span>
+<span class="sd">    typically 3–10× faster.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>

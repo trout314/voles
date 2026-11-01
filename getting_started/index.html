@@ -1653,8 +1653,11 @@ print(sol(0.37), np.sin(0.37))
 declare the singularity and use <code>optimal_graded_mesh</code> to recover the full
 collocation convergence order. With the exponent known, the dict form
 <code>kernel_singularity={0.0: 0.5}</code> switches the singular blocks from adaptive
-quadrature to much faster deterministic Gauss–Jacobi rules (with an
-automatic fallback if the declared exponent turns out to be wrong):</p>
+quadrature to deterministic Gauss–Jacobi rules, with an automatic fallback
+if the declared exponent turns out to be wrong. That is typically 3–10×
+faster than declaring only the location (<code>kernel_singularity=0.0</code>); a
+kernel that accepts arrays, like the one below, helps further (12–20×
+faster together, see <a href="../benchmarks/">Benchmarks</a>):</p>
 <pre><code class="language-python">import numpy as np
 import voles
 

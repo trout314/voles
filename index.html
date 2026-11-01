@@ -1508,7 +1508,8 @@ choose (<code>mesh=</code>), which also handles weakly singular kernels. Both re
 <p>For a kernel <span class="arithmatex">\(K(u) \sim u^{-\alpha}\)</span>, <code>optimal_graded_mesh(alpha=..., t_end=...,
 n_intervals=..., order=...)</code> builds a Brunner-graded mesh, and declaring the
 exponent with <code>kernel_singularity={0.0: alpha}</code> switches the singular blocks
-to fast deterministic Gauss–Jacobi quadrature. Collocation nodes for callable
+to deterministic Gauss–Jacobi quadrature, typically 3–10× faster than
+declaring only the location. Collocation nodes for callable
 inputs can be given via <code>coll_nodes</code>, with <code>gauss_legendre_nodes</code>,
 <code>radau_iia_nodes</code> and <code>lobatto_nodes</code> for the classical families.</p>
 <p>Upgrading from 0.10? See <a href="guide/migration/">Migration from 0.10</a>.</p>

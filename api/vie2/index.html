@@ -1625,8 +1625,11 @@ interpolant. Default: the number of nodes.</p>
               <div class="doc-md-description">
                 <p>Callable inputs: where the kernel is weakly singular, in
 <span class="arithmatex">\(u = t - s\)</span>: a location, a list of locations, <code>{location: alpha}</code>
-for <span class="arithmatex">\(K \sim |u - u_0|^{-\alpha}\)</span> (enables Gauss–Jacobi rules), or
-a callable returning the singular <span class="arithmatex">\(s\)</span>-locations for a time <span class="arithmatex">\(t\)</span>.</p>
+for <span class="arithmatex">\(K \sim |u - u_0|^{-\alpha}\)</span>, or a callable returning the
+singular <span class="arithmatex">\(s\)</span>-locations for a time <span class="arithmatex">\(t\)</span>. Declare the exponent when you
+know it: the blocks the singularity touches then use Gauss–Jacobi
+rules instead of adaptive quadrature, typically 3–10× faster for the
+whole solve.</p>
               </div>
             </td>
             <td>
@@ -1826,10 +1829,7 @@ exactly.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_api.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">608</span>
-<span class="normal">609</span>
-<span class="normal">610</span>
-<span class="normal">611</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">611</span>
 <span class="normal">612</span>
 <span class="normal">613</span>
 <span class="normal">614</span>
@@ -1969,7 +1969,13 @@ exactly.</p>
 <span class="normal">748</span>
 <span class="normal">749</span>
 <span class="normal">750</span>
-<span class="normal">751</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_vie2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="normal">751</span>
+<span class="normal">752</span>
+<span class="normal">753</span>
+<span class="normal">754</span>
+<span class="normal">755</span>
+<span class="normal">756</span>
+<span class="normal">757</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_vie2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_setting</span><span class="p">:</span> <span class="n">CollSetting</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">quadrature</span><span class="p">:</span> <span class="n">Quadrature</span> <span class="o">=</span> <span class="s2">"product"</span><span class="p">,</span>
                <span class="n">samples_per_interval</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2029,8 +2035,11 @@ exactly.</p>
 <span class="sd">    kernel_singularity : float, list, dict or callable, optional</span>
 <span class="sd">        Callable inputs: where the kernel is weakly singular, in</span>
 <span class="sd">        $u = t - s$: a location, a list of locations, ``{location: alpha}``</span>
-<span class="sd">        for $K \sim |u - u_0|^{-\alpha}$ (enables Gauss–Jacobi rules), or</span>
-<span class="sd">        a callable returning the singular $s$-locations for a time $t$.</span>
+<span class="sd">        for $K \sim |u - u_0|^{-\alpha}$, or a callable returning the</span>
+<span class="sd">        singular $s$-locations for a time $t$. Declare the exponent when you</span>
+<span class="sd">        know it: the blocks the singularity touches then use Gauss–Jacobi</span>
+<span class="sd">        rules instead of adaptive quadrature, typically 3–10× faster for the</span>
+<span class="sd">        whole solve.</span>
 <span class="sd">    reuse_adaptive_blocks : bool, optional</span>
 <span class="sd">        Callable inputs: on a uniform mesh, reuse adaptive-quadrature blocks</span>
 <span class="sd">        across mesh intervals. Default True.</span>
