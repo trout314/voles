@@ -2412,9 +2412,9 @@ def _maybe_warn_mesh_uniform_with_singularity(mesh_breakpoints: np.ndarray,
         _warn(
             "kernel_singularity is declared but the mesh appears "
             "uniform (max/min interval ratio = {:.2f}). For optimal "
-            "convergence on weakly singular problems, consider "
-            "`optimal_graded_mesh(alpha=..., T=..., M=..., "
-            "order=len(coll_choices))`.".format(ratio),
+            "convergence on weakly singular problems, consider a graded mesh "
+            "from `voles.optimal_graded_mesh`, graded for the method's order "
+            "(the number of collocation nodes).".format(ratio),
             AccuracyWarning)
 
 

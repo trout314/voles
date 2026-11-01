@@ -3,6 +3,23 @@
 ## [Unreleased]
 
 ### Added
+- **The 1.0 solvers `voles.solve_vie1`, `solve_vie2` and `solve_vide`.**
+  One function per equation for both kinds of input:
+  - arrays of samples, with `dt=`;
+  - callables, with `mesh=`.
+
+  The kind of input selects the method; mixing the two is not supported
+  yet. Each returns a `VolterraSolution`, and every parameter is
+  keyword-only. New names:
+  - `kernel`, `g`, `a`, `y0`, `dt`, `mesh`;
+  - `coll_setting=(divs, choices)` or `coll_setting=divs` for sampled
+    inputs, and `coll_nodes=` for callable ones;
+  - `samples_per_interval` (was `mesh_samples`);
+  - `continuous=True` with `y0` for the continuous VIE-1 method.
+
+  An input without a column axis is now shared by every column of a
+  matrix-valued problem, in every solver: for example a `(N, d)` forcing
+  with a `(d, m)` initial value. The 0.10 functions keep working unchanged.
 - **Warning classes.** `voles.VolesWarning` (a `UserWarning`) with
   subclasses `voles.AccuracyWarning` (reduced order, g(0) ≠ 0 for VIE-1,
   K(0) too small for collocation quadrature, a singularity declared on a
@@ -79,6 +96,11 @@
   kernels are not checked: a weakly singular kernel legitimately returns inf
   at u = 0.
 - `quadrature` is matched case-insensitively (`"Product"` works).
+- Warning texts no longer name 0.10 parameters:
+  - the reduced-order warning shows the setting as `(divs, choices)`;
+  - the K(0) warning suggests a finer "sample spacing";
+  - the uniform-mesh hint points to `voles.optimal_graded_mesh` without
+    spelling out its arguments.
 - Internal modules were reorganised for the 1.0 API: the solvers now live in
   the private `voles._sampled` and `voles._functional`, with shared helpers in
   `voles._common`. `voles.solvers` still re-exports `solve_VIE_1`,

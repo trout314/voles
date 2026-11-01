@@ -68,6 +68,36 @@ Phase 0 findings:
   across equations × quadratures × shapes × lengths × settings.
 - 1172 tests pass (NumPy 1.26, and NumPy 2.5 with a cold numba cache); the
   battery is unchanged; the strict docs build is clean.
+
+**Phase 4 done 2026-10-31**:
+- `_api.py`: `solve_vie1/2/vide` with type hints and numpydoc (Examples
+  come in Phase 6). Validation uses 1.0 names, in this order:
+  1. the regime is classified, with mixed inputs → NotImplementedError;
+  2. options from the other regime → ValueError;
+  3. `coll_setting` is resolved with the exact VIE-1 ρ rule;
+  4. mesh width and kernel degree, then shapes (2-D kernel reserved);
+  5. the matrix rule, with shared inputs broadcast (sampled) or `g`
+     wrapped (functional);
+  6. compiled-setting checks.
+
+  It then calls `_sampled.solve` / `_functional.solve`.
+- `_migrate.translate` / `describe`: 0.10 call → 1.0 call; Phase 5 uses it
+  for the deprecation messages.
+- Engine warning texts made API-neutral (17 battery text changes).
+- Builder trimmed (no vstack/tile, no copies of owned arrays; the mesh is
+  still copied because it may alias the user's array).
+- Tests:
+  - `test_api.py` (104): a table of invalid calls with expected types, and
+    no 0.10 names in any message;
+  - `test_api_shapes.py` (17): every matrix column equals its vector solve,
+    including shared inputs;
+  - `test_api_equivalence.py` (419): all 418 valid battery cases bitwise
+    equal through the 1.0 API.
+
+  1711 tests pass (NumPy 1 and 2).
+- Overhead of the 1.0 path over the 0.10 `return_function=True` call:
+  about 72 µs per call (N=82: 432 vs 360 µs; N=4001: about 2%). Revisit in
+  Phase 7.
 Inputs: `docs/dev/api-review-1.0.md` (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.
 

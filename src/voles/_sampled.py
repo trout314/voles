@@ -93,7 +93,7 @@ def _warn_reduced_order(coll_divs, coll_choices, force_continuous, show_warnings
     if show_warnings and _vie1_rho(coll_divs, coll_choices, continuous=force_continuous) == 1:
         m = len(coll_choices)
         nominal = m + 1 if force_continuous else m
-        _warn(f"collocation setting (coll_divs={coll_divs}, coll_choices={coll_choices}) "
+        _warn(f"collocation setting ({coll_divs}, {coll_choices}) "
               f"has amplification factor rho = 1 exactly, so the "
               f"{'continuous' if force_continuous else 'discontinuous'} VIE-1 method converges "
               f"at order {nominal - 1} rather than {nominal}.", AccuracyWarning)
@@ -170,7 +170,8 @@ def _warn_vie1_kernel_start(kernel_values_, samples_per_mesh, show_warnings):
                  f"K changes by {ratio:.3g} x |K(0)| over one mesh interval")
         _warn(f"{which}. The first-kind collocation scheme is unstable in "
               f"this regime and can return values that grow without bound. Use "
-              f"quadrature='product' (stable here), or a finer time_step if K(0) != 0.", AccuracyWarning)
+              f"quadrature='product' (stable here), or a finer sample spacing if K(0) != 0.",
+              AccuracyWarning)
 
 
 _DEFAULT_COLL = {"vie1": (3, [1, 2, 3]), "vie2": (2, [0, 1, 2]), "vide": (2, [0, 1, 2])}

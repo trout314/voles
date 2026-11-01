@@ -188,8 +188,12 @@ _EQUATIONS = ("vie1", "vie2", "vide")
 _REGIMES = ("sampled", "functional")
 
 
-def _read_only(a, dtype=None):
-    a = np.array(a, dtype=dtype)          # a private copy
+def _read_only(a, dtype=None, copy=True):
+    """``a`` as a read-only array. ``copy=False`` is for arrays the caller
+    owns outright (built by voles for this solution): it marks them in place
+    instead of copying. Anything that may alias user data (the mesh, which
+    the engine takes with np.asarray) must be copied."""
+    a = np.array(a, dtype=dtype) if copy else np.asarray(a, dtype=dtype)
     a.setflags(write=False)
     return a
 
@@ -269,17 +273,18 @@ class VolterraSolution:
         coef = np.asarray(coefficients)
         if not np.issubdtype(coef.dtype, np.complexfloating):
             coef = coef.astype(float)
-        self._coef = _read_only(coef)
-        self._mesh = _read_only(mesh, dtype=float)
+        self._coef = _read_only(coef, copy=False)          # computed by the engine
+        self._mesh = _read_only(mesh, dtype=float)          # may alias the user's array
         M = len(self._mesh) - 1
         if self._coef.shape[0] != M or M < 1:
             raise ValueError(f"{self._coef.shape[0]} coefficient blocks for {M} mesh intervals")
-        self._local_nodes = _read_only(local_nodes, dtype=float)
-        self._node_times = _read_only(node_times, dtype=float)
+        self._local_nodes = _read_only(local_nodes, dtype=float, copy=False)
+        self._node_times = _read_only(node_times, dtype=float, copy=False)
         if self._local_nodes.shape != self._node_times.shape or self._node_times.shape[0] != M:
             raise ValueError("node arrays must have shape (M, p)")
         self._nodes = _read_only(np.sort(np.asarray(nodes, dtype=float)))
-        self._node_values = None if node_values is None else _read_only(node_values)
+        self._node_values = (None if node_values is None
+                             else _read_only(node_values, copy=False))   # engine output
         self.equation = equation
         self.regime = regime
         self.continuous = bool(continuous)
@@ -507,16 +512,19 @@ def _from_sampled_engine(values, legacy, *, equation, continuous, coll_setting,
     Q = int(samples_per_interval)
     N = len(values)
     M_reg, Qp = mesh_split(N, Q)
-    kappa = np.array([c * Q // divs for c in choices])
-    local = np.tile(np.asarray(choices, dtype=float) / divs, (M_reg, 1))
-    sample_idx = np.arange(M_reg)[:, None] * Q + kappa[None, :]
+    ch = np.array(choices)
+    M = M_reg + (1 if Qp else 0)
+    local = np.empty((M, len(choices)))
+    sample_idx = np.empty((M, len(choices)), dtype=np.int64)
+    local[:M_reg] = ch / divs
+    sample_idx[:M_reg] = np.arange(M_reg)[:, None] * Q + (ch * Q // divs)[None, :]
     if Qp:
         kap = np.array(snap_nodes(choices, divs, Qp))
-        local = np.vstack([local, kap[None, :] / Qp])
-        sample_idx = np.vstack([sample_idx, M_reg * Q + kap[None, :]])
+        local[M_reg] = kap / Qp
+        sample_idx[M_reg] = M_reg * Q + kap
     return VolterraSolution._build(
         coefficients=legacy._unit, mesh=legacy.mesh_breakpoints, local_nodes=local,
-        node_times=sample_idx * dt, nodes=np.asarray(choices, dtype=float) / divs,
+        node_times=sample_idx * dt, nodes=ch / divs,
         equation=equation, regime="sampled", continuous=continuous, d=legacy._d,
         m=legacy._m, coll_setting=(divs, choices), y=values, dt=dt, n_samples=N,
         trim=legacy._trim)

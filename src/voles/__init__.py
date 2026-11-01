@@ -7,6 +7,7 @@ from ._functional import (
 from ._dlang import supported_coll_settings_d as _supported_coll_settings_d
 from ._warnings import VolesWarning, AccuracyWarning, PerformanceWarning
 from ._solution import VolterraSolution
+from ._api import solve_vie1, solve_vie2, solve_vide
 
 _all = _supported_coll_settings_d()
 
@@ -21,6 +22,7 @@ fast_coll_settings_VIDE  = _all
 del _all
 
 __all__ = [
+    "solve_vie1", "solve_vie2", "solve_vide",
     "solve_VIE_1", "solve_VIE_2", "solve_VIDE",
     "function_solve_VIE_1", "function_solve_VIE_2", "function_solve_VIDE",
     "optimal_graded_mesh",
