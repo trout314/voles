@@ -2095,13 +2095,15 @@ def gauss_legendre_nodes(p: int) -> np.ndarray:
     r"""Return the ``p`` Gauss-Legendre collocation nodes on $[0, 1]$.
 
     These interior nodes (none at 0 or 1) give the maximal collocation order.
-    For **VIE-2 / VIDE** the solution superconverges to order $2p$ at the mesh
-    points. For **VIE-1** (first kind) there is no mesh-point
-    superconvergence, and Gauss nodes are the *borderline* case of the
-    convergence criterion: being symmetric about $1/2$ they give
-    amplification $|\rho_p| = 1$ exactly, which costs one global order
-    (order $p - 1$ instead of $p$; see ``function_solve_VIE_1`` Notes).
-    Prefer ``radau_iia_nodes`` for VIE-1.
+    For a **VIDE** the solution superconverges to order $2p$ at the mesh
+    points. For **VIE-2** the collocation solution itself does not: at an
+    interior breakpoint the mean of its one-sided limits (the default of
+    `VolterraSolution`) gains one order for $p = 3$ (see the Conventions
+    page, "Values at breakpoints"). For **VIE-1** (first kind) Gauss nodes,
+    being symmetric about $1/2$, have amplification factor
+    $\rho_p = (-1)^p$: odd $p$ keeps the full order $p$, even $p$ costs one
+    order (see `voles.solve_vie1`, Notes). ``radau_iia_nodes`` have the full
+    order for every $p$.
 
     Parameters
     ----------
@@ -2128,12 +2130,17 @@ def radau_iia_nodes(p: int) -> np.ndarray:
     r"""Return the ``p`` Radau IIA collocation nodes on $[0, 1]$.
 
     The Radau IIA nodes include the right endpoint (``1.0``) and exclude 0.
-    For **VIE-2 / VIDE** they give mesh-point superconvergence of order
-    $2p - 1$; the right-endpoint node also makes them a common choice for stiff
-    VIDEs. For **VIE-1** they are the recommended family: the endpoint node
-    makes the amplification factor $\rho_p = 0$, giving the full global order
-    $p$ -- one order better than Gauss-Legendre nodes, whose $|\rho_p| = 1$
-    reduces VIE-1 to order $p - 1$ (see `voles.solve_vie1`, Notes).
+    They give mesh-point superconvergence of order $2p - 1$: for a **VIDE**
+    directly, and for **VIE-2** in the left limit at each breakpoint, which
+    is the collocation value at the last node
+    (``sol(t, at_breakpoints="left")``; the default mean has order $p$). The
+    right-endpoint node also makes them a common choice for stiff VIDEs. For
+    the default (discontinuous) **VIE-1** method they are the recommended
+    family: the endpoint node makes the amplification factor $\rho_p = 0$,
+    giving the full order $p$ for every $p$ (Gauss-Legendre nodes have
+    $\rho_p = (-1)^p$ and lose an order for even $p$). They do not suit
+    ``continuous=True``, where $|\rho_{p-1}| = p$ and the method diverges for
+    $p \ge 2$ (see `voles.solve_vie1`, Notes).
 
     Parameters
     ----------

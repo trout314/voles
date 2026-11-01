@@ -28,6 +28,10 @@ plugins:
           paths: [src]
           options:
             docstring_style: numpy
+            show_root_heading: true
+            show_root_full_path: false
+            separate_signature: true
+            line_length: 88
 
 nav:
   - Home: index.md

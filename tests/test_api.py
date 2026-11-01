@@ -257,6 +257,8 @@ def _recorded(call, **kw):
     (v1, dict(g=G + 0.5), AccuracyWarning, "g(0) is not zero"),
     (f1, dict(g=lambda t: np.sin(t) + 0.5), AccuracyWarning, "g(0) is not zero"),
     (v1, dict(coll_setting=(3, [1, 2])), AccuracyWarning, "rho = 1"),
+    (f1, dict(coll_nodes=voles.gauss_legendre_nodes(4)), AccuracyWarning, "rho = 1"),
+    (f1, dict(coll_nodes=[0.5, 1.0], continuous=True, y0=1.0), AccuracyWarning, "rho = 1"),
     (v1, dict(kernel=K - K[0] + 1e-4, quadrature="collocation"), AccuracyWarning,
      "unstable"),
     (f2, dict(kernel=lambda u: np.asarray(u, dtype=float) ** -0.5, kernel_singularity=0.0),
@@ -270,6 +272,13 @@ def test_warnings_use_1_0_names_and_point_at_the_caller(call, kw, category, text
     assert issubclass(w.category, category) and text in str(w.message)
     assert not OLD_NAMES.search(str(w.message)), str(w.message)
     assert w.filename == __file__
+
+
+@pytest.mark.parametrize("nodes", [[1 / 3, 2 / 3, 1.0], [0.5], [0.4, 1.0]])
+def test_gauss_legendre_odd_p_and_rho_below_one_do_not_warn(nodes):
+    """rho = (-1)^p for Gauss-Legendre nodes: odd p gives rho = -1, full order."""
+    assert _recorded(f1, coll_nodes=nodes) == []
+    assert _recorded(f1, coll_nodes=voles.gauss_legendre_nodes(3)) == []
 
 
 def test_numba_fallback_warns():

@@ -73,10 +73,10 @@ If you also know the singularity's *exponent*, use the dict form
 `kernel_singularity={location: alpha}` for $K(u) \sim |u - u_0|^{-\alpha}$.
 Blocks touching the singularity are then integrated by deterministic
 Gauss–Jacobi rules with the singular factor absorbed into the quadrature
-weight. On the Abel problem above this makes the weight-tensor build several
-times faster on a graded mesh, and an order of magnitude faster on a uniform
-mesh (where the deterministic rules can be reused across the Toeplitz
-assembly), with the same accuracy:
+weight. On the Abel problem above, with 30 intervals, this makes the solve
+about 8× faster on the graded mesh (16 ms instead of 132 ms), with the same
+accuracy. On a uniform mesh the default `reuse_adaptive_blocks=True` already
+recovers most of that (16 ms), and the dict form halves it again (8 ms):
 
 ```python
 import numpy as np
@@ -112,12 +112,17 @@ kernel = lambda u: np.exp(-u)
 g = lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t))  # exact y(t) = sin(t)
 
 sol = voles.solve_vie2(kernel=kernel, g=g, mesh=np.linspace(0, 1, 21),
-                       coll_nodes=voles.gauss_legendre_nodes(3))   # superconvergent
+                       coll_nodes=voles.gauss_legendre_nodes(3))
 ```
 
-Gauss–Legendre nodes give mesh-point superconvergence for VIE-2 and VIDE.
-For VIE-1 prefer `radau_iia_nodes`: the right-endpoint node gives the full
-collocation order (see the `solve_vie1` notes on convergence).
+Gauss–Legendre nodes give mesh-point superconvergence (order 2p) for the
+VIDE. For VIE-2 the collocation solution is not superconvergent at the mesh
+points, but with Radau IIA nodes its left limit there is (order 2p − 1,
+`sol(t, at_breakpoints="left")`); see
+[Values at breakpoints](../guide/conventions.md#values-at-breakpoints). For
+VIE-1 prefer `radau_iia_nodes` with the default discontinuous method: they
+have the full order for every p, while Gauss–Legendre nodes lose an order
+for even p (see [VIE-1 admissibility](../guide/conventions.md#collocation-nodes)).
 
 ## Vector-valued kernel
 
@@ -177,5 +182,5 @@ and initial values work here too.
 
 `solve_vie1` and `solve_vide` take callables the same way. `solve_vide`
 also takes an `a` callable and requires `y0`; `solve_vie1` has the optional
-`continuous=True` method, which needs `y0` (of shape `(d, m)` in the matrix
-case).
+`continuous=True` method, which needs `y0`: `(d, m)` in the matrix case, or
+`(d,)` to share one initial value across the columns.

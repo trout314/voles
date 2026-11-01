@@ -17,8 +17,9 @@ g=<array of shape (91,)>, dt=0.05, coll_setting=(3, [0, 1, 2, 3])) instead. ...
 To find every old call in a code base, run its tests with
 `python -W error::DeprecationWarning` (or pytest's
 `-W error::DeprecationWarning`). The deprecated functions return exactly
-what they returned in 0.10: the same values, the same `(values, solution)`
-pair for `return_function=True`, and the same errors.
+what they returned in 0.10: the same values, and the same `(values,
+solution)` pair for `return_function=True`. A few invalid inputs are
+handled differently; see [Behaviour changes in 0.11](#behaviour-changes-in-011).
 
 ## Names
 
@@ -39,7 +40,7 @@ pair for `return_function=True`, and the same errors.
 | `coll_nodes=` | `coll_nodes=` (unchanged) |
 | `show_warnings=False` | `warnings.simplefilter("ignore", voles.VolesWarning)`; see [Warnings](warnings.md) |
 | `return_function=True`, `return_polys=True` | not needed: the solution object is always returned |
-| `fast_coll_settings_VIE_1` etc. | removed; `quadrature="product"` (the default) accepts every setting |
+| `fast_coll_settings_VIE_1` etc. | deprecated (they still work in 0.11, with a warning) and not needed: `quadrature="product"`, the default, accepts every setting |
 | `from voles.solvers import ...` | `from voles import ...` |
 | `optimal_graded_mesh(T=..., M=...)` | `optimal_graded_mesh(t_end=..., n_intervals=...)` |
 

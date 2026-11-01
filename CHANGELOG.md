@@ -136,6 +136,10 @@ the [migration guide](https://trout314.github.io/voles/guide/migration/)):
   kernels are not checked: a weakly singular kernel legitimately returns inf
   at u = 0.
 - `quadrature` is matched case-insensitively (`"Product"` works).
+- `solve_vie1` with callable inputs warns (`AccuracyWarning`) for a
+  `coll_nodes` set with amplification factor ρ = +1, e.g. an even number of
+  Gauss–Legendre nodes, which converges one order lower. Sampled inputs
+  already warned; `function_solve_VIE_1` is unchanged.
 - **`voles.__version__` is the single source of the version**: `pyproject.toml`
   reads it from `src/voles/__init__.py`. It used to come from the installed
   metadata, which a stale editable install got wrong (an install made at

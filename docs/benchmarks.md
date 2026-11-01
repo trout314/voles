@@ -56,11 +56,13 @@ Notes on the rows:
 
 ## Callable inputs
 
-With **callable inputs** (`mesh=`) the solvers run the general path (Python +
-adaptive quadrature, no Toeplitz reuse), so they are benchmarked on much
+With **callable inputs** (`mesh=`) the solvers integrate the kernel
+numerically (Python + adaptive quadrature), so they are benchmarked on much
 smaller problems, sized by the number of mesh intervals $M$ (each carrying
-`len(coll_nodes)` collocation nodes). The *weakly singular* row uses an Abel
-kernel $K(u) = u^{-1/2}$ on a graded mesh with the singularity declared:
+`len(coll_nodes)` collocation nodes). The smooth rows use uniform meshes, on
+which the weights are assembled from one row (Toeplitz structure). The
+*weakly singular* row uses an Abel kernel $K(u) = u^{-1/2}$ on a graded mesh,
+with the singularity declared by location only (adaptive quadrature):
 
 <!-- CALLABLE_BENCHMARKS:START -->
 | Solver \ M | 25 | 50 | 100 | 200 |

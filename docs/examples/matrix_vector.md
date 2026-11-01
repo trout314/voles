@@ -39,8 +39,8 @@ print(sol(0.55))                                            # an array of shape 
 
 ## Several right-hand sides at once
 
-Three initial values for the same VIDE system, $y' = \int_0^t K(t-s) y(s)\,ds$
-with a shared vector forcing: `y0` of shape `(d, m)` makes the problem
+Three initial values for the same VIDE system,
+$y' = g(t) + \int_0^t K(t-s) y(s)\,ds$, with a shared vector forcing $g$: `y0` of shape `(d, m)` makes the problem
 matrix-valued, and the `(N, d)` forcing is used for every column.
 
 ```python

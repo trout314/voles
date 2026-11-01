@@ -24,6 +24,7 @@ from . import _functional, _sampled
 from . import _validate as _v
 from ._common import _vie1_rho
 from ._solution import VolterraSolution
+from ._warnings import AccuracyWarning, _warn
 
 __all__ = ["solve_vie1", "solve_vie2", "solve_vide"]
 
@@ -336,6 +337,20 @@ def _shared_g(g, d, m):
     return g_columns
 
 
+def _warn_rho_one(node_pos, continuous):
+    """The functional-regime counterpart of the sampled rule's exact test: a
+    node set with rho = +1 (to rounding) converges one order lower."""
+    c = node_pos[:-1] if continuous else node_pos
+    rho = (-1) ** len(node_pos) * float(np.prod((1.0 - c) / c))
+    if abs(rho - 1.0) <= 1e-9:
+        m = len(node_pos)
+        nominal = m + 1 if continuous else m
+        nodes = "[" + ", ".join(f"{x:.6g}" for x in node_pos) + "]"
+        _warn(f"coll_nodes {nodes} have amplification factor rho = 1, so the "
+              f"{'continuous' if continuous else 'discontinuous'} VIE-1 method converges at "
+              f"order {nominal - 1} rather than {nominal}.", AccuracyWarning)
+
+
 def _solve_functional(equation, *, kernel, g, a, y0, continuous, mesh, coll_nodes,
                       kernel_singularity, reuse_adaptive_blocks):
     mesh = _validate_mesh(mesh)
@@ -349,6 +364,8 @@ def _solve_functional(equation, *, kernel, g, a, y0, continuous, mesh, coll_node
             f"continuous=True needs a node at the right end of each interval (c_m = 1); "
             f"got coll_nodes ending at {node_pos[-1]:.6g}. Append 1.0 to the nodes; this is a "
             f"structural requirement of the continuous method (Brunner 2004, Section 2.4.3)")
+    if equation == "vie1":
+        _warn_rho_one(node_pos, continuous)
     widths = np.diff(mesh)
     is_vector, d = _functional._detect_kernel_shape(kernel, float(widths[0]) * 0.5)
     d = d if is_vector else 0
@@ -515,16 +532,18 @@ def solve_vie1(*, kernel: Data, g: Optional[Data] = None, continuous: bool = Fal
         Mixed callable and sampled inputs, or an uncompiled setting under
         ``quadrature="collocation"`` with no fallback.
     numpy.linalg.LinAlgError
-        A collocation system is singular (e.g. $K(0) = 0$).
+        A collocation system is singular (e.g. an identically zero kernel).
 
     Warns
     -----
     AccuracyWarning
-        $g(0) \ne 0$; a node set with $\rho = 1$ (one order lower);
+        $g(0) \ne 0$; a node set with $\rho = +1$ (one order lower);
         $K(0)$ too small for collocation quadrature; a singularity declared
         on a uniform mesh.
     PerformanceWarning
         The numba fallback is used.
+    VolesWarning
+        A ``kernel_singularity`` location outside $[0, T]$.
 
     See Also
     --------
@@ -544,10 +563,14 @@ def solve_vie1(*, kernel: Data, g: Optional[Data] = None, continuous: bool = Fal
     ``reuse_adaptive_blocks`` apply). An option from the other regime is
     an error. Mixing callable and sampled inputs is not supported yet.
 
-    The discontinuous method converges iff
-    $|\rho_m| = \prod_i (1 - c_i)/c_i \le 1$, and the continuous one iff
-    $|\rho_{m-1}| \le 1$ with $c_m = 1$ (Brunner 2004, Theorems 2.4.2 and
-    2.4.5); $\rho = 1$ costs one order.
+    The discontinuous method converges iff its amplification factor
+    $\rho_m = (-1)^m \prod_{i=1}^{m} (1 - c_i)/c_i$ satisfies
+    $|\rho_m| \le 1$, and the continuous one iff
+    $\rho_{m-1} = (-1)^m \prod_{i<m} (1 - c_i)/c_i$ does, with $c_m = 1$
+    (Brunner 2004, Theorems 2.4.2 and 2.4.5). The order is full for
+    $-1 \le \rho < 1$ and one lower at $\rho = +1$. Radau IIA nodes have
+    $\rho_m = 0$; Gauss-Legendre nodes have $\rho_m = (-1)^m$.
+
     Examples
     --------
     Sampled data: with $K = 1$ and $g(t) = \sin t$ the solution is
@@ -676,6 +699,8 @@ def solve_vie2(*, kernel: Data, g: Optional[Data] = None,
         A singularity declared on a uniform mesh.
     PerformanceWarning
         The numba fallback is used.
+    VolesWarning
+        A ``kernel_singularity`` location outside $[0, T]$.
 
     See Also
     --------
@@ -694,6 +719,7 @@ def solve_vie2(*, kernel: Data, g: Optional[Data] = None,
     (``mesh``, ``coll_nodes``, ``kernel_singularity``,
     ``reuse_adaptive_blocks`` apply). An option from the other regime is
     an error. Mixing callable and sampled inputs is not supported yet.
+
     Examples
     --------
     Sampled data: $y(t) = 1 + \int_0^t y(s)\,ds$ has the solution $e^t$.
@@ -829,6 +855,8 @@ def solve_vide(*, kernel: Data, a: Optional[Data] = None, g: Optional[Data] = No
         A singularity declared on a uniform mesh.
     PerformanceWarning
         The numba fallback is used.
+    VolesWarning
+        A ``kernel_singularity`` location outside $[0, T]$.
 
     See Also
     --------
@@ -847,6 +875,7 @@ def solve_vide(*, kernel: Data, a: Optional[Data] = None, g: Optional[Data] = No
     (``mesh``, ``coll_nodes``, ``kernel_singularity``,
     ``reuse_adaptive_blocks`` apply). An option from the other regime is
     an error. Mixing callable and sampled inputs is not supported yet.
+
     Examples
     --------
     Sampled data: $y' = \int_0^t y(s)\,ds$ with $y(0) = 1$ is

@@ -25,5 +25,6 @@ import voles
 omega = 2.0
 sol = voles.solve_vide(kernel=lambda u: np.zeros_like(u), a=lambda t: 1j * omega,
                        y0=1.0, mesh=np.linspace(0, 3, 61))
-print(f"max error {abs(sol(2.0) - np.exp(2j * omega)):.1e}")
+tt = np.linspace(0, 3, 301)
+print(f"max error {np.max(np.abs(sol(tt) - np.exp(1j * omega * tt))):.1e}")
 ```

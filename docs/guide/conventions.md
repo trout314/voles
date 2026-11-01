@@ -28,7 +28,7 @@ how the problem is posed:
 | Inputs | arrays of samples at t = 0, dt, …, (N−1)·dt | callables, `kernel(u)`, `g(t)`, `a(t)` |
 | Grid | `dt` (default 1.0); the solver builds a uniform mesh | `mesh`, required: the breakpoints, from 0 to T |
 | Node set | `coll_setting` | `coll_nodes` |
-| Options of this regime only | `coll_setting`, `quadrature`, `samples_per_interval`, `kernel_interp_degree` | `mesh`, `coll_nodes`, `kernel_singularity`, `reuse_adaptive_blocks` |
+| Options of this regime only | `dt`, `coll_setting`, `quadrature`, `samples_per_interval`, `kernel_interp_degree` | `mesh`, `coll_nodes`, `kernel_singularity`, `reuse_adaptive_blocks` |
 
 - Anything for which `callable(x)` is true counts as a callable: functions,
   lambdas, `numpy.polynomial.Polynomial`, scipy interpolators, numba
@@ -106,9 +106,16 @@ $$\rho = (-1)^p \prod_{i=1}^{p} \frac{1 - c_i}{c_i}$$
 
 for the default discontinuous method (Brunner 2004, Theorem 2.4.2), and the
 same product over i < p, with c_p = 1, for `continuous=True` (Theorem
-2.4.5). Other node sets are a `ValueError`. ρ = 1 converges one order lower
-and gives an `AccuracyWarning`. Radau IIA nodes have ρ = 0 and give the full
-order p; Gauss–Legendre nodes have |ρ| = 1 and lose an order.
+2.4.5). Other node sets are a `ValueError`. A node set with −1 ≤ ρ < 1 has
+the method's full order; ρ = +1 converges one order lower and gives an
+`AccuracyWarning`.
+
+- Radau IIA nodes have ρ = 0 and the full order p, which makes them the
+  usual choice for the discontinuous method. They don't suit
+  `continuous=True`: there |ρ| = p, so that method diverges for every
+  p ≥ 2. The default nodes {1/3, 2/3, 1} work for both methods.
+- Gauss–Legendre nodes are symmetric, so ρ = (−1)ᵖ: odd p keeps the full
+  order, even p loses one.
 
 ## Shapes
 
@@ -137,8 +144,10 @@ sides solved together.
   are converted to `float64`.
 - **Non-finite data** (NaN or inf in an array, or returned by `g` or `a` at
   a collocation time) is a `ValueError` naming the input and the first bad
-  index. Callable kernels are not checked: a weakly singular kernel may
-  return inf at u = 0, which the quadrature never samples.
+  index. Callable kernels are not checked point by point, since a weakly
+  singular kernel may return inf at u = 0, which the quadrature never
+  samples. A kernel that is non-finite where the quadrature does sample it
+  gives a `ValueError` suggesting `kernel_singularity`.
 - A 2-D sampled kernel is rejected; that shape is reserved for
   non-convolution kernels K(t, s) in a later release.
 
