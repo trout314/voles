@@ -295,7 +295,8 @@ polynomial.
 - **Breakpoint convention:** at interior breakpoints, `sol.y` and `sol(t)`
   report the *mean* of the two one-sided limits by default.
   `sol(t, at_breakpoints="left"|"right")` gives either limit.
-- *Provisional:* revisit the default after the iterated-solution discussion.
+- *Final (decided 2026-11-01):* "mean" is the 1.0 default. Iterated solutions come
+  after 1.0 as an additive keyword, so they don't reopen it.
 - Measured error at interior breakpoints, K = e⁻ᵘ, y = cos t on [0,4]
   (scripts in that day's scratchpad, `breakpoint_sides*.py`):
 
@@ -818,24 +819,53 @@ computes in one body (`solve_VIE_1` is ~390 lines). After this phase:
 
 ### Phase 8: 1.0.0
 
+Decided 2026-11-01: "mean" is the final breakpoint default; Python 3.14 is
+added to CI and the classifiers (done in 0.11.x, so 3.10–3.14 are supported;
+dropping 3.10 is left for a later minor release); the engine cleanup (step 3)
+is part of 1.0.
+
 1. Delete:
    - `_legacy.py`, the `voles/solvers.py` stub, `fast_coll_settings_*`
-   - the legacy `_SolutionFunction`
-   - the `VolterraSolution` deprecated aliases
    - `optimal_graded_mesh(T=, M=)`
    - the `[callable]`/`[numba]` extras (F34)
-2. Migrate the legacy test files to the new API. Mostly mechanical:
+
+   (The `VolterraSolution` compatibility aliases were already dropped in
+   Phase 5; the legacy `_SolutionFunction` goes in step 3.)
+2. Migrate the legacy test files to the new API (625 call sites in 23 files
+   on 2026-11-01; `test_function_solvers.py` has 244). Mostly mechanical,
+   scripted with `_migrate.translate`:
    - kwarg renames by script
    - `coll_divs`/`coll_choices` → `coll_setting`
    - `return_function` unpacking → `sol.y`/`sol.node_values`/`sol`
 
-   `test_function_solvers.py` (264 call sites) is the bulk of it. Keep
-   `test_api_equivalence.py`'s reference outputs as a frozen `.npz` fixture,
-   so coverage of the old numerics survives the wrappers' deletion.
-3. Add `py.typed`, set the classifier to `Development Status :: 5 -
+   Keep `test_api_equivalence.py`'s reference outputs as a frozen `.npz`
+   fixture, so coverage of the old numerics survives the wrappers' deletion.
+   Re-point the bitwise battery at the 1.0 API (or the engine entry points)
+   and save a new reference before step 3.
+3. **Engine cleanup.** With the wrappers gone, nothing calls the engines with
+   0.10 arguments, so:
+   - the engines take the 1.0 layer's validated, resolved inputs: the
+     resolved setting, the mesh width and the shaped arrays, under internal
+     names. They lose their own argument checks (about 140 `raise`/`_v.`
+     sites in `_sampled.py` and `_functional.py`), which `_api` already
+     makes;
+   - they return values or node values plus raw local coefficients, and the
+     builders make the `VolterraSolution` directly. `_SolutionFunction`,
+     `_polys_from_unit_coefs`, `_complex_solution`'s legacy form and
+     `return_polys`/`trim` go;
+   - engine-level diagnostics that need solve-time information (ρ = 1, g(0),
+     K(0), the uniform-mesh hint) stay, issued once from the 1.0 path;
+   - every error message is then the 1.0 layer's: check that each removed
+     engine check has a 1.0 counterpart (tests/test_validation_policy.py,
+     test_api.py).
+
+   Acceptance: the battery matches its new reference bitwise (values,
+   coefficients, node data), and the small-N overhead over the bare engine
+   path is gone (target: within noise of the Phase 0 baseline).
+4. Add `py.typed`, set the classifier to `Development Status :: 5 -
    Production/Stable`, regenerate the signature snapshot, and start the
    stability policy.
-4. Release 1.0.0.
+5. Release 1.0.0.
 
 ---
 

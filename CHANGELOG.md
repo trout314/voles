@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Python 3.14 is supported and tested in CI (Linux, macOS, Windows).
+
 ### Documentation
 - The pages and docstrings about weakly singular kernels say what declaring
   the exponent (`kernel_singularity={0.0: alpha}`, not only the location)

@@ -78,7 +78,7 @@ Docstring Examples are doctested by `tests/test_docstring_examples.py` (print ro
 
 ## CI/CD
 
-- GitHub Actions test on Linux/macOS/Windows across Python 3.10–3.13
+- GitHub Actions test on Linux/macOS/Windows across Python 3.10–3.14
 - Linux wheels target manylinux_2_31 (glibc ≤ 2.31 compatibility)
 - Only wheels are published (no sdist) since the D compiler is needed at build time
 - Wheel builds triggered by version tags (`v*`) via `build-wheels.yml`
