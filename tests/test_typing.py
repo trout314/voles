@@ -27,3 +27,13 @@ def test_usage_file_type_checks():
          "--no-incremental", str(USAGE)],
         capture_output=True, text=True)
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_package_type_checks():
+    """voles ships py.typed, so its own annotations must be consistent."""
+    pytest.importorskip("mypy")
+    src = pathlib.Path(__file__).parents[1] / "src" / "voles"
+    proc = subprocess.run(
+        [sys.executable, "-m", "mypy", "--ignore-missing-imports", "--no-incremental", str(src)],
+        capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stdout + proc.stderr

@@ -9,8 +9,7 @@ inputs (docs/dev/api-contract-1.0.md §3):
 This layer validates every argument with its 1.0 name, applies the shape and
 matrix rule of contract §6, and then calls the engine (`_sampled.solve` or
 `_functional.solve`) with the engine's own keyword names. Everything a user
-can get wrong is caught here, so the engine's internal checks, which still
-use the 0.10 names, are never what a 1.0 user sees.
+can get wrong is caught here; the engines trust their inputs.
 """
 from __future__ import annotations
 

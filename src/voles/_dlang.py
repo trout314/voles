@@ -11,7 +11,8 @@ import sys
 
 import numpy as np
 
-_lib = None
+# The loaded extension; _load() sets it at import or raises ImportError.
+_lib: ctypes.CDLL
 
 # ctypes shorthand
 _dp = ctypes.POINTER(ctypes.c_double)

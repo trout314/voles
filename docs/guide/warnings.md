@@ -77,7 +77,8 @@ thread-safe; in threaded code set the filters once, at start-up.
 
 ## Deprecation warnings
 
-The 0.10 functions issue a `DeprecationWarning` (not a `VolesWarning`)
-naming the equivalent 1.0 call; see
-[Migration from 0.10](migration.md). Python hides `DeprecationWarning` by
-default except in code run as `__main__`, and pytest shows it.
+voles 1.0 issues none. A feature deprecated in a later 1.x release will
+issue a `DeprecationWarning` (not a `VolesWarning`) for at least one minor
+release before it is removed; see [Stability policy](stability.md). Python
+hides `DeprecationWarning` by default except in code run as `__main__`, and
+pytest shows it.

@@ -14,7 +14,7 @@ authors = [
 requires-python = ">=3.10"
 keywords = ["volterra", "integral equations", "collocation", "numerical methods", "scientific computing"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Programming Language :: Python :: 3",
@@ -24,6 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Mathematics",
+    "Typing :: Typed",
 ]
 dependencies = [
     "numpy",

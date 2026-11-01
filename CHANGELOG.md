@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.0] - 2026-11-01
+
+The first stable release. The API is the one 0.11 introduced, without the
+deprecated 0.10 functions; from here voles follows semantic versioning (see the
+[stability policy](https://trout314.github.io/voles/guide/stability/)).
 
 ### Removed
 The 0.10 API, deprecated in 0.11 (see the
@@ -15,6 +19,10 @@ The 0.10 API, deprecated in 0.11 (see the
 - the `[callable]` and `[numba]` extras: use `voles` or `voles[full]`.
 
 ### Added
+- **Type information**: the package ships a `py.typed` marker, so type
+  checkers use voles' annotations (without it they treated every voles name
+  as `Any`). The classifiers now say `Development Status :: 5 -
+  Production/Stable` and `Typing :: Typed`.
 - **A constant `a`** for `solve_vide`: a number or a `(d, d)` array, with
   either kind of input. It takes no part in choosing the regime, so
   `a=-0.5` works with callables and with arrays (it used to need

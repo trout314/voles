@@ -38,6 +38,7 @@ from . import _validate as _v
 from ._warnings import _warn, AccuracyWarning, PerformanceWarning, VolesWarning
 
 
+_ComplexWarning: type[Warning]
 try:
     _ComplexWarning = np.exceptions.ComplexWarning
 except AttributeError:  # numpy < 1.25

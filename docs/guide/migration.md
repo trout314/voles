@@ -1,12 +1,13 @@
 # Migration from 0.10
 
-voles 0.11 replaces the six 0.10 solvers with three, `solve_vie1`,
+voles 1.0 replaces the six 0.10 solvers with three, `solve_vie1`,
 `solve_vie2` and `solve_vide`, which take either arrays or callables. The
-0.10 functions still work in 0.11, with a `DeprecationWarning`, and are
-removed in 1.0.
+0.10 functions are gone in 1.0; this page maps each of them, and each
+argument, to its replacement.
 
-Each deprecated call's warning shows the equivalent new call, built from
-the arguments you passed:
+The easiest route is through 0.11, which has both APIs. There the 0.10
+functions still work, with a `DeprecationWarning` showing the equivalent new
+call, built from the arguments you passed:
 
 ```text
 script.py:12: DeprecationWarning: solve_VIE_2() is deprecated since voles 0.11 and
@@ -14,16 +15,21 @@ will be removed in 1.0; use voles.solve_vie2(kernel=<array of shape (91,)>,
 g=<array of shape (91,)>, dt=0.05, coll_setting=(3, [0, 1, 2, 3])) instead. ...
 ```
 
-To find every old call in a code base, run its tests with
-`python -W error::DeprecationWarning` (or pytest's
-`-W error::DeprecationWarning`). The deprecated functions return exactly
-what they returned in 0.10: the same values, and the same `(values,
-solution)` pair for `return_function=True`. A few invalid inputs are
-handled differently; see [Behaviour changes in 0.11](#behaviour-changes-in-011).
+So:
+
+1. `pip install "voles==0.11.*"`;
+2. run your tests with `python -W error::DeprecationWarning` (or pytest's
+   `-W error::DeprecationWarning`) and replace each call the warnings
+   point to. In 0.11 the deprecated functions return exactly what they
+   returned in 0.10, so the tests' expected values still hold;
+3. upgrade to 1.0.
+
+A few inputs that 0.10 accepted are errors now; see
+[Behaviour changes since 0.10](#behaviour-changes-since-010).
 
 ## Names
 
-| 0.10 | 0.11 and 1.0 |
+| 0.10 | 1.0 |
 |---|---|
 | `solve_VIE_1`, `solve_VIE_2`, `solve_VIDE` | `solve_vie1`, `solve_vie2`, `solve_vide`, with array inputs |
 | `function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE` | the same three, with callable inputs and `mesh=` |
@@ -40,7 +46,7 @@ handled differently; see [Behaviour changes in 0.11](#behaviour-changes-in-011).
 | `coll_nodes=` | `coll_nodes=` (unchanged) |
 | `show_warnings=False` | `warnings.simplefilter("ignore", voles.VolesWarning)`; see [Warnings](warnings.md) |
 | `return_function=True`, `return_polys=True` | not needed: the solution object is always returned |
-| `fast_coll_settings_VIE_1` etc. | deprecated (they still work in 0.11, with a warning) and not needed: `quadrature="product"`, the default, accepts every setting |
+| `fast_coll_settings_VIE_1` etc. | removed, and not needed: `quadrature="product"`, the default, accepts every setting |
 | `from voles.solvers import ...` | `from voles import ...` |
 | `optimal_graded_mesh(T=..., M=...)` | `optimal_graded_mesh(t_end=..., n_intervals=...)` |
 
@@ -53,7 +59,7 @@ callables with `mesh`; an option of the other kind is an error (see
 
 Every solver returns a [`VolterraSolution`](../api/solution.md).
 
-| 0.10 | 0.11 and 1.0 |
+| 0.10 | 1.0 |
 |---|---|
 | array solvers: values, shape `(N, ...)` | `sol.y`, at the sample times `sol.t` |
 | callable solvers: node values, shape `(M, p, ...)` | `sol.node_values`, at `sol.node_times` |
@@ -159,18 +165,21 @@ with warnings.catch_warnings():
     sol = voles.solve_vide(kernel=-np.ones_like(t), y0=1.0, dt=0.01)
 ```
 
-## Behaviour changes in 0.11
+## Behaviour changes since 0.10
 
-These apply to the deprecated 0.10 functions too:
+Besides the names, these changed in 0.11 (for the 0.10 functions too) and
+hold in 1.0:
 
 - **Diagnostics are warnings** (`voles.AccuracyWarning`,
   `voles.PerformanceWarning`), not printed text; see [Warnings](warnings.md).
 - **Wrong types raise `TypeError`**, where some raised `ValueError` or were
-  silently converted: a float where an integer is needed (`coll_divs=2.0`),
-  a non-bool flag, a non-numeric array.
-- **`solve_VIDE(soln_init_value=None)` is an error**; it used to mean 0.
+  silently converted: a float where an integer is needed
+  (`samples_per_interval=4.0`), a non-bool flag, a non-numeric array.
+- **A VIDE needs `y0`**: `y0=None` is an error. In 0.10 a missing
+  `soln_init_value` meant 0.
 - **NaN or inf in the data is an error**, naming the input and the first
   bad index; it used to propagate into the solution.
-- A VIE-1 `soln_init_value` without `force_continuous=True`, which had no
-  effect, warns. In the new API, `y0` without `continuous=True` is a
-  `ValueError`.
+- **A VIE-1 `y0` without `continuous=True` is a `ValueError`.** In 0.10,
+  `soln_init_value` without `force_continuous=True` had no effect.
+- **Values at interior breakpoints** are the mean of the one-sided limits;
+  see [Return values](#return-values).

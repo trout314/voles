@@ -34,6 +34,6 @@ Python version past its end of life may be dropped in a minor release.
 
 ## Before 1.0
 
-0.11 is the transition release: it adds the 1.0 API next to the 0.10 one,
-which is deprecated and still works. 1.0 removes the 0.10 API. See
-[Migration from 0.10](migration.md).
+The 0.x releases made no compatibility promise. 0.11 was the transition
+release: it added the 1.0 API next to the 0.10 one, which it deprecated, and
+1.0 removed the 0.10 API. See [Migration from 0.10](migration.md).

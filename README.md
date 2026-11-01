@@ -56,7 +56,7 @@ For a kernel with a weak singularity at zero, $K(u) \sim u^{-\alpha}$ with known
 
 API reference: [api/optimal_graded_mesh/](https://trout314.github.io/voles/api/optimal_graded_mesh/)
 
-> **Upgrading from 0.10?** The six 0.10 functions (`solve_VIE_1`, …, `function_solve_VIDE`) still work in 0.11 with a `DeprecationWarning` that shows the equivalent new call; they are removed in 1.0. See [Migration from 0.10](https://trout314.github.io/voles/guide/migration/).
+> **Upgrading from 0.10?** 1.0 removes the six 0.10 functions (`solve_VIE_1`, …, `function_solve_VIDE`). voles 0.11 still has them, with a `DeprecationWarning` that shows the equivalent new call, so the easiest route is to run your code under 0.11 first. See [Migration from 0.10](https://trout314.github.io/voles/guide/migration/).
 
 ## Installation
 

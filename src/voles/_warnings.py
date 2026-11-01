@@ -6,9 +6,10 @@ turned into an error, or captured with the standard `warnings` machinery:
     warnings.simplefilter("ignore", voles.VolesWarning)     # silence voles
     warnings.simplefilter("error", voles.AccuracyWarning)   # make accuracy fatal
 
-The solvers' ``show_warnings=False`` (0.10 API) skips the call to `_warn` at
-each site, so it never touches the process-wide filter state, which
-`warnings.catch_warnings` would and which isn't thread-safe.
+Warnings are issued only from the calling thread: the sampled engine's
+worker threads run with ``diagnose=False``, which skips the call to `_warn`
+at each site instead of touching the process-wide filter state, as
+`warnings.catch_warnings` would (and which isn't thread-safe).
 """
 import functools
 import os
