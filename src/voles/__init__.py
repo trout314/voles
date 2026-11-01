@@ -1,3 +1,9 @@
+"""Collocation-method solvers for Volterra integral and integro-differential equations."""
+
+# The single source of the package version: pyproject.toml reads it from here
+# ([tool.hatch.version]). Bump it here when releasing.
+__version__ = "0.10.0"
+
 from ._api import solve_vie1, solve_vie2, solve_vide
 from ._solution import VolterraSolution
 from ._warnings import VolesWarning, AccuracyWarning, PerformanceWarning
@@ -48,6 +54,3 @@ def __getattr__(name):
         return _fast_coll_settings(name)
     raise AttributeError(f"module 'voles' has no attribute {name!r}")
 
-
-from importlib.metadata import version
-__version__ = version("voles")

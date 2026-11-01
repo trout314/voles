@@ -6,6 +6,7 @@ engine imports the other (1.0 plan, Phase 3): the collocation basis on
 [0, 1], the VIE-1 amplification factor and admissibility rule, the
 matrix-column thread count, and two small input/diagnostic helpers.
 """
+import functools
 import os
 from fractions import Fraction
 
@@ -139,10 +140,17 @@ def _vie1_rho(coll_divs, coll_choices, continuous=False):
     implementation of the criterion for ``coll_divs``/``coll_choices`` node
     sets; `_callable_solvers` uses it too and keeps a floating-point version
     only for arbitrary ``coll_nodes``."""
-    nodes = coll_choices[:-1] if continuous else coll_choices
-    rho = Fraction((-1) ** len(coll_choices))
+    return _rho_exact(int(coll_divs), tuple(int(k) for k in coll_choices), bool(continuous))
+
+
+@functools.lru_cache(maxsize=256)
+def _rho_exact(divs, choices, continuous):
+    # Cached: a solve evaluates it up to three times, and Fraction arithmetic
+    # costs more than the rest of the validation together.
+    nodes = choices[:-1] if continuous else choices
+    rho = Fraction((-1) ** len(choices))
     for k in nodes:
-        rho *= Fraction(int(coll_divs) - int(k), int(k))
+        rho *= Fraction(divs - k, k)
     return rho
 
 

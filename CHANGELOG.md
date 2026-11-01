@@ -37,6 +37,9 @@
     integrals);
   - pickling and a readable `repr`.
 
+  The solution's collocation data (`node_times`, `node_values`) is built on
+  first access.
+
   Dense evaluation no longer copies the coefficients per point: peak memory
   is about a third of the 0.10 object's on a matrix-valued solution. The 0.10
   solvers still return their 0.10 solution object.
@@ -72,7 +75,7 @@ the [migration guide](https://trout314.github.io/voles/guide/migration/)):
   linked See Also sections, and Raises/Warns sections.
 - The benchmarks call the new solvers; their names, and so the published
   history, are unchanged. The small-N timings include the new layer's
-  per-call overhead (about 70 µs).
+  per-call overhead (about 40–60 µs on the benchmark machine).
 
 ### Fixed
 - The Numba fallback passed `coll_choices` as a Python list, which Numba
@@ -133,6 +136,15 @@ the [migration guide](https://trout314.github.io/voles/guide/migration/)):
   kernels are not checked: a weakly singular kernel legitimately returns inf
   at u = 0.
 - `quadrature` is matched case-insensitively (`"Product"` works).
+- **`voles.__version__` is the single source of the version**: `pyproject.toml`
+  reads it from `src/voles/__init__.py`. It used to come from the installed
+  metadata, which a stale editable install got wrong (an install made at
+  0.7.0 kept reporting 0.7.0).
+- The public functions and `VolterraSolution` are fully annotated (`ArrayLike`
+  inputs, callables, `Literal` options). The test suite type-checks the
+  documented calls with mypy and pins `__all__` and every public signature
+  against a snapshot (`tests/data/public_api.json`). `py.typed` comes with
+  1.0, once the loosely typed 0.10 wrappers are gone.
 - Warning texts no longer name 0.10 parameters:
   - the reduced-order warning shows the setting as `(divs, choices)`;
   - the K(0) warning suggests a finer "sample spacing";

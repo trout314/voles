@@ -146,6 +146,38 @@ Phase 0 findings:
   coefficient request. That's for Phase 7.
 - CONTRIBUTING, CLAUDE.md and the CHANGELOG (Documentation section, the F34
   extras notice, the breakpoint mean) are updated.
+
+**Phase 7 done 2026-11-01:**
+- Performance. Overhead of the 1.0 path over the 0.10 values path, before →
+  after, at N≈500: 60–74 → 41–49 µs; at N=8000, 140 → 68 µs. The fixes:
+  - the sampled node arrays are built lazily (they cost 15–64 µs);
+  - the exact VIE-1 ρ is lru-cached (Fraction arithmetic, three times per
+    solve);
+  - no defensive copy of the engine-built mesh.
+
+  Tried and reverted: a sum-based finiteness fast path. It needs
+  `np.errstate`, which costs more than the `isfinite` it saves.
+
+  What remains is structural: the engine re-validates what `_api` already
+  checked, the coefficient request costs 11 µs at N=500 (32 µs at 8000),
+  and there's about 10 µs of object construction. Removing the double
+  validation would need the check/run split of each engine function that
+  the lighter-engine choice avoided.
+- F33: `__version__ = "..."` in `src/voles/__init__.py` is the source;
+  pyproject has `dynamic = ["version"]` with `[tool.hatch.version]`. A wheel
+  built and its metadata checked. (The dev env's editable metadata said
+  0.7.0.)
+- F30: aliases `Data`, `CollSetting`, `KernelSingularity` and `Quadrature`
+  in `_api`; `VolterraSolution` attributes, properties, `__call__` and
+  `to_ppoly` are annotated, and its private state is declared. mypy is clean
+  on `_api`, `_solution`, `_warnings` and `__init__`.
+  `tests/typing/public_api_usage.py` (the documented calls) must run and
+  type-check (`tests/test_typing.py`; mypy added to `dev`). pyright can't
+  run on this machine (its Node build needs macOS 13.5), so there's no
+  pyright CI step; `py.typed` waits for 1.0 as planned.
+- F32: `tests/test_public_api.py` and `tests/data/public_api.json`
+  (regenerate with `--update`).
+- Benchmarks moved to the 1.0 API (held back from the Phase 6 commit).
 Inputs: `docs/dev/api-review-1.0.md` (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.
 

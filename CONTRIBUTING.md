@@ -91,6 +91,12 @@ that triggers a warning fails unless it expects it (`pytest.warns`) or filters
 it. Until 1.0 the 0.10 API's deprecation messages are ignored there, so the
 legacy tests keep running.
 
+`tests/test_public_api.py` pins `voles.__all__` and every public signature
+against `tests/data/public_api.json`. After an intended API change, run
+`python tests/test_public_api.py --update` and review the diff.
+`tests/test_typing.py` type-checks the documented calls in
+`tests/typing/public_api_usage.py` with mypy (part of the `dev` extra).
+
 The Examples sections of the public docstrings are run by
 `tests/test_docstring_examples.py`; print rounded values in them so the output
 is the same on every platform.
@@ -138,5 +144,7 @@ docs via a snippet; edit it only in the README.
 
 ## Releases
 
-Wheels are built and published by CI when a version tag (`v*`) is pushed.
+The version lives in one place, `__version__` in `src/voles/__init__.py`
+(`pyproject.toml` reads it from there). Wheels are built and published by CI
+when a version tag (`v*`) is pushed.
 Only wheels are published (no sdist), since building requires a D compiler.

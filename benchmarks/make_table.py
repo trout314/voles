@@ -6,9 +6,9 @@ Usage: python benchmarks/make_table.py output.json docs/benchmarks.md
 
 Two regions are filled (markers kept):
 
-    <!-- BENCHMARKS:START -->           array-based solvers, size = points N
+    <!-- BENCHMARKS:START -->           sampled inputs, size = points N
     <!-- BENCHMARKS:END -->
-    <!-- CALLABLE_BENCHMARKS:START -->  callable solvers, size = mesh intervals M
+    <!-- CALLABLE_BENCHMARKS:START -->  callable inputs, size = mesh intervals M
     <!-- CALLABLE_BENCHMARKS:END -->
 """
 
@@ -43,11 +43,11 @@ CALLABLE = {
     "size_header": "M",
     "sizes": [25, 50, 100, 200],
     "rows": [
-        ("function_solve_VIE_1",                  "test_fn_vie1"),
-        ("function_solve_VIE_2",                  "test_fn_vie2"),
-        ("function_solve_VIE_2 (vector, d=3)",    "test_fn_vie2_vec"),
-        ("function_solve_VIDE",                   "test_fn_vide"),
-        ("function_solve_VIE_2 (weakly singular)", "test_fn_vie2_sing"),
+        ("VIE-1",                   "test_fn_vie1"),
+        ("VIE-2",                   "test_fn_vie2"),
+        ("VIE-2 (vector, d=3)",     "test_fn_vie2_vec"),
+        ("VIDE",                    "test_fn_vide"),
+        ("VIE-2 (weakly singular)", "test_fn_vie2_sing"),
     ],
 }
 

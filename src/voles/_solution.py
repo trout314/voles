@@ -10,8 +10,13 @@ that 0.10 pickles keep loading in 0.11.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, List, Literal, Optional, Tuple, Union
 
 import numpy as np
+from numpy.typing import ArrayLike
+
+if TYPE_CHECKING:
+    from scipy.interpolate import PPoly
 
 from . import _validate as _v
 
@@ -285,6 +290,25 @@ class VolterraSolution:
     1.301168  1.301169
     """
 
+    equation: Literal["vie1", "vie2", "vide"]
+    regime: Literal["sampled", "functional"]
+    continuous: bool
+    coll_setting: Optional[Tuple[int, List[int]]]
+    # State set by `_build` (and restored by unpickling).
+    _coef: np.ndarray
+    _mesh: np.ndarray
+    _nodes: np.ndarray
+    _local_nodes: Optional[np.ndarray]
+    _node_times: Optional[np.ndarray]
+    _node_values: Optional[np.ndarray]
+    _node_layout: Optional[tuple]
+    _y: Optional[np.ndarray]
+    _t: Optional[np.ndarray]
+    _dt: Optional[float]
+    _n: Optional[int]
+    _d: int
+    _m: int
+
     def __init__(self, *args, **kwargs):
         raise TypeError("VolterraSolution objects are returned by the solvers; "
                         "they are not constructed directly")
@@ -292,31 +316,35 @@ class VolterraSolution:
     # ------------------------------------------------------------ building
 
     @classmethod
-    def _build(cls, *, coefficients, mesh, local_nodes, node_times, nodes, equation, regime,
-               continuous, d, m, coll_setting=None, y=None, node_values=None, dt=None,
-               n_samples=None):
+    def _build(cls, *, coefficients, mesh, nodes, equation, regime, continuous, d, m,
+               local_nodes=None, node_times=None, node_layout=None, coll_setting=None,
+               y=None, node_values=None, dt=None, n_samples=None, copy_mesh=True):
         """The solvers' constructor.
 
         ``local_nodes`` (M, p): each interval's node positions in its local
         variable, which `node_values` evaluates at when the solver hasn't
-        supplied them. Sampled regime: ``y`` (the values on the sample grid),
-        ``dt`` and ``n_samples`` are required. Functional regime: ``y`` is
-        computed on first access, at the breakpoints."""
+        supplied them; ``node_times`` (M, p) the times. Instead of both, the
+        sampled builder passes ``node_layout`` (a tuple for `_sampled_layout`),
+        and they are computed on first access. Sampled regime: ``y`` (the
+        values on the sample grid), ``dt`` and ``n_samples`` are required.
+        Functional regime: ``y`` is computed on first access, at the
+        breakpoints. ``copy_mesh=False`` is for a mesh voles built itself."""
         if equation not in _EQUATIONS or regime not in _REGIMES:
             raise ValueError(f"bad equation/regime {equation!r}/{regime!r}")
         self = cls.__new__(cls)
         coef = np.asarray(coefficients)
         if not np.issubdtype(coef.dtype, np.complexfloating):
-            coef = coef.astype(float)
+            coef = coef.astype(float, copy=False)
         self._coef = _read_only(coef, copy=False)          # computed by the engine
-        self._mesh = _read_only(mesh, dtype=float)          # may alias the user's array
+        self._mesh = _read_only(mesh, dtype=float, copy=copy_mesh)   # may alias user data
         M = len(self._mesh) - 1
         if self._coef.shape[0] != M or M < 1:
             raise ValueError(f"{self._coef.shape[0]} coefficient blocks for {M} mesh intervals")
-        self._local_nodes = _read_only(local_nodes, dtype=float, copy=False)
-        self._node_times = _read_only(node_times, dtype=float, copy=False)
-        if self._local_nodes.shape != self._node_times.shape or self._node_times.shape[0] != M:
-            raise ValueError("node arrays must have shape (M, p)")
+        self._node_layout = node_layout
+        if node_layout is None:
+            self._set_node_arrays(local_nodes, node_times)
+        else:
+            self._local_nodes = self._node_times = None
         self._nodes = _read_only(np.sort(np.asarray(nodes, dtype=float)))
         self._node_values = (None if node_values is None
                              else _read_only(node_values, copy=False))   # engine output
@@ -345,48 +373,68 @@ class VolterraSolution:
     # ------------------------------------------------------------ attributes
 
     @property
-    def mesh(self):
+    def mesh(self) -> np.ndarray:
         return self._mesh
 
     @property
-    def coefficients(self):
+    def coefficients(self) -> np.ndarray:
         return self._coef
 
-    @property
-    def node_times(self):
-        return self._node_times
+    def _set_node_arrays(self, local_nodes, node_times):
+        self._local_nodes = _read_only(local_nodes, dtype=float, copy=False)
+        self._node_times = _read_only(node_times, dtype=float, copy=False)
+        if (self._local_nodes.shape != self._node_times.shape
+                or self._node_times.shape[0] != len(self._mesh) - 1):
+            raise ValueError("node arrays must have shape (M, p)")
+
+    def _nodes_local_and_times(self) -> Tuple[np.ndarray, np.ndarray]:
+        if self._local_nodes is None or self._node_times is None:
+            assert self._node_layout is not None
+            self._set_node_arrays(*_sampled_layout(*self._node_layout))
+        assert self._local_nodes is not None and self._node_times is not None
+        return self._local_nodes, self._node_times
 
     @property
-    def nodes(self):
+    def node_times(self) -> np.ndarray:
+        return self._nodes_local_and_times()[1]
+
+    @property
+    def nodes(self) -> np.ndarray:
         return self._nodes
 
     @property
-    def t(self):
-        if self._t is None:
+    def t(self) -> np.ndarray:
+        t = self._t
+        if t is None:
             if self.regime == "sampled":
-                self._t = _read_only(np.arange(self._n) * self._dt)
+                assert self._n is not None and self._dt is not None
+                t = _read_only(np.arange(self._n) * self._dt)
             else:
-                self._t = self._mesh
-        return self._t
+                t = self._mesh
+            self._t = t
+        return t
 
     @property
-    def y(self):
-        if self._y is None:                       # functional regime, first access
-            self._y = self(self._mesh)
-        return self._y
+    def y(self) -> np.ndarray:
+        y = self._y
+        if y is None:                             # functional regime, first access
+            y = np.asarray(self(self._mesh))
+            self._y = y
+        return y
 
     @property
-    def node_values(self):
-        if self._node_values is None:
-            x = self._local_nodes                               # (M, p)
+    def node_values(self) -> np.ndarray:
+        nv = self._node_values
+        if nv is None:
+            x = self._nodes_local_and_times()[0]                # (M, p)
             c = self._coef                                      # (M, P, *cs)
             extra = (1,) * (c.ndim - 2)
             xb = x.reshape(x.shape + extra)
             out = np.broadcast_to(c[:, -1][:, None], x.shape + c.shape[2:])
             for k in range(c.shape[1] - 2, -1, -1):
                 out = out * xb + c[:, k][:, None]
-            self._node_values = _read_only(out)
-        return self._node_values
+            nv = self._node_values = _read_only(out)
+        return nv
 
     @property
     def _shape(self):
@@ -405,7 +453,9 @@ class VolterraSolution:
             out += c[idx, k]
         return out
 
-    def __call__(self, t, *, at_breakpoints="mean"):
+    def __call__(self, t: ArrayLike, *,
+                 at_breakpoints: Literal["mean", "left", "right"] = "mean"
+                 ) -> Union[float, complex, np.ndarray]:
         """Evaluate the solution at ``t`` (scalar or array).
 
         Parameters
@@ -466,7 +516,7 @@ class VolterraSolution:
             return v.item() if not self._shape else v
         return out.reshape(t_arr.shape + self._shape)
 
-    def to_ppoly(self):
+    def to_ppoly(self) -> PPoly:
         """The solution as a `scipy.interpolate.PPoly`.
 
         Useful for derivatives (``.derivative()``), antiderivatives and
@@ -484,7 +534,7 @@ class VolterraSolution:
         pc = np.ascontiguousarray(np.moveaxis(scaled, 1, 0)[::-1])   # (P, M, *shape)
         return PPoly(pc, self._mesh, extrapolate=False)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         M = len(self._mesh) - 1
         nodes = (f"coll_setting={self.coll_setting}" if self.coll_setting is not None
                  else "coll_nodes=[" + ", ".join(f"{c:.4g}" for c in self._nodes) + "]")
@@ -504,10 +554,24 @@ def _from_sampled_engine(values, legacy, *, equation, continuous, coll_setting,
                          samples_per_interval, dt):
     """`VolterraSolution` from the sampled engine's ``(values,
     _SolutionFunction)`` pair, given the resolved setting and mesh width."""
-    from ._product import mesh_split, snap_nodes
     divs, choices = coll_setting[0], sorted(int(c) for c in coll_setting[1])
-    Q = int(samples_per_interval)
     N = len(values)
+    # The engine builds its mesh from the sample count (never the user's
+    # array), so it needs no defensive copy. The node arrays are built on
+    # first access: most callers never look at them.
+    return VolterraSolution._build(
+        coefficients=legacy._unit, mesh=legacy.mesh_breakpoints, copy_mesh=False,
+        node_layout=(tuple(choices), int(divs), int(samples_per_interval), N, float(dt)),
+        nodes=np.array(choices) / divs,
+        equation=equation, regime="sampled", continuous=continuous, d=legacy._d,
+        m=legacy._m, coll_setting=(divs, choices), y=values, dt=dt, n_samples=N)
+
+
+def _sampled_layout(choices, divs, Q, N, dt):
+    """``(local_nodes, node_times)`` of the sampled mesh: Q samples per regular
+    interval, with the leftover samples absorbed by a longer final interval
+    whose nodes are snapped to its own sample grid."""
+    from ._product import mesh_split, snap_nodes
     M_reg, Qp = mesh_split(N, Q)
     ch = np.array(choices)
     M = M_reg + (1 if Qp else 0)
@@ -516,14 +580,10 @@ def _from_sampled_engine(values, legacy, *, equation, continuous, coll_setting,
     local[:M_reg] = ch / divs
     sample_idx[:M_reg] = np.arange(M_reg)[:, None] * Q + (ch * Q // divs)[None, :]
     if Qp:
-        kap = np.array(snap_nodes(choices, divs, Qp))
+        kap = np.array(snap_nodes(list(choices), divs, Qp))
         local[M_reg] = kap / Qp
         sample_idx[M_reg] = M_reg * Q + kap
-    return VolterraSolution._build(
-        coefficients=legacy._unit, mesh=legacy.mesh_breakpoints, local_nodes=local,
-        node_times=sample_idx * dt, nodes=ch / divs,
-        equation=equation, regime="sampled", continuous=continuous, d=legacy._d,
-        m=legacy._m, coll_setting=(divs, choices), y=values, dt=dt, n_samples=N)
+    return local, sample_idx * dt
 
 
 def _from_functional_engine(node_values, legacy, *, equation, continuous, node_pos):

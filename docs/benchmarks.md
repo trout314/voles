@@ -15,10 +15,11 @@ measurements is published at the
 For the asymptotic complexity (which is what stays fixed as the implementation
 evolves), see the [Benchmarks section of the README](https://github.com/trout314/voles#benchmarks).
 
-## Array-based solvers
+## Sampled inputs
 
-Mean time in milliseconds for the **array-based** solvers, by input length $N$
-(number of sampled points):
+Mean time in milliseconds with **sampled inputs** (arrays, `dt=`), by input
+length $N$ (number of samples). These rows use `quadrature="collocation"`, the
+compiled path:
 
 <!-- BENCHMARKS:START -->
 | Solver \ N | 500 | 1000 | 2000 | 4000 | 8000 | 16000 | 32000 |
@@ -37,15 +38,15 @@ Mean time in milliseconds for the **array-based** solvers, by input length $N$
 
 Notes on the rows:
 
-- **VIE-1 with `force_continuous=True`** is not shown separately: its timings
+- **VIE-1 with `continuous=True`** is not shown separately: its timings
   are indistinguishable from the default (discontinuous) VIE-1 rows.
 - **d=8** is the largest compile-time-specialized dimension in the D
   extension; **d=16** exercises the runtime-dimension path (LAPACK, or the
   pure-D LU fallback used on the CI runner). Cost grows as $d^2$ either way.
 - **Numba fallback**: scalar equations with a collocation setting that is not
   compiled into the D extension fall back to a Numba JIT solver. Every setting
-  with `coll_divs` ≤ 4 is compiled, so this row uses `coll_divs=5,
-  coll_choices=[0, 3, 5]` — a 3-node rule comparable to the default — whose
+  with `divs` ≤ 4 is compiled, so this row uses
+  `coll_setting=(5, [0, 3, 5])` — a 3-node rule comparable to the default — whose
   mesh intervals are 25 fine steps wide instead of 4. The fallback therefore
   takes ~6× *fewer* (larger) steps at equal $N$ than the D rows above, and is
   still one to two orders of magnitude slower: its history sum is quadratic in
@@ -53,20 +54,20 @@ Notes on the rows:
   scheme. The one-time JIT compilation cost (seconds, on first call in a
   fresh environment) is excluded from the timings via a warmup round.
 
-## Callable-input solvers
+## Callable inputs
 
-The **callable-input** solvers run the general path (Python + adaptive
-quadrature, no Toeplitz reuse), so they are benchmarked on much smaller
-problems, sized by the number of mesh intervals $M$ (each carrying
-`len(coll_choices)` collocation nodes). The *weakly singular* row uses an Abel
+With **callable inputs** (`mesh=`) the solvers run the general path (Python +
+adaptive quadrature, no Toeplitz reuse), so they are benchmarked on much
+smaller problems, sized by the number of mesh intervals $M$ (each carrying
+`len(coll_nodes)` collocation nodes). The *weakly singular* row uses an Abel
 kernel $K(u) = u^{-1/2}$ on a graded mesh with the singularity declared:
 
 <!-- CALLABLE_BENCHMARKS:START -->
 | Solver \ M | 25 | 50 | 100 | 200 |
 |---|---|---|---|---|
-| function_solve_VIE_1 | 0.85 | 1.12 | 1.70 | 4.06 |
-| function_solve_VIE_2 | 0.87 | 1.19 | 1.86 | 3.96 |
-| function_solve_VIE_2 (vector, d=3) | 1.06 | 1.59 | 2.99 | 7.18 |
-| function_solve_VIDE | 1.38 | 1.99 | 3.30 | 7.06 |
-| function_solve_VIE_2 (weakly singular) | 137 | 320 | 832 | 2381 |
+| VIE-1 | 0.85 | 1.12 | 1.70 | 4.06 |
+| VIE-2 | 0.87 | 1.19 | 1.86 | 3.96 |
+| VIE-2 (vector, d=3) | 1.06 | 1.59 | 2.99 | 7.18 |
+| VIDE | 1.38 | 1.99 | 3.30 | 7.06 |
+| VIE-2 (weakly singular) | 137 | 320 | 832 | 2381 |
 <!-- CALLABLE_BENCHMARKS:END -->

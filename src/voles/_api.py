@@ -15,7 +15,7 @@ use the 0.10 names, are never what a 1.0 user sees.
 from __future__ import annotations
 
 import numbers
-from typing import Callable, Literal, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Literal, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -27,8 +27,13 @@ from ._solution import VolterraSolution
 
 __all__ = ["solve_vie1", "solve_vie2", "solve_vide"]
 
-Data = Union[ArrayLike, Callable[..., ArrayLike]]
+# Public input types. `Data`: samples, or a callable of one argument (the lag
+# u for the kernel, the time t for g and a) that may be vectorised.
+Data = Union[ArrayLike, Callable[[Any], ArrayLike]]
 CollSetting = Union[int, Tuple[int, Sequence[int]], None]
+KernelSingularity = Union[None, float, Sequence[float], Mapping[float, Optional[float]],
+                          Callable[[float], Sequence[float]]]
+Quadrature = Literal["product", "collocation"]
 
 _DEFAULT_SETTING = {"vie1": (3, [1, 2, 3]), "vie2": (2, [0, 1, 2]), "vide": (2, [0, 1, 2])}
 _FAST = {"vie1": "_fast_settings_VIE_1", "vie2": "_fast_settings_VIE_2",
@@ -417,11 +422,11 @@ def _solve(equation, *, kernel, g, a=None, y0=None, continuous=False, dt, coll_s
 def solve_vie1(*, kernel: Data, g: Optional[Data] = None, continuous: bool = False,
                y0: Optional[ArrayLike] = None,
                dt: float = 1.0, coll_setting: CollSetting = None,
-               quadrature: Literal["product", "collocation"] = "product",
+               quadrature: Quadrature = "product",
                samples_per_interval: Optional[int] = None,
                kernel_interp_degree: Optional[int] = None,
                mesh: Optional[ArrayLike] = None, coll_nodes: Optional[ArrayLike] = None,
-               kernel_singularity=None,
+               kernel_singularity: KernelSingularity = None,
                reuse_adaptive_blocks: bool = True) -> VolterraSolution:
     r"""Solve a Volterra integral equation of the first kind.
 
@@ -579,11 +584,11 @@ def solve_vie1(*, kernel: Data, g: Optional[Data] = None, continuous: bool = Fal
 
 def solve_vie2(*, kernel: Data, g: Optional[Data] = None,
                dt: float = 1.0, coll_setting: CollSetting = None,
-               quadrature: Literal["product", "collocation"] = "product",
+               quadrature: Quadrature = "product",
                samples_per_interval: Optional[int] = None,
                kernel_interp_degree: Optional[int] = None,
                mesh: Optional[ArrayLike] = None, coll_nodes: Optional[ArrayLike] = None,
-               kernel_singularity=None,
+               kernel_singularity: KernelSingularity = None,
                reuse_adaptive_blocks: bool = True) -> VolterraSolution:
     r"""Solve a Volterra integral equation of the second kind.
 
@@ -723,11 +728,11 @@ def solve_vie2(*, kernel: Data, g: Optional[Data] = None,
 def solve_vide(*, kernel: Data, a: Optional[Data] = None, g: Optional[Data] = None,
                y0: ArrayLike,
                dt: float = 1.0, coll_setting: CollSetting = None,
-               quadrature: Literal["product", "collocation"] = "product",
+               quadrature: Quadrature = "product",
                samples_per_interval: Optional[int] = None,
                kernel_interp_degree: Optional[int] = None,
                mesh: Optional[ArrayLike] = None, coll_nodes: Optional[ArrayLike] = None,
-               kernel_singularity=None,
+               kernel_singularity: KernelSingularity = None,
                reuse_adaptive_blocks: bool = True) -> VolterraSolution:
     r"""Solve a Volterra integro-differential equation.
 

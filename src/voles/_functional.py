@@ -26,6 +26,7 @@ import contextlib
 import functools
 import warnings
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 from ._common import (_column_workers, _check_vie1_setting, _warn_g_start_columns,
                       _scalar_init, _lagrange_basis_coefs, _lagrange_antideriv_coefs, _vide_basis_coefs, _eval_poly_at, _vie1_cont_basis_coefs, _vie1_cont_advance)
@@ -1971,8 +1972,9 @@ def vide(*, kernel, a=None, g=None, soln_init_value,
 # Mesh helpers
 # ---------------------------------------------------------------------------
 
-def optimal_graded_mesh(*, alpha: float, t_end: float = None, n_intervals: int = None,
-                        order: int, T: float = None, M: int = None) -> np.ndarray:
+def optimal_graded_mesh(*, alpha: float, t_end: Optional[float] = None,
+                        n_intervals: Optional[int] = None, order: int,
+                        T: Optional[float] = None, M: Optional[int] = None) -> np.ndarray:
     r"""Return a graded mesh of ``n_intervals + 1`` breakpoints suitable for a
     weakly singular convolution kernel $K(u) \sim u^{-\alpha}$,
     $\alpha \in [0, 1)$.

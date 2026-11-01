@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "voles"
-version = "0.10.0"
+dynamic = ["version"]
 description = "Collocation-method solvers for Volterra integral and integro-differential equations"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -50,6 +50,7 @@ dev = [
     "pytest-benchmark",
     "pytest-markdown-docs",
     "pytest-timeout",
+    "mypy",
 ]
 docs = [
     "mkdocs-material",
@@ -62,6 +63,9 @@ Repository = "https://github.com/trout314/voles"
 Documentation = "https://trout314.github.io/voles"
 Changelog = "https://github.com/trout314/voles/blob/main/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/trout314/voles/issues"
+
+[tool.hatch.version]
+path = "src/voles/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/voles"]

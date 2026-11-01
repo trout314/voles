@@ -80,8 +80,8 @@ def finite(name, values):
         arr = np.asarray(values)
     except Exception:
         return
-    if arr.dtype.kind not in "biufc":
-        return
+    if arr.dtype.kind not in "fc":
+        return              # integers and bools are finite; non-numeric is not ours
     ok = np.isfinite(arr)
     if ok.all():
         return
