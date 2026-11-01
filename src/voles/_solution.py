@@ -10,7 +10,6 @@ that 0.10 pickles keep loading in 0.11.
 """
 from __future__ import annotations
 
-import warnings
 
 import numpy as np
 
@@ -198,11 +197,6 @@ def _read_only(a, dtype=None, copy=True):
     return a
 
 
-def _deprecated(what, instead):
-    warnings.warn(f"{what} is deprecated and will be removed in voles 1.0; use {instead}.",
-                  DeprecationWarning, stacklevel=3)
-
-
 class VolterraSolution:
     """The solution of a Volterra equation, as returned by the solvers.
 
@@ -259,7 +253,7 @@ class VolterraSolution:
     @classmethod
     def _build(cls, *, coefficients, mesh, local_nodes, node_times, nodes, equation, regime,
                continuous, d, m, coll_setting=None, y=None, node_values=None, dt=None,
-               n_samples=None, trim=True):
+               n_samples=None):
         """The solvers' constructor.
 
         ``local_nodes`` (M, p): each interval's node positions in its local
@@ -291,7 +285,6 @@ class VolterraSolution:
         self.coll_setting = (None if coll_setting is None
                              else (int(coll_setting[0]), [int(c) for c in coll_setting[1]]))
         self._d, self._m = int(d), int(m)
-        self._trim = trim
         if regime == "sampled":
             if y is None or dt is None or n_samples is None:
                 raise ValueError("the sampled regime needs y, dt and n_samples")
@@ -301,13 +294,11 @@ class VolterraSolution:
             self._y = None if y is None else np.asarray(y)
             self._dt = self._n = None
         self._t = None
-        self._polys = None
         return self
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state["_polys"] = None           # caches are rebuilt on demand
-        state["_t"] = None
+        state["_t"] = None               # rebuilt on demand
         return state
 
     # ------------------------------------------------------------ attributes
@@ -461,41 +452,6 @@ class VolterraSolution:
                 f"[0, {self._mesh[-1]:.6g}], degree {self._coef.shape[1] - 1}, {nodes}"
                 f"{shape}, {self._coef.dtype}>")
 
-    def __bool__(self):
-        return True
-
-    # ------------------------------------------------- 0.10 compatibility (0.11 only)
-
-    @property
-    def mesh_breakpoints(self):
-        _deprecated("VolterraSolution.mesh_breakpoints", "VolterraSolution.mesh")
-        return self._mesh
-
-    @property
-    def polynomials(self):
-        _deprecated("VolterraSolution.polynomials",
-                    "VolterraSolution.coefficients or VolterraSolution.to_ppoly()")
-        return self._polynomials()
-
-    def _polynomials(self):
-        if self._polys is None:
-            self._polys = _polys_from_unit_coefs(self._coef, self._mesh, self._trim)
-        return self._polys
-
-    def __len__(self):
-        _deprecated("len(VolterraSolution)", "len(VolterraSolution.mesh) - 1")
-        return len(self._mesh) - 1
-
-    def __getitem__(self, index):
-        _deprecated("indexing a VolterraSolution",
-                    "VolterraSolution.coefficients[n] or VolterraSolution.to_ppoly()")
-        return self._polynomials()[index]
-
-    def __iter__(self):
-        _deprecated("iterating over a VolterraSolution",
-                    "VolterraSolution.coefficients or VolterraSolution.to_ppoly()")
-        return iter(self._polynomials())
-
 
 # ---------------------------------------------------------------------------
 # Builders from the engines' output: values (sampled) or node values
@@ -526,8 +482,7 @@ def _from_sampled_engine(values, legacy, *, equation, continuous, coll_setting,
         coefficients=legacy._unit, mesh=legacy.mesh_breakpoints, local_nodes=local,
         node_times=sample_idx * dt, nodes=ch / divs,
         equation=equation, regime="sampled", continuous=continuous, d=legacy._d,
-        m=legacy._m, coll_setting=(divs, choices), y=values, dt=dt, n_samples=N,
-        trim=legacy._trim)
+        m=legacy._m, coll_setting=(divs, choices), y=values, dt=dt, n_samples=N)
 
 
 def _from_functional_engine(node_values, legacy, *, equation, continuous, node_pos):
@@ -541,4 +496,4 @@ def _from_functional_engine(node_values, legacy, *, equation, continuous, node_p
         coefficients=legacy._unit, mesh=mesh,
         local_nodes=np.broadcast_to(node_pos, node_times.shape), node_times=node_times,
         nodes=node_pos, equation=equation, regime="functional", continuous=continuous,
-        d=legacy._d, m=legacy._m, node_values=node_values, trim=legacy._trim)
+        d=legacy._d, m=legacy._m, node_values=node_values)

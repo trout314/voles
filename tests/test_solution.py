@@ -4,7 +4,7 @@ Solutions here come from the engines' entry points (voles._sampled.solve,
 voles._functional.solve), which the 1.0 solvers call. Each builder also makes
 the same solve through the 0.10 API, for comparison. What is tested is the
 object itself: grid output, structure, evaluation, breakpoint conventions,
-to_ppoly, pickling and the 0.11 compatibility aliases.
+to_ppoly and pickling.
 """
 import pathlib
 import pickle
@@ -403,23 +403,7 @@ def test_0_10_pickles_still_load():
     np.testing.assert_array_equal(payload["matrix"](payload["tq2"]), payload["expect_matrix"])
 
 
-# ------------------------------------------- 0.10 compatibility aliases (0.11)
-
-def test_list_protocol_and_mesh_breakpoints_are_deprecated():
-    sol, _, leg = sampled(kind="vie2", N=82)
-    with pytest.warns(DeprecationWarning, match="mesh_breakpoints"):
-        np.testing.assert_array_equal(sol.mesh_breakpoints, sol.mesh)
-    with pytest.warns(DeprecationWarning, match="polynomials"):
-        polys = sol.polynomials
-    assert len(polys) == len(leg.polynomials)
-    with pytest.warns(DeprecationWarning, match="len"):
-        assert len(sol) == len(sol.mesh) - 1
-    with pytest.warns(DeprecationWarning, match="indexing"):
-        p0 = sol[0]
-    assert p0 == leg[0]
-    with pytest.warns(DeprecationWarning, match="iterating"):
-        assert sum(1 for _ in sol) == len(sol.mesh) - 1
-
+# ------------------------------------------------------------------ misc.
 
 def test_truthiness_does_not_warn():
     sol, _, _ = functional()

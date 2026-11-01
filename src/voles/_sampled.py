@@ -29,11 +29,9 @@ def _resolve_return_flag(return_function, return_polys):
     return_function = _v.flag("return_function", return_function)
     if return_polys is not None:
         return_polys = _v.flag("return_polys", return_polys)
-        warnings.warn(
-            "`return_polys` is deprecated; use `return_function`. The second "
-            "return value is now a callable solution object that also indexes "
-            "and iterates like the old list of polynomials.",
-            DeprecationWarning, stacklevel=3)
+        _warn("`return_polys` is deprecated; use `return_function`. The second "
+              "return value is now a callable solution object that also indexes "
+              "and iterates like the old list of polynomials.", DeprecationWarning)
         return bool(return_function) or bool(return_polys)
     return bool(return_function)
 
@@ -339,168 +337,12 @@ def _with_tail(kind, regular, kernel_full, g_full, a_full, init, time_step, coll
     return full, _SolutionFunction(unit_all[:, :, 0] if d == 0 else unit_all, bps, d=d, trim=trim)
 
 
-def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, time_step=1.0,
+def vide(*, kernel_values, a_values=None, g_values=None, soln_init_value, time_step=1.0,
                coll_divs=None, coll_choices=None, return_function=False, return_polys=None,
                show_warnings=True,
                quadrature="product", mesh_samples=None, kernel_interp_degree=None):
-    r'''
-    Solve a Volterra integro-differential equation.
-
-    Finds $y(t)$ satisfying
-
-    $$y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds, \quad y(0) = y_0$$
-
-    Parameters
-    ----------
-    kernel_values : array_like of shape (N,) or (N, d, d)
-        Values of $K(s)$ at times $s = 0, h, 2h, \ldots, (N-1)h$, where $h$
-        is ``time_step``. Pass a 1-D array for scalar equations or a 3-D array
-        of shape ``(N, d, d)`` for $d$-dimensional vector equations.
-    a_values : array_like of shape (N,) or (N, d, d), optional
-        Values of the coefficient $a(t)$ at the same times as
-        ``kernel_values``. For vector equations $a(t)$ is a $d \times d$
-        matrix. Defaults to zero.
-    g_values : array_like of shape (N,) or (N, d) or (N, d, m), optional
-        Forcing term $g(t)$ sampled at the same times as ``kernel_values``.
-        Defaults to zero. In the matrix-valued case pass shape
-        ``(N, d, m)`` (or a shared ``(N, d)`` forcing for all columns).
-    soln_init_value : float or array_like of shape (d,) or (d, m)
-        Initial value $y(0) = y_0$. Required. A ``(d, m)`` shape is what
-        *selects* the matrix-valued case ($m$ right-hand sides solved
-        simultaneously, in threads capped at the CPU count); ``g_values``
-        alone does not.
-    time_step : float, optional
-        Spacing $h$ between consecutive sample times. Must be positive.
-        Default is 1.0.
-    coll_divs : int, optional
-        Number of collocation sub-intervals per mesh interval. Must be a
-        positive integer. Given alone, the nodes are all its sub-interval
-        points, ``coll_choices = [0, 1, ..., coll_divs]``; given neither,
-        the setting is ``coll_divs=2, coll_choices=[0, 1, 2]``.
-    coll_choices : list of int, optional
-        Indices selecting the collocation nodes within each sub-interval.
-        Each entry $k$ corresponds to the node $k / c$ where $c$ =
-        ``coll_divs``, placed in $[0, 1]$. Entries must be distinct integers
-        in $\{0, 1, \ldots, \text{coll\_divs}\}$. Given alone, ``coll_divs``
-        is the largest entry.
-    return_function : bool, optional
-        If ``True``, also return a callable solution object as the second
-        element of a tuple (see Returns). Default is ``False``.
-    return_polys : bool, optional
-        Deprecated alias for ``return_function``; passing it emits a
-        ``DeprecationWarning``.
-    show_warnings : bool, optional
-        If ``True`` (default), emit a `voles.PerformanceWarning` when the
-        Numba fallback is used, or when ``quadrature="product"`` has to step
-        in NumPy because the loaded D extension predates its block driver.
-        ``False`` emits nothing; the standard `warnings` filters work as
-        well, e.g. ``warnings.simplefilter("ignore", voles.VolesWarning)``.
-
-    quadrature : {"product", "collocation"}, optional
-        How the integrals are evaluated from the sampled kernel.
-        ``"product"`` (default) replaces the kernel by a piecewise polynomial
-        interpolant of degree ``kernel_interp_degree`` on the data grid and
-        integrates its products with the collocation polynomial exactly
-        (product integration), so the mesh can be any multiple of
-        ``coll_divs`` samples wide (``mesh_samples``), every sample is used,
-        and any node set is available without the Numba fallback.
-        ``"collocation"`` applies the interpolatory rule on the collocation
-        nodes, which forces a mesh ``coll_divs**2`` samples wide and reads
-        only every ``coll_divs``-th sample of the data in the history sums;
-        it runs in compiled code specialised per setting and is a few times
-        faster. See ``solve_VIE_1`` for the construction; unlike the
-        first-kind case this equation is well posed, so there is no
-        amplification of data errors to trade against the finer mesh.
-    mesh_samples : int, optional
-        Samples per mesh interval; the mesh width is
-        ``mesh_samples * time_step``. Any positive multiple of ``coll_divs``
-        with ``quadrature="product"``, default ``coll_divs`` (the finest
-        mesh); must be ``coll_divs**2`` with ``quadrature="collocation"``.
-    kernel_interp_degree : int, optional
-        Degree of the kernel interpolant for ``quadrature="product"``;
-        defaults to the number of collocation nodes. Not accepted with
-        ``quadrature="collocation"``.
-
-    Returns
-    -------
-    soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)
-        Solution values $y(t)$ at the same times as the input arrays.
-        Returned when ``return_function=False`` (default).
-    (soln_values, solution) : tuple
-        Returned when ``return_function=True``. ``soln_values`` is as above.
-        ``solution`` is callable -- ``solution(t)`` evaluates the piecewise
-        polynomial solution at scalar or array ``t`` (NaN for ``t`` outside
-        the solved interval) -- and also behaves like
-        the previous list of per-interval polynomials: ``len(solution)``,
-        ``solution[n]``, and iteration operate on ``solution.polynomials``.
-        For scalar equations each polynomial is a
-        `numpy.polynomial.Polynomial`; for vector equations each interval entry
-        is an object array of shape ``(d,)`` (or ``(d, m)`` for matrix
-        equations), one polynomial per component.
-
-    Raises
-    ------
-    ValueError
-        For invalid input: shapes that do not fit together (``g_values`` and
-        ``a_values`` must have the length of ``kernel_values``), inputs too
-        short to form one mesh interval, matrix input
-        with zero columns, inputs so large that a solver buffer would exceed
-        $2^{31}$ elements, a ``coll_divs`` below 1 or ``coll_choices``
-        that is empty or not made of distinct integers in ``0 .. coll_divs``,
-        a ``time_step`` that is not positive and finite, an unknown
-        ``quadrature`` (matched case-insensitively), a ``mesh_samples`` /
-        ``kernel_interp_degree`` that is not admissible for the chosen
-        quadrature, or input data containing NaN or infinity.
-    TypeError
-        For an argument of the wrong type: a float (even an integer-valued
-        one) or bool for ``coll_divs``, a ``coll_choices`` entry,
-        ``mesh_samples`` or ``kernel_interp_degree``; a non-number
-        ``time_step``; a non-string ``quadrature``; a flag (``show_warnings``,
-        ``return_function``) that is not a bool; ``soln_init_value=None``.
-    NotImplementedError
-        For a collocation setting not compiled into the D extension, on the
-        vector/matrix path (no fallback exists) or on the scalar path when
-        ``numba`` is not installed.
-    numpy.linalg.LinAlgError
-        If a collocation system is singular or nearly singular.
-    RuntimeError
-        If the D extension reports an internal error. This is a bug in voles;
-        please report it.
-
-    Notes
-    -----
-    The mesh is ``coll_divs**2`` samples wide. Any input length $N$ of at
-    least ``coll_divs**2 + 1`` is accepted and the solution is returned at
-    every sample: the data are covered by regular mesh intervals, and when
-    they do not end on a mesh point the last regular interval and the
-    leftover samples form one final interval of between one and two
-    regular widths, whose collocation nodes are snapped to the nearest
-    samples. That interval is integrated with the product-integration rule
-    (as for ``quadrature="product"``) and adds one local error of the
-    method's order, so the convergence order is unchanged; superconvergence
-    at the mesh points, where a node set has it, is kept at the final point
-    but not at the samples inside the final interval.
-
-    With ``quadrature="product"`` the scheme is exact collocation for the
-    interpolated kernel; the kernel-perturbation error is of order
-    $\delta^{p+1}$ for interpolation degree $p$, the mesh is ``mesh_samples``
-    samples wide (with the same final-interval treatment of leftover samples
-    as above, so any length of at least ``mesh_samples + 1`` is accepted),
-    and the lag structure of the blocks lets the FFT-accelerated history of
-    the D extension be used.
-
-    The solver dispatches at runtime to a D-extension routine specialised for
-    the given collocation setting. For scalar equations, settings not compiled
-    into the extension fall back to a Numba-JIT implementation (requires the
-    ``numba`` optional dependency), with a `voles.PerformanceWarning`. For vector equations only the compiled settings are supported. The
-    compiled settings are listed in ``fast_coll_settings_VIDE``.
-
-    References
-    ----------
-    .. [1] Brunner, H. *Collocation Methods for Volterra Integral and Related
-       Functional Differential Equations.* Cambridge University Press, 2004.
-       Chapter 3, pp. 160–167.
-    '''
+    """Engine for the 0.10 ``solve_VIDE`` (see `voles._legacy.solve_VIDE` for the documentation). Called by the deprecated wrapper and by
+    `solve`; internal recursion calls this function directly."""
     return_function = _resolve_return_flag(return_function, return_polys)
     show_warnings = _v.flag("show_warnings", show_warnings)
     if soln_init_value is None:
@@ -518,7 +360,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
         a_real = _cplx._block_a(np.asarray(a_values)) if a_values is not None else None
         g_real = _cplx._expand_g(np.asarray(g_values)) if g_values is not None else None
         init_real = _cplx._expand_init(soln_init_value)
-        result = solve_VIDE(
+        result = vide(
             kernel_values=K_real, a_values=a_real, g_values=g_real,
             soln_init_value=init_real, time_step=time_step, coll_divs=coll_divs,
             coll_choices=coll_choices, return_function=return_function,
@@ -584,7 +426,7 @@ def solve_VIDE(*, kernel_values, a_values=None, g_values=None, soln_init_value, 
             def _col_vide(j):
                 # column 0 carries any per-solve warnings; the others would
                 # only duplicate them m_cols times from interleaved threads
-                return solve_VIDE(kernel_values=kernel_values_,
+                return vide(kernel_values=kernel_values_,
                                   a_values=a_trunc,
                                   g_values=g_cols[j],
                                   soln_init_value=soln_init_values_[:, j],
@@ -924,254 +766,12 @@ def _solve_vie1_product_path(kernel_values_, g_values, soln_init_value, time_ste
     return values
 
 
-def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step=1.0,
+def vie1(*, kernel_values, g_values=None, soln_init_value=None, time_step=1.0,
                 coll_divs=None, coll_choices=None, return_function=False, return_polys=None,
                 force_continuous=False, show_warnings=True,
                 quadrature="product", mesh_samples=None, kernel_interp_degree=None):
-    r'''
-    Solve a Volterra integral equation of the first kind.
-
-    Finds $y(t)$ satisfying
-
-    $$g(t) = \int_0^t K(t-s)\,y(s)\,ds$$
-
-    Parameters
-    ----------
-    kernel_values : array_like of shape (N,) or (N, d, d)
-        Values of $K(s)$ at times $s = 0, h, 2h, \ldots, (N-1)h$, where $h$
-        is ``time_step``. Pass a 1-D array for scalar equations or a 3-D array
-        of shape ``(N, d, d)`` for $d$-dimensional vector equations.
-    g_values : array_like of shape (N,) or (N, d) or (N, d, m), optional
-        Right-hand side $g(t)$ sampled at the same times as ``kernel_values``.
-        For matrix-valued equations pass shape ``(N, d, m)`` to solve $m$
-        right-hand sides simultaneously. Defaults to zero.
-    soln_init_value : float or array_like of shape (d,) or (d, m), optional
-        Initial value $y(0)$ imposed when ``force_continuous=True``. Has no
-        effect when ``force_continuous=False`` (default). Required when
-        ``force_continuous=True``.
-        It must be the value the equation implies: differentiating at
-        $t = 0$ gives $g'(0) = K(0)\,y(0)$. Any other value gives a wrong
-        solution on the whole interval, not only near $t = 0$, and is not
-        detected. If $y(0)$ is not known independently, use the default
-        method, or estimate it by solving with ``force_continuous=False,
-        return_function=True`` and evaluating the solution at $t = 0$ (the
-        continuous solve is then more accurate than the default method but
-        falls short of its full order).
-    time_step : float, optional
-        Spacing $h$ between consecutive sample times. Must be positive.
-        Default is 1.0.
-    coll_divs : int, optional
-        Number of collocation sub-intervals per mesh interval. Must be a
-        positive integer. Given alone, the nodes are all its sub-interval
-        points, ``coll_choices = [1, ..., coll_divs]`` (the right endpoint
-        included, so $\rho_m = 0$ and the method has its full order); given
-        neither, the setting is ``coll_divs=3, coll_choices=[1, 2, 3]``.
-    coll_choices : list of int, optional
-        Indices selecting the collocation nodes within each sub-interval.
-        Each entry $k$ corresponds to the node $k / c$ where $c$ =
-        ``coll_divs``, placed in $(0, 1]$; zero is excluded. Entries must be
-        distinct integers in $\{1, \ldots, \text{coll\_divs}\}$. Given
-        alone, ``coll_divs`` is the largest entry.
-    return_function : bool, optional
-        If ``True``, also return a callable solution object as the second
-        element of a tuple (see Returns). Default is ``False``.
-    return_polys : bool, optional
-        Deprecated alias for ``return_function``; passing it emits a
-        ``DeprecationWarning``.
-    force_continuous : bool, optional
-        If ``True``, use the continuous collocation method (Brunner's
-        $S_m^{(0)}$): on each mesh interval the solution is a polynomial of
-        degree $m$ (one more than the default) that is continuous across mesh
-        points, starting from ``soln_init_value`` at $t = 0$. Requires the last
-        collocation node to be the right endpoint of the mesh interval
-        (``max(coll_choices) == coll_divs``) and a node set with
-        $|\rho_{m-1}| \le 1$ (see Notes). Converges with order $m + 1$ when
-        $-1 \le \rho_{m-1} < 1$ and with order $m$ when $\rho_{m-1} = 1$,
-        versus order $m$ for the default discontinuous method with the same
-        nodes. Default is ``False``.
-    show_warnings : bool, optional
-        If ``True`` (default), emit warnings through the `warnings` module:
-        a `voles.AccuracyWarning` when the node set has $\rho = 1$ exactly
-        and so converges one order lower (see Notes), when $g(0) \ne 0$, or
-        when $K(0)$ is too small for ``quadrature="collocation"``; a
-        `voles.PerformanceWarning` when the Numba fallback is used or when
-        ``quadrature="product"`` has to step in NumPy because the loaded D
-        extension predates its block drivers; and a `voles.VolesWarning`
-        when ``soln_init_value`` has no effect. ``False`` emits nothing; the
-        standard `warnings` filters work as well.
-    quadrature : {"product", "collocation"}, optional
-        How the integrals of the collocation equations are evaluated from the
-        sampled kernel. ``"product"`` (default) replaces the kernel by a
-        piecewise polynomial interpolant of degree ``kernel_interp_degree`` on
-        the data grid and integrates its products with the collocation
-        polynomial exactly (product integration): the mesh can be any
-        multiple of ``coll_divs`` samples wide (``mesh_samples``), every
-        sample is used, and any valid ``coll_divs``/``coll_choices`` setting
-        is available without the Numba fallback. ``"collocation"`` applies
-        the interpolatory rule on the method's own nodes; this forces the
-        mesh to be ``coll_divs**2`` samples wide, reads only every
-        ``coll_divs``-th sample of the data in the history sums, and is
-        unstable when $K(0)$ is small next to the kernel's change over one
-        mesh interval, but runs in compiled code specialised per setting and
-        is a few times faster. See Notes.
-    mesh_samples : int, optional
-        Number of data samples per mesh interval; the mesh width is
-        ``mesh_samples * time_step``. With ``quadrature="product"`` any
-        positive multiple of ``coll_divs`` is admissible; the default is
-        ``coll_divs**2``, the same mesh as the collocation quadrature,
-        because inverting a first-kind equation amplifies errors in the data
-        by roughly the inverse of the mesh width, so the finest mesh
-        (``mesh_samples=coll_divs``) buys resolution at the price of a
-        ``coll_divs``-fold larger amplification (see Notes). With
-        ``quadrature="collocation"`` the only admissible value is
-        ``coll_divs**2``.
-    kernel_interp_degree : int, optional
-        Degree of the kernel interpolant used by ``quadrature="product"``: on
-        each cell of the data grid the kernel is represented by the polynomial
-        through the ``kernel_interp_degree + 1`` nearest samples. Defaults to
-        the number of collocation nodes, ``len(coll_choices)``. Not accepted
-        with ``quadrature="collocation"``.
-
-    Returns
-    -------
-    soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)
-        Solution values $y(t)$ at the same times as the input arrays.
-        Returned when ``return_function=False`` (default).
-    (soln_values, solution) : tuple
-        Returned when ``return_function=True``. ``soln_values`` is as above.
-        ``solution`` is callable -- ``solution(t)`` evaluates the piecewise
-        polynomial solution at scalar or array ``t`` (NaN for ``t`` outside
-        the solved interval) -- and also behaves like
-        the previous list of per-interval polynomials: ``len(solution)``,
-        ``solution[n]``, and iteration operate on ``solution.polynomials``.
-        For scalar equations each polynomial is a
-        `numpy.polynomial.Polynomial`; for vector equations each interval entry
-        is an object array of shape ``(d,)`` (or ``(d, m)`` for matrix
-        equations), one polynomial per component.
-
-    Raises
-    ------
-    ValueError
-        For invalid input:
-
-        - shapes that do not fit together (``g_values`` must have the length
-          of ``kernel_values``), inputs too short to form one mesh interval,
-          matrix input with zero columns, or inputs
-          so large that a solver buffer would exceed $2^{31}$ elements;
-        - a ``coll_divs`` below 1, or ``coll_choices`` that is empty or not
-          made of distinct integers in ``1 .. coll_divs``;
-        - node sets with $|\rho_m| > 1$, for which the method diverges (see
-          Notes; e.g. ``(coll_divs=3, [1])``, ``(4, [1, 2])``, ``(5, [1])``);
-        - with ``force_continuous=True``: a missing ``soln_init_value``, or a
-          node set whose last node is not the right endpoint or whose
-          $|\rho_{m-1}|$ exceeds 1 (see Notes);
-        - an unknown ``quadrature`` (matched case-insensitively), a
-          ``mesh_samples`` or ``kernel_interp_degree`` that is not admissible
-          for the chosen quadrature, or ``kernel_interp_degree`` given with
-          ``quadrature="collocation"``;
-        - a ``time_step`` that is not positive and finite, or input data
-          containing NaN or infinity.
-    TypeError
-        For an argument of the wrong type: a float (even an integer-valued
-        one) or bool for ``coll_divs``, a ``coll_choices`` entry,
-        ``mesh_samples`` or ``kernel_interp_degree``; a non-number
-        ``time_step``; a non-string ``quadrature``; a flag (``show_warnings``,
-        ``return_function``, ``force_continuous``) that is not a bool.
-    NotImplementedError
-        For a collocation setting not compiled into the D extension, on the
-        vector/matrix path (no fallback exists) or on the scalar path when
-        ``numba`` is not installed.
-    numpy.linalg.LinAlgError
-        If a collocation system is singular or nearly singular (e.g. a zero
-        kernel).
-    RuntimeError
-        If the D extension reports an internal error. This is a bug in voles;
-        please report it.
-
-    Notes
-    -----
-    The mesh is ``coll_divs**2`` samples wide. Any input length $N$ of at
-    least ``coll_divs**2 + 1`` is accepted and the solution is returned at
-    every sample: the data are covered by regular mesh intervals, and when
-    they do not end on a mesh point the last regular interval and the
-    leftover samples form one final interval of between one and two
-    regular widths, whose collocation nodes are snapped to the nearest
-    samples. That interval is integrated with the product-integration rule
-    (as for ``quadrature="product"``) and adds one local error of the
-    method's order, so the convergence order is unchanged; superconvergence
-    at the mesh points, where a node set has it, is kept at the final point
-    but not at the samples inside the final interval.
-
-    Zero is excluded from ``coll_choices`` because the VIE-1 collocation
-    scheme does not place nodes at $t = 0$; doing so would require evaluating
-    the equation at $t = 0$ where both sides are zero by definition, giving no
-    information about $y(0)$.
-
-    First-kind collocation converges only for some node sets. With
-    $c_i = k_i / \text{coll\_divs}$, the default discontinuous method
-    ($S_{m-1}^{(-1)}$) converges iff
-    $-1 \le \rho_m := (-1)^m \prod_{i=1}^{m} (1 - c_i)/c_i \le 1$, with order
-    $m$ for $\rho_m < 1$ (Brunner [1], Theorem 2.4.2); any set with
-    $c_m = 1$ has $\rho_m = 0$. The continuous method (``force_continuous``)
-    requires $c_m = 1$ and converges iff
-    $-1 \le \rho_{m-1} := (-1)^m \prod_{i=1}^{m-1} (1 - c_i)/c_i \le 1$, with
-    order $m + 1$ for $\rho_{m-1} < 1$ and order $m$ for $\rho_{m-1} = 1$
-    ([1], Theorem 2.4.5). The equispaced sets ``list(range(1, coll_divs+1))``
-    have $\rho_{m-1} = -1$ for odd $m$ and $+1$ for even $m$. All integrals
-    are evaluated with the interpolatory quadrature rule on the method's own
-    nodes, i.e. on $\{c_1, \ldots, c_m\}$ for the discontinuous method and on
-    $\{0, c_1, \ldots, c_m\}$ for the continuous one ([1], Section 2.4.5);
-    for ``coll_divs=1``, ``coll_choices=[1]`` the continuous method is the
-    product trapezoidal rule.
-
-    The equation forces $g(0) = 0$; for $g(0) \ne 0$ there is no bounded
-    solution, and a `voles.AccuracyWarning` is emitted.
-
-    The theory above assumes $K(0) \ne 0$ ($K(0)$ nonsingular for vector
-    equations). With the default quadrature the scheme is also unstable when
-    $K(0)$ is small next to the kernel's change over one mesh interval $H$
-    (divergence was observed once $H |K'(0)| / |K(0)| \gtrsim 5$), and when
-    $K(0) = 0$ it diverges without bound as the mesh is refined. A
-    `voles.AccuracyWarning` is emitted when $|K(H) - K(0)| > 2 |K(0)|$ (vector: $\|K(0)^{-1}(K(H) -
-    K(0))\|_2 > 2$ or $K(0)$ singular). ``quadrature="product"`` does not
-    have this restriction.
-
-    With ``quadrature="product"`` the scheme is exact collocation for the
-    interpolated kernel $K_h$, so its error is the collocation error plus a
-    kernel-perturbation term. For a first-kind equation that term enters
-    through the derivative of the interpolation error and is of order
-    $\delta^{p}$ for degree $p$ (Linz 1971 [2]; de Hoog and Weiss 1973 [3]);
-    the default $p = m$ keeps it below the collocation error. The mesh is
-    ``mesh_samples`` samples wide (with the same final-interval treatment of
-    leftover samples as above, so any length of at least
-    ``mesh_samples + 1`` is accepted), and the blocks depend on the mesh
-    intervals only through their lag, so the FFT-accelerated history of the
-    D extension is used. The
-    convergence conditions on the node sets are unchanged (they are
-    properties of the collocation method, not of the quadrature); the
-    discontinuous method is admitted for any ``coll_divs`` provided
-    $-1 \le \rho_m \le 1$, with order $m - 1$ rather than $m$ at
-    $\rho_m = 1$ (e.g. ``coll_divs=3, coll_choices=[1, 2]``). Inverting a first-kind equation amplifies errors
-    in the data by roughly the inverse of the mesh width, so on noisy data a
-    finer mesh is not automatically better; ``mesh_samples`` is the knob.
-
-    The solver dispatches at runtime to a D-extension routine specialised for
-    the given collocation setting. For scalar equations, settings not compiled
-    into the extension fall back to a Numba-JIT implementation (requires the
-    ``numba`` optional dependency), with a `voles.PerformanceWarning`. For vector equations only the compiled settings are supported. The
-    supported settings (with the non-convergent ones excluded) are listed in
-    ``fast_coll_settings_VIE_1``.
-
-    References
-    ----------
-    .. [1] Brunner, H. *Collocation Methods for Volterra Integral and Related
-       Functional Differential Equations.* Cambridge University Press, 2004.
-       Sections 2.4.1--2.4.3 and 2.4.5.
-    .. [2] Linz, P. Product integration methods for Volterra integral
-       equations of the first kind. *BIT* 11 (1971) 413--421.
-    .. [3] de Hoog, F. and Weiss, R. High order methods for Volterra integral
-       equations of the first kind. *SIAM J. Numer. Anal.* 10 (1973) 647--664.
-    '''
+    """Engine for the 0.10 ``solve_VIE_1`` (see `voles._legacy.solve_VIE_1` for the documentation). Called by the deprecated wrapper and by
+    `solve`; internal recursion calls this function directly."""
     return_function = _resolve_return_flag(return_function, return_polys)
     show_warnings = _v.flag("show_warnings", show_warnings)
     force_continuous = _v.flag("force_continuous", force_continuous)
@@ -1189,7 +789,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
         K_real = _cplx._block_kernel(K_arr)
         g_real = _cplx._expand_g(np.asarray(g_values)) if g_values is not None else None
         init_real = _cplx._expand_init(soln_init_value) if soln_init_value is not None else None
-        result = solve_VIE_1(
+        result = vie1(
             kernel_values=K_real, g_values=g_real, soln_init_value=init_real,
             time_step=time_step, coll_divs=coll_divs, coll_choices=coll_choices,
             return_function=return_function, force_continuous=force_continuous,
@@ -1251,7 +851,7 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                     init_cols = None
                 g_cols = g_values_[:N]
                 def _col_vie1(j):
-                    return solve_VIE_1(kernel_values=kernel_values_,
+                    return vie1(kernel_values=kernel_values_,
                                        g_values=g_cols[:, :, j],
                                        soln_init_value=init_cols[:, j] if init_cols is not None else None,
                                        time_step=time_step, coll_divs=coll_divs,
@@ -1344,159 +944,12 @@ def solve_VIE_1(*, kernel_values, g_values=None, soln_init_value=None, time_step
                       g_values_, None, soln_init_value_, time_step, coll_divs, coll_choices,
                       M_reg, Qp, 0, return_function)
 
-def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
+def vie2(*, kernel_values, g_values=None, time_step=1.0,
                 coll_divs=None, coll_choices=None, return_function=False, return_polys=None,
                 show_warnings=True,
                 quadrature="product", mesh_samples=None, kernel_interp_degree=None):
-    r'''
-    Solve a Volterra integral equation of the second kind.
-
-    Finds $y(t)$ satisfying
-
-    $$y(t) = g(t) + \int_0^t K(t-s)\,y(s)\,ds$$
-
-    Parameters
-    ----------
-    kernel_values : array_like of shape (N,) or (N, d, d)
-        Values of $K(s)$ at times $s = 0, h, 2h, \ldots, (N-1)h$, where $h$
-        is ``time_step``. Pass a 1-D array for scalar equations or a 3-D array
-        of shape ``(N, d, d)`` for $d$-dimensional vector equations.
-    g_values : array_like of shape (N,) or (N, d) or (N, d, m), optional
-        Right-hand side $g(t)$ sampled at the same times as ``kernel_values``.
-        For matrix-valued equations pass shape ``(N, d, m)`` to solve $m$
-        right-hand sides simultaneously. Defaults to zero.
-    time_step : float, optional
-        Spacing $h$ between consecutive sample times. Must be positive.
-        Default is 1.0.
-    coll_divs : int, optional
-        Number of collocation sub-intervals per mesh interval. Must be a
-        positive integer. Given alone, the nodes are all its sub-interval
-        points, ``coll_choices = [0, 1, ..., coll_divs]``; given neither,
-        the setting is ``coll_divs=2, coll_choices=[0, 1, 2]``.
-    coll_choices : list of int, optional
-        Indices selecting the collocation nodes within each sub-interval.
-        Each entry $k$ corresponds to the node $k / c$ where $c$ =
-        ``coll_divs``, placed in $[0, 1]$. Entries must be distinct integers
-        in $\{0, 1, \ldots, \text{coll\_divs}\}$. Given alone, ``coll_divs``
-        is the largest entry.
-    return_function : bool, optional
-        If ``True``, also return a callable solution object as the second
-        element of a tuple (see Returns). Default is ``False``.
-    return_polys : bool, optional
-        Deprecated alias for ``return_function``; passing it emits a
-        ``DeprecationWarning``.
-    show_warnings : bool, optional
-        If ``True`` (default), emit a `voles.PerformanceWarning` when the
-        Numba fallback is used, or when ``quadrature="product"`` has to step
-        in NumPy because the loaded D extension predates its block driver.
-        ``False`` emits nothing; the standard `warnings` filters work as
-        well, e.g. ``warnings.simplefilter("ignore", voles.VolesWarning)``.
-
-    quadrature : {"product", "collocation"}, optional
-        How the integrals are evaluated from the sampled kernel.
-        ``"product"`` (default) replaces the kernel by a piecewise polynomial
-        interpolant of degree ``kernel_interp_degree`` on the data grid and
-        integrates its products with the collocation polynomial exactly
-        (product integration), so the mesh can be any multiple of
-        ``coll_divs`` samples wide (``mesh_samples``), every sample is used,
-        and any node set is available without the Numba fallback.
-        ``"collocation"`` applies the interpolatory rule on the collocation
-        nodes, which forces a mesh ``coll_divs**2`` samples wide and reads
-        only every ``coll_divs``-th sample of the data in the history sums;
-        it runs in compiled code specialised per setting and is a few times
-        faster. See ``solve_VIE_1`` for the construction; unlike the
-        first-kind case this equation is well posed, so there is no
-        amplification of data errors to trade against the finer mesh.
-    mesh_samples : int, optional
-        Samples per mesh interval; the mesh width is
-        ``mesh_samples * time_step``. Any positive multiple of ``coll_divs``
-        with ``quadrature="product"``, default ``coll_divs`` (the finest
-        mesh); must be ``coll_divs**2`` with ``quadrature="collocation"``.
-    kernel_interp_degree : int, optional
-        Degree of the kernel interpolant for ``quadrature="product"``;
-        defaults to the number of collocation nodes. Not accepted with
-        ``quadrature="collocation"``.
-
-    Returns
-    -------
-    soln_values : ndarray of shape (N,) or (N, d) or (N, d, m)
-        Solution values $y(t)$ at the same times as the input arrays.
-        Returned when ``return_function=False`` (default).
-    (soln_values, solution) : tuple
-        Returned when ``return_function=True``. ``soln_values`` is as above.
-        ``solution`` is callable -- ``solution(t)`` evaluates the piecewise
-        polynomial solution at scalar or array ``t`` (NaN for ``t`` outside
-        the solved interval) -- and also behaves like
-        the previous list of per-interval polynomials: ``len(solution)``,
-        ``solution[n]``, and iteration operate on ``solution.polynomials``.
-        For scalar equations each polynomial is a
-        `numpy.polynomial.Polynomial`; for vector equations each interval entry
-        is an object array of shape ``(d,)`` (or ``(d, m)`` for matrix
-        equations), one polynomial per component.
-
-    Raises
-    ------
-    ValueError
-        For invalid input: shapes that do not fit together (``g_values`` and
-        ``a_values`` must have the length of ``kernel_values``), inputs too
-        short to form one mesh interval, matrix input
-        with zero columns, inputs so large that a solver buffer would exceed
-        $2^{31}$ elements, a ``coll_divs`` below 1 or ``coll_choices``
-        that is empty or not made of distinct integers in ``0 .. coll_divs``,
-        a ``time_step`` that is not positive and finite, an unknown
-        ``quadrature`` (matched case-insensitively), a ``mesh_samples`` /
-        ``kernel_interp_degree`` that is not admissible for the chosen
-        quadrature, or input data containing NaN or infinity.
-    TypeError
-        For an argument of the wrong type: a float (even an integer-valued
-        one) or bool for ``coll_divs``, a ``coll_choices`` entry,
-        ``mesh_samples`` or ``kernel_interp_degree``; a non-number
-        ``time_step``; a non-string ``quadrature``; a flag (``show_warnings``,
-        ``return_function``) that is not a bool.
-    NotImplementedError
-        For a collocation setting not compiled into the D extension, on the
-        vector/matrix path (no fallback exists) or on the scalar path when
-        ``numba`` is not installed.
-    numpy.linalg.LinAlgError
-        If a collocation system is singular or nearly singular.
-    RuntimeError
-        If the D extension reports an internal error. This is a bug in voles;
-        please report it.
-
-    Notes
-    -----
-    The mesh is ``coll_divs**2`` samples wide. Any input length $N$ of at
-    least ``coll_divs**2 + 1`` is accepted and the solution is returned at
-    every sample: the data are covered by regular mesh intervals, and when
-    they do not end on a mesh point the last regular interval and the
-    leftover samples form one final interval of between one and two
-    regular widths, whose collocation nodes are snapped to the nearest
-    samples. That interval is integrated with the product-integration rule
-    (as for ``quadrature="product"``) and adds one local error of the
-    method's order, so the convergence order is unchanged; superconvergence
-    at the mesh points, where a node set has it, is kept at the final point
-    but not at the samples inside the final interval.
-
-    With ``quadrature="product"`` the scheme is exact collocation for the
-    interpolated kernel; the kernel-perturbation error is of order
-    $\delta^{p+1}$ for interpolation degree $p$, the mesh is ``mesh_samples``
-    samples wide (with the same final-interval treatment of leftover samples
-    as above, so any length of at least ``mesh_samples + 1`` is accepted),
-    and the lag structure of the blocks lets the FFT-accelerated history of
-    the D extension be used.
-
-    The solver dispatches at runtime to a D-extension routine specialised for
-    the given collocation setting. For scalar equations, settings not compiled
-    into the extension fall back to a Numba-JIT implementation (requires the
-    ``numba`` optional dependency), with a `voles.PerformanceWarning`. For vector equations only the compiled settings are supported. The
-    compiled settings are listed in ``fast_coll_settings_VIE_2``.
-
-    References
-    ----------
-    .. [1] Brunner, H. *Collocation Methods for Volterra Integral and Related
-       Functional Differential Equations.* Cambridge University Press, 2004.
-       Section 2.2.
-    '''
+    """Engine for the 0.10 ``solve_VIE_2`` (see `voles._legacy.solve_VIE_2` for the documentation). Called by the deprecated wrapper and by
+    `solve`; internal recursion calls this function directly."""
     return_function = _resolve_return_flag(return_function, return_polys)
     show_warnings = _v.flag("show_warnings", show_warnings)
     for _name, _val in (("kernel_values", kernel_values), ("g_values", g_values)):
@@ -1509,7 +962,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
         d_orig = 0 if is_scalar else K_arr.shape[1]
         K_real = _cplx._block_kernel(K_arr)
         g_real = _cplx._expand_g(np.asarray(g_values)) if g_values is not None else None
-        result = solve_VIE_2(
+        result = vie2(
             kernel_values=K_real, g_values=g_real,
             time_step=time_step, coll_divs=coll_divs, coll_choices=coll_choices,
             return_function=return_function, show_warnings=show_warnings,
@@ -1558,7 +1011,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
                 def _col_vie2(j):
                     # column 0 carries any per-solve warnings; the others
                     # would only duplicate them from interleaved threads
-                    return solve_VIE_2(kernel_values=kernel_values_,
+                    return vie2(kernel_values=kernel_values_,
                                        g_values=g_cols[:, :, j],
                                        time_step=time_step, coll_divs=coll_divs,
                                        coll_choices=coll_choices,
@@ -1624,7 +1077,7 @@ def solve_VIE_2(*, kernel_values, g_values=None, time_step=1.0,
 # Engine entry point (1.0 plan, Phase 3)
 # ---------------------------------------------------------------------------
 
-_ENGINE = {"vie1": solve_VIE_1, "vie2": solve_VIE_2, "vide": solve_VIDE}
+_ENGINE = {"vie1": vie1, "vie2": vie2, "vide": vide}
 
 
 def solve(equation, **engine_kw):

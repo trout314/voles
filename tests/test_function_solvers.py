@@ -9,7 +9,7 @@ continue to pass after the D port.
 import numpy as np
 import pytest
 
-from voles._functional import (
+from voles import (
     function_solve_VIE_2, function_solve_VIDE, function_solve_VIE_1,
     optimal_graded_mesh,
 )
@@ -1261,15 +1261,15 @@ def test_graded_mesh_alpha_zero_is_uniform():
 
 def test_graded_mesh_validation():
     with pytest.raises(ValueError, match="alpha"):
-        optimal_graded_mesh(alpha=1.0, T=1.0, M=10, order=2)
+        optimal_graded_mesh(alpha=1.0, t_end=1.0, n_intervals=10, order=2)
     with pytest.raises(ValueError, match="alpha"):
-        optimal_graded_mesh(alpha=-0.1, T=1.0, M=10, order=2)
-    with pytest.raises(ValueError, match="T"):
-        optimal_graded_mesh(alpha=0.5, T=-1.0, M=10, order=2)
-    with pytest.raises(ValueError, match="M"):
-        optimal_graded_mesh(alpha=0.5, T=1.0, M=0, order=2)
+        optimal_graded_mesh(alpha=-0.1, t_end=1.0, n_intervals=10, order=2)
+    with pytest.raises(ValueError, match="t_end"):
+        optimal_graded_mesh(alpha=0.5, t_end=-1.0, n_intervals=10, order=2)
+    with pytest.raises(ValueError, match="n_intervals"):
+        optimal_graded_mesh(alpha=0.5, t_end=1.0, n_intervals=0, order=2)
     with pytest.raises(ValueError, match="order"):
-        optimal_graded_mesh(alpha=0.5, T=1.0, M=10, order=0)
+        optimal_graded_mesh(alpha=0.5, t_end=1.0, n_intervals=10, order=0)
 
 
 def test_graded_mesh_recovers_high_order_on_abel(vie2_callable_abel):

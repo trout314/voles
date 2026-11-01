@@ -86,4 +86,14 @@ testpaths = ["tests"]
 # Every warning is an error unless the test expects it (pytest.warns) or
 # filters it. This keeps each voles diagnostic covered by a test and stops
 # new warnings from appearing unnoticed.
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # The 0.10 API, deprecated in 0.11: the legacy tests, the docs examples and
+    # the benchmarks still use it until they migrate (1.0 plan, Phases 6 and 8).
+    # tests/test_legacy_shims.py checks these warnings with pytest.warns, which
+    # records them regardless. Remove these lines with the 0.10 API in 1.0.
+    "ignore:(function_)?solve_VI(E_[12]|DE)\\(\\) is deprecated:DeprecationWarning",
+    "ignore:optimal_graded_mesh\\([TM]=\\.\\.\\.\\) is deprecated:DeprecationWarning",
+    "ignore:voles\\.fast_coll_settings_\\w+ is deprecated:DeprecationWarning",
+    "ignore:voles\\.solvers is deprecated:DeprecationWarning",
+]

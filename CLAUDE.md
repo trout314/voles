@@ -50,8 +50,10 @@ Test tolerance is `1e-3`. No linter/formatter is configured.
 
 ### Source layout: `src/voles/`
 
-- **`_sampled.py`** — sampled-data engine: `solve_VIE_1`, `solve_VIE_2`, `solve_VIDE` (the 0.10 public API, re-exported from `voles`). Validates inputs, dispatches to D extension or Numba fallback, handles scalar/vector/matrix/complex cases, threading for matrix columns, and optional piecewise polynomial output. `solve(equation, **kw)` is the engine entry that returns a `VolterraSolution`. (`voles/solvers.py` is only a re-export stub.)
-- **`_functional.py`** — callable-input engine: `function_solve_VIE_1/2/VIDE`, `optimal_graded_mesh`, the node helpers; `solve(equation, **kw)` entry as above.
+- **`_api.py`** — the 1.0 public solvers `solve_vie1/2/vide`: validate every argument with 1.0 names (regime from input types: arrays → sampled/`dt`, callables → functional/`mesh`), apply the shape/matrix rule, then call the engine entry `_sampled.solve` / `_functional.solve`.
+- **`_sampled.py`** — sampled-data engine `vie1`, `vie2`, `vide` (the 0.10 `solve_VIE_*`, 0.10 kwarg names, with their own checks). Validates, dispatches to D extension or Numba fallback, handles scalar/vector/matrix/complex cases, threading for matrix columns. `solve(equation, **kw)` returns a `VolterraSolution`.
+- **`_functional.py`** — callable-input engine `vie1`, `vie2`, `vide` (the 0.10 `function_solve_*`), `optimal_graded_mesh`, the node helpers; `solve(...)` as above.
+- **`_legacy.py`** — the deprecated 0.10 functions (exact signatures and docstrings): warn with the equivalent 1.0 call (`_migrate.describe`) and call the engine directly, so results and messages stay 0.10's. `voles/solvers.py` is a deprecated re-export.
 - **`_common.py`** — helpers both engines share (collocation basis, VIE-1 ρ rule, thread count); neither engine imports the other.
 - **`_solution.py`** — `VolterraSolution` (the 1.0 solution object) and the legacy `_SolutionFunction`.
 - **`_validate.py`, `_warnings.py`** — the type-vs-value validation rule and the `VolesWarning` classes/`_warn` helper.

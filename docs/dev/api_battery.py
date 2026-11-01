@@ -358,7 +358,7 @@ def solve_cases():
 
     # G. Singular kernels: each kernel_singularity form, graded and uniform.
     T = 1.0
-    graded = voles.optimal_graded_mesh(alpha=0.5, T=T, M=16, order=3)
+    graded = voles.optimal_graded_mesh(alpha=0.5, t_end=T, n_intervals=16, order=3)
     uni = np.linspace(0, T, 17)
     sing_forms = {"float": 0.0, "list": [0.0], "dict-alpha": {0.0: 0.5},
                   "dict-none": {0.0: None}, "callable": sing_callable, "empty": []}

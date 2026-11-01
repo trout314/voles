@@ -10,6 +10,7 @@ The solvers' ``show_warnings=False`` (0.10 API) skips the call to `_warn` at
 each site, so it never touches the process-wide filter state, which
 `warnings.catch_warnings` would and which isn't thread-safe.
 """
+import functools
 import os
 import sys
 import warnings
@@ -36,8 +37,16 @@ class PerformanceWarning(VolesWarning):
 _PKG_DIR = os.path.dirname(os.path.abspath(__file__)) + os.sep
 
 
+@functools.lru_cache(maxsize=1024)
+def _is_package_file(filename):
+    # Cached: abspath() calls getcwd() for relative names ("<string>", ...),
+    # a system call that is slow on some machines, and the walk below runs
+    # on every warning.
+    return os.path.abspath(filename).startswith(_PKG_DIR)
+
+
 def _in_package(frame):
-    return os.path.abspath(frame.f_code.co_filename).startswith(_PKG_DIR)
+    return _is_package_file(frame.f_code.co_filename)
 
 
 def _warn(message, category=VolesWarning):

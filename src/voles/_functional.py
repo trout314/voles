@@ -1618,160 +1618,15 @@ def _recombine_complex_y(y_real: np.ndarray, d_orig: int) -> np.ndarray:
 
 
 @_escalate_complex_warning
-def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
+def vie2(*, kernel, g=None, mesh_breakpoints,
                           coll_divs: int = None, coll_choices: list[int] = None,
                           coll_nodes=None,
                           kernel_singularity=None,
                           return_function: bool = False,
                           reuse_adaptive_blocks: bool = True,
                           show_warnings: bool = True):
-    r"""Solve the scalar Volterra integral equation of the second kind
-
-    $$y(t) = g(t) + \int_0^t K(t-s)\,y(s)\,ds$$
-
-    with callable kernel and right-hand side, on an arbitrary mesh.
-
-    Parameters
-    ----------
-    kernel : callable
-        ``kernel(u)`` returns $K(u)$ for scalar $u > 0$: a scalar for scalar
-        equations, or a square $(d, d)$ matrix for $d$-dimensional vector and
-        matrix-valued equations.
-        For the fastest weight assembly, make ``kernel`` accept a 1-D array
-        of ``u`` values and return the matching ``(n,)`` or ``(n, d, d)``
-        array (e.g. ``np.multiply.outer(np.exp(-u), A)`` rather than
-        ``np.exp(-u) * A``): the smooth blocks of a whole mesh row are then
-        evaluated in one call. A kernel that only accepts scalars still
-        works, through a per-point path that can be several times slower.
-    g : callable, optional
-        ``g(t)`` returns the forcing term $g(t)$. Defaults to zero. Return a
-        scalar for scalar equations, a $(d,)$ array for vector equations, or a
-        $(d, m)$ array to solve $m$ right-hand sides simultaneously (the
-        matrix-valued case). A 2-D return signals the matrix case; matrix-valued
-        problems require a $(d, d)$ matrix kernel.
-    mesh_breakpoints : array_like
-        Strictly increasing 1-D array starting at 0. Defines the integration
-        intervals directly.
-    coll_divs, coll_choices : int, list of int, optional
-        Collocation node positions: nodes lie at
-        ``coll_choices[k] / coll_divs`` in each interval. Unlike the array-
-        based solvers, ``coll_divs`` does *not* sub-divide intervals.
-        ``coll_divs`` alone selects every admissible point of the
-        subdivision, ``coll_choices = [0, ..., coll_divs]``; ``coll_choices``
-        alone sets ``coll_divs`` to its largest entry; neither gives
-        ``coll_divs=2, coll_choices=[0, 1, 2]``. Mutually exclusive with
-        ``coll_nodes``.
-    coll_nodes : array_like, optional
-        Collocation node positions given directly as floats in $[0, 1]$, for
-        node sets that are not rational multiples of $1/c$ (e.g. Gauss-Legendre
-        or Radau IIA points; see ``gauss_legendre_nodes``, ``radau_iia_nodes``,
-        ``lobatto_nodes``). Mutually exclusive with
-        ``coll_divs``/``coll_choices``. Convergence of the chosen node set is
-        the caller's responsibility.
-    kernel_singularity : None, float, list of float, dict, or callable
-        Declare the singularity structure of the kernel.
-
-        - ``None``: kernel is smooth everywhere.
-        - ``float`` or list of float: convolution-style singularity locations
-          (in $u = t - s$); e.g. ``0.0`` for $K(u) \sim u^{-\alpha}$. Blocks
-          touching a location are integrated adaptively.
-        - dict ``{location: alpha}``: like the list form, but a non-None
-          ``alpha`` additionally declares the power law
-          $K(u) \sim |u - u_0|^{-\alpha}$ (with $0 < \alpha < 1$; use
-          ``{0.0: 0.5}`` for an Abel kernel $u^{-1/2}$). Blocks touching such
-          a location are integrated by deterministic fixed-order Gauss-Jacobi
-          rules with the singular factor absorbed into the weight: typically
-          much faster and more accurate than adaptive quadrature, and -- being
-          deterministic -- reusable across the uniform-mesh Toeplitz assembly
-          under the default strict policy, so the singular build runs at
-          smooth-kernel speed with no ``reuse_adaptive_blocks`` flag needed.
-          Each Jacobi block passes the same two-order acceptance check as the
-          smooth path; a failing basis function (wrong declared ``alpha``, or
-          extra structure like a log factor) falls back to the adaptive
-          treatment automatically. ``alpha=None`` keeps a location fully
-          adaptive.
-        - callable ``f(t) -> list[float]``: returns the singular $s$-locations
-          for collocation point $t$. Forward-compatible with non-convolution
-          $K(s, t)$.
-
-        Locations may be Python floats/ints, NumPy scalars, or 0-d arrays;
-        booleans are rejected with a ``TypeError`` (``True`` would silently
-        mean location 1.0). An empty list/tuple/dict declares nothing and
-        behaves exactly like ``None``. The kernel's return value exactly *at*
-        a declared singular point is never used (it is masked out of the
-        quadrature), so returning 0, ``inf``, or a clamped value there are
-        all equivalent.
-    return_function : bool, optional
-        If True, also return a callable solution wrapper.
-    reuse_adaptive_blocks : bool, optional
-        On a uniform mesh with a convolution kernel the weight tensor is
-        Toeplitz and is assembled from one integrated row. Blocks evaluated
-        by deterministic fixed-order quadrature are always reused across
-        rows. With the default ``True``, blocks touching a declared
-        singularity that need adaptive quadrature are reused too, computed
-        once at a tightened tolerance: the singular-kernel build cost is
-        about an order of magnitude lower than re-evaluating them per row.
-        ``False`` re-evaluates those blocks for every row, which reproduces
-        the general (non-Toeplitz) assembly to rounding level at an $O(M)$
-        adaptive-quadrature cost; the two differ by at most the adaptive
-        quadrature's own tolerance (scalar problems $\sim10^{-8}$, typically
-        $\sim10^{-9}$; vector/matrix and complex problems, which integrate
-        via ``scipy.integrate.quad_vec``, up to $\sim10^{-7}$), far below
-        discretization error in practice. No effect on non-uniform meshes
-        or on kernels with no declared ``kernel_singularity``. scipy
-        ``IntegrationWarning``s raised by the deliberately tightened reuse
-        quadratures are suppressed (the best-obtainable value is what reuse
-        wants); default-tolerance quadratures still warn as usual.
-    show_warnings : bool, optional
-        If True (default), emit a `voles.AccuracyWarning` when a
-        ``kernel_singularity`` is declared on a mesh that looks uniform
-        (suggesting ``optimal_graded_mesh``), and a `voles.VolesWarning` when
-        a declared location lies outside $[0, T]$. ``False`` emits nothing;
-        the standard `warnings` filters work as well.
-
-    Returns
-    -------
-    soln_values : ndarray
-        Solution values at collocation nodes, where M is the number of
-        intervals and p is the number of collocation nodes per interval
-        (``len(coll_choices)`` or ``len(coll_nodes)``). Shape ``(M, p)`` for
-        scalar equations, ``(M, p, d)`` for vector equations, and
-        ``(M, p, d, m)`` for matrix-valued equations.
-    (soln_values, y_callable) : tuple
-        When ``return_function=True``. ``y_callable(t)`` evaluates the
-        piecewise polynomial at any time t in the mesh (NaN outside it), returning a scalar / ``(d,)`` /
-        ``(d, m)`` value for scalar t (with a leading time axis for array t).
-
-    Raises
-    ------
-    ValueError
-        For invalid meshes, collocation settings, ``kernel_singularity``
-        declarations (out-of-range ``alpha``), non-finite weight-tensor
-        entries, a ``g`` returning NaN or infinity at a collocation time,
-        kernel dimension or node count past the compiled limits, or matrix
-        input with zero columns.
-    TypeError
-        If ``kernel`` or ``g`` is not callable; for a ``coll_divs`` or
-        ``coll_choices`` entry that is not an integer (floats are rejected,
-        not truncated); for a ``kernel_singularity`` location that is a bool
-        or not a number; or for a flag (``return_function``,
-        ``reuse_adaptive_blocks``, ``show_warnings``) that is not a bool.
-    numpy.linalg.LinAlgError
-        If a collocation system is singular or nearly singular (e.g. a zero
-        kernel).
-    ImportError
-        If scipy is not installed.
-
-    Notes
-    -----
-    See the module docstring for the mesh-convention difference from the
-    array-based solvers.
-
-    Matrix-valued problems share the kernel weight tensor across all $m$
-    right-hand sides (it is built once), so they are substantially cheaper than
-    $m$ separate calls. The $m$ columns are solved in threads (capped at the
-    CPU count).
-    """
+    """Engine for the 0.10 ``function_solve_VIE_2`` (see `voles._legacy.function_solve_VIE_2` for the documentation). Called by the deprecated wrapper and by
+    `solve`; internal recursion calls this function directly."""
     return_function = _v.flag("return_function", return_function)
     reuse_adaptive_blocks = _v.flag("reuse_adaptive_blocks", reuse_adaptive_blocks)
     show_warnings = _v.flag("show_warnings", show_warnings)
@@ -1801,7 +1656,7 @@ def function_solve_VIE_2(*, kernel, g=None, mesh_breakpoints,
     if _samples_indicate_complex([kernel, g], mesh_breakpoints, None):
         sample_u = float(np.diff(mesh_breakpoints)[0]) * 0.5
         d_orig = _detect_complex_d_orig(kernel, sample_u)
-        result = function_solve_VIE_2(
+        result = vie2(
             kernel=_block_wrap_kernel(kernel, d_orig),
             g=_block_wrap_g(g, d_orig),
             mesh_breakpoints=mesh_breakpoints,
@@ -1917,7 +1772,7 @@ def _vide_solution(y_prime: np.ndarray, y_boundary: np.ndarray,
 
 
 @_escalate_complex_warning
-def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
+def vide(*, kernel, a=None, g=None, soln_init_value,
                          mesh_breakpoints,
                          coll_divs: int = None, coll_choices: list[int] = None,
                          coll_nodes=None,
@@ -1925,82 +1780,8 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
                          return_function: bool = False,
                          reuse_adaptive_blocks: bool = True,
                          show_warnings: bool = True):
-    r"""Solve the scalar Volterra integro-differential equation
-
-    $$y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds,\quad y(0) = y_0$$
-
-    with callable inputs on an arbitrary mesh.
-
-    Parameters
-    ----------
-    kernel : callable
-        ``kernel(u)`` returns $K(u)$: a scalar, or a $(d, d)$ matrix for vector
-        and matrix-valued equations.
-        For the fastest weight assembly, make ``kernel`` accept a 1-D array
-        of ``u`` values and return the matching ``(n,)`` or ``(n, d, d)``
-        array (e.g. ``np.multiply.outer(np.exp(-u), A)`` rather than
-        ``np.exp(-u) * A``): the smooth blocks of a whole mesh row are then
-        evaluated in one call. A kernel that only accepts scalars still
-        works, through a per-point path that can be several times slower.
-    a : callable, optional
-        ``a(t)`` returns the coefficient $a(t)$ (a scalar, or a $(d, d)$ matrix
-        for vector/matrix equations). Defaults to zero. ``a`` does not depend on
-        the right-hand side, so it is sampled once in the matrix case.
-    g : callable, optional
-        ``g(t)`` returns the forcing term: scalar, $(d,)$, or $(d, m)$ for the
-        matrix-valued case. Defaults to zero.
-    soln_init_value : float or array_like
-        $y(0)$. Required. A scalar/`(d,)` value gives the scalar/vector case; a
-        $(d, m)$ array selects the matrix-valued case ($m$ right-hand sides).
-    mesh_breakpoints : array_like
-        Strictly-increasing 1-D array starting at 0.
-    coll_divs, coll_choices : int, list of int, optional
-        Collocation node positions; see ``function_solve_VIE_2`` for the
-        convention (differs from the array-based solvers). ``coll_divs``
-        alone selects ``coll_choices = [0, ..., coll_divs]``, ``coll_choices``
-        alone sets ``coll_divs`` to its largest entry, and neither gives
-        ``coll_divs=2, coll_choices=[0, 1, 2]``. Mutually exclusive with
-        ``coll_nodes``.
-    coll_nodes : array_like, optional
-        Collocation node positions given directly as floats in $[0, 1]$; see
-        ``function_solve_VIE_2``. Mutually exclusive with
-        ``coll_divs``/``coll_choices``.
-    kernel_singularity : None, float, list of float, dict, or callable
-        Declare integrable singularities, optionally with known power-law
-        exponents (dict form, enabling deterministic Gauss-Jacobi rules);
-        see ``function_solve_VIE_2``.
-    return_function : bool, optional
-        If True, also return a callable solution wrapper.
-    reuse_adaptive_blocks : bool, optional
-        Reuse the adaptive-quadrature weight blocks across the uniform-mesh
-        Toeplitz assembly; see ``function_solve_VIE_2``.
-    show_warnings : bool, optional
-        If True (default), emit the ``kernel_singularity`` warnings described
-        in ``function_solve_VIE_2``.
-
-    Returns
-    -------
-    soln_values : ndarray
-        $y$ values at collocation nodes. Shape ``(M, p)`` (scalar),
-        ``(M, p, d)`` (vector), or ``(M, p, d, m)`` (matrix-valued), with p
-        the number of collocation nodes per interval.
-    (soln_values, y_callable) : tuple
-        When ``return_function=True``.
-
-    Raises
-    ------
-    ValueError, TypeError, numpy.linalg.LinAlgError, ImportError
-        As for ``function_solve_VIE_2``; additionally ``TypeError`` when
-        ``soln_init_value`` is omitted or None, and ``ValueError`` when its
-        shape is incompatible with the kernel dimension, when it or ``a(t)``
-        is not finite.
-
-    Notes
-    -----
-    Internally the unknowns are $y'$ at the collocation nodes; the returned
-    values are $y$ itself (reconstructed via the antiderivative basis and the
-    tracked boundary values).
-    """
+    """Engine for the 0.10 ``function_solve_VIDE`` (see `voles._legacy.function_solve_VIDE` for the documentation). Called by the deprecated wrapper and by
+    `solve`; internal recursion calls this function directly."""
     return_function = _v.flag("return_function", return_function)
     reuse_adaptive_blocks = _v.flag("reuse_adaptive_blocks", reuse_adaptive_blocks)
     show_warnings = _v.flag("show_warnings", show_warnings)
@@ -2035,7 +1816,7 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
     if _samples_indicate_complex([kernel, g, a], mesh_breakpoints, soln_init_value):
         sample_u = float(np.diff(mesh_breakpoints)[0]) * 0.5
         d_orig = _detect_complex_d_orig(kernel, sample_u)
-        result = function_solve_VIDE(
+        result = vide(
             kernel=_block_wrap_kernel(kernel, d_orig),
             a=_block_wrap_a(a, d_orig),
             g=_block_wrap_g(g, d_orig),
@@ -2190,61 +1971,71 @@ def function_solve_VIDE(*, kernel, a=None, g=None, soln_init_value,
 # Mesh helpers
 # ---------------------------------------------------------------------------
 
-def optimal_graded_mesh(*, alpha: float, T: float, M: int,
-                        order: int) -> np.ndarray:
-    r"""Return a graded mesh of M+1 breakpoints suitable for a weakly
-    singular convolution kernel $K(u) \sim u^{-\alpha}$, $\alpha \in [0, 1)$.
+def optimal_graded_mesh(*, alpha: float, t_end: float = None, n_intervals: int = None,
+                        order: int, T: float = None, M: int = None) -> np.ndarray:
+    r"""Return a graded mesh of ``n_intervals + 1`` breakpoints suitable for a
+    weakly singular convolution kernel $K(u) \sim u^{-\alpha}$,
+    $\alpha \in [0, 1)$.
 
-    Grading: $t_n = T \cdot (n/M)^r$ with $r = p / (1 - \alpha)$, where
-    $p =$ ``order`` is the order of the collocation method (number of
-    collocation nodes per interval). This recovers the optimal convergence
-    order for Abel-type kernels (per Brunner ch. 6). At ``alpha == 0`` the
-    kernel is non-singular and the solution smooth, so a uniform mesh
-    ($r = 1$) is returned instead.
+    Grading: $t_n = T (n/M)^r$ with $T$ = ``t_end``, $M$ = ``n_intervals``
+    and $r = p / (1 - \alpha)$, where $p$ = ``order`` is the order of the
+    collocation method (the number of collocation nodes per interval). This
+    recovers the optimal convergence order for Abel-type kernels (Brunner
+    2004, ch. 6). At ``alpha == 0`` the kernel is non-singular and the
+    solution smooth, so a uniform mesh ($r = 1$) is returned instead.
 
     Parameters
     ----------
     alpha : float
         Singularity exponent, in $[0, 1)$.
-    T : float
+    t_end : float
         Right endpoint of the mesh (positive).
-    M : int
-        Number of intervals (positive). The returned array has length M+1.
+    n_intervals : int
+        Number of intervals (positive). The returned array has length
+        ``n_intervals + 1``.
     order : int
         Order of the collocation method (positive). For a matched mesh,
-        pass the same order you give the solver, i.e. ``len(coll_choices)``.
+        pass the number of collocation nodes the solver uses.
+    T, M : float, int
+        Deprecated spellings of ``t_end`` and ``n_intervals`` (0.10); they
+        still work in 0.11, with a `DeprecationWarning`, and are removed in
+        1.0.
 
     Returns
     -------
-    mesh_breakpoints : ndarray of shape (M+1,)
-        Strictly-increasing breakpoints with ``[0] == 0`` and ``[-1] == T``.
+    ndarray of shape (n_intervals + 1,)
+        Strictly increasing breakpoints with ``[0] == 0`` and
+        ``[-1] == t_end``.
 
     Raises
     ------
     ValueError
-        If ``alpha`` is outside $[0, 1)$, ``T`` is not positive and finite,
-        or ``M`` / ``order`` is less than 1.
+        If ``alpha`` is outside $[0, 1)$, ``t_end`` is not positive and
+        finite, or ``n_intervals`` / ``order`` is less than 1.
     TypeError
-        If ``alpha`` or ``T`` is not a real number, or ``M`` / ``order`` is
-        not an integer.
+        If ``alpha`` or ``t_end`` is not a real number, ``n_intervals`` /
+        ``order`` is not an integer, or ``t_end`` / ``n_intervals`` is
+        missing (or given together with its deprecated spelling).
 
     Examples
     --------
-    Best practice is to grade for the same order as the solver's collocation
-    method, i.e. ``order=len(coll_choices)``::
+    Grade for the same order as the solver's collocation method::
 
-        coll_choices = [1, 2, 3]
-        mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=30,
-                                   order=len(coll_choices))
-        y = function_solve_VIE_2(kernel=..., g=..., mesh_breakpoints=mesh,
-                                 coll_divs=3, coll_choices=coll_choices,
-                                 kernel_singularity=0.0)
+        nodes = voles.radau_iia_nodes(3)
+        mesh = optimal_graded_mesh(alpha=0.5, t_end=1.0, n_intervals=30,
+                                   order=len(nodes))
+        sol = voles.solve_vie2(kernel=..., g=..., mesh=mesh, coll_nodes=nodes,
+                               kernel_singularity={0.0: 0.5})
     """
+    t_end = _renamed("t_end", t_end, "T", T)
+    n_intervals = _renamed("n_intervals", n_intervals, "M", M)
     alpha = _v.real("alpha", alpha)
     if not 0.0 <= alpha < 1.0:
         raise ValueError(f"alpha must satisfy 0 <= alpha < 1, got {alpha}")
-    T = _v.real("T", T, positive=True, value_msg=f"T must be positive, got {T}")
-    M = _v.integer("M", M, minimum=1, value_msg=f"M must be a positive integer, got {M}")
+    t_end = _v.real("t_end", t_end, positive=True,
+                    value_msg=f"t_end must be positive and finite, got {t_end}")
+    n_intervals = _v.integer("n_intervals", n_intervals, minimum=1,
+                             value_msg=f"n_intervals must be a positive integer, got {n_intervals}")
     order = _v.integer("order", order, minimum=1,
                        type_msg=f"order must be a positive integer, got {order!r}",
                        value_msg=f"order must be a positive integer, got {order}")
@@ -2252,8 +2043,22 @@ def optimal_graded_mesh(*, alpha: float, T: float, M: int,
     # At alpha=0 the kernel is non-singular and the solution is smooth, so a
     # uniform mesh (r=1) is optimal; grading would only waste resolution near 0.
     r = p / (1.0 - alpha) if alpha > 0.0 else 1.0
-    n = np.arange(M + 1, dtype=np.float64)
-    return T * (n / M) ** r
+    n = np.arange(n_intervals + 1, dtype=np.float64)
+    return t_end * (n / n_intervals) ** r
+
+
+def _renamed(name, value, old_name, old_value):
+    """A parameter renamed in 0.11, accepting the old spelling with a warning."""
+    if old_value is not None:
+        if value is not None:
+            raise TypeError(f"optimal_graded_mesh: pass {name} or the deprecated {old_name}, "
+                            f"not both")
+        _warn(f"optimal_graded_mesh({old_name}=...) is deprecated since voles 0.11 and will be "
+              f"removed in 1.0; use {name}=", DeprecationWarning)
+        return old_value
+    if value is None:
+        raise TypeError(f"optimal_graded_mesh() missing required keyword argument {name!r}")
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -2500,7 +2305,7 @@ def _warn_vie1_g_start_callable(g, g_samples, show_warnings):
 
 
 @_escalate_complex_warning
-def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
+def vie1(*, kernel, g=None, soln_init_value=None,
                           mesh_breakpoints,
                           coll_divs: int = None, coll_choices: list[int] = None,
                           coll_nodes=None,
@@ -2509,130 +2314,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
                           force_continuous: bool = False,
                           reuse_adaptive_blocks: bool = True,
                           show_warnings: bool = True):
-    r"""Solve the Volterra integral equation of the first kind
-
-    $$g(t) = \int_0^t K(t-s)\,y(s)\,ds$$
-
-    with callable kernel and right-hand side on an arbitrary mesh. Zero is not
-    a permitted collocation node (both sides of the equation vanish at t=0).
-
-    Parameters
-    ----------
-    kernel : callable
-        ``kernel(u)`` returns $K(u)$: a scalar, or a $(d, d)$ matrix for vector
-        and matrix-valued equations.
-        For the fastest weight assembly, make ``kernel`` accept a 1-D array
-        of ``u`` values and return the matching ``(n,)`` or ``(n, d, d)``
-        array (e.g. ``np.multiply.outer(np.exp(-u), A)`` rather than
-        ``np.exp(-u) * A``): the smooth blocks of a whole mesh row are then
-        evaluated in one call. A kernel that only accepts scalars still
-        works, through a per-point path that can be several times slower.
-    g : callable, optional
-        ``g(t)`` returns the right-hand side: scalar, $(d,)$, or $(d, m)$ for
-        the matrix-valued case ($m$ right-hand sides). Defaults to zero
-        (trivial y=0). A 2-D return signals the matrix case.
-    soln_init_value : float or array_like, optional
-        $y(0)$. Required only when ``force_continuous=True``; ignored
-        otherwise. A warning is emitted if a value is passed when it has no
-        effect. For a matrix-valued problem with ``force_continuous=True`` it
-        must have shape $(d, m)$.
-        It must be the value the equation implies: differentiating at
-        $t = 0$ gives $g'(0) = K(0)\,y(0)$. Any other value gives a wrong
-        solution on the whole interval, not only near $t = 0$, and is not
-        detected. If $y(0)$ is not known independently, use the default
-        method, or estimate it by solving with ``force_continuous=False,
-        return_function=True`` and evaluating the solution at $t = 0$ (the
-        continuous solve is then more accurate than the default method but
-        falls short of its full order).
-    mesh_breakpoints : array_like
-        Strictly-increasing 1-D array starting at 0.
-    coll_divs, coll_choices : int, list of int, optional
-        Collocation nodes lie at ``coll_choices[k] / coll_divs`` in (0, 1].
-        Zero is excluded from ``coll_choices``. ``coll_divs`` alone selects
-        ``coll_choices = [1, ..., coll_divs]`` (the right endpoint included,
-        so $\rho_m = 0$ and the method has its full order), ``coll_choices``
-        alone sets ``coll_divs`` to its largest entry, and neither gives
-        ``coll_divs=3, coll_choices=[1, 2, 3]``. Mutually exclusive with
-        ``coll_nodes``.
-    coll_nodes : array_like, optional
-        Collocation node positions given directly as floats in $(0, 1]$ (zero
-        excluded); see ``function_solve_VIE_2``. Mutually exclusive with
-        ``coll_divs``/``coll_choices``. The convergence check (see Notes) is
-        applied to both the integer and the ``coll_nodes`` paths.
-    force_continuous : bool, optional
-        If ``True``, use the continuous collocation method (Brunner's
-        $S_m^{(0)}$): the solution is a globally $C^0$ piecewise polynomial
-        whose degree $m$ is the number of collocation nodes, anchored at
-        $y(0) =$ ``soln_init_value``. This requires the last node to be the
-        right endpoint, $c_m = 1$ -- a structural property of the continuous
-        representation that is enforced regardless of ``kernel_singularity``
-        (see Notes for the separate convergence condition). The default
-        discontinuous method ($S_{m-1}^{(-1)}$) imposes no such restriction
-        and is generally the better default.
-    kernel_singularity : None, float, list of float, dict, or callable
-        See ``function_solve_VIE_2``.
-    return_function : bool, optional
-        See ``function_solve_VIE_2``.
-    reuse_adaptive_blocks : bool, optional
-        See ``function_solve_VIE_2``.
-    show_warnings : bool, optional
-        See ``function_solve_VIE_2``; also gates the `voles.AccuracyWarning`
-        for $g(0) \ne 0$ and the `voles.VolesWarning` emitted when
-        ``soln_init_value`` is passed without ``force_continuous``.
-
-    Returns
-    -------
-    soln_values : ndarray
-        Solution values at collocation nodes, with M the number of intervals
-        and p the number of nodes per interval. Shape ``(M, p)`` for scalar
-        equations, ``(M, p, d)`` for vector equations, and ``(M, p, d, m)``
-        for matrix-valued equations.
-    (soln_values, y_callable) : tuple
-        When ``return_function=True``; ``y_callable`` as in
-        ``function_solve_VIE_2``.
-
-    Raises
-    ------
-    ValueError, TypeError, numpy.linalg.LinAlgError, ImportError
-        As for ``function_solve_VIE_2``; additionally ``ValueError`` for
-        non-convergent node sets (see Notes), zero in ``coll_choices`` /
-        ``coll_nodes``, ``force_continuous`` without $c_m = 1$,
-        ``force_continuous`` without ``soln_init_value``, or a non-finite
-        ``soln_init_value``; ``TypeError`` for a ``force_continuous`` that is
-        not a bool.
-
-    Notes
-    -----
-    The equation forces $g(0) = 0$; for $g(0) \ne 0$ there is no bounded
-    solution, and a `voles.AccuracyWarning` is emitted.
-
-    Whether a given node set yields a convergent method depends on the nodes
-    (Brunner 2004, smooth-kernel chapter). For a smooth kernel with
-    $|K(t, t)| \ge k_0 > 0$, writing $c_1 < \dots < c_m$ for the nodes:
-
-    - Discontinuous (default): converges iff
-      $|\rho_m| := \prod_{i=1}^{m} (1 - c_i)/c_i \le 1$ (Thm 2.4.2), with global
-      order $m$ (reduced to $m - 1$ at $\rho_m = 1$).
-    - Continuous (``force_continuous``): converges iff
-      $|\rho_{m-1}| := \prod_{i=1}^{m-1} (1 - c_i)/c_i \le 1$ (Thm 2.4.5), with
-      global order $m + 1$ (reduced to $m$ at $\rho_{m-1} = 1$).
-
-    Node sets violating these are rejected with a ``ValueError``. The
-    amplification criteria do not apply to weakly-singular kernels (where
-    $|K(t, t)|$ is unbounded), so they are skipped when ``kernel_singularity``
-    is given and convergence is then the caller's responsibility. The
-    $c_m = 1$ requirement of ``force_continuous`` is *not* part of these
-    criteria -- it is structural and always enforced.
-
-    These theorems are proved for a *uniform* mesh. The amplification factors
-    $\rho$ depend only on the nodes, so the conditions carry over to
-    *quasi-uniform* meshes (all interval widths within fixed constant multiples
-    of each other). They are not guaranteed on *strongly graded* meshes -- e.g.
-    the geometric refinement of ``optimal_graded_mesh``, where the smallest
-    interval shrinks far faster than the largest -- but such meshes normally
-    accompany a declared ``kernel_singularity``, for which the check is already
-    skipped.
-    """
+    """Engine for the 0.10 ``function_solve_VIE_1`` (see `voles._legacy.function_solve_VIE_1` for the documentation). Called by the deprecated wrapper and by
+    `solve`; internal recursion calls this function directly."""
     return_function = _v.flag("return_function", return_function)
     force_continuous = _v.flag("force_continuous", force_continuous)
     reuse_adaptive_blocks = _v.flag("reuse_adaptive_blocks", reuse_adaptive_blocks)
@@ -2709,7 +2392,7 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
         d_orig = _detect_complex_d_orig(kernel, sample_u)
         init_wrapped = (_block_expand_init(soln_init_value, d_orig)
                         if force_continuous else None)
-        result = function_solve_VIE_1(
+        result = vie1(
             kernel=_block_wrap_kernel(kernel, d_orig),
             g=_block_wrap_g(g, d_orig),
             soln_init_value=init_wrapped,
@@ -2869,8 +2552,8 @@ def function_solve_VIE_1(*, kernel, g=None, soln_init_value=None,
 # Engine entry point (1.0 plan, Phase 3)
 # ---------------------------------------------------------------------------
 
-_ENGINE = {"vie1": function_solve_VIE_1, "vie2": function_solve_VIE_2,
-           "vide": function_solve_VIDE}
+_ENGINE = {"vie1": vie1, "vie2": vie2,
+           "vide": vide}
 _DEFAULT_SETTING = {"vie1": (3, [1, 2, 3], True), "vie2": (2, [0, 1, 2], False),
                     "vide": (2, [0, 1, 2], False)}
 
@@ -2887,7 +2570,8 @@ def solve(equation, **engine_kw):
     node_pos, _, _ = _resolve_node_pos(
         engine_kw.get("coll_nodes"), engine_kw.get("coll_divs"), engine_kw.get("coll_choices"),
         default_divs=divs, default_choices=choices, exclude_zero=exclude_zero,
-        fname=_ENGINE[equation].__name__)
+        fname={"vie1": "function_solve_VIE_1", "vie2": "function_solve_VIE_2",
+               "vide": "function_solve_VIDE"}[equation])
     M = len(engine_sol.mesh_breakpoints) - 1
     if np.shape(node_values)[:2] != (M, len(node_pos)):
         raise RuntimeError(

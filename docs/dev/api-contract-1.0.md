@@ -364,11 +364,19 @@ voles follows semantic versioning on the public API of §1.
 ## 13. Transition (0.11 only; removed in 1.0)
 
 - 0.11.0 keeps `solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`,
-  `function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`,
-  `fast_coll_settings_*` and `voles.solvers` as deprecated wrappers.
-  - They return their 0.10 types.
-  - Their numerics are bitwise identical to 0.10, except for dense
-    evaluation at exact interior breakpoints (now the mean of the limits).
+  `function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE` as
+  deprecated wrappers.
+  - Each call emits one `DeprecationWarning` showing the equivalent 1.0 call.
+  - Each calls the 0.10 engine directly, so it returns exactly the 0.10 types,
+    including the 0.10 solution object for `return_function=True`.
+  - Results and error messages are those of 0.10, bitwise; dense evaluation
+    is unchanged too.
+- Also deprecated in 0.11, all with a `DeprecationWarning` and all removed
+  in 1.0:
+  - `fast_coll_settings_*` (module attributes, no longer in `__all__`);
+  - the `voles.solvers` module (warns on import);
+  - `optimal_graded_mesh(T=, M=)`, now `t_end=` and `n_intervals=`.
+- `import voles` and `from voles import *` emit no warnings.
 - Changes that affect 0.10 code directly, all listed in the 0.11
   changelog:
   - warnings instead of prints

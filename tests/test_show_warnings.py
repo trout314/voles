@@ -26,6 +26,8 @@ def recorded():
 
 
 def _voles(rec, category=VolesWarning):
+    """The voles diagnostics among the recorded warnings (the 0.10 API's
+    DeprecationWarning is not one)."""
     return [w for w in rec if issubclass(w.category, category)]
 
 
@@ -64,7 +66,7 @@ class TestOddLengthIsSilent:
         with recorded() as rec:
             y = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h, coll_divs=3,
                             coll_choices=[1, 2, 3], show_warnings=show)
-        assert len(y) == len(kernel) and rec == []
+        assert len(y) == len(kernel) and _voles(rec) == []
 
     @pytest.mark.parametrize("show", [True, False])
     def test_vie2(self, show):
@@ -72,7 +74,7 @@ class TestOddLengthIsSilent:
         with recorded() as rec:
             y = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=h, coll_divs=3,
                             coll_choices=[0, 1, 2, 3], show_warnings=show)
-        assert len(y) == len(kernel) and rec == []
+        assert len(y) == len(kernel) and _voles(rec) == []
 
     @pytest.mark.parametrize("show", [True, False])
     def test_vide(self, show):
@@ -80,7 +82,7 @@ class TestOddLengthIsSilent:
         with recorded() as rec:
             y = solve_VIDE(kernel_values=kernel, g_values=g, soln_init_value=0.0, time_step=h,
                            coll_divs=3, coll_choices=[0, 1, 2], show_warnings=show)
-        assert len(y) == len(kernel) and rec == []
+        assert len(y) == len(kernel) and _voles(rec) == []
 
     def test_matrix_vie2_and_vide(self):
         n, d, m = 90, 2, 3
@@ -92,7 +94,7 @@ class TestOddLengthIsSilent:
             solve_VIDE(kernel_values=np.zeros((n, d, d)), g_values=np.ones((n, d, m)),
                        soln_init_value=np.zeros((d, m)), time_step=0.01, coll_divs=3,
                        coll_choices=[1, 2, 3])
-        assert rec == []
+        assert _voles(rec) == []
 
 
 # ---------------------------------------------------------------- numba fallback
@@ -164,13 +166,13 @@ class TestVIE1SolnInitValueWarning:
         kw, init = self._inputs(d, m)
         with recorded() as rec:
             solve_VIE_1(soln_init_value=init, show_warnings=False, **kw)
-        assert rec == []
+        assert _voles(rec) == []
 
     def test_no_init_no_warning(self):
         kw, _ = self._inputs(2, 3)
         with recorded() as rec:
             solve_VIE_1(**kw)
-        assert rec == []
+        assert _voles(rec) == []
 
 
 # ------------------------------------------------- where and how warnings arrive
@@ -212,14 +214,14 @@ def test_show_warnings_false_silences_matrix_workers():
     with recorded() as rec:
         solve_VIE_1(soln_init_value=np.zeros((2, 3)), show_warnings=False,
                     **_g0_nonzero_matrix())
-    assert rec == []
+    assert _voles(rec) == []
 
 
 def test_standard_filter_silences_voles():
     with recorded() as rec:
         warnings.simplefilter("ignore", VolesWarning)
         solve_VIE_1(**_g0_nonzero_matrix())
-    assert rec == []
+    assert _voles(rec) == []
 
 
 def test_error_filter_makes_a_diagnostic_fatal():

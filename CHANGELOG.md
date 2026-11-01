@@ -35,7 +35,22 @@
   - pickling and a readable `repr`.
 
   Dense evaluation no longer copies the coefficients per point: peak memory
-  is about a third of the 0.10 object's on a matrix-valued solution.
+  is about a third of the 0.10 object's on a matrix-valued solution. The 0.10
+  solvers still return their 0.10 solution object.
+
+### Deprecated
+These still work in 0.11, exactly as in 0.10, and are removed in 1.0:
+- **`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`** and
+  **`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`**:
+  use `solve_vie1`, `solve_vie2`, `solve_vide`. Each call warns with the
+  equivalent new call built from your arguments, e.g. "use
+  voles.solve_vie2(kernel=<array of shape (81,)>, g=<array of shape (81,)>,
+  dt=0.0125, coll_setting=3) instead". Results, return types and error
+  messages are unchanged.
+- **`fast_coll_settings_VIE_1`, `_VIE_2`, `_VIDE`**: product quadrature (the
+  default) accepts every valid setting. They are no longer in `__all__`.
+- **The `voles.solvers` module**: import from `voles`.
+- **`optimal_graded_mesh(T=, M=)`**: renamed `t_end=` and `n_intervals=`.
 
 ### Fixed
 - The Numba fallback passed `coll_choices` as a Python list, which Numba

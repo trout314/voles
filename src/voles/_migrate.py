@@ -74,8 +74,8 @@ def _short(value):
     if callable(value):
         return getattr(value, "__name__", "<callable>")
     if isinstance(value, np.ndarray):
-        if value.size <= 6:
-            return np.array2string(value, precision=6, separator=", ")
+        if value.ndim == 1 and value.size <= 6 and value.dtype.kind in "iuf":
+            return "[" + ", ".join(f"{v:.6g}" for v in value.tolist()) + "]"
         return f"<array of shape {value.shape}>"
     if isinstance(value, (list, tuple)) and len(value) > 6:
         return f"<{type(value).__name__} of length {len(value)}>"
