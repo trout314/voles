@@ -1669,16 +1669,7 @@ compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/solvers.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">434</span>
-<span class="normal">435</span>
-<span class="normal">436</span>
-<span class="normal">437</span>
-<span class="normal">438</span>
-<span class="normal">439</span>
-<span class="normal">440</span>
-<span class="normal">441</span>
-<span class="normal">442</span>
-<span class="normal">443</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">443</span>
 <span class="normal">444</span>
 <span class="normal">445</span>
 <span class="normal">446</span>
@@ -1997,7 +1988,16 @@ compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
 <span class="normal">759</span>
 <span class="normal">760</span>
 <span class="normal">761</span>
-<span class="normal">762</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">a_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<span class="normal">762</span>
+<span class="normal">763</span>
+<span class="normal">764</span>
+<span class="normal">765</span>
+<span class="normal">766</span>
+<span class="normal">767</span>
+<span class="normal">768</span>
+<span class="normal">769</span>
+<span class="normal">770</span>
+<span class="normal">771</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_VIDE</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel_values</span><span class="p">,</span> <span class="n">a_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">g_values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">soln_init_value</span><span class="p">,</span> <span class="n">time_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
                <span class="n">coll_divs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">coll_choices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_polys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                <span class="n">show_warnings</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                <span class="n">quadrature</span><span class="o">=</span><span class="s2">"product"</span><span class="p">,</span> <span class="n">mesh_samples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">kernel_interp_degree</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -2322,7 +2322,7 @@ compiled settings are listed in <code>fast_coll_settings_VIDE</code>.</p>
             <span class="k">return</span> <span class="n">_dlang_module</span><span class="o">.</span><span class="n">solve_vide_d</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">show_warnings</span><span class="p">:</span>
             <span class="n">_warn</span><span class="p">(</span><span class="s2">"falling back to slower python/numba code"</span><span class="p">,</span> <span class="n">PerformanceWarning</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">_numba_solvers</span><span class="o">.</span><span class="n">solve_VIDE_jit</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">_numba_solvers</span><span class="o">.</span><span class="n">solve_VIDE_jit</span><span class="p">(</span><span class="o">*</span><span class="n">_numba_args</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="mi">6</span><span class="p">))</span>
     <span class="k">return</span> <span class="n">_with_tail</span><span class="p">(</span><span class="s2">"vide"</span><span class="p">,</span> <span class="n">_regular</span><span class="p">,</span> <span class="n">kernel_values_</span><span class="p">,</span> <span class="n">g_values_</span><span class="p">,</span> <span class="n">a_values_</span><span class="p">,</span> <span class="n">init</span><span class="p">,</span>
                       <span class="n">time_step</span><span class="p">,</span> <span class="n">coll_divs</span><span class="p">,</span> <span class="n">coll_choices</span><span class="p">,</span> <span class="n">M_reg</span><span class="p">,</span> <span class="n">Qp</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">return_function</span><span class="p">,</span>
                       <span class="n">trim</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>

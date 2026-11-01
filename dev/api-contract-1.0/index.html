@@ -1795,8 +1795,9 @@ piecewise polynomial on <code>mesh</code>. Users don't construct it.</p>
 </ul>
 <p><code>sol.to_ppoly()</code> returns an equivalent <code>scipy.interpolate.PPoly</code> (trailing
 axes <code>cs</code>). It is right-continuous at breakpoints and can differentiate,
-integrate and find roots. Complex solutions are supported if and only if
-PPoly supports them (to be verified in Phase 2; otherwise <code>TypeError</code>).</p>
+integrate and find roots. Complex solutions are supported (PPoly evaluates,
+differentiates and integrates complex coefficients; <code>.roots()</code> is real-only).
+Outside [0, T] it returns NaN, like <code>sol(t)</code>.</p>
 <h3 id="84-other-behaviour">8.4 Other behaviour</h3>
 <ul>
 <li><code>repr(sol)</code> is a one-line summary. Its exact text isn't part of the
