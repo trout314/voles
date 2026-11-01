@@ -494,6 +494,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../guide/accuracy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accuracy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../guide/warnings/" class="md-nav__link">
         
   
@@ -1433,7 +1461,9 @@
 runner (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost).
 Mean time is averaged over a variable number of calibrated rounds (from ~3 for
 large inputs up to ~6000 for small inputs). A dash (—) marks sizes a row is
-not benchmarked at (to keep the CI job fast).</p>
+not benchmarked at (to keep the CI job fast). The timings are for warm calls:
+the first solve in a process that needs scipy's quadrature (callable inputs
+with a declared singularity) also imports it, about half a second once.</p>
 <p>These tables are regenerated automatically by the benchmark CI job on pushes
 to <code>main</code> that touch code (docs-only pushes are skipped), and this page is
 redeployed with the fresh numbers. An interactive history of the same

@@ -490,6 +490,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guide/accuracy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accuracy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guide/warnings/" class="md-nav__link">
         
   
@@ -1639,6 +1667,11 @@ inputs (<code>kernel</code>, <code>g</code>, and for VIDE <code>a</code>):</p>
 <td>every data input given is callable</td>
 </tr>
 <tr>
+<td>(constant <code>a</code>)</td>
+<td>a VIDE <code>a</code> that is a number or a <code>(d, d)</code> array is a constant: it takes no part in the choice and works in either regime</td>
+<td></td>
+</tr>
+<tr>
 <td>Grid</td>
 <td><code>dt</code> (sample spacing, default 1.0). Inputs are samples at t = 0, dt, …, (N−1)·dt, where N is the kernel's length. The solver builds a uniform mesh of <code>samples_per_interval</code> samples per interval, with a longer final interval when the samples don't divide evenly.</td>
 <td><code>mesh</code>, required: 1-D, finite, strictly increasing, <code>mesh[0] == 0</code></td>
@@ -1813,8 +1846,8 @@ solve_vie1(*, kernel, g=None, continuous=False, y0=None,
 </tr>
 <tr>
 <td><code>a</code> (VIDE)</td>
-<td><code>(N,)</code> or <code>(N, d, d)</code></td>
-<td><code>a(t)</code> → scalar or <code>(d, d)</code></td>
+<td><code>(N,)</code> or <code>(N, d, d)</code>, or a constant: scalar or <code>(d, d)</code></td>
+<td><code>a(t)</code> → scalar or <code>(d, d)</code>, or the same constants</td>
 </tr>
 <tr>
 <td><code>y0</code></td>
@@ -1950,6 +1983,11 @@ piecewise polynomial on <code>mesh</code>. Users don't construct it.</p>
 <td><code>(divs, choices)</code> with <code>choices</code> a sorted list, or <code>None</code> in the functional regime</td>
 </tr>
 <tr>
+<td><code>dt</code>, <code>samples_per_interval</code>, <code>quadrature</code></td>
+<td>—</td>
+<td>the sampled regime's settings as used (<code>quadrature</code> canonical lower case); <code>None</code> in the functional regime</td>
+</tr>
+<tr>
 <td><code>equation</code></td>
 <td>—</td>
 <td><code>"vie1"</code>, <code>"vie2"</code> or <code>"vide"</code></td>
@@ -2067,7 +2105,7 @@ Outside [0, T] it returns NaN, like <code>sol(t)</code>.</p>
 <tr>
 <td><code>PerformanceWarning</code></td>
 <td><code>VolesWarning</code></td>
-<td>the numba fallback; an extension build lacking a fast path</td>
+<td>the numba fallback; a declared <code>kernel_singularity</code> exponent whose Gauss–Jacobi estimates failed the acceptance check (adaptive quadrature used instead); an extension build lacking a fast path</td>
 </tr>
 </tbody>
 </table>

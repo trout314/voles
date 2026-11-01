@@ -11,7 +11,7 @@
       
       
       
-        <link rel="prev" href="../conventions/">
+        <link rel="prev" href="../accuracy/">
       
       
         <link rel="next" href="../migration/">
@@ -481,6 +481,34 @@
     
   
     Conventions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../accuracy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accuracy
   
 
     
@@ -1460,7 +1488,7 @@
 <tr>
 <td><code>PerformanceWarning</code></td>
 <td><code>VolesWarning</code></td>
-<td>the result is correct but came from a slower path: the numba fallback, or an extension build without a fast path</td>
+<td>the result is correct but came from a slower path: the numba fallback; a declared exponent (<code>kernel_singularity={u0: alpha}</code>) that failed its accuracy check, so adaptive quadrature was used; or an extension build without a fast path</td>
 </tr>
 </tbody>
 </table>
@@ -1475,6 +1503,9 @@
   <code>IntegrationWarning</code> from adaptive quadrature of a callable kernel.</li>
 <li>New warning conditions may be added in a minor release; they are always
   <code>VolesWarning</code> subclasses.</li>
+<li>A first-kind solve with measured data often warns <code>g(0) is not zero</code>: the
+  measured g[0] is zero plus noise. Set <code>g[0] = 0</code> (see
+  <a href="../accuracy/#noisy-first-kind-data">Accuracy</a>).</li>
 </ul>
 <h2 id="filtering">Filtering</h2>
 <p>Silence every voles diagnostic for the rest of the program:</p>

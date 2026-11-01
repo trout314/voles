@@ -14,7 +14,7 @@
         <link rel="prev" href="../../getting_started/">
       
       
-        <link rel="next" href="../warnings/">
+        <link rel="next" href="../accuracy/">
       
       
         
@@ -647,6 +647,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../accuracy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accuracy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1763,7 +1791,10 @@ the method's full order; ρ = +1 converges one order lower and gives an
 <li>Radau IIA nodes have ρ = 0 and the full order p, which makes them the
   usual choice for the discontinuous method. They don't suit
   <code>continuous=True</code>: there |ρ| = p, so that method diverges for every
-  p ≥ 2. The default nodes {1/3, 2/3, 1} work for both methods.</li>
+  p ≥ 2. The default nodes {1/3, 2/3, 1} work for both methods, which is
+  why they are the default; with the default mean at the breakpoints they
+  are also one order more accurate there than Radau IIA (see
+  <a href="../accuracy/#convergence-orders">Accuracy</a>).</li>
 <li>Gauss–Legendre nodes are symmetric, so ρ = (−1)ᵖ: odd p keeps the full
   order, even p loses one.</li>
 </ul>
@@ -1796,6 +1827,11 @@ sides solved together.</p>
 <td>scalar or <code>(d, d)</code></td>
 </tr>
 <tr>
+<td>constant <code>a</code> (VIDE)</td>
+<td>a number, or a <code>(d, d)</code> array</td>
+<td>the same</td>
+</tr>
+<tr>
 <td><code>y0</code></td>
 <td>scalar, <code>(d,)</code> or <code>(d, m)</code></td>
 <td>the same</td>
@@ -1809,10 +1845,16 @@ sides solved together.</p>
   or a vector <code>g</code> with a <code>(d, m)</code> <code>y0</code>, both work. The columns are
   independent problems with a common kernel; the kernel's work is shared
   and the columns may run in parallel threads.</li>
+<li><strong>Sampled inputs</strong> all have the same number of samples N, at the same
+  times n·dt.</li>
+<li><strong>A constant <code>a</code></strong>, a number or a <code>(d, d)</code> array, works with either kind of
+  input; it doesn't take part in choosing the regime.</li>
 <li><strong>Callable kernels</strong> are called with one argument u = t − s ≥ 0. A kernel
   that also accepts a 1-D array of u, returning the stacked values, is
   detected and used vectorised, which is much faster. For a matrix kernel
-  <code>np.multiply.outer(np.exp(-u), A)</code> vectorises, <code>np.exp(-u) * A</code> does not.</li>
+  <code>np.multiply.outer(np.exp(-u), A)</code> vectorises, <code>np.exp(-u) * A</code> does not.
+  <code>g</code> and <code>a</code> are called with one time t at a time, so they need not accept
+  arrays.</li>
 <li><strong>Complex</strong> inputs give a complex solution. Integer and <code>float32</code> inputs
   are converted to <code>float64</code>.</li>
 <li><strong>Non-finite data</strong> (NaN or inf in an array, or returned by <code>g</code> or <code>a</code> at
@@ -1859,6 +1901,11 @@ sides solved together.</p>
 <td><code>coefficients</code></td>
 <td><code>(M, P, *cs)</code></td>
 <td>each interval's polynomial in x = (t − tₙ)/hₙ ∈ [0, 1], monomial, lowest degree first</td>
+</tr>
+<tr>
+<td><code>dt</code>, <code>samples_per_interval</code>, <code>quadrature</code></td>
+<td>—</td>
+<td>the sampled-regime settings used; <code>None</code> for callable inputs</td>
 </tr>
 </tbody>
 </table>
@@ -1950,7 +1997,8 @@ width h, and the error behaves like</p>
 the first term but amplifies the noise. This is why the sampled VIE-1
 default is <code>samples_per_interval = divs²</code> rather than the finest mesh
 <code>divs</code>, and why <code>samples_per_interval</code> is the parameter to tune on real
-data. (Noise in the kernel is not amplified this way; it enters as an O(ε)
+data; <a href="../accuracy/#noisy-first-kind-data">Accuracy</a> gives a procedure for
+choosing it when y is unknown. (Noise in the kernel is not amplified this way; it enters as an O(ε)
 error.) VIE-2 and VIDE are well posed and have no such trade-off, so their
 default is the finest mesh.</p>
 <p>Measured on K(u) = e⁻ᵘ, y = cos t, t ∈ [0, 4] with dt = 10⁻³, the default

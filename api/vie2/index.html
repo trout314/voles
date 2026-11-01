@@ -498,6 +498,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guide/accuracy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accuracy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guide/warnings/" class="md-nav__link">
         
   
@@ -1764,7 +1792,9 @@ samples for one mesh interval.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The numba fallback is used.</p>
+                <p>The numba fallback is used; or a declared exponent in
+<code>kernel_singularity</code> failed its accuracy check, so the singular
+blocks used adaptive quadrature.</p>
               </div>
             </td>
           </tr>
@@ -1829,40 +1859,7 @@ exactly.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_api.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">611</span>
-<span class="normal">612</span>
-<span class="normal">613</span>
-<span class="normal">614</span>
-<span class="normal">615</span>
-<span class="normal">616</span>
-<span class="normal">617</span>
-<span class="normal">618</span>
-<span class="normal">619</span>
-<span class="normal">620</span>
-<span class="normal">621</span>
-<span class="normal">622</span>
-<span class="normal">623</span>
-<span class="normal">624</span>
-<span class="normal">625</span>
-<span class="normal">626</span>
-<span class="normal">627</span>
-<span class="normal">628</span>
-<span class="normal">629</span>
-<span class="normal">630</span>
-<span class="normal">631</span>
-<span class="normal">632</span>
-<span class="normal">633</span>
-<span class="normal">634</span>
-<span class="normal">635</span>
-<span class="normal">636</span>
-<span class="normal">637</span>
-<span class="normal">638</span>
-<span class="normal">639</span>
-<span class="normal">640</span>
-<span class="normal">641</span>
-<span class="normal">642</span>
-<span class="normal">643</span>
-<span class="normal">644</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">644</span>
 <span class="normal">645</span>
 <span class="normal">646</span>
 <span class="normal">647</span>
@@ -1975,7 +1972,42 @@ exactly.</p>
 <span class="normal">754</span>
 <span class="normal">755</span>
 <span class="normal">756</span>
-<span class="normal">757</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_vie2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="normal">757</span>
+<span class="normal">758</span>
+<span class="normal">759</span>
+<span class="normal">760</span>
+<span class="normal">761</span>
+<span class="normal">762</span>
+<span class="normal">763</span>
+<span class="normal">764</span>
+<span class="normal">765</span>
+<span class="normal">766</span>
+<span class="normal">767</span>
+<span class="normal">768</span>
+<span class="normal">769</span>
+<span class="normal">770</span>
+<span class="normal">771</span>
+<span class="normal">772</span>
+<span class="normal">773</span>
+<span class="normal">774</span>
+<span class="normal">775</span>
+<span class="normal">776</span>
+<span class="normal">777</span>
+<span class="normal">778</span>
+<span class="normal">779</span>
+<span class="normal">780</span>
+<span class="normal">781</span>
+<span class="normal">782</span>
+<span class="normal">783</span>
+<span class="normal">784</span>
+<span class="normal">785</span>
+<span class="normal">786</span>
+<span class="normal">787</span>
+<span class="normal">788</span>
+<span class="normal">789</span>
+<span class="normal">790</span>
+<span class="normal">791</span>
+<span class="normal">792</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_vie2</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_setting</span><span class="p">:</span> <span class="n">CollSetting</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">quadrature</span><span class="p">:</span> <span class="n">Quadrature</span> <span class="o">=</span> <span class="s2">"product"</span><span class="p">,</span>
                <span class="n">samples_per_interval</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2071,7 +2103,9 @@ exactly.</p>
 <span class="sd">    AccuracyWarning</span>
 <span class="sd">        A singularity declared on a uniform mesh.</span>
 <span class="sd">    PerformanceWarning</span>
-<span class="sd">        The numba fallback is used.</span>
+<span class="sd">        The numba fallback is used; or a declared exponent in</span>
+<span class="sd">        ``kernel_singularity`` failed its accuracy check, so the singular</span>
+<span class="sd">        blocks used adaptive quadrature.</span>
 <span class="sd">    VolesWarning</span>
 <span class="sd">        A ``kernel_singularity`` location outside $[0, T]$.</span>
 

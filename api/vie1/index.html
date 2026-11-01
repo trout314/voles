@@ -498,6 +498,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guide/accuracy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accuracy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guide/warnings/" class="md-nav__link">
         
   
@@ -1803,7 +1831,9 @@ on a uniform mesh.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The numba fallback is used.</p>
+                <p>The numba fallback is used; or a declared exponent in
+<code>kernel_singularity</code> failed its accuracy check, so the singular
+blocks used adaptive quadrature.</p>
               </div>
             </td>
           </tr>
@@ -1877,38 +1907,7 @@ the singularity and grade the mesh to match it:</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_api.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">439</span>
-<span class="normal">440</span>
-<span class="normal">441</span>
-<span class="normal">442</span>
-<span class="normal">443</span>
-<span class="normal">444</span>
-<span class="normal">445</span>
-<span class="normal">446</span>
-<span class="normal">447</span>
-<span class="normal">448</span>
-<span class="normal">449</span>
-<span class="normal">450</span>
-<span class="normal">451</span>
-<span class="normal">452</span>
-<span class="normal">453</span>
-<span class="normal">454</span>
-<span class="normal">455</span>
-<span class="normal">456</span>
-<span class="normal">457</span>
-<span class="normal">458</span>
-<span class="normal">459</span>
-<span class="normal">460</span>
-<span class="normal">461</span>
-<span class="normal">462</span>
-<span class="normal">463</span>
-<span class="normal">464</span>
-<span class="normal">465</span>
-<span class="normal">466</span>
-<span class="normal">467</span>
-<span class="normal">468</span>
-<span class="normal">469</span>
-<span class="normal">470</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">470</span>
 <span class="normal">471</span>
 <span class="normal">472</span>
 <span class="normal">473</span>
@@ -2046,7 +2045,40 @@ the singularity and grade the mesh to match it:</p>
 <span class="normal">605</span>
 <span class="normal">606</span>
 <span class="normal">607</span>
-<span class="normal">608</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_vie1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">continuous</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="normal">608</span>
+<span class="normal">609</span>
+<span class="normal">610</span>
+<span class="normal">611</span>
+<span class="normal">612</span>
+<span class="normal">613</span>
+<span class="normal">614</span>
+<span class="normal">615</span>
+<span class="normal">616</span>
+<span class="normal">617</span>
+<span class="normal">618</span>
+<span class="normal">619</span>
+<span class="normal">620</span>
+<span class="normal">621</span>
+<span class="normal">622</span>
+<span class="normal">623</span>
+<span class="normal">624</span>
+<span class="normal">625</span>
+<span class="normal">626</span>
+<span class="normal">627</span>
+<span class="normal">628</span>
+<span class="normal">629</span>
+<span class="normal">630</span>
+<span class="normal">631</span>
+<span class="normal">632</span>
+<span class="normal">633</span>
+<span class="normal">634</span>
+<span class="normal">635</span>
+<span class="normal">636</span>
+<span class="normal">637</span>
+<span class="normal">638</span>
+<span class="normal">639</span>
+<span class="normal">640</span>
+<span class="normal">641</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_vie1</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">continuous</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                <span class="n">y0</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ArrayLike</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_setting</span><span class="p">:</span> <span class="n">CollSetting</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">quadrature</span><span class="p">:</span> <span class="n">Quadrature</span> <span class="o">=</span> <span class="s2">"product"</span><span class="p">,</span>
@@ -2154,7 +2186,9 @@ the singularity and grade the mesh to match it:</p>
 <span class="sd">        $K(0)$ too small for collocation quadrature; a singularity declared</span>
 <span class="sd">        on a uniform mesh.</span>
 <span class="sd">    PerformanceWarning</span>
-<span class="sd">        The numba fallback is used.</span>
+<span class="sd">        The numba fallback is used; or a declared exponent in</span>
+<span class="sd">        ``kernel_singularity`` failed its accuracy check, so the singular</span>
+<span class="sd">        blocks used adaptive quadrature.</span>
 <span class="sd">    VolesWarning</span>
 <span class="sd">        A ``kernel_singularity`` location outside $[0, T]$.</span>
 

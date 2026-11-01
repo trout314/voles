@@ -498,6 +498,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guide/accuracy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accuracy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guide/warnings/" class="md-nav__link">
         
   
@@ -1477,12 +1505,13 @@ over a 1-D <code>u</code>, which is faster.</p>
                 <code>a</code>
             </td>
             <td>
-                  <code><span title="array_like">array_like</span> or <span title="callable">callable</span></code>
+                  <code>(<span title="array_like">array_like</span>, <span title="callable">callable</span> or <span title="constant">constant</span>)</code>
             </td>
             <td>
               <div class="doc-md-description">
                 <p><span class="arithmatex">\(a\)</span>. Sampled: <code>(N,)</code> or <code>(N, d, d)</code>. Callable: <code>a(t)</code> returning
-a scalar or a <code>(d, d)</code> matrix. Default zero.</p>
+a scalar or a <code>(d, d)</code> matrix. A constant, a number or a <code>(d, d)</code>
+array, works with either kind of input. Default zero.</p>
               </div>
             </td>
             <td>
@@ -1801,7 +1830,9 @@ samples for one mesh interval.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The numba fallback is used.</p>
+                <p>The numba fallback is used; or a declared exponent in
+<code>kernel_singularity</code> failed its accuracy check, so the singular
+blocks used adaptive quadrature.</p>
               </div>
             </td>
           </tr>
@@ -1865,42 +1896,7 @@ an error. Mixing callable and sampled inputs is not supported yet.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_api.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">760</span>
-<span class="normal">761</span>
-<span class="normal">762</span>
-<span class="normal">763</span>
-<span class="normal">764</span>
-<span class="normal">765</span>
-<span class="normal">766</span>
-<span class="normal">767</span>
-<span class="normal">768</span>
-<span class="normal">769</span>
-<span class="normal">770</span>
-<span class="normal">771</span>
-<span class="normal">772</span>
-<span class="normal">773</span>
-<span class="normal">774</span>
-<span class="normal">775</span>
-<span class="normal">776</span>
-<span class="normal">777</span>
-<span class="normal">778</span>
-<span class="normal">779</span>
-<span class="normal">780</span>
-<span class="normal">781</span>
-<span class="normal">782</span>
-<span class="normal">783</span>
-<span class="normal">784</span>
-<span class="normal">785</span>
-<span class="normal">786</span>
-<span class="normal">787</span>
-<span class="normal">788</span>
-<span class="normal">789</span>
-<span class="normal">790</span>
-<span class="normal">791</span>
-<span class="normal">792</span>
-<span class="normal">793</span>
-<span class="normal">794</span>
-<span class="normal">795</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">795</span>
 <span class="normal">796</span>
 <span class="normal">797</span>
 <span class="normal">798</span>
@@ -2020,7 +2016,45 @@ an error. Mixing callable and sampled inputs is not supported yet.</p>
 <span class="normal">912</span>
 <span class="normal">913</span>
 <span class="normal">914</span>
-<span class="normal">915</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_vide</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="normal">915</span>
+<span class="normal">916</span>
+<span class="normal">917</span>
+<span class="normal">918</span>
+<span class="normal">919</span>
+<span class="normal">920</span>
+<span class="normal">921</span>
+<span class="normal">922</span>
+<span class="normal">923</span>
+<span class="normal">924</span>
+<span class="normal">925</span>
+<span class="normal">926</span>
+<span class="normal">927</span>
+<span class="normal">928</span>
+<span class="normal">929</span>
+<span class="normal">930</span>
+<span class="normal">931</span>
+<span class="normal">932</span>
+<span class="normal">933</span>
+<span class="normal">934</span>
+<span class="normal">935</span>
+<span class="normal">936</span>
+<span class="normal">937</span>
+<span class="normal">938</span>
+<span class="normal">939</span>
+<span class="normal">940</span>
+<span class="normal">941</span>
+<span class="normal">942</span>
+<span class="normal">943</span>
+<span class="normal">944</span>
+<span class="normal">945</span>
+<span class="normal">946</span>
+<span class="normal">947</span>
+<span class="normal">948</span>
+<span class="normal">949</span>
+<span class="normal">950</span>
+<span class="normal">951</span>
+<span class="normal">952</span>
+<span class="normal">953</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_vide</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">y0</span><span class="p">:</span> <span class="n">ArrayLike</span><span class="p">,</span>
                <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_setting</span><span class="p">:</span> <span class="n">CollSetting</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">quadrature</span><span class="p">:</span> <span class="n">Quadrature</span> <span class="o">=</span> <span class="s2">"product"</span><span class="p">,</span>
@@ -2048,9 +2082,10 @@ an error. Mixing callable and sampled inputs is not supported yet.</p>
 <span class="sd">        equations, at $u = 0, dt, \ldots, (N-1)\,dt$. Callable: ``kernel(u)``</span>
 <span class="sd">        returning a scalar or a ``(d, d)`` matrix; it may be vectorised</span>
 <span class="sd">        over a 1-D ``u``, which is faster.</span>
-<span class="sd">    a : array_like or callable, optional</span>
+<span class="sd">    a : array_like, callable or constant, optional</span>
 <span class="sd">        $a$. Sampled: ``(N,)`` or ``(N, d, d)``. Callable: ``a(t)`` returning</span>
-<span class="sd">        a scalar or a ``(d, d)`` matrix. Default zero.</span>
+<span class="sd">        a scalar or a ``(d, d)`` matrix. A constant, a number or a ``(d, d)``</span>
+<span class="sd">        array, works with either kind of input. Default zero.</span>
 <span class="sd">    g : array_like or callable, optional</span>
 <span class="sd">        $g$. Sampled: ``(N,)``, ``(N, d)`` or ``(N, d, m)`` for $m$</span>
 <span class="sd">        right-hand sides. Callable: ``g(t)`` returning a scalar, ``(d,)`` or</span>
@@ -2126,7 +2161,9 @@ an error. Mixing callable and sampled inputs is not supported yet.</p>
 <span class="sd">    AccuracyWarning</span>
 <span class="sd">        A singularity declared on a uniform mesh.</span>
 <span class="sd">    PerformanceWarning</span>
-<span class="sd">        The numba fallback is used.</span>
+<span class="sd">        The numba fallback is used; or a declared exponent in</span>
+<span class="sd">        ``kernel_singularity`` failed its accuracy check, so the singular</span>
+<span class="sd">        blocks used adaptive quadrature.</span>
 <span class="sd">    VolesWarning</span>
 <span class="sd">        A ``kernel_singularity`` location outside $[0, T]$.</span>
 
