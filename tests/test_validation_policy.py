@@ -1,21 +1,19 @@
-"""The argument-validation rules of the 1.0 contract (docs/dev/api-contract-1.0.md §6, §9),
-as they apply to the 0.10 API in 0.11.
+"""The argument-validation rules of the 1.0 contract (docs/dev/api-contract-1.0.md §6, §9).
 
 - A wrong *type* raises TypeError; the right type with a wrong *value*
   raises ValueError. Floats are never truncated to ints, and flags must be
   bools.
 - Required arguments passed as None are rejected.
 - Non-finite data are rejected, naming the input.
-"""
-import inspect
 
+(Which options belong to which regime, and the shape rules, are in
+test_api.py and test_api_shapes.py.)
+"""
 import numpy as np
 import pytest
 
-import voles
-from voles import (solve_VIE_1, solve_VIE_2, solve_VIDE, function_solve_VIE_1,
-                   function_solve_VIE_2, function_solve_VIDE, optimal_graded_mesh,
-                   gauss_legendre_nodes, radau_iia_nodes, lobatto_nodes)
+from voles import (gauss_legendre_nodes, lobatto_nodes, optimal_graded_mesh, radau_iia_nodes,
+                   solve_vide, solve_vie1, solve_vie2)
 
 N, DT = 81, 0.0125
 T = np.arange(N) * DT
@@ -25,99 +23,93 @@ MESH = np.linspace(0, 1, 9)
 
 
 def vie1(**kw):
-    return solve_VIE_1(**{**dict(kernel_values=K, g_values=G, time_step=DT), **kw})
+    return solve_vie1(**{**dict(kernel=K, g=G - G[0], dt=DT), **kw})
 
 
 def vie2(**kw):
-    return solve_VIE_2(**{**dict(kernel_values=K, g_values=G, time_step=DT), **kw})
+    return solve_vie2(**{**dict(kernel=K, g=G, dt=DT), **kw})
 
 
 def vide(**kw):
-    return solve_VIDE(**{**dict(kernel_values=K, g_values=G, soln_init_value=1.0,
-                                time_step=DT), **kw})
+    return solve_vide(**{**dict(kernel=K, g=G, y0=1.0, dt=DT), **kw})
 
 
 def fvie1(**kw):
-    return function_solve_VIE_1(**{**dict(kernel=np.exp, g=np.sin, mesh_breakpoints=MESH), **kw})
+    return solve_vie1(**{**dict(kernel=np.exp, g=np.sin, mesh=MESH), **kw})
 
 
 def fvie2(**kw):
-    return function_solve_VIE_2(**{**dict(kernel=np.exp, g=np.cos, mesh_breakpoints=MESH), **kw})
+    return solve_vie2(**{**dict(kernel=np.exp, g=np.cos, mesh=MESH), **kw})
 
 
 def fvide(**kw):
-    return function_solve_VIDE(**{**dict(kernel=np.exp, g=np.cos, soln_init_value=1.0,
-                                         mesh_breakpoints=MESH), **kw})
+    return solve_vide(**{**dict(kernel=np.exp, g=np.cos, y0=1.0, mesh=MESH), **kw})
+
+
+def _id(case):
+    call, kw = case[0], case[1]
+    k, v = list(kw.items())[-1]
+    return f"{call.__name__}-{k}={v!r}"
 
 
 # ------------------------------------------------------------ type vs value
 
 TYPE_ERRORS = [
-    (vie2, dict(coll_divs=2.0)),
-    (vie2, dict(coll_divs=True)),
-    (vie2, dict(coll_divs=2, coll_choices=[0.0, 2.0])),
-    (vie2, dict(mesh_samples=4.0)),
+    (vie2, dict(coll_setting=2.0)),
+    (vie2, dict(coll_setting=True)),
+    (vie2, dict(coll_setting=(2, [0.0, 2.0]))),
+    (vie2, dict(samples_per_interval=4.0)),
     (vie2, dict(kernel_interp_degree=2.0)),
-    (vie2, dict(time_step="0.1")),
-    (vie2, dict(time_step=None)),
+    (vie2, dict(dt="0.1")),
+    (vie2, dict(dt=None)),
     (vie2, dict(quadrature=3)),
-    (vie2, dict(show_warnings="no")),
-    (vie2, dict(show_warnings=0)),
-    (vie2, dict(return_function=1)),
-    (vie2, dict(return_polys=1)),
-    (vie1, dict(force_continuous=1, soln_init_value=0.0)),
-    (vide, dict(coll_divs=2.5)),
-    (fvie2, dict(coll_divs=2.5)),           # used to run silently with nodes {0, 0.4, 0.8}
-    (fvie2, dict(coll_divs=2.0)),
-    (fvie2, dict(coll_choices=[1.0, 2.0])),
+    (vie1, dict(continuous=1, y0=0.0)),
+    (vide, dict(coll_setting=2.5)),
+    (vie2, dict(kernel=np.array(["a", "b"]))),
+    (fvie2, dict(coll_nodes=["a", "b"])),
     (fvie2, dict(kernel_singularity=True)),
     (fvie2, dict(kernel_singularity=["abc"])),
     (fvie2, dict(reuse_adaptive_blocks="yes")),
-    (fvie2, dict(return_function=1)),
-    (fvie1, dict(force_continuous=1, soln_init_value=0.0)),
-    (fvide, dict(show_warnings=None)),
+    (fvie1, dict(continuous=1, y0=0.0)),
 ]
 
 
-@pytest.mark.parametrize("call, kw", TYPE_ERRORS,
-                         ids=[f"{c.__name__}-{list(k)[-1]}={list(k.values())[-1]!r}"
-                              for c, k in TYPE_ERRORS])
+@pytest.mark.parametrize("call, kw", TYPE_ERRORS, ids=[_id(c) for c in TYPE_ERRORS])
 def test_wrong_type_is_a_type_error(call, kw):
     with pytest.raises(TypeError):
         call(**kw)
 
 
 VALUE_ERRORS = [
-    (vie2, dict(coll_divs=0)),
-    (vie2, dict(coll_divs=2, coll_choices=[0, 3])),
-    (vie2, dict(mesh_samples=0)),
-    (vie2, dict(time_step=0.0)),
-    (vie2, dict(time_step=-1.0)),
-    (vie2, dict(time_step=np.inf)),
+    (vie2, dict(coll_setting=0)),
+    (vie2, dict(coll_setting=(2, [0, 3]))),
+    (vie2, dict(samples_per_interval=0)),
+    (vie2, dict(dt=0.0)),
+    (vie2, dict(dt=-1.0)),
+    (vie2, dict(dt=np.inf)),
     (vie2, dict(quadrature="simpson")),
-    (fvie2, dict(coll_divs=0)),
+    (fvie2, dict(coll_nodes=[0.5, 1.5])),
+    (fvie2, dict(coll_nodes=[])),
     (fvie2, dict(kernel_singularity={0.0: 1.5})),
 ]
 
 
-@pytest.mark.parametrize("call, kw", VALUE_ERRORS,
-                         ids=[f"{c.__name__}-{list(k)[-1]}={list(k.values())[-1]!r}"
-                              for c, k in VALUE_ERRORS])
+@pytest.mark.parametrize("call, kw", VALUE_ERRORS, ids=[_id(c) for c in VALUE_ERRORS])
 def test_wrong_value_is_a_value_error(call, kw):
     with pytest.raises(ValueError):
         call(**kw)
 
 
 @pytest.mark.parametrize("kw, exc", [
-    (dict(alpha="0.5"), TypeError), (dict(T="1"), TypeError), (dict(M=10.0), TypeError),
-    (dict(order=3.0), TypeError), (dict(M=True), TypeError),
-    (dict(alpha=1.0), ValueError), (dict(T=0.0), ValueError), (dict(T=np.inf), ValueError),
-    (dict(M=0), ValueError), (dict(order=0), ValueError),
+    (dict(alpha="0.5"), TypeError), (dict(t_end="1"), TypeError),
+    (dict(n_intervals=10.0), TypeError), (dict(order=3.0), TypeError),
+    (dict(n_intervals=True), TypeError),
+    (dict(alpha=1.0), ValueError), (dict(t_end=0.0), ValueError), (dict(t_end=np.inf), ValueError),
+    (dict(n_intervals=0), ValueError), (dict(order=0), ValueError),
 ])
 def test_optimal_graded_mesh_validation(kw, exc):
-    args = {**dict(alpha=0.5, T=1.0, M=10, order=3), **kw}
     with pytest.raises(exc):
-        optimal_graded_mesh(**args)
+        optimal_graded_mesh(**{**dict(alpha=0.5, t_end=1.0, n_intervals=10, order=3), **kw})
 
 
 @pytest.mark.parametrize("fn", [gauss_legendre_nodes, radau_iia_nodes, lobatto_nodes])
@@ -132,42 +124,44 @@ def test_node_helpers_validation(fn):
 
 def test_numpy_scalars_are_accepted():
     """NumPy integers, floats and bools are the right types."""
-    ref = vie2(coll_divs=2, coll_choices=[0, 1, 2], mesh_samples=4, show_warnings=True)
-    got = vie2(coll_divs=np.int64(2), coll_choices=np.array([0, 1, 2]),
-               mesh_samples=np.int32(4), time_step=np.float64(DT), show_warnings=np.bool_(True))
-    np.testing.assert_array_equal(ref, got)
-    mesh = optimal_graded_mesh(alpha=np.float32(0.5), T=np.int64(1), M=np.int16(10),
+    ref = vie2(coll_setting=(2, [0, 1, 2]), samples_per_interval=4)
+    got = vie2(coll_setting=(np.int64(2), np.array([0, 1, 2])), samples_per_interval=np.int32(4),
+               dt=np.float64(DT))
+    np.testing.assert_array_equal(ref.y, got.y)
+    np.testing.assert_array_equal(vie1(continuous=np.bool_(True), y0=0.0).y,
+                                  vie1(continuous=True, y0=0.0).y)
+    mesh = optimal_graded_mesh(alpha=np.float32(0.5), t_end=np.int64(1), n_intervals=np.int16(10),
                                order=np.int64(3))
     assert mesh.shape == (11,)
 
 
 def test_quadrature_is_case_insensitive():
-    np.testing.assert_array_equal(vie2(quadrature="product"), vie2(quadrature="Product"))
-    np.testing.assert_array_equal(vie2(quadrature="collocation"),
-                                  vie2(quadrature="COLLOCATION"))
+    np.testing.assert_array_equal(vie2(quadrature="product").y, vie2(quadrature="Product").y)
+    np.testing.assert_array_equal(vie2(quadrature="collocation").y,
+                                  vie2(quadrature="COLLOCATION").y)
 
 
 # ------------------------------------------------------- required arguments
 
 def test_vide_requires_an_initial_value():
-    """soln_init_value=None used to give an all-NaN solution."""
-    with pytest.raises(TypeError, match="soln_init_value is required"):
-        vide(soln_init_value=None)
-    with pytest.raises(TypeError, match="soln_init_value is required"):
-        fvide(soln_init_value=None)
+    with pytest.raises(TypeError, match="y0 is required"):
+        vide(y0=None)
+    with pytest.raises(TypeError, match="y0 is required"):
+        fvide(y0=None)
 
 
 # ------------------------------------------------------------- non-finite data
 
 @pytest.mark.parametrize("call, name, kw", [
-    (vie2, "kernel_values", dict(kernel_values=np.where(T > 0.5, np.nan, K))),
-    (vie2, "g_values", dict(g_values=np.where(T > 0.5, np.inf, G))),
-    (vie2, "g_values", dict(g_values=np.where(T > 0.5, np.nan + 1j, G + 0j))),
-    (vie1, "kernel_values", dict(kernel_values=np.where(T > 0.5, -np.inf, K))),
-    (vie1, "soln_init_value", dict(soln_init_value=np.nan, force_continuous=True)),
-    (vide, "a_values", dict(a_values=np.where(T > 0.5, np.nan, -0.5))),
-    (vide, "soln_init_value", dict(soln_init_value=np.inf)),
-    (fvide, "soln_init_value", dict(soln_init_value=np.nan)),
+    (vie2, "kernel", dict(kernel=np.where(T > 0.5, np.nan, K))),
+    (vie2, "g", dict(g=np.where(T > 0.5, np.inf, G))),
+    (vie2, "g", dict(g=np.where(T > 0.5, np.nan + 1j, G + 0j))),
+    (vie1, "kernel", dict(kernel=np.where(T > 0.5, -np.inf, K))),
+    (vie1, "y0", dict(y0=np.nan, continuous=True)),
+    (vide, "a", dict(a=np.where(T > 0.5, np.nan, -0.5))),
+    (vide, "a", dict(a=np.nan)),
+    (vide, "y0", dict(y0=np.inf)),
+    (fvide, "y0", dict(y0=np.nan)),
 ])
 def test_non_finite_arrays_are_rejected(call, name, kw):
     with pytest.raises(ValueError, match=f"{name} contains a non-finite value"):
@@ -178,12 +172,11 @@ def test_non_finite_error_names_the_index():
     g = G.copy()
     g[40] = np.nan
     with pytest.raises(ValueError, match="at index 40"):
-        vie2(g_values=g)
+        vie2(g=g)
     g2 = np.ones((N, 2, 3))
     g2[7, 1, 2] = np.inf
     with pytest.raises(ValueError, match=r"at index \(7, 1, 2\)"):
-        solve_VIE_2(kernel_values=np.exp(-T)[:, None, None] * np.eye(2), g_values=g2,
-                    time_step=DT)
+        solve_vie2(kernel=np.exp(-T)[:, None, None] * np.eye(2), g=g2, dt=DT)
 
 
 @pytest.mark.parametrize("call, which", [(fvie2, "g"), (fvie1, "g"), (fvide, "g"),
@@ -196,20 +189,13 @@ def test_non_finite_callable_values_are_rejected(call, which):
 
 def test_non_finite_vector_callable_is_rejected():
     with pytest.raises(ValueError, match=r"g\(t\) returned a non-finite value at t=0\.5625"):
-        function_solve_VIE_2(kernel=lambda u: np.exp(-u) * np.eye(2),
-                             g=lambda t: np.array([1.0, np.inf if t > 0.5 else 0.0]),
-                             mesh_breakpoints=np.linspace(0, 1, 9))
+        solve_vie2(kernel=lambda u: np.exp(-u) * np.eye(2),
+                   g=lambda t: np.array([1.0, np.inf if t > 0.5 else 0.0]), mesh=MESH)
 
 
-# ------------------------------------------------------------- misc. Phase 1
+# ------------------------------------------------------------------ internal
 
 def test_internal_error_codes_are_reported_as_bugs():
     from voles._dlang import _check_return
     with pytest.raises(RuntimeError, match="internal error.*please report"):
         _check_return(7, "volterra_solve_vie2")
-
-
-@pytest.mark.parametrize("fn", [function_solve_VIE_1, function_solve_VIE_2,
-                                function_solve_VIDE])
-def test_no_private_parameters_in_public_signatures(fn):
-    assert not [p for p in inspect.signature(fn).parameters if p.startswith("_")]

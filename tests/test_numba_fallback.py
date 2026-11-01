@@ -11,9 +11,10 @@ path, which has no fallback.
 """
 import numpy as np
 import pytest
-from voles import solve_VIDE, solve_VIE_1, solve_VIE_2
+from voles import solve_vide, solve_vie1, solve_vie2
 from conftest import (TOLERANCE, as_array,
                       VIE1_SPEC_DAMPED, VIE2_SPEC_SMOOTH, VIDE_SPEC_SMOOTH)
+from conftest import run
 
 
 def _skip_if_no_numba(exc):
@@ -26,10 +27,7 @@ def test_numba_vie2_accuracy():
     d = as_array(VIE2_SPEC_SMOOTH, time_step=0.002, coll_divs=5,
                  coll_choices=[0, 1, 2], num_blocks=8)
     try:
-        soln = solve_VIE_2(
-            kernel_values=d["kernel"], g_values=d["g"],
-            time_step=d["time_step"], coll_divs=d["coll_divs"],
-            coll_choices=d["coll_choices"], show_warnings=False)
+        soln = run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     except NotImplementedError as exc:
         _skip_if_no_numba(exc)
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
@@ -41,10 +39,7 @@ def test_numba_vie1_accuracy():
     d = as_array(VIE1_SPEC_DAMPED, time_step=0.002, coll_divs=5,
                  coll_choices=[3, 4, 5], num_blocks=8)
     try:
-        soln = solve_VIE_1(
-            kernel_values=d["kernel"], g_values=d["g"],
-            time_step=d["time_step"], coll_divs=d["coll_divs"],
-            coll_choices=d["coll_choices"], show_warnings=False)
+        soln = run(solve_vie1, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     except (NotImplementedError, ValueError) as exc:
         _skip_if_no_numba(exc)
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
@@ -54,11 +49,7 @@ def test_numba_vide_accuracy():
     d = as_array(VIDE_SPEC_SMOOTH, time_step=0.002, coll_divs=5,
                  coll_choices=[1, 2, 3], num_blocks=8)
     try:
-        soln = solve_VIDE(
-            kernel_values=d["kernel"], a_values=d["a"], g_values=d["g"],
-            soln_init_value=d["soln_init_value"],
-            time_step=d["time_step"], coll_divs=d["coll_divs"],
-            coll_choices=d["coll_choices"], show_warnings=False)
+        soln = run(solve_vide, show_warnings=False, kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     except NotImplementedError as exc:
         _skip_if_no_numba(exc)
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
@@ -75,8 +66,6 @@ def test_vector_beyond_compiled_settings_raises():
     kernel = np.zeros((N, 2, 2))
     kernel[:, 0, 0] = kernel[:, 1, 1] = d["kernel"]
     g = np.stack([d["g"], d["g"]], axis=1)
-    with pytest.raises(NotImplementedError, match="not supported"):
-        solve_VIE_2(kernel_values=kernel, g_values=g,
-                    time_step=d["time_step"], coll_divs=5, quadrature="collocation",
-                    coll_choices=[0, 1, 2], show_warnings=False)
+    with pytest.raises(NotImplementedError, match="is not compiled into the extension"):
+        run(solve_vie2, show_warnings=False, kernel=kernel, g=g, dt=d["time_step"], coll_setting=(5, [0, 1, 2]), quadrature="collocation").y
     assert issubclass(NotImplementedError, RuntimeError)

@@ -52,7 +52,6 @@ nav:
       - Helpers:
           - optimal_graded_mesh: api/optimal_graded_mesh.md
           - Collocation node helpers: api/coll_nodes.md
-      - Deprecated 0.10 solvers: api/legacy.md
   - Examples:
       - VIE Type 1: examples/vie1.md
       - VIE Type 2: examples/vie2.md

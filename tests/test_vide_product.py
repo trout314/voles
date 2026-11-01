@@ -15,8 +15,9 @@ the product-integration blocks are those of the basis {H beta_k, 1}. Checks:
 import numpy as np
 import pytest
 
-from voles import solve_VIDE, function_solve_VIDE
+from voles import solve_vide
 from voles import _product
+from conftest import run, with_sol
 
 
 def damped(dt, N, gam=0.5):
@@ -55,14 +56,9 @@ def test_polynomial_kernel_matches_exact_collocation(coll_divs, choices, Q_facto
     a = lambda tt: 0.3 - 0.1 * tt
     g = lambda tt: np.cos(1.1 * tt)
     y0 = 0.7
-    vals = solve_VIDE(kernel_values=kernel(t), a_values=a(t), g_values=g(t),
-                      soln_init_value=y0, time_step=dt, coll_divs=coll_divs,
-                      coll_choices=choices, quadrature="product", mesh_samples=Q,
-                      kernel_interp_degree=p, show_warnings=False)
+    vals = run(solve_vide, show_warnings=False, kernel=kernel(t), a=a(t), g=g(t), y0=y0, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p).y
     mesh = np.arange(N // Q + 1) * (Q * dt)
-    _, ref = function_solve_VIDE(kernel=kernel, a=a, g=g, soln_init_value=y0,
-                                 mesh_breakpoints=mesh, coll_divs=coll_divs,
-                                 coll_choices=choices, return_function=True)
+    _, ref = with_sol(solve_vide(kernel=kernel, a=a, g=g, y0=y0, mesh=mesh, coll_nodes=np.asarray(choices) / coll_divs))
     assert np.max(np.abs(vals - ref(t))) < 1e-8
 
 
@@ -80,14 +76,9 @@ def test_polynomial_kernel_matches_exact_collocation_vector():
     K = np.array([kernel(tau) for tau in t])
     av = np.array([a(tt) for tt in t])
     gv = np.array([g(tt) for tt in t])
-    vals = solve_VIDE(kernel_values=K, a_values=av, g_values=gv, soln_init_value=y0,
-                      time_step=dt, coll_divs=coll_divs, coll_choices=choices,
-                      quadrature="product", mesh_samples=Q, kernel_interp_degree=p,
-                      show_warnings=False)
+    vals = run(solve_vide, show_warnings=False, kernel=K, a=av, g=gv, y0=y0, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p).y
     mesh = np.arange(N // Q + 1) * (Q * dt)
-    _, ref = function_solve_VIDE(kernel=kernel, a=a, g=g, soln_init_value=y0,
-                                 mesh_breakpoints=mesh, coll_divs=coll_divs,
-                                 coll_choices=choices, return_function=True)
+    _, ref = with_sol(solve_vide(kernel=kernel, a=a, g=g, y0=y0, mesh=mesh, coll_nodes=np.asarray(choices) / coll_divs))
     assert np.max(np.abs(vals - ref(t))) < 1e-8
 
 
@@ -100,15 +91,11 @@ def test_reproduces_polynomial_solutions(coll_divs, choices):
     y = t ** m
     # ODE limit K == 0 with a = 1/2: y' = a y + g
     g = m * t ** (m - 1) - 0.5 * y
-    vals = solve_VIDE(kernel_values=np.zeros(N), a_values=0.5 * np.ones(N), g_values=g,
-                      soln_init_value=0.0, time_step=dt, coll_divs=coll_divs,
-                      coll_choices=choices, quadrature="product", show_warnings=False)
+    vals = run(solve_vide, show_warnings=False, kernel=np.zeros(N), a=0.5 * np.ones(N), g=g, y0=0.0, dt=dt, coll_setting=(coll_divs, choices), quadrature="product").y
     assert np.max(np.abs(vals - y)) < 1e-9
     # K == 1, a == 0: y' = g + int_0^t y
     g = m * t ** (m - 1) - t ** (m + 1) / (m + 1)
-    vals = solve_VIDE(kernel_values=np.ones(N), g_values=g, soln_init_value=0.0,
-                      time_step=dt, coll_divs=coll_divs, coll_choices=choices,
-                      quadrature="product", show_warnings=False)
+    vals = run(solve_vide, show_warnings=False, kernel=np.ones(N), g=g, y0=0.0, dt=dt, coll_setting=(coll_divs, choices), quadrature="product").y
     assert np.max(np.abs(vals - y)) < 1e-9
 
 
@@ -117,8 +104,7 @@ def _max_err(dt, coll_divs, choices, T=12.0):
     N = int(round(T / dt)) + 1
     N = (N - 1) // Q * Q + 1
     t, K, y = damped(dt, N)
-    vals = solve_VIDE(kernel_values=K, soln_init_value=1.0, time_step=dt, coll_divs=coll_divs,
-                      coll_choices=choices, quadrature="product", show_warnings=False)
+    vals = run(solve_vide, show_warnings=False, kernel=K, y0=1.0, dt=dt, coll_setting=(coll_divs, choices), quadrature="product").y
     return np.max(np.abs(vals - y))
 
 
@@ -134,10 +120,9 @@ def test_finer_mesh_beats_present_scheme_on_coarse_data():
     dt = 0.2
     N = n_samples(9, 8)
     t, K, y = damped(dt, N)
-    common = dict(kernel_values=K, soln_init_value=1.0, time_step=dt, coll_divs=3,
-                  coll_choices=[1, 2, 3], show_warnings=False)
-    err_coll = np.max(np.abs(solve_VIDE(quadrature="collocation", **common) - y))
-    err_prod = np.max(np.abs(solve_VIDE(quadrature="product", **common) - y))
+    common = dict(kernel=K, y0=1.0, dt=dt, coll_setting=(3, [1, 2, 3]))
+    err_coll = np.max(np.abs(solve_vide(quadrature="collocation", **common).y - y))
+    err_prod = np.max(np.abs(solve_vide(quadrature="product", **common).y - y))
     assert err_prod < err_coll / 5
 
 
@@ -145,13 +130,11 @@ def test_every_sample_is_used():
     dt, q = 0.1, 3
     N = n_samples(q, 12)
     t, K, y = damped(dt, N)
-    base = solve_VIDE(kernel_values=K, soln_init_value=1.0, time_step=dt, coll_divs=q,
-                      coll_choices=[1, 2, 3], quadrature="product", show_warnings=False)
+    base = run(solve_vide, show_warnings=False, kernel=K, y0=1.0, dt=dt, coll_setting=(q, [1, 2, 3]), quadrature="product").y
     for j in (1, 5, 7, N - 2):
         Kp = K.copy()
         Kp[j] += 0.1
-        pert = solve_VIDE(kernel_values=Kp, soln_init_value=1.0, time_step=dt, coll_divs=q,
-                          coll_choices=[1, 2, 3], quadrature="product", show_warnings=False)
+        pert = run(solve_vide, show_warnings=False, kernel=Kp, y0=1.0, dt=dt, coll_setting=(q, [1, 2, 3]), quadrature="product").y
         assert np.max(np.abs(pert - base)) > 1e-6, j
 
 
@@ -161,10 +144,9 @@ def test_mesh_samples_q_squared_is_not_the_collocation_scheme():
     for dt in (0.1, 0.05, 0.025):
         N = n_samples(q * q, int(round(6.0 / (q * q * dt))))
         t, K, y = damped(dt, N)
-        common = dict(kernel_values=K, soln_init_value=1.0, time_step=dt, coll_divs=q,
-                      coll_choices=choices, show_warnings=False)
-        a = solve_VIDE(**common)
-        b = solve_VIDE(quadrature="product", mesh_samples=q * q, **common)
+        common = dict(kernel=K, y0=1.0, dt=dt, coll_setting=(q, choices))
+        a = solve_vide(**common).y
+        b = solve_vide(quadrature="product", samples_per_interval=q * q, **common).y
         diffs.append(np.max(np.abs(a - b)))
         assert diffs[-1] > 1e-12
     assert diffs[2] < diffs[0] / 4
@@ -197,18 +179,14 @@ def test_vector_matrix_and_return_function():
         G[:, 0, j] = (j + 1) * g1
         G[:, 1, j] = g1
         Y0[:, j] = [j + 1, 1.0]
-    vals, sol = solve_VIDE(kernel_values=K, a_values=A, g_values=G, soln_init_value=Y0,
-                           time_step=dt, coll_divs=q, coll_choices=[0, 1, 2],
-                           quadrature="product", return_function=True, show_warnings=False)
+    vals, sol = with_sol(run(solve_vide, show_warnings=False, kernel=K, a=A, g=G, y0=Y0, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product"))
     assert vals.shape == (N, 2, 3)
     for j in range(3):
         assert np.allclose(vals[:, 0, j], (j + 1) * y1, atol=1e-6)
         assert np.allclose(vals[:, 1, j], y1, atol=1e-6)
     assert np.allclose(sol(t), vals, atol=1e-10)
     assert len(sol) == (N - 1) // q
-    single, s1 = solve_VIDE(kernel_values=K1, a_values=a1, g_values=g1, soln_init_value=1.0,
-                            time_step=dt, coll_divs=q, coll_choices=[0, 1, 2],
-                            quadrature="product", return_function=True, show_warnings=False)
+    single, s1 = with_sol(run(solve_vide, show_warnings=False, kernel=K1, a=a1, g=g1, y0=1.0, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product"))
     assert np.allclose(single, y1, atol=1e-6)
     assert abs(s1(0.0) - 1.0) < 1e-12
 
@@ -217,9 +195,7 @@ def test_complex_passthrough():
     dt, q = 0.05, 2
     N = n_samples(q, 16)
     t, K, a, g, y = exp_problem(dt, N)
-    vals = solve_VIDE(kernel_values=K.astype(complex), a_values=a, g_values=g,
-                      soln_init_value=1.0 + 0j, time_step=dt, coll_divs=q,
-                      coll_choices=[0, 1, 2], quadrature="product", show_warnings=False)
+    vals = run(solve_vide, show_warnings=False, kernel=K.astype(complex), a=a, g=g, y0=1.0 + 0j, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
     assert np.iscomplexobj(vals)
     assert np.allclose(vals.real, y, atol=1e-6)
     assert np.allclose(vals.imag, 0.0, atol=1e-10)
@@ -229,20 +205,17 @@ def test_validation():
     dt, q = 0.05, 2
     N = n_samples(4, 4)
     t, K, a, g, _ = exp_problem(dt, N)
-    common = dict(kernel_values=K, a_values=a, g_values=g, soln_init_value=1.0,
-                  time_step=dt, coll_divs=q, coll_choices=[0, 1, 2], show_warnings=False)
+    common = dict(kernel=K, a=a, g=g, y0=1.0, dt=dt, coll_setting=(q, [0, 1, 2]))
     with pytest.raises(ValueError):
-        solve_VIDE(quadrature="gauss", **common)
+        solve_vide(quadrature="gauss", **common).y
     with pytest.raises(ValueError):
-        solve_VIDE(quadrature="collocation", kernel_interp_degree=3, **common)
+        solve_vide(quadrature="collocation", kernel_interp_degree=3, **common).y
     with pytest.raises(ValueError):
-        solve_VIDE(quadrature="collocation", mesh_samples=2, **common)
+        solve_vide(quadrature="collocation", samples_per_interval=2, **common).y
     with pytest.raises(ValueError):
-        solve_VIDE(quadrature="product", mesh_samples=3, **common)
+        solve_vide(quadrature="product", samples_per_interval=3, **common).y
     with pytest.raises(ValueError):
-        solve_VIDE(kernel_values=K, a_values=a[:-1], g_values=g, soln_init_value=1.0,
-                   time_step=dt, coll_divs=q, coll_choices=[0, 1, 2], quadrature="product",
-                   show_warnings=False)
+        run(solve_vide, show_warnings=False, kernel=K, a=a[:-1], g=g, y0=1.0, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
 
 
 # ---------------------------------------------------------------------------
@@ -268,14 +241,10 @@ def test_matrix_shared_g_solves_under_kernel_truncation(quadrature):
     q, choices = 2, [0, 1, 2]
     N = (4 * 10 + 1) + 3
     K, a, g, init = _matrix_problem(N)
-    soln = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=init,
-                      time_step=0.01, coll_divs=q, coll_choices=choices, quadrature=quadrature,
-                      show_warnings=False)
+    soln = run(solve_vide, show_warnings=False, kernel=K, a=a, g=g, y0=init, dt=0.01, coll_setting=(q, choices), quadrature=quadrature).y
     assert soln.shape[0] == N and soln.shape[1:] == init.shape
     for j in range(init.shape[1]):
-        col = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=init[:, j],
-                         time_step=0.01, coll_divs=q, coll_choices=choices, quadrature=quadrature,
-                         show_warnings=False)
+        col = run(solve_vide, show_warnings=False, kernel=K, a=a, g=g, y0=init[:, j], dt=0.01, coll_setting=(q, choices), quadrature=quadrature).y
         assert np.array_equal(soln[:, :, j], col)
 
 
@@ -286,14 +255,13 @@ def test_matrix_path_validates_a_and_g_lengths(quadrature):
     q, choices = 2, [0, 1, 2]
     N = 4 * 10 + 1
     K, a, g, init = _matrix_problem(N)
-    kw = dict(kernel_values=K, soln_init_value=init, time_step=0.01, coll_divs=q,
-              coll_choices=choices, quadrature=quadrature, show_warnings=False)
-    with pytest.raises(ValueError, match=r"a_values shape \(50, 2, 2\) incompatible"):
-        solve_VIDE(a_values=np.broadcast_to(a[0], (50, 2, 2)), g_values=g, **kw)
-    with pytest.raises(ValueError, match=r"g_values shape \(50, 2\) incompatible"):
-        solve_VIDE(a_values=a, g_values=np.zeros((50, 2)), **kw)
-    with pytest.raises(ValueError, match=r"expected \(41, 2, 3\)"):
-        solve_VIDE(a_values=a, g_values=np.zeros((N, 2, 2)), **kw)
+    kw = dict(kernel=K, y0=init, dt=0.01, coll_setting=(q, choices), quadrature=quadrature)
+    with pytest.raises(ValueError, match=r"a must have shape \(41, 2, 2\) .* got \(50, 2, 2\)"):
+        solve_vide(a=np.broadcast_to(a[0], (50, 2, 2)), g=g, **kw).y
+    with pytest.raises(ValueError, match=r"g must have shape \(41, 2\) or \(41, 2, m\) .* got \(50, 2\)"):
+        solve_vide(a=a, g=np.zeros((50, 2)), **kw).y
+    with pytest.raises(ValueError, match=r"agree on the number of columns m: g has m = 2, y0 has m = 3"):
+        solve_vide(a=a, g=np.zeros((N, 2, 2)), **kw).y
 
 
 def test_pre_truncated_g_is_rejected_like_the_other_solvers():
@@ -303,10 +271,8 @@ def test_pre_truncated_g_is_rejected_like_the_other_solvers():
     dt, q = 0.05, 2
     N = n_samples(4, 4) + 2
     t, K, a, g, _ = exp_problem(dt, N)
-    with pytest.raises(ValueError, match="g_values shape"):
-        solve_VIDE(kernel_values=K, a_values=a, g_values=g[:-2], soln_init_value=1.0,
-                   time_step=dt, coll_divs=q, coll_choices=[0, 1, 2], quadrature="product",
-                   show_warnings=False)
+    with pytest.raises(ValueError, match="g must have shape"):
+        run(solve_vide, show_warnings=False, kernel=K, a=a, g=g[:-2], y0=1.0, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
 
 
 def test_matrix_columns_share_one_set_of_blocks(monkeypatch):
@@ -315,13 +281,9 @@ def test_matrix_columns_share_one_set_of_blocks(monkeypatch):
     monkeypatch.setattr(_product, "build_lag_blocks",
                         lambda *a, **k: calls.append(1) or real(*a, **k))
     K, a, g, init = _matrix_problem(4 * 10 + 1)
-    soln, fn = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=init,
-                          time_step=0.01, coll_divs=2, coll_choices=[0, 1, 2],
-                          quadrature="product", return_function=True, show_warnings=False)
+    soln, fn = with_sol(run(solve_vide, show_warnings=False, kernel=K, a=a, g=g, y0=init, dt=0.01, coll_setting=(2, [0, 1, 2]), quadrature="product"))
     assert len(calls) == 1
-    col, col_fn = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=init[:, 1],
-                             time_step=0.01, coll_divs=2, coll_choices=[0, 1, 2],
-                             quadrature="product", return_function=True, show_warnings=False)
+    col, col_fn = with_sol(run(solve_vide, show_warnings=False, kernel=K, a=a, g=g, y0=init[:, 1], dt=0.01, coll_setting=(2, [0, 1, 2]), quadrature="product"))
     assert np.array_equal(soln[:, :, 1], col)
     assert np.allclose(fn(0.123)[:, 1], col_fn(0.123), rtol=0, atol=1e-13)
 
@@ -330,27 +292,24 @@ def test_missing_a_is_not_materialised_and_agrees_with_zeros():
     dt, q = 0.05, 2
     N = n_samples(2, 30)
     t, K, y = damped(dt, N)
-    kw = dict(kernel_values=K, soln_init_value=1.0, time_step=dt, coll_divs=q,
-              coll_choices=[1, 2], quadrature="product", show_warnings=False)
-    assert np.array_equal(solve_VIDE(a_values=None, **kw), solve_VIDE(a_values=np.zeros(N), **kw))
-    assert np.max(np.abs(solve_VIDE(**kw) - y)) < 1e-3
+    kw = dict(kernel=K, y0=1.0, dt=dt, coll_setting=(q, [1, 2]), quadrature="product")
+    assert np.array_equal(solve_vide(a=None, **kw).y, solve_vide(a=np.zeros(N), **kw).y)
+    assert np.max(np.abs(solve_vide(**kw).y - y)) < 1e-3
 
 
 def test_stale_driver_fallback_is_per_driver(monkeypatch, voles_warnings):
     """An extension with the VIE-1 drivers but not the VIDE one keeps the
     fast path for VIE-1 and announces the fallback for the VIDE only."""
-    from voles import _dlang, solve_VIE_1
+    from voles import _dlang, solve_vie1
     monkeypatch.setattr(_dlang, "have_block_driver", lambda name: name != "vide")
     dt, q = 0.05, 2
     N = n_samples(2, 20)
     t, K, a, g, y = exp_problem(dt, N)
-    vals = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=1.0,
-                      time_step=dt, coll_divs=q, coll_choices=[0, 1, 2], quadrature="product")
+    vals = solve_vide(kernel=K, a=a, g=g, y0=1.0, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
     out = voles_warnings.text()
     assert "volterra_solve_vide_blocks" in out and "falling back" in out
     assert np.max(np.abs(vals - y)) < 1e-6
-    solve_VIE_1(kernel_values=np.exp(-t), g_values=1 - np.exp(-t), time_step=dt,
-                coll_divs=q, coll_choices=[1, 2], quadrature="product")
+    solve_vie1(kernel=np.exp(-t), g=1 - np.exp(-t), dt=dt, coll_setting=(q, [1, 2]), quadrature="product").y
     assert voles_warnings.text() == ""
 
 
@@ -367,6 +326,4 @@ def test_numpy_fallback_raises_on_nearly_singular_local_system(monkeypatch):
         if fallback:
             monkeypatch.setattr(_dlang, "have_block_driver", lambda name: False)
         with pytest.raises(np.linalg.LinAlgError):
-            solve_VIDE(kernel_values=K, a_values=a, g_values=np.ones(N), soln_init_value=1.0,
-                       time_step=dt, coll_divs=q, coll_choices=[1], quadrature="product",
-                       show_warnings=False)
+            run(solve_vide, show_warnings=False, kernel=K, a=a, g=np.ones(N), y0=1.0, dt=dt, coll_setting=(q, [1]), quadrature="product").y

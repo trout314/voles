@@ -88,8 +88,7 @@ pytest tests/ -v
 
 pytest runs with `filterwarnings = ["error"]` (see `pyproject.toml`): a test
 that triggers a warning fails unless it expects it (`pytest.warns`) or filters
-it. Until 1.0 the 0.10 API's deprecation messages are ignored there, so the
-legacy tests keep running.
+it.
 
 `tests/test_public_api.py` pins `voles.__all__` and every public signature
 against `tests/data/public_api.json`. After an intended API change, run

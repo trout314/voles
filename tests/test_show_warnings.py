@@ -13,8 +13,15 @@ import numpy as np
 import pytest
 
 import voles
-from voles import (solve_VIE_1, solve_VIE_2, solve_VIDE, VolesWarning, AccuracyWarning,
-                   PerformanceWarning)
+from voles import (
+    solve_vie1,
+    solve_vie2,
+    solve_vide,
+    VolesWarning,
+    AccuracyWarning,
+    PerformanceWarning,
+)
+from conftest import run, values_fn
 
 
 @contextlib.contextmanager
@@ -64,24 +71,21 @@ class TestOddLengthIsSilent:
         kernel, g, h = _make_data(90)
         g[0] = 0.0
         with recorded() as rec:
-            y = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h, coll_divs=3,
-                            coll_choices=[1, 2, 3], show_warnings=show)
+            y = run(solve_vie1, show_warnings=show, kernel=kernel, g=g, dt=h, coll_setting=(3, [1, 2, 3])).y
         assert len(y) == len(kernel) and _voles(rec) == []
 
     @pytest.mark.parametrize("show", [True, False])
     def test_vie2(self, show):
         kernel, g, h = _make_data(90)
         with recorded() as rec:
-            y = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=h, coll_divs=3,
-                            coll_choices=[0, 1, 2, 3], show_warnings=show)
+            y = run(solve_vie2, show_warnings=show, kernel=kernel, g=g, dt=h, coll_setting=(3, [0, 1, 2, 3])).y
         assert len(y) == len(kernel) and _voles(rec) == []
 
     @pytest.mark.parametrize("show", [True, False])
     def test_vide(self, show):
         kernel, g, h = _make_data(90)
         with recorded() as rec:
-            y = solve_VIDE(kernel_values=kernel, g_values=g, soln_init_value=0.0, time_step=h,
-                           coll_divs=3, coll_choices=[0, 1, 2], show_warnings=show)
+            y = run(solve_vide, show_warnings=show, kernel=kernel, g=g, y0=0.0, dt=h, coll_setting=(3, [0, 1, 2])).y
         assert len(y) == len(kernel) and _voles(rec) == []
 
     def test_matrix_vie2_and_vide(self):
@@ -89,11 +93,8 @@ class TestOddLengthIsSilent:
         kernel = np.zeros((n, d, d))
         kernel[:, 0, 0] = kernel[:, 1, 1] = 1.0
         with recorded() as rec:
-            solve_VIE_2(kernel_values=kernel, g_values=np.ones((n, d, m)), time_step=0.01,
-                        coll_divs=3, coll_choices=[0, 1, 2])
-            solve_VIDE(kernel_values=np.zeros((n, d, d)), g_values=np.ones((n, d, m)),
-                       soln_init_value=np.zeros((d, m)), time_step=0.01, coll_divs=3,
-                       coll_choices=[1, 2, 3])
+            solve_vie2(kernel=kernel, g=np.ones((n, d, m)), dt=0.01, coll_setting=(3, [0, 1, 2])).y
+            solve_vide(kernel=np.zeros((n, d, d)), g=np.ones((n, d, m)), y0=np.zeros((d, m)), dt=0.01, coll_setting=(3, [1, 2, 3])).y
         assert _voles(rec) == []
 
 
@@ -102,20 +103,16 @@ class TestOddLengthIsSilent:
 class TestNumbaFallbackWarning:
     """An uncompiled setting under collocation quadrature runs on numba."""
 
-    SETTINGS = dict(coll_divs=5, quadrature="collocation")
+    SETTINGS = dict(quadrature="collocation")
 
     def _calls(self):
         kernel, g, h = _make_data(5 ** 2 + 1)
         g1 = g.copy()
         g1[0] = 0.0
         return {
-            "vie1": (solve_VIE_1, dict(kernel_values=kernel, g_values=g1, time_step=h,
-                                       coll_choices=[1, 2, 3, 4, 5], **self.SETTINGS)),
-            "vie2": (solve_VIE_2, dict(kernel_values=kernel, g_values=g, time_step=h,
-                                       coll_choices=[0, 1, 2, 3, 4, 5], **self.SETTINGS)),
-            "vide": (solve_VIDE, dict(kernel_values=kernel, g_values=g, soln_init_value=0.0,
-                                      time_step=h, coll_choices=[0, 1, 2, 3, 4, 5],
-                                      **self.SETTINGS)),
+            "vie1": (values_fn(solve_vie1), dict(kernel=kernel, g=g1, dt=h, coll_setting=(max([1, 2, 3, 4, 5]), [1, 2, 3, 4, 5]), **self.SETTINGS)),
+            "vie2": (values_fn(solve_vie2), dict(kernel=kernel, g=g, dt=h, coll_setting=(max([0, 1, 2, 3, 4, 5]), [0, 1, 2, 3, 4, 5]), **self.SETTINGS)),
+            "vide": (values_fn(solve_vide), dict(kernel=kernel, g=g, y0=0.0, dt=h, coll_setting=(max([0, 1, 2, 3, 4, 5]), [0, 1, 2, 3, 4, 5]), **self.SETTINGS)),
         }
 
     @pytest.mark.parametrize("kind", ["vie1", "vie2", "vide"])
@@ -124,18 +121,11 @@ class TestNumbaFallbackWarning:
         with pytest.warns(PerformanceWarning, match="falling back"):
             _numba_or_skip(fn, **kw)
 
-    @pytest.mark.parametrize("kind", ["vie1", "vie2", "vide"])
-    def test_silent(self, kind):
-        fn, kw = self._calls()[kind]
-        with recorded() as rec:
-            _numba_or_skip(fn, show_warnings=False, **kw)
-        assert _voles(rec) == []
 
+# ------------------------------------------------- VIE-1: y0 needs continuous
 
-# ----------------------------------------------- VIE-1: unused soln_init_value
-
-class TestVIE1SolnInitValueWarning:
-    """soln_init_value has no effect unless force_continuous=True."""
+class TestVIE1InitialValueNeedsContinuous:
+    """y0 has no effect on the discontinuous method; 0.10 warned, 1.0 refuses."""
 
     @staticmethod
     def _inputs(d, m):
@@ -150,28 +140,18 @@ class TestVIE1SolnInitValueWarning:
                                 shape).copy()
         g[0] = 0.0
         init = 1.0 if d == 0 else (np.ones(d) if m is None else np.ones((d, m)))
-        return dict(kernel_values=kernel, g_values=g, time_step=h, coll_divs=1,
-                    coll_choices=[1], force_continuous=False), init
+        return dict(kernel=kernel, g=g, dt=h, coll_setting=(1, [1])), init
 
     @pytest.mark.parametrize("d,m", [(0, None), (2, None), (2, 3)])
-    def test_warns_once(self, d, m):
+    def test_raises(self, d, m):
         kw, init = self._inputs(d, m)
-        with recorded() as rec:
-            solve_VIE_1(soln_init_value=init, **kw)
-        msgs = [str(w.message) for w in _voles(rec)]
-        assert len(msgs) == 1 and "no effect" in msgs[0]
-
-    @pytest.mark.parametrize("d,m", [(0, None), (2, None), (2, 3)])
-    def test_silent(self, d, m):
-        kw, init = self._inputs(d, m)
-        with recorded() as rec:
-            solve_VIE_1(soln_init_value=init, show_warnings=False, **kw)
-        assert _voles(rec) == []
+        with pytest.raises(ValueError, match="y0 is used only by the continuous method"):
+            solve_vie1(y0=init, **kw)
 
     def test_no_init_no_warning(self):
         kw, _ = self._inputs(2, 3)
         with recorded() as rec:
-            solve_VIE_1(**kw)
+            solve_vie1(**kw).y
         assert _voles(rec) == []
 
 
@@ -182,12 +162,12 @@ def _g0_nonzero_matrix():
     t = np.arange(n) * h
     kernel = np.exp(-t)[:, None, None] * np.eye(d)
     g = np.sin(t)[:, None, None] + np.ones((n, d, m))      # g(0) = 1 in every column
-    return dict(kernel_values=kernel, g_values=g, time_step=h)
+    return dict(kernel=kernel, g=g, dt=h)
 
 
 def test_warning_points_at_the_callers_line():
     with recorded() as rec:
-        solve_VIE_1(**_g0_nonzero_matrix())
+        solve_vie1(**_g0_nonzero_matrix()).y
     (w,) = _voles(rec)
     assert w.category is AccuracyWarning
     assert w.filename == __file__
@@ -205,22 +185,21 @@ def test_matrix_solve_warns_once_from_the_calling_thread(monkeypatch):
     monkeypatch.setattr(warnings, "warn", spy)
     kw = _g0_nonzero_matrix()
     with recorded() as rec:
-        solve_VIE_1(soln_init_value=np.zeros((2, 3)), **kw)     # two diagnostics
+        solve_vie1(coll_setting=(3, [1, 2]), **kw)     # two diagnostics: g(0), rho = 1
     assert len(_voles(rec)) == 2
     assert threads and all(t is threading.main_thread() for t in threads)
 
 
 def test_show_warnings_false_silences_matrix_workers():
     with recorded() as rec:
-        solve_VIE_1(soln_init_value=np.zeros((2, 3)), show_warnings=False,
-                    **_g0_nonzero_matrix())
+        run(solve_vie1, show_warnings=False, **_g0_nonzero_matrix()).y
     assert _voles(rec) == []
 
 
 def test_standard_filter_silences_voles():
     with recorded() as rec:
         warnings.simplefilter("ignore", VolesWarning)
-        solve_VIE_1(**_g0_nonzero_matrix())
+        solve_vie1(**_g0_nonzero_matrix()).y
     assert _voles(rec) == []
 
 
@@ -228,10 +207,10 @@ def test_error_filter_makes_a_diagnostic_fatal():
     with warnings.catch_warnings():
         warnings.simplefilter("error", AccuracyWarning)
         with pytest.raises(AccuracyWarning, match="g\\(0\\) is not zero"):
-            solve_VIE_1(**_g0_nonzero_matrix())
+            solve_vie1(**_g0_nonzero_matrix()).y
 
 
 def test_nothing_is_printed(capsys):
     with recorded():
-        solve_VIE_1(soln_init_value=np.zeros((2, 3)), **_g0_nonzero_matrix())
+        solve_vie1(**_g0_nonzero_matrix()).y
     assert capsys.readouterr().out == ""

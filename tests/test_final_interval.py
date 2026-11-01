@@ -3,8 +3,9 @@ are solved in full, with the leftover samples absorbed by one stretched final
 interval whose nodes are snapped to samples (see _product.solve_tail)."""
 import numpy as np
 import pytest
-from voles import solve_VIE_1, solve_VIE_2, solve_VIDE
+from voles import solve_vie1, solve_vie2, solve_vide
 from voles._product import mesh_split, snap_nodes
+from conftest import with_sol
 
 # K = exp(-u), y = cos t, on [0, 2]
 def _data(N, T=2.0):
@@ -17,19 +18,17 @@ def _data(N, T=2.0):
 
 def _solve(kind, N, quad, q, choices, T=2.0):
     delta, t, K, I, y = _data(N, T)
-    kw = dict(time_step=delta, coll_divs=q, coll_choices=choices, quadrature=quad,
-              show_warnings=False)
+    kw = dict(dt=delta, coll_setting=(q, choices), quadrature=quad)
     if quad == "product":
-        kw["mesh_samples"] = q                    # the finest mesh for every kind
+        kw["samples_per_interval"] = q            # the finest mesh for every kind
     if kind == "vie1":
-        out = solve_VIE_1(kernel_values=K, g_values=I, **kw)
+        out = solve_vie1(kernel=K, g=I, **kw).y
     elif kind == "vie1_cont":
-        out = solve_VIE_1(kernel_values=K, g_values=I, force_continuous=True,
-                          soln_init_value=1.0, **kw)
+        out = solve_vie1(kernel=K, g=I, continuous=True, y0=1.0, **kw).y
     elif kind == "vie2":
-        out = solve_VIE_2(kernel_values=K, g_values=np.cos(t) - I, **kw)
+        out = solve_vie2(kernel=K, g=np.cos(t) - I, **kw).y
     else:                                                        # y' = g + int K y
-        out = solve_VIDE(kernel_values=K, g_values=-np.sin(t) - I, soln_init_value=1.0, **kw)
+        out = solve_vide(kernel=K, g=-np.sin(t) - I, y0=1.0, **kw).y
     return out, y
 
 
@@ -89,8 +88,7 @@ def test_single_stretched_interval(kind, quad):
 def test_solution_object_covers_the_whole_range(quad):
     N = 10 * 4 + 1 + 3 if quad == "collocation" else 20 * 2 + 1 + 1
     delta, t, K, I, exact = _data(N)
-    y, f = solve_VIE_2(kernel_values=K, g_values=np.cos(t) - I, time_step=delta,
-                       quadrature=quad, return_function=True)
+    y, f = with_sol(solve_vie2(kernel=K, g=np.cos(t) - I, dt=delta, quadrature=quad))
     bps = f.mesh_breakpoints
     assert bps[-1] == pytest.approx(t[-1]) and len(f) == len(bps) - 1
     assert bps[-1] - bps[-2] > bps[1] - bps[0]                    # the stretched last interval
@@ -106,20 +104,19 @@ def test_vector_matrix_and_complex_agree_with_scalar_columns(quad):
     N = 9 * 5 + 1 + 4 if quad == "collocation" else 3 * 15 + 1 + 2
     delta, t, K, I, exact = _data(N)
     g = np.cos(t) - I
-    kw = dict(time_step=delta, coll_divs=3, coll_choices=[0, 1, 2, 3], quadrature=quad,
-              show_warnings=False)
-    ys = solve_VIE_2(kernel_values=K, g_values=g, **kw)
+    kw = dict(dt=delta, coll_setting=(3, [0, 1, 2, 3]), quadrature=quad)
+    ys = solve_vie2(kernel=K, g=g, **kw).y
     assert np.max(np.abs(ys - exact)) < 1e-4
     d = 2
     Kv = K[:, None, None] * np.eye(d)
     gv = np.stack([g, 2 * g], axis=1)
-    yv = solve_VIE_2(kernel_values=Kv, g_values=gv, **kw)
+    yv = solve_vie2(kernel=Kv, g=gv, **kw).y
     np.testing.assert_allclose(yv[:, 0], ys, rtol=0, atol=1e-12)
     np.testing.assert_allclose(yv[:, 1], 2 * ys, rtol=0, atol=1e-11)
-    ym = solve_VIE_2(kernel_values=Kv, g_values=np.stack([gv, -gv], axis=2), **kw)
+    ym = solve_vie2(kernel=Kv, g=np.stack([gv, -gv], axis=2), **kw).y
     np.testing.assert_allclose(ym[:, :, 0], yv, rtol=0, atol=1e-12)
     np.testing.assert_allclose(ym[:, :, 1], -yv, rtol=0, atol=1e-12)
-    yc = solve_VIE_2(kernel_values=K + 0j, g_values=g * (1 + 2j), **kw)
+    yc = solve_vie2(kernel=K + 0j, g=g * (1 + 2j), **kw).y
     np.testing.assert_allclose(yc, ys * (1 + 2j), rtol=0, atol=1e-11)
 
 
@@ -130,12 +127,11 @@ def test_vide_with_coefficient_and_matrix_init_on_the_tail():
     delta, t, K, I, exact = _data(N)
     a = 0.3 * np.cos(t)
     g = -np.sin(t) - a * np.cos(t) - I                              # y' = a y + g + int K y
-    kw = dict(time_step=delta, coll_divs=2, coll_choices=[0, 1, 2], show_warnings=False)
-    y = solve_VIDE(kernel_values=K, a_values=a, g_values=g, soln_init_value=1.0, **kw)
+    kw = dict(dt=delta, coll_setting=(2, [0, 1, 2]))
+    y = solve_vide(kernel=K, a=a, g=g, y0=1.0, **kw).y
     assert np.max(np.abs(y - exact)) < 1e-5
     Kv = K[:, None, None] * np.eye(2)
-    ym = solve_VIDE(kernel_values=Kv, a_values=a[:, None, None] * np.eye(2),
-                    g_values=np.stack([g, g], axis=1), soln_init_value=np.ones((2, 2)), **kw)
+    ym = solve_vide(kernel=Kv, a=a[:, None, None] * np.eye(2), g=np.stack([g, g], axis=1), y0=np.ones((2, 2)), **kw).y
     np.testing.assert_allclose(ym[:, 0, 1], y, rtol=0, atol=1e-12)
 
 
@@ -144,8 +140,8 @@ def test_inputs_ending_on_a_mesh_point_are_unchanged():
     N = 4 * 10 + 1
     delta, t, K, I, exact = _data(N)
     g = np.cos(t) - I
-    y = solve_VIE_2(kernel_values=K, g_values=g, time_step=delta)
+    y = solve_vie2(kernel=K, g=g, dt=delta).y
     assert mesh_split(N, 4) == (10, 0)
-    y2 = solve_VIE_2(kernel_values=K[:N], g_values=g[:N], time_step=delta)
+    y2 = solve_vie2(kernel=K[:N], g=g[:N], dt=delta).y
     assert np.array_equal(y, y2)
     assert np.max(np.abs(y - exact)) < 1e-3

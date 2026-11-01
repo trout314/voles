@@ -9,9 +9,10 @@ exactly the results of single-threaded solves.
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
-from voles import solve_VIDE, solve_VIE_1, solve_VIE_2
+from voles import solve_vide, solve_vie1, solve_vie2
 from conftest import (TOLERANCE, make_coupled_data_nd,
                       VIE2_SPEC_SMOOTH, VIE2_SPEC_RATIONAL)
+from conftest import run
 
 
 def _coupled_matrix_problem(m_cols):
@@ -30,10 +31,7 @@ def _coupled_matrix_problem(m_cols):
 
 
 def _solve(d, g, quadrature="collocation"):
-    return solve_VIE_2(
-        kernel_values=d["kernel"], g_values=g, time_step=d["time_step"],
-        coll_divs=d["coll_divs"], coll_choices=d["coll_choices"],
-        quadrature=quadrature, show_warnings=False)
+    return run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=g, dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"]), quadrature=quadrature).y
 
 
 def test_matrix_fanout_matches_serial_columns():
@@ -61,13 +59,11 @@ def test_independent_solves_from_user_threads():
         for _ in range(4):
             g = np.sin(2 * t[:, None] + rng.uniform(0, 1, dim)) + t[:, None]
             jobs.append((K, g))
-    run = lambda job: solve_VIE_2(kernel_values=job[0], g_values=job[1],
-                                  time_step=ts, quadrature="collocation",
-                                  show_warnings=False)
-    serial = [run(job) for job in jobs]
+    solve = lambda job: run(solve_vie2, show_warnings=False, kernel=job[0], g=job[1], dt=ts, quadrature="collocation").y
+    serial = [solve(job) for job in jobs]
     with ThreadPoolExecutor(max_workers=6) as ex:
         for _ in range(5):
-            for r, s in zip(ex.map(run, jobs), serial):
+            for r, s in zip(ex.map(solve, jobs), serial):
                 assert np.array_equal(r, s)
 
 
@@ -82,15 +78,10 @@ def test_product_block_drivers_on_fresh_threads():
     G = rng.standard_normal((N, d, m))
     G1 = G - G[0]
     calls = [
-        lambda: solve_VIE_2(kernel_values=K, g_values=G, time_step=0.01,
-                            quadrature="product", show_warnings=False),
-        lambda: solve_VIE_1(kernel_values=K, g_values=G1, time_step=0.01,
-                            quadrature="product", show_warnings=False),
-        lambda: solve_VIE_1(kernel_values=K, g_values=G1, time_step=0.01,
-                            soln_init_value=np.zeros((d, m)), force_continuous=True,
-                            quadrature="product", show_warnings=False),
-        lambda: solve_VIDE(kernel_values=K, g_values=G, soln_init_value=np.ones((d, m)),
-                           time_step=0.01, quadrature="product", show_warnings=False),
+        lambda: run(solve_vie2, show_warnings=False, kernel=K, g=G, dt=0.01, quadrature="product").y,
+        lambda: run(solve_vie1, show_warnings=False, kernel=K, g=G1, dt=0.01, quadrature="product").y,
+        lambda: run(solve_vie1, show_warnings=False, kernel=K, g=G1, dt=0.01, y0=np.zeros((d, m)), continuous=True, quadrature="product").y,
+        lambda: run(solve_vide, show_warnings=False, kernel=K, g=G, y0=np.ones((d, m)), dt=0.01, quadrature="product").y,
     ]
     first = [c() for c in calls]
     for _ in range(8):

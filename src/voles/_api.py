@@ -379,6 +379,8 @@ def _solve_functional(equation, *, kernel, g, a, y0, continuous, mesh, coll_node
     mesh = _validate_mesh(mesh)
     reuse_adaptive_blocks = _v.flag("reuse_adaptive_blocks", reuse_adaptive_blocks)
     divs, choices = _DEFAULT_SETTING[equation]
+    if coll_nodes is not None:
+        coll_nodes = _numeric_array("coll_nodes", coll_nodes)   # TypeError if not numeric
     node_pos, _, _ = _functional._resolve_node_pos(
         coll_nodes, None, None, default_divs=divs, default_choices=choices,
         exclude_zero=equation == "vie1", fname=f"solve_{equation}")

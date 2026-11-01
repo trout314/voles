@@ -178,6 +178,38 @@ Phase 0 findings:
 - F32: `tests/test_public_api.py` and `tests/data/public_api.json`
   (regenerate with `--update`).
 - Benchmarks moved to the 1.0 API (held back from the Phase 6 commit).
+
+**Phase 8, steps 1–3 done 2026-11-01** (step 4, the engine cleanup, next):
+- Safety nets:
+  - `docs/dev/battery.py`: every battery case through the 1.0 API,
+    translated by `docs/dev/migrate_0_10.py`, bitwise. The reference is
+    `~/.cache/voles_battery_6d15e66.npz`: 510 cases, 3,931 fields, and a
+    second run matches it.
+  - `tests/test_reference_values.py` and `tests/data/reference_values.npz`
+    (109 kB): 16 fixed samples of y/node values and coefficients per case,
+    plus the error type, at rtol 1e-9. This is the cross-platform
+    replacement for the 0.10-vs-1.0 equivalence test.
+- Tests migrated by an AST codemod (scratchpad `migrate_tests.py`,
+  `migrate_helpers.py`): about 700 call sites in 20 files.
+  - conftest helpers: `values_of`, `with_sol`, `as_returned`, `run`
+    (show_warnings), `values_fn`, `polynomials`, and `PolyView` (the 0.10
+    list interface over a `VolterraSolution`, for tests written against
+    it).
+  - `test_validation_policy.py` and the top of `test_input_validation.py`
+    were rewritten for 1.0 messages.
+  - Obsolete 0.10-only tests were deleted: coll_divs/coll_choices with
+    callables, show_warnings semantics, return_polys, and y0 without
+    continuous (now a ValueError test).
+- Bugs found by the migration:
+  - `to_ppoly().antiderivative()`/`.roots()` failed on the read-only mesh;
+  - non-numeric `coll_nodes` raised ValueError instead of TypeError.
+  - The script itself dropped `soln_init_value` when `force_continuous`
+    was inside `**kw`, in two places; both were fixed by hand.
+- Deleted: `_legacy.py`, `solvers.py`, `_migrate.py` (moved to docs/dev),
+  `fast_coll_settings_*`, ogm `T`/`M` (`t_end`/`n_intervals` are now
+  required), the `[callable]`/`[numba]` extras, the pytest deprecation
+  ignores, `test_legacy_shims.py`, `test_api_equivalence.py` and
+  `docs/api/legacy.md`. The battery is unchanged bitwise.
 Inputs: `docs/dev/api-review-1.0.md` (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.
 

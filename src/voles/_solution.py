@@ -554,7 +554,9 @@ class VolterraSolution:
         scale = h[:, None] ** -np.arange(P)[None, :]             # (M, P): 1 / h^k
         scaled = c * scale.reshape(scale.shape + (1,) * (c.ndim - 2))
         pc = np.ascontiguousarray(np.moveaxis(scaled, 1, 0)[::-1])   # (P, M, *shape)
-        return PPoly(pc, self._mesh, extrapolate=False)
+        # Copies: scipy's Cython routines (antiderivative, roots) need writable
+        # buffers, and the solution's arrays are read-only.
+        return PPoly(pc, np.array(self._mesh), extrapolate=False)
 
     def __repr__(self) -> str:
         M = len(self._mesh) - 1

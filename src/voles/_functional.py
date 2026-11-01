@@ -2019,9 +2019,8 @@ def vide(*, kernel, a=None, g=None, soln_init_value,
 # Mesh helpers
 # ---------------------------------------------------------------------------
 
-def optimal_graded_mesh(*, alpha: float, t_end: Optional[float] = None,
-                        n_intervals: Optional[int] = None, order: int,
-                        T: Optional[float] = None, M: Optional[int] = None) -> np.ndarray:
+def optimal_graded_mesh(*, alpha: float, t_end: float, n_intervals: int,
+                        order: int) -> np.ndarray:
     r"""Return a graded mesh of ``n_intervals + 1`` breakpoints suitable for a
     weakly singular convolution kernel $K(u) \sim u^{-\alpha}$,
     $\alpha \in [0, 1)$.
@@ -2050,11 +2049,6 @@ def optimal_graded_mesh(*, alpha: float, t_end: Optional[float] = None,
     order : int
         Order of the collocation method (positive). For a matched mesh,
         pass the number of collocation nodes the solver uses.
-    T, M : float, int
-        Deprecated spellings of ``t_end`` and ``n_intervals`` (0.10); they
-        still work in 0.11, with a `DeprecationWarning`, and are removed in
-        1.0.
-
     Returns
     -------
     ndarray of shape (n_intervals + 1,)
@@ -2068,8 +2062,7 @@ def optimal_graded_mesh(*, alpha: float, t_end: Optional[float] = None,
         finite, or ``n_intervals`` / ``order`` is less than 1.
     TypeError
         If ``alpha`` or ``t_end`` is not a real number, ``n_intervals`` /
-        ``order`` is not an integer, or ``t_end`` / ``n_intervals`` is
-        missing (or given together with its deprecated spelling).
+        ``order`` is not an integer, or an argument is missing.
 
     Examples
     --------
@@ -2091,8 +2084,6 @@ def optimal_graded_mesh(*, alpha: float, t_end: Optional[float] = None,
     >>> print(f"relative error {abs(sol(1.0) / erfcx(-np.sqrt(np.pi)) - 1):.1e}")
     relative error 1.3e-05
     """
-    t_end = _renamed("t_end", t_end, "T", T)
-    n_intervals = _renamed("n_intervals", n_intervals, "M", M)
     alpha = _v.real("alpha", alpha)
     if not 0.0 <= alpha < 1.0:
         raise ValueError(f"alpha must satisfy 0 <= alpha < 1, got {alpha}")
@@ -2109,20 +2100,6 @@ def optimal_graded_mesh(*, alpha: float, t_end: Optional[float] = None,
     r = p / (1.0 - alpha) if alpha > 0.0 else 1.0
     n = np.arange(n_intervals + 1, dtype=np.float64)
     return t_end * (n / n_intervals) ** r
-
-
-def _renamed(name, value, old_name, old_value):
-    """A parameter renamed in 0.11, accepting the old spelling with a warning."""
-    if old_value is not None:
-        if value is not None:
-            raise TypeError(f"optimal_graded_mesh: pass {name} or the deprecated {old_name}, "
-                            f"not both")
-        _warn(f"optimal_graded_mesh({old_name}=...) is deprecated since voles 0.11 and will be "
-              f"removed in 1.0; use {name}=", DeprecationWarning)
-        return old_value
-    if value is None:
-        raise TypeError(f"optimal_graded_mesh() missing required keyword argument {name!r}")
-    return value
 
 
 # ---------------------------------------------------------------------------

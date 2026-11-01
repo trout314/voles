@@ -580,3 +580,106 @@ def vide_callable_vec_coupled():
         coll_divs=2,
         coll_choices=[0, 1, 2],
     )
+
+
+# --------------------------------------------------------------------------
+# Helpers for the tests migrated from the 0.10 API (plan Phase 8). The 0.10
+# solvers returned the values (sampled) or node values (callables), or
+# ``(values, solution)`` with ``return_function=True``; ``show_warnings=False``
+# silenced the diagnostics.
+# --------------------------------------------------------------------------
+
+def values_of(sol):
+    """What a 0.10 solver returned: the sample values or the node values."""
+    return sol.y if sol.regime == "sampled" else sol.node_values
+
+
+class PolyView:
+    """A `VolterraSolution` with the 0.10 solution object's list interface
+    (``.polynomials``, ``len``, indexing, iteration, ``.mesh_breakpoints``),
+    built from the public coefficients, for the tests written against it.
+    Everything else, including calling it, goes to the solution."""
+
+    def __init__(self, sol):
+        self._sol = sol
+        self._polys = None
+
+    def __getattr__(self, name):
+        if name.startswith("__") or name in ("_sol", "_polys"):
+            raise AttributeError(name)       # copying/pickling before __init__
+        return getattr(self._sol, name)
+
+    def __call__(self, t, **kw):
+        return self._sol(t, **kw)
+
+    @property
+    def polynomials(self):
+        if self._polys is None:
+            self._polys = polynomials(self._sol)
+        return self._polys
+
+    @property
+    def mesh_breakpoints(self):
+        return self._sol.mesh
+
+    def __len__(self):
+        return len(self._sol.mesh) - 1
+
+    def __getitem__(self, n):
+        return self.polynomials[n]
+
+    def __iter__(self):
+        return iter(self.polynomials)
+
+
+def with_sol(sol):
+    """``(values, sol)``, as 0.10 returned it for ``return_function=True``."""
+    return values_of(sol), PolyView(sol)
+
+
+def as_returned(sol, return_function):
+    return with_sol(sol) if return_function else values_of(sol)
+
+
+def run(fn, *, show_warnings=True, **kw):
+    """``fn(**kw)``, with voles' warnings silenced unless ``show_warnings``."""
+    if show_warnings:
+        return fn(**kw)
+    from voles import VolesWarning
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", VolesWarning)
+        return fn(**kw)
+
+
+def values_fn(fn):
+    """A 1.0 solver that returns what the 0.10 one did (for tests that pass
+    solvers around)."""
+    def call(**kw):
+        return values_of(fn(**kw))
+    call.__name__ = fn.__name__
+    return call
+
+
+def polynomials(sol):
+    """The per-interval ``numpy.polynomial.Polynomial`` objects (in t) of a
+    solution, as the 0.10 solution object's ``.polynomials`` gave them:
+    scalar problems give a list of Polynomials, vector and matrix problems a
+    list of object arrays of them."""
+    coefs = sol.coefficients
+    mesh = sol.mesh
+    comp = coefs.shape[2:]
+    out = []
+    for n in range(coefs.shape[0]):
+        dom = (mesh[n], mesh[n + 1])
+
+        def poly(c):
+            p = np.polynomial.Polynomial(c, domain=dom, window=(0.0, 1.0), symbol="t")
+            return p.convert(domain=dom, window=dom).trim()
+        if not comp:
+            out.append(poly(coefs[n]))
+            continue
+        arr = np.empty(comp, dtype=object)
+        for idx in np.ndindex(comp):
+            arr[idx] = poly(coefs[(n, slice(None)) + idx])
+        out.append(arr)
+    return out

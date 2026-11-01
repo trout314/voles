@@ -37,14 +37,6 @@ dependencies = [
 full = [
     "numba",
 ]
-numba = [
-    "numba",
-]
-# Retained for backwards compatibility: scipy is now a core dependency,
-# so `voles[callable]` resolves to the same thing as a plain install.
-callable = [
-    "scipy",
-]
 dev = [
     "pytest",
     "pytest-cov",
@@ -93,12 +85,4 @@ testpaths = ["tests"]
 # new warnings from appearing unnoticed.
 filterwarnings = [
     "error",
-    # The 0.10 API, deprecated in 0.11: the legacy tests, the docs examples and
-    # the benchmarks still use it until they migrate (1.0 plan, Phases 6 and 8).
-    # tests/test_legacy_shims.py checks these warnings with pytest.warns, which
-    # records them regardless. Remove these lines with the 0.10 API in 1.0.
-    "ignore:(function_)?solve_VI(E_[12]|DE)\\(\\) is deprecated:DeprecationWarning",
-    "ignore:optimal_graded_mesh\\([TM]=\\.\\.\\.\\) is deprecated:DeprecationWarning",
-    "ignore:voles\\.fast_coll_settings_\\w+ is deprecated:DeprecationWarning",
-    "ignore:voles\\.solvers is deprecated:DeprecationWarning",
 ]

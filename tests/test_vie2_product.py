@@ -13,8 +13,9 @@ converges for every node set, so the checks are:
 import numpy as np
 import pytest
 
-from voles import solve_VIE_2, function_solve_VIE_2
+from voles import solve_vie2
 from voles import _product
+from conftest import run, with_sol
 
 
 def cos_problem(dt, N):
@@ -62,13 +63,9 @@ def test_polynomial_kernel_matches_exact_collocation(coll_divs, choices, Q_facto
     t = dt * np.arange(N)
     kernel = lambda tau: 0.8 - 0.3 * tau + 0.1 * tau ** 2
     g = lambda tt: np.cos(1.1 * tt) - 0.3 * tt
-    vals = solve_VIE_2(kernel_values=kernel(t), g_values=g(t), time_step=dt,
-                       coll_divs=coll_divs, coll_choices=choices, quadrature="product",
-                       mesh_samples=Q, kernel_interp_degree=p, show_warnings=False)
+    vals = run(solve_vie2, show_warnings=False, kernel=kernel(t), g=g(t), dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p).y
     mesh = np.arange(N // Q + 1) * (Q * dt)
-    _, ref = function_solve_VIE_2(kernel=kernel, g=g, mesh_breakpoints=mesh,
-                                  coll_divs=coll_divs, coll_choices=choices,
-                                  return_function=True)
+    _, ref = with_sol(solve_vie2(kernel=kernel, g=g, mesh=mesh, coll_nodes=np.asarray(choices) / coll_divs))
     assert np.max(np.abs(vals - sampled_values(ref, t, Q))) < 1e-8
 
 
@@ -83,13 +80,9 @@ def test_polynomial_kernel_matches_exact_collocation_vector():
     g = lambda tt: np.array([np.cos(tt), 0.5 * tt])
     K = np.array([kernel(tau) for tau in t])
     gv = np.array([g(tt) for tt in t])
-    vals = solve_VIE_2(kernel_values=K, g_values=gv, time_step=dt, coll_divs=coll_divs,
-                       coll_choices=choices, quadrature="product", mesh_samples=Q,
-                       kernel_interp_degree=p, show_warnings=False)
+    vals = run(solve_vie2, show_warnings=False, kernel=K, g=gv, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p).y
     mesh = np.arange(N // Q + 1) * (Q * dt)
-    _, ref = function_solve_VIE_2(kernel=kernel, g=g, mesh_breakpoints=mesh,
-                                  coll_divs=coll_divs, coll_choices=choices,
-                                  return_function=True)
+    _, ref = with_sol(solve_vie2(kernel=kernel, g=g, mesh=mesh, coll_nodes=np.asarray(choices) / coll_divs))
     assert np.max(np.abs(vals - sampled_values(ref, t, Q))) < 1e-8
 
 
@@ -101,9 +94,7 @@ def test_reproduces_polynomial_solutions_for_unit_kernel(coll_divs, choices):
     t = dt * np.arange(N)
     y = t ** (m - 1)
     g = y - t ** m / m                      # y = g + int_0^t y
-    vals = solve_VIE_2(kernel_values=np.ones(N), g_values=g, time_step=dt,
-                       coll_divs=coll_divs, coll_choices=choices, quadrature="product",
-                       show_warnings=False)
+    vals = run(solve_vie2, show_warnings=False, kernel=np.ones(N), g=g, dt=dt, coll_setting=(coll_divs, choices), quadrature="product").y
     assert np.max(np.abs(vals - y)) < 1e-9
 
 
@@ -112,8 +103,7 @@ def _max_err(dt, coll_divs, choices, T=12.0):
     N = int(round(T / dt)) + 1
     N = (N - 1) // Q * Q + 1
     t, K, g, y = cos_problem(dt, N)
-    vals = solve_VIE_2(kernel_values=K, g_values=g, time_step=dt, coll_divs=coll_divs,
-                       coll_choices=choices, quadrature="product", show_warnings=False)
+    vals = run(solve_vie2, show_warnings=False, kernel=K, g=g, dt=dt, coll_setting=(coll_divs, choices), quadrature="product").y
     return np.max(np.abs(vals - y))
 
 
@@ -129,10 +119,9 @@ def test_finer_mesh_beats_present_scheme_on_coarse_data():
     dt = 0.2
     N = n_samples(9, 8)
     t, K, g, y = cos_problem(dt, N)
-    common = dict(kernel_values=K, g_values=g, time_step=dt, coll_divs=3,
-                  coll_choices=[1, 2, 3], show_warnings=False)
-    err_coll = np.max(np.abs(solve_VIE_2(quadrature="collocation", **common) - y))
-    err_prod = np.max(np.abs(solve_VIE_2(quadrature="product", **common) - y))
+    common = dict(kernel=K, g=g, dt=dt, coll_setting=(3, [1, 2, 3]))
+    err_coll = np.max(np.abs(solve_vie2(quadrature="collocation", **common).y - y))
+    err_prod = np.max(np.abs(solve_vie2(quadrature="product", **common).y - y))
     assert err_prod < err_coll / 5
 
 
@@ -140,19 +129,16 @@ def test_every_sample_is_used():
     dt, q = 0.1, 3
     N = n_samples(q, 12)
     t, K, g, _ = cos_problem(dt, N)
-    base = solve_VIE_2(kernel_values=K, g_values=g, time_step=dt, coll_divs=q,
-                       coll_choices=[1, 2, 3], quadrature="product", show_warnings=False)
+    base = run(solve_vie2, show_warnings=False, kernel=K, g=g, dt=dt, coll_setting=(q, [1, 2, 3]), quadrature="product").y
     for j in (1, 5, 7, N - 2):
         Kp = K.copy()
         Kp[j] += 0.1
-        pert = solve_VIE_2(kernel_values=Kp, g_values=g, time_step=dt, coll_divs=q,
-                           coll_choices=[1, 2, 3], quadrature="product", show_warnings=False)
+        pert = run(solve_vie2, show_warnings=False, kernel=Kp, g=g, dt=dt, coll_setting=(q, [1, 2, 3]), quadrature="product").y
         assert np.max(np.abs(pert - base)) > 1e-6, j
     for j in (1, 2, 4):
         gp = g.copy()
         gp[j] += 0.1
-        pert = solve_VIE_2(kernel_values=K, g_values=gp, time_step=dt, coll_divs=q,
-                           coll_choices=[1, 2, 3], quadrature="product", show_warnings=False)
+        pert = run(solve_vie2, show_warnings=False, kernel=K, g=gp, dt=dt, coll_setting=(q, [1, 2, 3]), quadrature="product").y
         assert np.max(np.abs(pert - base)) > 1e-6, j
 
 
@@ -162,10 +148,9 @@ def test_mesh_samples_q_squared_is_not_the_collocation_scheme():
     for dt in (0.1, 0.05, 0.025):
         N = n_samples(q * q, int(round(6.0 / (q * q * dt))))
         t, K, g, y = cos_problem(dt, N)
-        common = dict(kernel_values=K, g_values=g, time_step=dt, coll_divs=q,
-                      coll_choices=choices, show_warnings=False)
-        a = solve_VIE_2(**common)
-        b = solve_VIE_2(quadrature="product", mesh_samples=q * q, **common)
+        common = dict(kernel=K, g=g, dt=dt, coll_setting=(q, choices))
+        a = solve_vie2(**common).y
+        b = solve_vie2(quadrature="product", samples_per_interval=q * q, **common).y
         diffs.append(np.max(np.abs(a - b)))
         assert diffs[-1] > 1e-12
     assert diffs[2] < diffs[0] / 4
@@ -191,14 +176,10 @@ def test_vector_matrix_and_return_function():
     for j in range(3):
         G[:, 0, j] = (j + 1) * g1
         G[:, 1, j] = -g1
-    vals, sol = solve_VIE_2(kernel_values=K, g_values=G, time_step=dt, coll_divs=q,
-                            coll_choices=[0, 1, 2], quadrature="product",
-                            return_function=True, show_warnings=False)
+    vals, sol = with_sol(run(solve_vie2, show_warnings=False, kernel=K, g=G, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product"))
     assert vals.shape == (N, 2, 3)
-    s0 = solve_VIE_2(kernel_values=K1, g_values=2 * g1, time_step=dt, coll_divs=q,
-                     coll_choices=[0, 1, 2], quadrature="product", show_warnings=False)
-    s1 = solve_VIE_2(kernel_values=0.5 * K1, g_values=-g1, time_step=dt, coll_divs=q,
-                     coll_choices=[0, 1, 2], quadrature="product", show_warnings=False)
+    s0 = run(solve_vie2, show_warnings=False, kernel=K1, g=2 * g1, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
+    s1 = run(solve_vie2, show_warnings=False, kernel=0.5 * K1, g=-g1, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
     assert np.allclose(vals[:, 0, 1], s0, atol=1e-11)
     assert np.allclose(vals[:, 1, 1], s1, atol=1e-11)
     interior = np.array([i for i in range(N) if i % q != 0], dtype=int)
@@ -210,11 +191,8 @@ def test_complex_passthrough():
     dt, q = 0.05, 2
     N = n_samples(q, 16)
     t, K, g, _ = cos_problem(dt, N)
-    vals = solve_VIE_2(kernel_values=K * (1 + 0.5j), g_values=g * (1 + 0.5j), time_step=dt,
-                       coll_divs=q, coll_choices=[0, 1, 2], quadrature="product",
-                       show_warnings=False)
-    real = solve_VIE_2(kernel_values=K, g_values=g, time_step=dt, coll_divs=q,
-                       coll_choices=[0, 1, 2], quadrature="product", show_warnings=False)
+    vals = run(solve_vie2, show_warnings=False, kernel=K * (1 + 0.5j), g=g * (1 + 0.5j), dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
+    real = run(solve_vie2, show_warnings=False, kernel=K, g=g, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
     # K*(1+i/2) with g*(1+i/2) has solution y satisfying (1+i/2)-scaled equation:
     # y = (1+i/2) g + (1+i/2) K*y is not the same problem; just check the path runs
     assert vals.shape == real.shape and np.iscomplexobj(vals)
@@ -224,18 +202,17 @@ def test_validation():
     dt, q = 0.05, 2
     N = n_samples(4, 4)
     t, K, g, _ = cos_problem(dt, N)
-    common = dict(kernel_values=K, g_values=g, time_step=dt, coll_divs=q,
-                  coll_choices=[0, 1, 2], show_warnings=False)
+    common = dict(kernel=K, g=g, dt=dt, coll_setting=(q, [0, 1, 2]))
     with pytest.raises(ValueError):
-        solve_VIE_2(quadrature="gauss", **common)
+        solve_vie2(quadrature="gauss", **common).y
     with pytest.raises(ValueError):
-        solve_VIE_2(quadrature="collocation", kernel_interp_degree=3, **common)
+        solve_vie2(quadrature="collocation", kernel_interp_degree=3, **common).y
     with pytest.raises(ValueError):
-        solve_VIE_2(quadrature="collocation", mesh_samples=2, **common)
+        solve_vie2(quadrature="collocation", samples_per_interval=2, **common).y
     with pytest.raises(ValueError):
-        solve_VIE_2(quadrature="product", mesh_samples=3, **common)
+        solve_vie2(quadrature="product", samples_per_interval=3, **common).y
     with pytest.raises(ValueError):
-        solve_VIE_2(quadrature="product", kernel_interp_degree=0, **common)
+        solve_vie2(quadrature="product", kernel_interp_degree=0, **common).y
 
 
 # ---------------------------------------------------------------------------
@@ -246,9 +223,8 @@ def test_validation():
 def test_matrix_shape_error_reports_the_untruncated_kernel(quadrature):
     N, d = 4 * 10 + 3, 2                                   # truncates to 41
     K = np.broadcast_to(0.5 * np.eye(d), (N, d, d)).copy()
-    with pytest.raises(ValueError, match=rf"kernel_values shape \({N}, {d}, {d}\).*expected \({N}, {d}, m\)"):
-        solve_VIE_2(kernel_values=K, g_values=np.zeros((41, d, 3)), time_step=0.05,
-                    coll_divs=2, coll_choices=[0, 1, 2], quadrature=quadrature, show_warnings=False)
+    with pytest.raises(ValueError, match=rf"g must have shape \({N}, {d}\) or \({N}, {d}, m\) to match kernel \({N}, {d}, {d}\)"):
+        run(solve_vie2, show_warnings=False, kernel=K, g=np.zeros((41, d, 3)), dt=0.05, coll_setting=(2, [0, 1, 2]), quadrature=quadrature).y
 
 
 def test_matrix_columns_share_one_set_of_blocks(monkeypatch):
@@ -261,14 +237,10 @@ def test_matrix_columns_share_one_set_of_blocks(monkeypatch):
     t = 0.05 * np.arange(N)
     K = np.exp(-t)[:, None, None] * (np.eye(d) + 0.1)
     G = np.cos(t)[:, None, None] * rng.standard_normal((d, m_cols))
-    soln, fn = solve_VIE_2(kernel_values=K, g_values=G, time_step=0.05, coll_divs=2,
-                           coll_choices=[0, 1, 2], quadrature="product", return_function=True,
-                           show_warnings=False)
+    soln, fn = with_sol(run(solve_vie2, show_warnings=False, kernel=K, g=G, dt=0.05, coll_setting=(2, [0, 1, 2]), quadrature="product"))
     assert len(calls) == 1
     for j in range(m_cols):
-        col, col_fn = solve_VIE_2(kernel_values=K, g_values=G[:, :, j], time_step=0.05,
-                                  coll_divs=2, coll_choices=[0, 1, 2], quadrature="product",
-                                  return_function=True, show_warnings=False)
+        col, col_fn = with_sol(run(solve_vie2, show_warnings=False, kernel=K, g=G[:, :, j], dt=0.05, coll_setting=(2, [0, 1, 2]), quadrature="product"))
         assert np.array_equal(soln[:, :, j], col)
         assert np.allclose(fn(0.321)[:, j], col_fn(0.321), rtol=0, atol=1e-13)
 
@@ -298,18 +270,16 @@ def test_linalg_error_names_the_second_kind_solver(monkeypatch):
     dt, q = 0.05, 1
     N = n_samples(1, 5)
     with pytest.raises(np.linalg.LinAlgError, match="solve_VIE_2"):
-        solve_VIE_2(kernel_values=np.exp(-dt * np.arange(N)), g_values=np.ones(N), time_step=dt,
-                    coll_divs=q, coll_choices=[1], quadrature="product", show_warnings=False)
+        run(solve_vie2, show_warnings=False, kernel=np.exp(-dt * np.arange(N)), g=np.ones(N), dt=dt, coll_setting=(q, [1]), quadrature="product").y
 
 
-@pytest.mark.parametrize("kwargs", [dict(mesh_samples=2.5), dict(kernel_interp_degree=2.0),
-                                    dict(coll_divs=2.0)])
+@pytest.mark.parametrize("kwargs", [dict(samples_per_interval=2.5), dict(kernel_interp_degree=2.0),
+                                    dict(coll_setting=(2.0, [0, 1, 2]))])
 def test_non_integer_parameters_are_rejected(kwargs):
     dt = 0.05
     N = n_samples(4, 4)
     t, K, g, _ = cos_problem(dt, N)
-    base = dict(kernel_values=K, g_values=g, time_step=dt, coll_divs=2, coll_choices=[0, 1, 2],
-                quadrature="product", show_warnings=False)
+    base = dict(kernel=K, g=g, dt=dt, coll_setting=(2, [0, 1, 2]), quadrature="product")
     base.update(kwargs)
     with pytest.raises(TypeError, match="integer"):
-        solve_VIE_2(**base)
+        solve_vie2(**base).y

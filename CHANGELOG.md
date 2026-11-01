@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Removed
+The 0.10 API, deprecated in 0.11 (see the
+[migration guide](https://trout314.github.io/voles/guide/migration/)):
+- `solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`, `function_solve_VIE_1`,
+  `function_solve_VIE_2`, `function_solve_VIDE`: use `solve_vie1`,
+  `solve_vie2`, `solve_vide`;
+- the `voles.solvers` module;
+- `fast_coll_settings_VIE_1`, `_VIE_2`, `_VIDE`;
+- `optimal_graded_mesh(T=, M=)`: use `t_end=` and `n_intervals=`, which are
+  now required;
+- the `[callable]` and `[numba]` extras: use `voles` or `voles[full]`.
+
 ### Added
 - **A constant `a`** for `solve_vide`: a number or a `(d, d)` array, with
   either kind of input. It takes no part in choosing the regime, so
@@ -20,6 +32,11 @@
 - Python 3.14 is supported and tested in CI (Linux, macOS, Windows).
 
 ### Fixed
+- `VolterraSolution.to_ppoly()` gave a `PPoly` whose `antiderivative()` and
+  `roots()` failed with "buffer source array is read-only": it shared the
+  solution's read-only mesh array. It now copies it.
+- A non-numeric `coll_nodes` (e.g. strings) raises `TypeError`, not
+  `ValueError`, like the other array arguments.
 - **Singular kernels on strongly graded meshes.** Whether a declared
   singularity touches a mesh interval was decided with an absolute 1e-12
   tolerance. On intervals narrower than that (graded meshes for order 3

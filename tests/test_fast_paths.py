@@ -14,7 +14,7 @@ uniform-mesh optimization (PR #1) that the rest of the suite does not reach:
    mesh_divs = 40 so the runtime drivers also cross the FFT cutoff.
 """
 import numpy as np
-from voles import solve_VIDE, solve_VIE_1, solve_VIE_2
+from voles import solve_vide, solve_vie1, solve_vie2
 from conftest import (TOLERANCE, make_coupled_data_nd,
                       VIE1_SPEC_POLY_A, VIE1_SPEC_POLY_B, VIE1_SPEC_SMOOTH,
                       VIE1_SPEC_POLY, VIE1_SPEC_DAMPED,
@@ -23,6 +23,7 @@ from conftest import (TOLERANCE, make_coupled_data_nd,
                       VIDE_SPEC_POLY_A, VIDE_SPEC_POLY_B, VIDE_SPEC_SMOOTH,
                       VIDE_SPEC_ODE, VIDE_SPEC_LOG,
                       as_array)
+from conftest import run, with_sol
 
 # mesh_divs for the scalar FFT-path tests; must be well above FFT_CUTOFF = 32.
 FFT_BLOCKS = 80
@@ -44,10 +45,7 @@ def coupling_matrix(d):
 def test_vie1_fft_path_accuracy():
     d = as_array(VIE1_SPEC_DAMPED, time_step=0.01, coll_divs=3,
                  coll_choices=[1, 2, 3], num_blocks=FFT_BLOCKS)
-    soln = solve_VIE_1(
-        kernel_values=d["kernel"], g_values=d["g"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"])
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -56,32 +54,21 @@ def test_vie1_fft_path_force_continuous_accuracy():
     ToeplitzHistory instance; exercise its FFT path too."""
     d = as_array(VIE1_SPEC_DAMPED, time_step=0.01, coll_divs=3,
                  coll_choices=[1, 2, 3], num_blocks=FFT_BLOCKS)
-    soln = solve_VIE_1(
-        kernel_values=d["kernel"], g_values=d["g"],
-        soln_init_value=d["exact"][0], force_continuous=True,
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"])
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], y0=d["exact"][0], continuous=True, dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_vie2_fft_path_accuracy():
     d = as_array(VIE2_SPEC_SMOOTH, time_step=0.02, coll_divs=3,
                  coll_choices=[0, 1, 2, 3], num_blocks=FFT_BLOCKS)
-    soln = solve_VIE_2(
-        kernel_values=d["kernel"], g_values=d["g"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"])
+    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_vide_fft_path_accuracy():
     d = as_array(VIDE_SPEC_SMOOTH, time_step=0.01, coll_divs=3,
                  coll_choices=[1, 2, 3], num_blocks=FFT_BLOCKS)
-    soln = solve_VIDE(
-        kernel_values=d["kernel"], a_values=d["a"], g_values=d["g"],
-        soln_init_value=d["soln_init_value"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"])
+    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -97,10 +84,7 @@ def test_vie2_vec_fft_path_accuracy():
         [VIE2_SPEC_SMOOTH, VIE2_SPEC_RATIONAL], [[1, 1], [1, -1]],
         time_step=0.005, coll_divs=3, coll_choices=[0, 1, 2, 3],
         num_blocks=FFT_BLOCKS)
-    soln = solve_VIE_2(
-        kernel_values=d["kernel"], g_values=d["g"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"])
+    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -110,11 +94,7 @@ def test_vide_vec_fft_path_accuracy():
         [VIDE_SPEC_SMOOTH, VIDE_SPEC_LOG], [[1, 1], [1, -1]],
         time_step=0.005, coll_divs=3, coll_choices=[1, 2, 3],
         num_blocks=FFT_BLOCKS)
-    soln = solve_VIDE(
-        kernel_values=d["kernel"], a_values=d["a"], g_values=d["g"],
-        soln_init_value=d["soln_init_value"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"])
+    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -128,10 +108,7 @@ def test_vie1_runtime_d10_accuracy():
     d = make_coupled_data_nd(
         specs, coupling_matrix(10),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=40)
-    soln = solve_VIE_1(
-        kernel_values=d["kernel"], g_values=d["g"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"])
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -141,10 +118,7 @@ def test_vie2_runtime_d10_accuracy():
     d = make_coupled_data_nd(
         specs, coupling_matrix(10),
         time_step=0.01, coll_divs=3, coll_choices=[0, 1, 2, 3], num_blocks=40)
-    soln = solve_VIE_2(
-        kernel_values=d["kernel"], g_values=d["g"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"])
+    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -154,11 +128,7 @@ def test_vide_runtime_d10_accuracy():
     d = make_coupled_data_nd(
         specs, coupling_matrix(10),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=40)
-    soln = solve_VIDE(
-        kernel_values=d["kernel"], a_values=d["a"], g_values=d["g"],
-        soln_init_value=d["soln_init_value"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"])
+    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -192,19 +162,11 @@ def test_vie2_runtime_d9_return_function_matches_scalar():
     d = make_coupled_data_nd(
         VIE2_SPECS_9, np.eye(9),
         time_step=0.01, coll_divs=3, coll_choices=[0, 1, 2], num_blocks=10)
-    _, f_vec = solve_VIE_2(
-        kernel_values=d["kernel"], g_values=d["g"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"], return_function=True,
-        show_warnings=False)
+    _, f_vec = with_sol(run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
     for i, spec in enumerate(VIE2_SPECS_9):
         s = as_array(spec, time_step=0.01, coll_divs=3,
                      coll_choices=[0, 1, 2], num_blocks=10)
-        _, f_s = solve_VIE_2(
-            kernel_values=s["kernel"], g_values=s["g"],
-            time_step=s["time_step"], coll_divs=s["coll_divs"],
-            coll_choices=s["coll_choices"], return_function=True,
-            show_warnings=False)
+        _, f_s = with_sol(run(solve_vie2, show_warnings=False, kernel=s["kernel"], g=s["g"], dt=s["time_step"], coll_setting=(s["coll_divs"], s["coll_choices"])))
         for t in _poly_eval_points(d):
             assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-9
 
@@ -213,19 +175,11 @@ def test_vie1_runtime_d9_return_function_matches_scalar():
     d = make_coupled_data_nd(
         VIE1_SPECS_9, np.eye(9),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=10)
-    _, f_vec = solve_VIE_1(
-        kernel_values=d["kernel"], g_values=d["g"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"], return_function=True,
-        show_warnings=False)
+    _, f_vec = with_sol(run(solve_vie1, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
     for i, spec in enumerate(VIE1_SPECS_9):
         s = as_array(spec, time_step=0.01, coll_divs=3,
                      coll_choices=[1, 2, 3], num_blocks=10)
-        _, f_s = solve_VIE_1(
-            kernel_values=s["kernel"], g_values=s["g"],
-            time_step=s["time_step"], coll_divs=s["coll_divs"],
-            coll_choices=s["coll_choices"], return_function=True,
-            show_warnings=False)
+        _, f_s = with_sol(run(solve_vie1, show_warnings=False, kernel=s["kernel"], g=s["g"], dt=s["time_step"], coll_setting=(s["coll_divs"], s["coll_choices"])))
         for t in _poly_eval_points(d):
             assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-9
 
@@ -234,21 +188,11 @@ def test_vie1_runtime_d9_force_continuous_return_function_matches_scalar():
     d = make_coupled_data_nd(
         VIE1_SPECS_9, np.eye(9),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=10)
-    _, f_vec = solve_VIE_1(
-        kernel_values=d["kernel"], g_values=d["g"],
-        soln_init_value=d["exact"][0], force_continuous=True,
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"], return_function=True,
-        show_warnings=False)
+    _, f_vec = with_sol(run(solve_vie1, show_warnings=False, kernel=d["kernel"], g=d["g"], y0=d["exact"][0], continuous=True, dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
     for i, spec in enumerate(VIE1_SPECS_9):
         s = as_array(spec, time_step=0.01, coll_divs=3,
                      coll_choices=[1, 2, 3], num_blocks=10)
-        _, f_s = solve_VIE_1(
-            kernel_values=s["kernel"], g_values=s["g"],
-            soln_init_value=s["exact"][0], force_continuous=True,
-            time_step=s["time_step"], coll_divs=s["coll_divs"],
-            coll_choices=s["coll_choices"], return_function=True,
-            show_warnings=False)
+        _, f_s = with_sol(run(solve_vie1, show_warnings=False, kernel=s["kernel"], g=s["g"], y0=s["exact"][0], continuous=True, dt=s["time_step"], coll_setting=(s["coll_divs"], s["coll_choices"])))
         for t in _poly_eval_points(d):
             assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-9
 
@@ -257,21 +201,11 @@ def test_vide_runtime_d9_return_function_matches_scalar():
     d = make_coupled_data_nd(
         VIDE_SPECS_9, np.eye(9),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=10)
-    _, f_vec = solve_VIDE(
-        kernel_values=d["kernel"], a_values=d["a"], g_values=d["g"],
-        soln_init_value=d["soln_init_value"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"], return_function=True,
-        show_warnings=False)
+    _, f_vec = with_sol(run(solve_vide, show_warnings=False, kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
     for i, spec in enumerate(VIDE_SPECS_9):
         s = as_array(spec, time_step=0.01, coll_divs=3,
                      coll_choices=[1, 2, 3], num_blocks=10)
-        _, f_s = solve_VIDE(
-            kernel_values=s["kernel"], a_values=s["a"], g_values=s["g"],
-            soln_init_value=s["soln_init_value"],
-            time_step=s["time_step"], coll_divs=s["coll_divs"],
-            coll_choices=s["coll_choices"], return_function=True,
-            show_warnings=False)
+        _, f_s = with_sol(run(solve_vide, show_warnings=False, kernel=s["kernel"], a=s["a"], g=s["g"], y0=s["soln_init_value"], dt=s["time_step"], coll_setting=(s["coll_divs"], s["coll_choices"])))
         for t in _poly_eval_points(d):
             assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-9
 
@@ -295,10 +229,7 @@ def _vie2_soln_at_blocks(num_blocks, coll_divs=2, coll_choices=[0, 1, 2],
                          time_step=0.004):
     d = as_array(VIE2_SPEC_SMOOTH, time_step=time_step, coll_divs=coll_divs,
                  coll_choices=coll_choices, num_blocks=num_blocks)
-    soln = solve_VIE_2(
-        kernel_values=d["kernel"], g_values=d["g"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"], show_warnings=False)
+    soln = run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     return soln, d
 
 
@@ -337,10 +268,7 @@ def test_runtime_d10_fft_boundary_prefix_consistency():
              VIE2_SPEC_RATIONAL, VIE2_SPEC_POLY2] * 2, coupling_matrix(10),
             time_step=0.004, coll_divs=2, coll_choices=[0, 1, 2],
             num_blocks=num_blocks)
-        return solve_VIE_2(
-            kernel_values=d["kernel"], g_values=d["g"],
-            time_step=d["time_step"], coll_divs=d["coll_divs"],
-            coll_choices=d["coll_choices"], show_warnings=False)
+        return run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     s63 = solve_at(63)
     s64 = solve_at(64)
     n_shared = 63 * 4
@@ -356,8 +284,5 @@ def test_runtime_d10_fft_boundary_prefix_consistency():
 def test_vie2_largest_compiled_setting_accuracy():
     d = as_array(VIE2_SPEC_SMOOTH, time_step=0.002, coll_divs=4,
                  coll_choices=[0, 1, 2, 3, 4], num_blocks=10)
-    soln = solve_VIE_2(
-        kernel_values=d["kernel"], g_values=d["g"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"], show_warnings=False)
+    soln = run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < 1e-6

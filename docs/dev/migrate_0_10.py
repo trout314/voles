@@ -1,4 +1,4 @@
-"""Translate a 0.10 solver call into the equivalent 1.0 call.
+"""Translate a 0.10 solver call into the equivalent 1.0 call (a dev tool since 1.0).
 
 Used by the equivalence tests (every 0.10 call and its translation must give
 the same numbers) and by the 0.11 deprecation wrappers, whose warning shows

@@ -16,11 +16,11 @@ import sys
 import numpy as np
 
 from voles import (
-    solve_VIE_1, solve_VIE_2, solve_VIDE,
-    fast_coll_settings_VIE_1,
-    fast_coll_settings_VIE_2,
-    fast_coll_settings_VIDE,
+    solve_vie1,
+    solve_vie2,
+    solve_vide,
 )
+from conftest import run
 
 # ---------------------------------------------------------------------------
 # Test problems
@@ -38,9 +38,7 @@ def _vie2_error(n_intervals, coll_divs, coll_choices, T):
     t = np.arange(N) * h
     kernel = np.exp(-t)
     g = np.sin(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
-    soln = solve_VIE_2(kernel_values=kernel, g_values=g, time_step=h,
-                       coll_divs=coll_divs, coll_choices=coll_choices,
-                       show_warnings=False)
+    soln = run(solve_vie2, show_warnings=False, kernel=kernel, g=g, dt=h, coll_setting=(coll_divs, coll_choices)).y
     return np.max(np.abs(soln - np.sin(t)))
 
 # Checked using Mathematica commands:
@@ -60,10 +58,7 @@ def _vide_error(n_intervals, coll_divs, coll_choices, T):
     g = (np.cos(t)
          - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
          - np.sin(t) / (1.0 + t**2))
-    soln = solve_VIDE(kernel_values=kernel, g_values=g, a_values=a,
-                      soln_init_value=0.0, time_step=h,
-                      coll_divs=coll_divs, coll_choices=coll_choices,
-                      show_warnings=False)
+    soln = run(solve_vide, show_warnings=False, kernel=kernel, g=g, a=a, y0=0.0, dt=h, coll_setting=(coll_divs, coll_choices)).y
     return np.max(np.abs(soln - np.sin(t)))
 
 # Checked using Mathematica commands:
@@ -83,9 +78,7 @@ def _vie1_error(n_intervals, coll_divs, coll_choices, T):
     kernel = np.exp(t)
     g = np.sin(t)
     g[0] = 0.0
-    soln = solve_VIE_1(kernel_values=kernel, g_values=g, time_step=h,
-                       coll_divs=coll_divs, coll_choices=coll_choices,
-                       show_warnings=False)
+    soln = run(solve_vie1, show_warnings=False, kernel=kernel, g=g, dt=h, coll_setting=(coll_divs, coll_choices)).y
     exact = np.cos(t) - np.sin(t)
     return np.max(np.abs(soln[1:] - exact[1:]))  # skip t=0
 
@@ -93,6 +86,13 @@ def _vie1_error(n_intervals, coll_divs, coll_choices, T):
 # ---------------------------------------------------------------------------
 # Convergence check
 # ---------------------------------------------------------------------------
+
+# The settings compiled into the extension (quadrature="collocation"); VIE-1
+# excludes the node sets at 0, which it does not admit.
+from voles._dlang import supported_coll_settings_d  # noqa: E402
+_SETTINGS = supported_coll_settings_d()
+_VIE1_SETTINGS = [(d, c) for d, c in _SETTINGS if 0 not in c]
+
 
 def check_convergence(error_fn, coll_divs, coll_choices,
                       T=1.0, n_base=10, n_levels=4):
@@ -162,13 +162,13 @@ def main():
     bad = {}
     if args.solver in ("vie1", "all"):
         bad["VIE-1"] = run_checks(
-            "solve_VIE_1", _vie1_error, fast_coll_settings_VIE_1)
+            "solve_vie1", _vie1_error, _VIE1_SETTINGS)
     if args.solver in ("vie2", "all"):
         bad["VIE-2"] = run_checks(
-            "solve_VIE_2", _vie2_error, fast_coll_settings_VIE_2)
+            "solve_vie2", _vie2_error, _SETTINGS)
     if args.solver in ("vide", "all"):
         bad["VIDE"] = run_checks(
-            "solve_VIDE", _vide_error, fast_coll_settings_VIDE)
+            "solve_vide", _vide_error, _SETTINGS)
 
     print(f"\n{'=' * 66}")
     print("  Summary")

@@ -10,13 +10,7 @@
     "optimal_graded_mesh",
     "gauss_legendre_nodes",
     "radau_iia_nodes",
-    "lobatto_nodes",
-    "solve_VIE_1",
-    "solve_VIE_2",
-    "solve_VIDE",
-    "function_solve_VIE_1",
-    "function_solve_VIE_2",
-    "function_solve_VIDE"
+    "lobatto_nodes"
   ],
   "objects": {
     "solve_vie1": {
@@ -74,7 +68,7 @@
     },
     "optimal_graded_mesh": {
       "kind": "function",
-      "signature": "(*, alpha: 'float', t_end: 'Optional[float]' = None, n_intervals: 'Optional[int]' = None, order: 'int', T: 'Optional[float]' = None, M: 'Optional[int]' = None) -> 'np.ndarray'"
+      "signature": "(*, alpha: 'float', t_end: 'float', n_intervals: 'int', order: 'int') -> 'np.ndarray'"
     },
     "gauss_legendre_nodes": {
       "kind": "function",
@@ -87,30 +81,6 @@
     "lobatto_nodes": {
       "kind": "function",
       "signature": "(p: 'int') -> 'np.ndarray'"
-    },
-    "solve_VIE_1": {
-      "kind": "function",
-      "signature": "(*, kernel_values, g_values=None, soln_init_value=None, time_step=1.0, coll_divs=None, coll_choices=None, return_function=False, return_polys=None, force_continuous=False, show_warnings=True, quadrature='product', mesh_samples=None, kernel_interp_degree=None)"
-    },
-    "solve_VIE_2": {
-      "kind": "function",
-      "signature": "(*, kernel_values, g_values=None, time_step=1.0, coll_divs=None, coll_choices=None, return_function=False, return_polys=None, show_warnings=True, quadrature='product', mesh_samples=None, kernel_interp_degree=None)"
-    },
-    "solve_VIDE": {
-      "kind": "function",
-      "signature": "(*, kernel_values, a_values=None, g_values=None, soln_init_value, time_step=1.0, coll_divs=None, coll_choices=None, return_function=False, return_polys=None, show_warnings=True, quadrature='product', mesh_samples=None, kernel_interp_degree=None)"
-    },
-    "function_solve_VIE_1": {
-      "kind": "function",
-      "signature": "(*, kernel, g=None, soln_init_value=None, mesh_breakpoints, coll_divs: 'int' = None, coll_choices: 'list[int]' = None, coll_nodes=None, kernel_singularity=None, return_function: 'bool' = False, force_continuous: 'bool' = False, reuse_adaptive_blocks: 'bool' = True, show_warnings: 'bool' = True)"
-    },
-    "function_solve_VIE_2": {
-      "kind": "function",
-      "signature": "(*, kernel, g=None, mesh_breakpoints, coll_divs: 'int' = None, coll_choices: 'list[int]' = None, coll_nodes=None, kernel_singularity=None, return_function: 'bool' = False, reuse_adaptive_blocks: 'bool' = True, show_warnings: 'bool' = True)"
-    },
-    "function_solve_VIDE": {
-      "kind": "function",
-      "signature": "(*, kernel, a=None, g=None, soln_init_value, mesh_breakpoints, coll_divs: 'int' = None, coll_choices: 'list[int]' = None, coll_nodes=None, kernel_singularity=None, return_function: 'bool' = False, reuse_adaptive_blocks: 'bool' = True, show_warnings: 'bool' = True)"
     }
   }
 }

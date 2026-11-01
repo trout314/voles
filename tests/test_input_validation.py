@@ -1,13 +1,16 @@
-"""Tests that solvers raise meaningful errors for bad inputs."""
+"""Tests that solvers raise meaningful errors for bad inputs (sampled inputs;
+the regime rules and the type-vs-value policy are in test_api.py and
+test_validation_policy.py)."""
 import numpy as np
 import pytest
-from voles import solve_VIE_1, solve_VIE_2, solve_VIDE
+from voles import solve_vie1, solve_vie2, solve_vide
+from conftest import run
 
 # ---------------------------------------------------------------------------
 # Helpers — valid base kwargs, override per test
 # ---------------------------------------------------------------------------
 
-# 9 points → (coll_divs=2)**2 * 2 + 1, a valid fast-path length
+# 9 points: two mesh intervals of divs**2 = 4 samples for coll_setting divs = 2
 _K = np.ones(9)
 _G = np.ones(9)
 _A = np.zeros(9)
@@ -16,263 +19,144 @@ _G1 = np.arange(9.0)
 
 
 def _vie1(**kw):
-    base = dict(kernel_values=_K, g_values=_G1, coll_divs=2, coll_choices=[1, 2])
-    base.update(kw)
-    return solve_VIE_1(**base)
+    return solve_vie1(**{**dict(kernel=_K, g=_G1, coll_setting=(2, [1, 2])), **kw}).y
 
 
 def _vie2(**kw):
-    base = dict(kernel_values=_K, g_values=_G, coll_divs=2, coll_choices=[0, 1, 2])
-    base.update(kw)
-    return solve_VIE_2(**base)
+    return solve_vie2(**{**dict(kernel=_K, g=_G, coll_setting=(2, [0, 1, 2])), **kw}).y
 
 
 def _vide(**kw):
-    base = dict(kernel_values=_K, g_values=_G, a_values=_A,
-                soln_init_value=0.0, coll_divs=2, coll_choices=[0, 1, 2])
-    base.update(kw)
-    return solve_VIDE(**base)
+    return solve_vide(**{**dict(kernel=_K, g=_G, a=_A, y0=0.0, coll_setting=(2, [0, 1, 2])),
+                         **kw}).y
+
+
+ALL = [_vie1, _vie2, _vide]
 
 
 # ---------------------------------------------------------------------------
-# kernel_values must be 1-D (VIE-2/VIDE) or 1-D/3-D (VIE-1)
+# Shapes
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("solver", [_vie2, _vide])
+@pytest.mark.parametrize("solver", ALL)
 def test_kernel_2d(solver):
-    # 2-D kernel is invalid for all solvers (accept 1-D scalar or 3-D matrix)
-    with pytest.raises(ValueError, match="kernel_values must be 1-D"):
-        solver(kernel_values=np.ones((3, 3)))
+    # A 2-D sampled kernel is reserved for non-convolution kernels.
+    with pytest.raises(ValueError, match="2-D kernel is reserved"):
+        solver(kernel=np.ones((3, 3)))
 
 
-def test_kernel_2d_vie1():
-    # 2-D kernel is invalid for VIE-1 (accepts 1-D scalar or 3-D matrix only)
-    with pytest.raises(ValueError, match="kernel_values must be 1-D"):
-        _vie1(kernel_values=np.ones((3, 3)))
+@pytest.mark.parametrize("solver", ALL)
+def test_g_2d(solver):
+    with pytest.raises(ValueError, match=r"g must have shape \(9,\) to match kernel \(9,\), got \(3, 3\)"):
+        solver(g=np.zeros((3, 3)))
 
 
-# ---------------------------------------------------------------------------
-# g_values must be 1-D and same length as kernel_values
-# ---------------------------------------------------------------------------
-
-# All three array-input solvers report bad input with ValueError (they used
-# assert statements, which vanish under python -O).
-
-@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
-def test_g_values_2d(solver):
-    with pytest.raises(ValueError, match="g_values shape \\(3, 3\\) incompatible"):
-        solver(g_values=np.zeros((3, 3)))   # only the shape is wrong
+@pytest.mark.parametrize("solver", ALL)
+def test_g_wrong_length(solver):
+    with pytest.raises(ValueError, match=r"g must have shape \(9,\) .* got \(5,\)"):
+        solver(g=np.zeros(5))
 
 
-@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
-def test_g_values_wrong_length(solver):
-    with pytest.raises(ValueError, match=r"g_values shape \(5,\) incompatible .* expected \(9,\)"):
-        solver(g_values=np.zeros(5))        # only the length is wrong
+def test_a_matrix_for_a_scalar_equation():
+    with pytest.raises(ValueError, match="must be a number for a scalar equation"):
+        _vide(a=np.ones((3, 3)))
+
+
+def test_a_wrong_length():
+    with pytest.raises(ValueError, match=r"a must have shape \(9,\) .* got \(5,\)"):
+        _vide(a=np.ones(5))
 
 
 # ---------------------------------------------------------------------------
-# a_values (VIDE only)
+# dt
 # ---------------------------------------------------------------------------
 
-def test_a_values_2d():
-    with pytest.raises(ValueError, match="a_values shape \\(3, 3\\) incompatible"):
-        _vide(a_values=np.ones((3, 3)))
-
-
-def test_a_values_wrong_length():
-    with pytest.raises(ValueError, match=r"a_values shape \(5,\) incompatible .* expected \(9,\)"):
-        _vide(a_values=np.ones(5))
-
-
-# ---------------------------------------------------------------------------
-# time_step (VIE_1 only)
-# ---------------------------------------------------------------------------
-
-@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
-def test_time_step_zero(solver):
-    with pytest.raises(ValueError, match="time_step must be positive"):
-        solver(time_step=0.0)
-
-
-@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
-def test_time_step_negative(solver):
-    with pytest.raises(ValueError, match="time_step must be positive"):
-        solver(time_step=-1.0)
-
-
-@pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
-@pytest.mark.parametrize("bad", [np.inf, np.nan])
-def test_time_step_non_finite(solver, bad):
+@pytest.mark.parametrize("solver", ALL)
+@pytest.mark.parametrize("bad", [0.0, -1.0, np.inf, np.nan])
+def test_dt_must_be_positive_and_finite(solver, bad):
     """inf used to pass the positivity check and return all-NaN output."""
-    with pytest.raises(ValueError, match="time_step must be positive and finite"):
-        solver(time_step=bad)
+    with pytest.raises(ValueError, match="dt must be positive and finite"):
+        solver(dt=bad)
 
 
 @pytest.mark.parametrize("quad", ["collocation", "product"])
-def test_time_step_non_finite_both_quadratures(quad):
-    with pytest.raises(ValueError, match="time_step must be positive and finite"):
-        _vie2(time_step=np.inf, quadrature=quad)
+def test_dt_non_finite_both_quadratures(quad):
+    with pytest.raises(ValueError, match="dt must be positive and finite"):
+        _vie2(dt=np.inf, quadrature=quad)
 
 
 # ---------------------------------------------------------------------------
-# coll_divs must be positive
+# coll_setting
 # ---------------------------------------------------------------------------
 
-_COLL_ERRORS = [(_vie1, ValueError), (_vie2, ValueError), (_vide, ValueError)]
+@pytest.mark.parametrize("solver", ALL)
+@pytest.mark.parametrize("divs", [0, -1])
+def test_divs_must_be_positive(solver, divs):
+    with pytest.raises(ValueError, match="divs must be at least 1"):
+        solver(coll_setting=(divs, [1]))
 
 
-@pytest.mark.parametrize("solver, error", _COLL_ERRORS)
-def test_coll_divs_zero(solver, error):
-    with pytest.raises(error, match="coll_divs must be a positive integer"):
-        solver(coll_divs=0, coll_choices=[1])
-
-
-@pytest.mark.parametrize("solver, error", _COLL_ERRORS)
-def test_coll_divs_negative(solver, error):
-    with pytest.raises(error, match="coll_divs must be a positive integer"):
-        solver(coll_divs=-1, coll_choices=[1])
-
-
-def test_vie1_coll_divs_non_integer():
+@pytest.mark.parametrize("quadrature", ["collocation", "product"])
+def test_divs_non_integer(quadrature):
     """Used to reach the solver and fail deep inside (or, with
-    quadrature='product', silently run as coll_divs=2)."""
-    for quadrature in ("collocation", "product"):
-        with pytest.raises(TypeError, match="coll_divs must be a positive integer"):
-            _vie1(coll_divs=2.7, coll_choices=[1, 2], quadrature=quadrature)
+    quadrature='product', silently run as divs = 2)."""
+    with pytest.raises(TypeError, match="divs must be an integer"):
+        _vie1(coll_setting=(2.7, [1, 2]), quadrature=quadrature)
 
 
-# ---------------------------------------------------------------------------
-# coll_choices must be integers
-# ---------------------------------------------------------------------------
-
-@pytest.mark.parametrize("solver", [s for s, _ in _COLL_ERRORS])
-def test_coll_choices_floats(solver):
+@pytest.mark.parametrize("solver", ALL)
+def test_choices_floats(solver):
     # A float where an integer is required is a type error (contract §9).
-    with pytest.raises(TypeError, match="coll_choices must be a list of integers"):
-        solver(coll_choices=[1.0, 2.0])
+    with pytest.raises(TypeError, match="choices must be integers"):
+        solver(coll_setting=(2, [1.0, 2.0]))
 
 
-# ---------------------------------------------------------------------------
-# coll_choices must be distinct
-# ---------------------------------------------------------------------------
-
-@pytest.mark.parametrize("solver, error", _COLL_ERRORS)
-def test_coll_choices_duplicates(solver, error):
-    with pytest.raises(error,
-                       match="all integers in coll_choices must be distinct"):
-        solver(coll_choices=[1, 1, 2])
+@pytest.mark.parametrize("solver", ALL)
+def test_choices_duplicates(solver):
+    with pytest.raises(ValueError, match="choices must be distinct"):
+        solver(coll_setting=(2, [1, 1, 2]))
 
 
-# ---------------------------------------------------------------------------
-# coll_choices range
-# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("solver, rng", [(_vie1, "1..2 for VIE-1"), (_vie2, "0..2"),
+                                         (_vide, "0..2")])
+def test_choices_out_of_range(solver, rng):
+    with pytest.raises(ValueError, match=f"choices must lie in {rng}"):
+        solver(coll_setting=(2, [1, 5]))
 
-def test_vie1_choice_out_of_range():
-    with pytest.raises(ValueError,
-                       match="coll_choices must contain only integers from 1 to coll_divs"):
-        _vie1(coll_divs=2, coll_choices=[1, 5])
-
-
-def test_vie2_choice_out_of_range():
-    with pytest.raises(ValueError,
-                       match="coll_choices must contain only integers from 0 to coll_divs"):
-        _vie2(coll_divs=2, coll_choices=[1, 5])
-
-
-def test_vide_choice_out_of_range():
-    with pytest.raises(ValueError,
-                       match="coll_choices must contain only integers from 0 to coll_divs"):
-        _vide(coll_divs=2, coll_choices=[1, 5])
-
-
-# ---------------------------------------------------------------------------
-# Zero not allowed in coll_choices for VIE_1
-# ---------------------------------------------------------------------------
 
 def test_vie1_zero_choice():
-    with pytest.raises(ValueError, match="zero cannot be a collocation parameter"):
-        _vie1(coll_divs=2, coll_choices=[0, 1])
+    with pytest.raises(ValueError, match="choices must lie in 1..2 for VIE-1"):
+        _vie1(coll_setting=(2, [0, 1]))
+
+
+def test_vie1_continuous_needs_y0():
+    with pytest.raises(ValueError, match="continuous=True needs the initial value y0"):
+        _vie1(continuous=True)
 
 
 # ---------------------------------------------------------------------------
-# force_continuous requires soln_init_value (VIE_1)
+# NaN inputs are rejected up front, naming the input (see also
+# test_validation_policy.py). divs = 5 is not compiled, so these used to reach
+# the numba path with the NaN.
 # ---------------------------------------------------------------------------
 
-def test_vie1_force_continuous_no_init():
-    with pytest.raises(ValueError, match="must specify soln_init_value"):
-        solve_VIE_1(kernel_values=_K, g_values=_G1, coll_divs=2,
-                    coll_choices=[1, 2], force_continuous=True)
+_N = 51                                  # 1 * 5**2 + 1
+_COLL_IDX = 5                            # the first collocation sample of mesh 0
 
 
-# ---------------------------------------------------------------------------
-# NaN inputs — documented current behaviour.
-# Uses coll_divs=5 to guarantee the Numba path (not in fast settings).
-#
-# NaN in kernel: propagates into the coefficient matrix, causing
-#   numpy.linalg.solve to raise LinAlgError — the solver does NOT silently
-#   produce a result.
-# NaN in g/a at a collocation-point index: propagates to NaN in output.
-# ---------------------------------------------------------------------------
-
-_N = 51  # 1 * 5**2 + 1, all coll_divs=5 tests use this length
-_Knan = np.ones(_N)
-_Gnan = np.ones(_N)
-_Anan = np.zeros(_N)
-
-# With coll_divs=5, coll_choices=[1,2,3], collocation indices in mesh 0
-# are at 1*5=5, 2*5=10, 3*5=15.  Index 5 is the first accessed g/a point.
-_COLL_IDX = 5
-
-
-def _nan_raises_or_propagates(fn, **kwargs):
-    """Return True if fn raises any exception or returns a result containing NaN."""
-    try:
-        result = fn(**kwargs)
-        return np.any(~np.isfinite(result))
-    except Exception:
-        return True
-
-
-def test_nan_kernel_vie1():
-    k = _Knan.copy(); k[3] = np.nan
-    assert _nan_raises_or_propagates(
-        solve_VIE_1, kernel_values=k, g_values=np.arange(_N, dtype=float),
-        coll_divs=5, coll_choices=[1, 2, 3])
-
-
-def test_nan_kernel_vie2():
-    k = _Knan.copy(); k[3] = np.nan
-    assert _nan_raises_or_propagates(
-        solve_VIE_2, kernel_values=k, g_values=_Gnan,
-        coll_divs=5, coll_choices=[1, 2, 3])
-
-
-def test_nan_kernel_vide():
-    k = _Knan.copy(); k[3] = np.nan
-    assert _nan_raises_or_propagates(
-        solve_VIDE, kernel_values=k, g_values=_Gnan, a_values=_Anan,
-        soln_init_value=0.0, coll_divs=5, coll_choices=[1, 2, 3])
-
-
-def test_nan_g_at_coll_point_vie2():
-    g = _Gnan.copy(); g[_COLL_IDX] = np.nan
-    assert _nan_raises_or_propagates(
-        solve_VIE_2, kernel_values=_Knan, g_values=g,
-        coll_divs=5, quadrature="collocation", coll_choices=[1, 2, 3])
-
-
-def test_nan_g_at_coll_point_vide():
-    g = _Gnan.copy(); g[_COLL_IDX] = np.nan
-    assert _nan_raises_or_propagates(
-        solve_VIDE, kernel_values=_Knan, g_values=g, a_values=_Anan,
-        soln_init_value=0.0, coll_divs=5, quadrature="collocation", coll_choices=[1, 2, 3])
-
-
-def test_nan_a_at_coll_point_vide():
-    a = _Anan.copy(); a[_COLL_IDX] = np.nan
-    assert _nan_raises_or_propagates(
-        solve_VIDE, kernel_values=_Knan, g_values=_Gnan, a_values=a,
-        soln_init_value=0.0, coll_divs=5, quadrature="collocation", coll_choices=[1, 2, 3])
+@pytest.mark.parametrize("which", ["kernel", "g", "a"])
+@pytest.mark.parametrize("solver", ["vie1", "vie2", "vide"])
+def test_nan_input_is_rejected(solver, which):
+    if which == "a" and solver != "vide":
+        pytest.skip("a is a VIDE input")
+    data = dict(kernel=np.ones(_N), g=np.arange(_N, dtype=float) if solver == "vie1" else np.ones(_N))
+    if solver == "vide":
+        data.update(a=np.zeros(_N), y0=0.0)
+    data[which] = data[which].copy()
+    data[which][3 if which == "kernel" else _COLL_IDX] = np.nan
+    fn = dict(vie1=solve_vie1, vie2=solve_vie2, vide=solve_vide)[solver]
+    with pytest.raises(ValueError, match=f"{which} contains a non-finite value"):
+        fn(coll_setting=5, quadrature="collocation", **data)
 
 
 # ---------------------------------------------------------------------------
@@ -294,24 +178,20 @@ def test_vie1_singular_matrix_raises_linalgerror():
     kernel = np.zeros((N, d, d))
     g = np.outer(np.arange(N), np.ones(d))
     with pytest.raises(np.linalg.LinAlgError):
-        solve_VIE_1(kernel_values=kernel, g_values=g,
-                    coll_divs=coll_divs, coll_choices=[1, 2, 3], show_warnings=False)
+        run(solve_vie1, show_warnings=False, kernel=kernel, g=g, coll_setting=(coll_divs, [1, 2, 3])).y
 
 
 def test_vie1_singular_matrix_scalar_raises_linalgerror():
     # Compile-time (d <= 8) path, scalar driver.
     with pytest.raises(np.linalg.LinAlgError):
-        solve_VIE_1(kernel_values=np.zeros(10), g_values=np.arange(10.0),
-                    coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
+        run(solve_vie1, show_warnings=False, kernel=np.zeros(10), g=np.arange(10.0), coll_setting=(3, [1, 2, 3])).y
 
 
 def test_vie1_singular_matrix_d2_raises_linalgerror():
     # Compile-time (d <= 8) path, vector driver.
     N = 10
     with pytest.raises(np.linalg.LinAlgError):
-        solve_VIE_1(kernel_values=np.zeros((N, 2, 2)),
-                    g_values=np.outer(np.arange(N), np.ones(2)),
-                    coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
+        run(solve_vie1, show_warnings=False, kernel=np.zeros((N, 2, 2)), g=np.outer(np.arange(N), np.ones(2)), coll_setting=(3, [1, 2, 3])).y
 
 
 def _near_singular_kernel(d, N=10):
@@ -335,8 +215,7 @@ def test_vie1_near_singular_matrix_raises_linalgerror(d):
     itself only reports exactly-zero pivots)."""
     K = _near_singular_kernel(d)
     with pytest.raises(np.linalg.LinAlgError):
-        solve_VIE_1(kernel_values=K, g_values=np.outer(np.arange(len(K)), np.ones(d)),
-                    coll_divs=3, coll_choices=[1, 2, 3], show_warnings=False)
+        run(solve_vie1, show_warnings=False, kernel=K, g=np.outer(np.arange(len(K)), np.ones(d)), coll_setting=(3, [1, 2, 3])).y
 
 
 # ---------------------------------------------------------------------------
@@ -348,12 +227,9 @@ def test_matrix_zero_columns_raises_clean_error():
     kernel = np.zeros((N, d, d))
     kernel[:, 0, 0] = kernel[:, 1, 1] = 1.0
     with pytest.raises(ValueError, match="zero columns"):
-        solve_VIE_2(kernel_values=kernel, g_values=np.ones((N, d, 0)),
-                    coll_divs=3, coll_choices=[0, 1, 2])
+        solve_vie2(kernel=kernel, g=np.ones((N, d, 0)), coll_setting=(3, [0, 1, 2])).y
     with pytest.raises(ValueError, match="zero columns"):
-        solve_VIDE(kernel_values=kernel, g_values=np.ones((N, d, 0)),
-                   soln_init_value=np.ones((d, 0)),
-                   coll_divs=3, coll_choices=[1, 2, 3])
+        solve_vide(kernel=kernel, g=np.ones((N, d, 0)), y0=np.ones((d, 0)), coll_setting=(3, [1, 2, 3])).y
 
 
 # ---------------------------------------------------------------------------
@@ -372,12 +248,12 @@ def _list_kernel():
 
 @pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
 def test_list_kernel_values(solver):
-    solver(kernel_values=_list_kernel(), g_values=_list_inputs())
+    solver(kernel=_list_kernel(), g=_list_inputs())
 
 
 @pytest.mark.parametrize("solver", [_vie1, _vie2, _vide])
 def test_list_g_values(solver):
-    solver(g_values=_list_inputs())
+    solver(g=_list_inputs())
 
 
 # ---------------------------------------------------------------------------
@@ -387,20 +263,19 @@ def test_list_g_values(solver):
 def test_coll_choices_not_mutated_vie1():
     # coll_divs=2, choices [1,2] but supplied reversed; _K has 9 pts = 2*4+1
     choices = [2, 1]
-    solve_VIE_1(kernel_values=_K, g_values=_G1, coll_divs=2, coll_choices=choices)
+    solve_vie1(kernel=_K, g=_G1, coll_setting=(2, choices)).y
     assert choices == [2, 1]
 
 
 def test_coll_choices_not_mutated_vie2():
     choices = [2, 0, 1]
-    solve_VIE_2(kernel_values=_K, g_values=_G, coll_divs=2, coll_choices=choices)
+    solve_vie2(kernel=_K, g=_G, coll_setting=(2, choices)).y
     assert choices == [2, 0, 1]
 
 
 def test_coll_choices_not_mutated_vide():
     choices = [2, 0, 1]
-    solve_VIDE(kernel_values=_K, g_values=_G, a_values=_A,
-               soln_init_value=0.0, coll_divs=2, coll_choices=choices)
+    solve_vide(kernel=_K, g=_G, a=_A, y0=0.0, coll_setting=(2, choices)).y
     assert choices == [2, 0, 1]
 
 
@@ -418,23 +293,18 @@ def test_too_short_input_raises(solver):
     short_K = np.ones(5)
     short_G = np.zeros(5)
     short_A = np.zeros(5)
-    kwargs = dict(kernel_values=short_K, g_values=short_G,
-                  coll_divs=3, quadrature="collocation",
-                  coll_choices=([1, 2, 3] if solver is _vie1 else [0, 1, 2]))
+    kwargs = dict(kernel=short_K, g=short_G, coll_setting=(3, [1, 2, 3] if solver is _vie1 else [0, 1, 2]), quadrature="collocation")
     if solver is _vide:
-        kwargs["a_values"] = short_A
-    with pytest.raises(ValueError, match=r"zero mesh intervals"):
+        kwargs["a"] = short_A
+    with pytest.raises(ValueError, match=r"kernel has 5 samples, but one mesh interval"):
         solver(**kwargs)
 
 
 def test_too_short_input_vector_raises():
     """Vector path -- the original notebook's failure mode."""
     import numpy as np
-    with pytest.raises(ValueError, match=r"zero mesh intervals"):
-        solve_VIE_1(kernel_values=np.zeros((5, 2, 2)),
-                    g_values=np.zeros((5, 2)),
-                    time_step=1.0,
-                    coll_divs=3, coll_choices=[1, 2, 3])
+    with pytest.raises(ValueError, match=r"kernel has 5 samples, but one mesh interval"):
+        solve_vie1(kernel=np.zeros((5, 2, 2)), g=np.zeros((5, 2)), dt=1.0, coll_setting=(3, [1, 2, 3])).y
 
 
 # ---------------------------------------------------------------------------
@@ -445,19 +315,15 @@ _T30 = np.arange(37) * 0.05
 
 
 def _scalar_init_solves(init):
-    from voles import function_solve_VIDE, function_solve_VIE_1
+    from voles import solve_vide, solve_vie1
     K, g = np.exp(-_T30), np.sin(_T30)
     mesh = np.linspace(0, 1, 6)
     return [
-        solve_VIDE(kernel_values=K, g_values=g, soln_init_value=init, time_step=0.05),
-        solve_VIDE(kernel_values=K, g_values=g, soln_init_value=init, time_step=0.05,
-                   quadrature="product"),
-        solve_VIE_1(kernel_values=K + 1, g_values=g, soln_init_value=init, time_step=0.05,
-                    force_continuous=True, show_warnings=False),
-        function_solve_VIDE(kernel=lambda u: np.exp(-u), g=np.sin, soln_init_value=init,
-                            mesh_breakpoints=mesh),
-        function_solve_VIE_1(kernel=lambda u: np.exp(-u) + 1, g=np.sin, soln_init_value=init,
-                             mesh_breakpoints=mesh, force_continuous=True, show_warnings=False),
+        solve_vide(kernel=K, g=g, y0=init, dt=0.05).y,
+        solve_vide(kernel=K, g=g, y0=init, dt=0.05, quadrature="product").y,
+        run(solve_vie1, show_warnings=False, kernel=K + 1, g=g, y0=init, dt=0.05, continuous=True).y,
+        solve_vide(kernel=lambda u: np.exp(-u), g=np.sin, y0=init, mesh=mesh).node_values,
+        run(solve_vie1, show_warnings=False, kernel=lambda u: np.exp(-u) + 1, g=np.sin, y0=init, mesh=mesh, continuous=True).node_values,
     ]
 
 
@@ -470,8 +336,7 @@ def test_scalar_init_accepts_single_element(init):
 
 def test_scalar_init_rejects_multiple_elements():
     with pytest.raises(ValueError, match="single number for a scalar equation"):
-        solve_VIDE(kernel_values=np.exp(-_T30), g_values=np.sin(_T30),
-                   soln_init_value=[0.5, 1.0], time_step=0.05)
+        solve_vide(kernel=np.exp(-_T30), g=np.sin(_T30), y0=[0.5, 1.0], dt=0.05).y
 
 
 @pytest.mark.parametrize("quad", ["collocation", "product"])
@@ -481,8 +346,7 @@ def test_vector_vide_scalar_init_message(quad):
     t = np.arange(37) * 0.05
     K = np.exp(-t)[:, None, None] * np.eye(2)
     with pytest.raises(ValueError, match=r"must have shape \(2,\) .* got shape \(\)"):
-        solve_VIDE(kernel_values=K, g_values=np.zeros((37, 2)), soln_init_value=0.5,
-                   time_step=0.05, quadrature=quad)
+        solve_vide(kernel=K, g=np.zeros((37, 2)), y0=0.5, dt=0.05, quadrature=quad).y
 
 
 @pytest.mark.parametrize("quad", ["collocation", "product"])
@@ -490,7 +354,6 @@ def test_vector_vide_scalar_init_message(quad):
 def test_too_short_input_message(N, quad, voles_warnings):
     """An empty input used to report 'truncated to -3', after printing a
     truncation warning; now the length check comes first."""
-    with pytest.raises(ValueError, match=rf"has length {N}, which leaves zero mesh intervals"):
-        solve_VIE_2(kernel_values=np.ones(N), g_values=np.ones(N), time_step=0.1,
-                    quadrature=quad, mesh_samples=4 if quad == "product" else None)
+    with pytest.raises(ValueError, match=rf"kernel has {N} samples, but one mesh interval"):
+        solve_vie2(kernel=np.ones(N), g=np.ones(N), dt=0.1, quadrature=quad, samples_per_interval=4 if quad == "product" else None).y
     assert "truncated" not in voles_warnings.text()

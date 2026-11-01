@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
-from voles import solve_VIDE
+from voles import solve_vide
 from conftest import TOLERANCE
+from conftest import with_sol
 
 
 # ---------------------------------------------------------------------------
@@ -30,20 +31,12 @@ def test_vide_vec_diagonal_matches_scalar():
     exact[:, 0] = np.exp(times)
     exact[:, 1] = np.exp(times)
 
-    soln_vec = solve_VIDE(
-        kernel_values=kernel, a_values=a, g_values=g,
-        soln_init_value=np.array([1.0, 1.0]),
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[0, 1, 2])
+    soln_vec = solve_vide(kernel=kernel, a=a, g=g, y0=np.array([1.0, 1.0]), dt=time_step, coll_setting=(coll_divs, [0, 1, 2])).y
     assert soln_vec.shape == exact.shape
 
     k_scalar = np.ones(num_pts)
     a_scalar = np.zeros(num_pts)
-    soln_s = solve_VIDE(
-        kernel_values=k_scalar, a_values=a_scalar, g_values=g[:, 0],
-        soln_init_value=1.0,
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[0, 1, 2])
+    soln_s = solve_vide(kernel=k_scalar, a=a_scalar, g=g[:, 0], y0=1.0, dt=time_step, coll_setting=(coll_divs, [0, 1, 2])).y
 
     assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < TOLERANCE
     assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < TOLERANCE
@@ -65,11 +58,7 @@ def test_vide_vec_analytic_2d():
     exact[:, 0] = np.exp(times)
     exact[:, 1] = np.exp(times)
 
-    soln = solve_VIDE(
-        kernel_values=kernel, a_values=a, g_values=g,
-        soln_init_value=np.array([1.0, 1.0]),
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[0, 1, 2, 3])
+    soln = solve_vide(kernel=kernel, a=a, g=g, y0=np.array([1.0, 1.0]), dt=time_step, coll_setting=(coll_divs, [0, 1, 2, 3])).y
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
@@ -87,15 +76,7 @@ def test_vide_vec_coupled_generated_accuracy(coupled_vide, pair):
         spec_a, spec_b, [[1, 1], [1, -1]],
         time_step=0.02, coll_divs=3, coll_choices=[1, 2, 3],
     )
-    soln = solve_VIDE(
-        kernel_values=d["kernel"],
-        a_values=d["a"],
-        g_values=d["g"],
-        soln_init_value=d["soln_init_value"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -125,72 +106,31 @@ def test_make_coupled_vide_reproduces_handwritten(coupled_vide):
 
 def test_vide_accuracy(vide_data):
     d = vide_data
-    soln = solve_VIDE(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        a_values=d["a"],
-        soln_init_value=d["soln_init_value"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vide(kernel=d["kernel"], g=d["g"], a=d["a"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_vide_ode_accuracy(vide_ode_data):
     d = vide_ode_data
-    soln = solve_VIDE(
-        kernel_values=d["kernel"],
-        a_values=d["a"],
-        g_values=d["g"],
-        soln_init_value=d["soln_init_value"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_vide_log_accuracy(vide_log_data):
     d = vide_log_data
-    soln = solve_VIDE(
-        kernel_values=d["kernel"],
-        a_values=d["a"],
-        g_values=d["g"],
-        soln_init_value=d["soln_init_value"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_vide_stiff_accuracy(vide_stiff_data):
     d = vide_stiff_data
-    soln = solve_VIDE(
-        kernel_values=d["kernel"],
-        a_values=d["a"],
-        g_values=d["g"],
-        soln_init_value=d["soln_init_value"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_vide_return_polys(vide_data):
     d = vide_data
-    result = solve_VIDE(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        a_values=d["a"],
-        soln_init_value=d["soln_init_value"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-        return_function=True,
-    )
+    result = with_sol(solve_vide(kernel=d["kernel"], g=d["g"], a=d["a"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
     assert isinstance(result, tuple) and len(result) == 2
     soln, polys = result
     assert isinstance(soln, np.ndarray)

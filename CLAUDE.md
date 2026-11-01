@@ -55,7 +55,7 @@ Docstring Examples are doctested by `tests/test_docstring_examples.py` (print ro
 - **`_api.py`** — the 1.0 public solvers `solve_vie1/2/vide`: validate every argument with 1.0 names (regime from input types: arrays → sampled/`dt`, callables → functional/`mesh`), apply the shape/matrix rule, then call the engine entry `_sampled.solve` / `_functional.solve`.
 - **`_sampled.py`** — sampled-data engine `vie1`, `vie2`, `vide` (the 0.10 `solve_VIE_*`, 0.10 kwarg names, with their own checks). Validates, dispatches to D extension or Numba fallback, handles scalar/vector/matrix/complex cases, threading for matrix columns. `solve(equation, **kw)` returns a `VolterraSolution`.
 - **`_functional.py`** — callable-input engine `vie1`, `vie2`, `vide` (the 0.10 `function_solve_*`), `optimal_graded_mesh`, the node helpers; `solve(...)` as above.
-- **`_legacy.py`** — the deprecated 0.10 functions (exact signatures and docstrings): warn with the equivalent 1.0 call (`_migrate.describe`) and call the engine directly, so results and messages stay 0.10's. `voles/solvers.py` is a deprecated re-export.
+- The 0.10 API (`solve_VIE_*`, `function_solve_*`) was removed in 1.0. `docs/dev/migrate_0_10.py` translates a 0.10 call to its 1.0 equivalent (used by the battery). Bitwise regression: `docs/dev/battery.py` (local); cross-platform frozen values: `tests/test_reference_values.py`.
 - **`_common.py`** — helpers both engines share (collocation basis, VIE-1 ρ rule, thread count); neither engine imports the other.
 - **`_solution.py`** — `VolterraSolution` (the 1.0 solution object) and the legacy `_SolutionFunction`.
 - **`_validate.py`, `_warnings.py`** — the type-vs-value validation rule and the `VolesWarning` classes/`_warn` helper.

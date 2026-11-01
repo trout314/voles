@@ -56,8 +56,8 @@ def sampled(kind="vie2", N=1030, d=0, m=None, cplx=False, coll_setting=None,
                             np.broadcast_to(-0.5 * np.eye(d), (N, d, d)).copy()),
                   soln_init_value=y0 + 1.0)
     eq = "vie1" if kind.startswith("vie1") else kind
-    vals, leg = {"vie1": voles.solve_VIE_1, "vie2": voles.solve_VIE_2,
-                 "vide": voles.solve_VIDE}[eq](return_function=True, **kw)
+    vals, leg = {"vie1": _sampled.vie1, "vie2": _sampled.vie2,
+                 "vide": _sampled.vide}[eq](return_function=True, **kw)
     sol = _sampled.solve(eq, **kw)
     return sol, vals, leg
 
@@ -85,8 +85,8 @@ def functional(kind="vie2", nodes=None, d=0, m=None, cplx=False, M=16):
         kw["g"] = g
     else:
         kw.update(g=g, soln_init_value=y0)
-    fn = {"vie1": voles.function_solve_VIE_1, "vie2": voles.function_solve_VIE_2,
-          "vide": voles.function_solve_VIDE}[kind]
+    fn = {"vie1": _functional.vie1, "vie2": _functional.vie2,
+          "vide": _functional.vide}[kind]
     vals, leg = fn(return_function=True, **kw)
     sol = _functional.solve(kind, **kw)
     return sol, vals, leg
@@ -424,3 +424,15 @@ def test_sampled_settings_are_recorded():
     assert s.samples_per_interval == 4
     f = voles.solve_vie2(kernel=np.exp, g=np.sin, mesh=np.linspace(0, 1, 5))
     assert (f.dt, f.samples_per_interval, f.quadrature) == (None, None, None)
+
+
+def test_to_ppoly_antiderivative_and_roots_work():
+    """The solution's arrays are read-only; PPoly's Cython routines need
+    writable buffers (antiderivative failed with 'buffer source array is
+    read-only')."""
+    import voles
+    t = np.linspace(0, 2 * np.pi, 201)
+    sol = voles.solve_vide(kernel=np.zeros_like(t), a=0.0, g=np.cos(t), y0=0.0, dt=t[1])  # y = sin t
+    pp = sol.to_ppoly()
+    np.testing.assert_allclose(pp.antiderivative()(np.pi), 2.0, rtol=1e-6)
+    np.testing.assert_allclose(pp.roots(extrapolate=False)[1], np.pi, rtol=1e-6)

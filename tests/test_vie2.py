@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
-from voles import solve_VIE_2
+from voles import solve_vie2
 from conftest import TOLERANCE
+from conftest import with_sol
 
 
 # ---------------------------------------------------------------------------
@@ -28,16 +29,10 @@ def test_vie2_vec_diagonal_matches_scalar():
     exact[:, 0] = times
     exact[:, 1] = times
 
-    soln_vec = solve_VIE_2(
-        kernel_values=kernel, g_values=g,
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[0, 1, 2])
+    soln_vec = solve_vie2(kernel=kernel, g=g, dt=time_step, coll_setting=(coll_divs, [0, 1, 2])).y
     assert soln_vec.shape == exact.shape
 
-    soln_s = solve_VIE_2(
-        kernel_values=K0, g_values=g[:, 0],
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[0, 1, 2])
+    soln_s = solve_vie2(kernel=K0, g=g[:, 0], dt=time_step, coll_setting=(coll_divs, [0, 1, 2])).y
 
     assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < TOLERANCE
     assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < TOLERANCE
@@ -60,46 +55,25 @@ def test_vie2_vec_analytic_2d():
     exact[:, 0] = times
     exact[:, 1] = times
 
-    soln = solve_VIE_2(
-        kernel_values=kernel, g_values=g,
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[0, 1, 2, 3])
+    soln = solve_vie2(kernel=kernel, g=g, dt=time_step, coll_setting=(coll_divs, [0, 1, 2, 3])).y
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
 def test_vie2_accuracy(vie2_data):
     d = vie2_data
-    soln = solve_VIE_2(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_vie2_exp_accuracy(vie2_exp_data):
     d = vie2_exp_data
-    soln = solve_VIE_2(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_vie2_rational_accuracy(vie2_rational_data):
     d = vie2_rational_data
-    soln = solve_VIE_2(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -118,13 +92,7 @@ def test_vie2_vec_coupled_generated_accuracy(coupled_vie2, pair):
         spec_a, spec_b, [[1, 1], [1, -1]],
         time_step=0.02, coll_divs=3, coll_choices=[0, 1, 2, 3],
     )
-    soln = solve_VIE_2(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -161,14 +129,7 @@ def test_make_coupled_vie2_reproduces_handwritten(coupled_vie2):
 
 def test_vie2_return_polys(vie2_data):
     d = vie2_data
-    result = solve_VIE_2(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-        return_function=True,
-    )
+    result = with_sol(solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
     assert isinstance(result, tuple) and len(result) == 2
     soln, polys = result
     assert isinstance(soln, np.ndarray)
@@ -180,10 +141,7 @@ def test_vie2_return_function_callable_and_list_semantics(vie2_data):
     """The second return value is callable AND indexes/iterates like the old
     list of per-interval polynomials."""
     d = vie2_data
-    soln, sol = solve_VIE_2(
-        kernel_values=d["kernel"], g_values=d["g"], time_step=d["time_step"],
-        coll_divs=d["coll_divs"], coll_choices=d["coll_choices"],
-        return_function=True)
+    soln, sol = with_sol(solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
     # Callable: evaluating at an interior point matches the owning interval poly.
     h = d["coll_divs"] ** 2 * d["time_step"]
     t_mid = 0.5 * h
@@ -193,21 +151,6 @@ def test_vie2_return_function_callable_and_list_semantics(vie2_data):
     assert list(sol) == sol.polynomials
     # Callable agrees with the array solution at the final node.
     assert sol(d["time_step"] * (len(soln) - 1)) == pytest.approx(soln[-1], abs=TOLERANCE)
-
-
-def test_vie2_return_polys_deprecated_alias(vie2_data):
-    """`return_polys` still works but emits a DeprecationWarning and yields the
-    same callable solution object as `return_function`."""
-    d = vie2_data
-    kw = dict(kernel_values=d["kernel"], g_values=d["g"], time_step=d["time_step"],
-              coll_divs=d["coll_divs"], coll_choices=d["coll_choices"])
-    with pytest.warns(DeprecationWarning):
-        soln_old, sol_old = solve_VIE_2(return_polys=True, **kw)
-    soln_new, sol_new = solve_VIE_2(return_function=True, **kw)
-    assert np.array_equal(soln_old, soln_new)
-    assert type(sol_old) is type(sol_new)
-    assert sol_old(0.5 * d["coll_divs"] ** 2 * d["time_step"]) == pytest.approx(
-        sol_new(0.5 * d["coll_divs"] ** 2 * d["time_step"]))
 
 
 # ---------------------------------------------------------------------------
@@ -230,7 +173,7 @@ def test_solution_function_nan_outside_domain(shape):
             g = np.stack([g, 3 * g], axis=2)
     if shape == "complex":
         K = K * (1 + 0.5j)
-    y, f = solve_VIE_2(kernel_values=K, g_values=g, time_step=dt, return_function=True)
+    y, f = with_sol(solve_vie2(kernel=K, g=g, dt=dt))
     T = t[-1]
     inside = f(np.array([0.0, 0.5 * T, T, T * (1 + 1e-14)]))
     assert np.all(np.isfinite(inside))
@@ -265,8 +208,7 @@ def test_solution_function_nan_tolerance_scales_with_the_interval():
     silently extrapolated. It is now relative to the interval length."""
     dt = 1e-11
     t = np.arange(101) * dt                                  # T = 1e-9
-    y, f = solve_VIE_2(kernel_values=np.exp(-t), g_values=np.sin(1e9 * t) + 1.0,
-                       time_step=dt, return_function=True)
+    y, f = with_sol(solve_vie2(kernel=np.exp(-t), g=np.sin(1e9 * t) + 1.0, dt=dt))
     T = t[-1]
     assert np.isfinite(f(T)) and np.isfinite(f(T * (1 - 1e-13)))
     assert np.isnan(f(T * (1 + 1e-4)))                       # 0.01% past T: outside

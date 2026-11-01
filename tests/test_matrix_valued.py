@@ -6,8 +6,9 @@ independently using the vector-valued interface.
 """
 import numpy as np
 import pytest
-from voles import solve_VIE_1, solve_VIE_2, solve_VIDE
+from voles import solve_vie1, solve_vie2, solve_vide
 from conftest import TOLERANCE
+from conftest import with_sol
 
 
 # ---------------------------------------------------------------------------
@@ -69,32 +70,21 @@ class TestVIE2Matrix:
         self.coll_choices = [0, 1, 2, 3]
 
     def test_output_shape(self):
-        soln = solve_VIE_2(kernel_values=self.kernel, g_values=self.g_matrix,
-                           time_step=self.time_step, coll_divs=self.coll_divs,
-                           coll_choices=self.coll_choices)
+        soln = solve_vie2(kernel=self.kernel, g=self.g_matrix, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert soln.shape == (self.exact.shape[0], 2, 2)
 
     def test_accuracy(self):
-        soln = solve_VIE_2(kernel_values=self.kernel, g_values=self.g_matrix,
-                           time_step=self.time_step, coll_divs=self.coll_divs,
-                           coll_choices=self.coll_choices)
+        soln = solve_vie2(kernel=self.kernel, g=self.g_matrix, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
 
     def test_matches_independent_columns(self):
-        soln = solve_VIE_2(kernel_values=self.kernel, g_values=self.g_matrix,
-                           time_step=self.time_step, coll_divs=self.coll_divs,
-                           coll_choices=self.coll_choices)
+        soln = solve_vie2(kernel=self.kernel, g=self.g_matrix, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
         for j in range(2):
-            col_soln = solve_VIE_2(kernel_values=self.kernel,
-                                   g_values=self.g_matrix[:, :, j],
-                                   time_step=self.time_step, coll_divs=self.coll_divs,
-                                   coll_choices=self.coll_choices)
+            col_soln = solve_vie2(kernel=self.kernel, g=self.g_matrix[:, :, j], dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
             assert np.max(np.abs(soln[:, :, j] - col_soln)) < 1e-12
 
     def test_return_polys(self):
-        result = solve_VIE_2(kernel_values=self.kernel, g_values=self.g_matrix,
-                             time_step=self.time_step, coll_divs=self.coll_divs,
-                             coll_choices=self.coll_choices, return_function=True)
+        result = with_sol(solve_vie2(kernel=self.kernel, g=self.g_matrix, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)))
         assert isinstance(result, tuple) and len(result) == 2
         soln, polys = result
         assert soln.shape == self.exact.shape
@@ -144,32 +134,21 @@ class TestVIE1Matrix:
         self.coll_choices = [1, 2, 3]
 
     def test_output_shape(self):
-        soln = solve_VIE_1(kernel_values=self.kernel, g_values=self.g_matrix,
-                           time_step=self.time_step, coll_divs=self.coll_divs,
-                           coll_choices=self.coll_choices)
+        soln = solve_vie1(kernel=self.kernel, g=self.g_matrix, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert soln.shape == (len(self.times), 2, 2)
 
     def test_accuracy(self):
-        soln = solve_VIE_1(kernel_values=self.kernel, g_values=self.g_matrix,
-                           time_step=self.time_step, coll_divs=self.coll_divs,
-                           coll_choices=self.coll_choices)
+        soln = solve_vie1(kernel=self.kernel, g=self.g_matrix, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
 
     def test_matches_independent_columns(self):
-        soln = solve_VIE_1(kernel_values=self.kernel, g_values=self.g_matrix,
-                           time_step=self.time_step, coll_divs=self.coll_divs,
-                           coll_choices=self.coll_choices)
+        soln = solve_vie1(kernel=self.kernel, g=self.g_matrix, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
         for j in range(2):
-            col_soln = solve_VIE_1(kernel_values=self.kernel,
-                                   g_values=self.g_matrix[:, :, j],
-                                   time_step=self.time_step, coll_divs=self.coll_divs,
-                                   coll_choices=self.coll_choices)
+            col_soln = solve_vie1(kernel=self.kernel, g=self.g_matrix[:, :, j], dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
             assert np.max(np.abs(soln[:, :, j] - col_soln)) < 1e-12
 
     def test_return_polys(self):
-        result = solve_VIE_1(kernel_values=self.kernel, g_values=self.g_matrix,
-                             time_step=self.time_step, coll_divs=self.coll_divs,
-                             coll_choices=self.coll_choices, return_function=True)
+        result = with_sol(solve_vie1(kernel=self.kernel, g=self.g_matrix, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)))
         assert isinstance(result, tuple) and len(result) == 2
         soln, polys = result
         assert soln.shape == self.exact.shape
@@ -224,37 +203,21 @@ class TestVIDEMatrix:
         self.coll_choices = [1, 2, 3]
 
     def test_output_shape(self):
-        soln = solve_VIDE(kernel_values=self.kernel, a_values=self.a_values,
-                          g_values=self.g_matrix, soln_init_value=self.soln_init,
-                          time_step=self.time_step, coll_divs=self.coll_divs,
-                          coll_choices=self.coll_choices)
+        soln = solve_vide(kernel=self.kernel, a=self.a_values, g=self.g_matrix, y0=self.soln_init, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert soln.shape == (len(self.times), 2, 2)
 
     def test_accuracy(self):
-        soln = solve_VIDE(kernel_values=self.kernel, a_values=self.a_values,
-                          g_values=self.g_matrix, soln_init_value=self.soln_init,
-                          time_step=self.time_step, coll_divs=self.coll_divs,
-                          coll_choices=self.coll_choices)
+        soln = solve_vide(kernel=self.kernel, a=self.a_values, g=self.g_matrix, y0=self.soln_init, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
 
     def test_matches_independent_columns(self):
-        soln = solve_VIDE(kernel_values=self.kernel, a_values=self.a_values,
-                          g_values=self.g_matrix, soln_init_value=self.soln_init,
-                          time_step=self.time_step, coll_divs=self.coll_divs,
-                          coll_choices=self.coll_choices)
+        soln = solve_vide(kernel=self.kernel, a=self.a_values, g=self.g_matrix, y0=self.soln_init, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
         for j in range(2):
-            col_soln = solve_VIDE(kernel_values=self.kernel, a_values=self.a_values,
-                                  g_values=self.g_matrix[:, :, j],
-                                  soln_init_value=self.soln_init[:, j],
-                                  time_step=self.time_step, coll_divs=self.coll_divs,
-                                  coll_choices=self.coll_choices)
+            col_soln = solve_vide(kernel=self.kernel, a=self.a_values, g=self.g_matrix[:, :, j], y0=self.soln_init[:, j], dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
             assert np.max(np.abs(soln[:, :, j] - col_soln)) < 1e-12
 
     def test_return_polys(self):
-        result = solve_VIDE(kernel_values=self.kernel, a_values=self.a_values,
-                            g_values=self.g_matrix, soln_init_value=self.soln_init,
-                            time_step=self.time_step, coll_divs=self.coll_divs,
-                            coll_choices=self.coll_choices, return_function=True)
+        result = with_sol(solve_vide(kernel=self.kernel, a=self.a_values, g=self.g_matrix, y0=self.soln_init, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)))
         assert isinstance(result, tuple) and len(result) == 2
         soln, polys = result
         assert soln.shape == self.exact.shape
@@ -271,10 +234,7 @@ class TestVIDEMatrix:
         kernel_zero = np.zeros((num_pts, 2, 2))
         a_zero = np.zeros((num_pts, 2, 2))
         init = np.array([[1.0, 2.0], [3.0, 4.0]])
-        soln = solve_VIDE(kernel_values=kernel_zero, a_values=a_zero,
-                          g_values=None, soln_init_value=init,
-                          time_step=self.time_step, coll_divs=self.coll_divs,
-                          coll_choices=self.coll_choices)
+        soln = solve_vide(kernel=kernel_zero, a=a_zero, g=None, y0=init, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert soln.shape == (num_pts, 2, 2)
         # y should be constant = init for each column
         for j in range(2):
@@ -305,10 +265,7 @@ class TestVectorReturnPolys:
         self.mesh_divs = (num_pts - 1) // self.coll_divs**2
 
     def test_vie2_vec_return_polys_shape(self):
-        soln, polys = solve_VIE_2(
-            kernel_values=self.kernel, g_values=self.g_vec,
-            time_step=self.time_step, coll_divs=self.coll_divs, quadrature="collocation",
-            coll_choices=self.coll_choices, return_function=True)
+        soln, polys = with_sol(solve_vie2(kernel=self.kernel, g=self.g_vec, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices), quadrature="collocation"))
         assert soln.shape == (len(self.times), 2)
         assert len(polys) == self.mesh_divs
         assert polys[0].shape == (2,)
@@ -316,10 +273,7 @@ class TestVectorReturnPolys:
         assert hasattr(polys[0][1], '__call__')
 
     def test_vie2_vec_return_polys_accuracy(self):
-        soln, polys = solve_VIE_2(
-            kernel_values=self.kernel, g_values=self.g_vec,
-            time_step=self.time_step, coll_divs=self.coll_divs, quadrature="collocation",
-            coll_choices=self.coll_choices, return_function=True)
+        soln, polys = with_sol(solve_vie2(kernel=self.kernel, g=self.g_vec, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices), quadrature="collocation"))
         h = self.coll_divs**2 * self.time_step
         for n, poly_arr in enumerate(polys):
             t_mid = (n + 0.5) * h
@@ -336,10 +290,7 @@ class TestVectorReturnPolys:
         g_vec[:, 0] = np.sin(self.times)
         g_vec[0, 0] = 0.0
         g_vec[:, 1] = g_vec[:, 0]
-        soln, polys = solve_VIE_1(
-            kernel_values=kernel, g_values=g_vec,
-            time_step=self.time_step, coll_divs=self.coll_divs,
-            coll_choices=[1, 2, 3], return_function=True)
+        soln, polys = with_sol(solve_vie1(kernel=kernel, g=g_vec, dt=self.time_step, coll_setting=(self.coll_divs, [1, 2, 3])))
         assert soln.shape == (len(self.times), 2)
         assert len(polys) == self.mesh_divs
         assert polys[0].shape == (2,)
@@ -355,11 +306,7 @@ class TestVectorReturnPolys:
         a_values[:, 1, 1] = a_1d
         g_vec = np.column_stack([g_1d, g_1d])
         soln_init = np.zeros(2)
-        soln, polys = solve_VIDE(
-            kernel_values=self.kernel, a_values=a_values,
-            g_values=g_vec, soln_init_value=soln_init,
-            time_step=self.time_step, coll_divs=self.coll_divs, quadrature="collocation",
-            coll_choices=[1, 2, 3], return_function=True)
+        soln, polys = with_sol(solve_vide(kernel=self.kernel, a=a_values, g=g_vec, y0=soln_init, dt=self.time_step, coll_setting=(self.coll_divs, [1, 2, 3]), quadrature="collocation"))
         assert soln.shape == (len(self.times), 2)
         assert len(polys) == self.mesh_divs
         assert polys[0].shape == (2,)

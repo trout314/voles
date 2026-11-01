@@ -25,8 +25,9 @@ import numpy as np
 import pytest
 from scipy.special import j1, jv
 
-from voles import solve_VIE_1, function_solve_VIE_1
+from voles import solve_vie1
 from voles import _dlang, _product
+from conftest import run, with_sol
 
 
 # ---------------------------------------------------------------------------
@@ -102,16 +103,9 @@ def test_polynomial_kernel_matches_exact_collocation(coll_divs, choices, force_c
     K = kernel(t)
     gv = g(t)
     init = 1.5      # consistent with the data: y(0) = g'(0) / K(0) = (1.3 + 0.2) / 1
-    vals = solve_VIE_1(kernel_values=K, g_values=gv, time_step=dt, coll_divs=coll_divs,
-                       coll_choices=choices, quadrature="product", mesh_samples=Q,
-                       kernel_interp_degree=p, force_continuous=force_continuous,
-                       soln_init_value=(init if force_continuous else None),
-                       show_warnings=False)
+    vals = run(solve_vie1, show_warnings=False, kernel=K, g=gv, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p, continuous=force_continuous, y0=init if force_continuous else None).y
     mesh = np.arange(N // Q + 1) * (Q * dt)
-    ref_vals, ref = function_solve_VIE_1(
-        kernel=kernel, g=g, mesh_breakpoints=mesh, coll_divs=coll_divs,
-        coll_choices=choices, force_continuous=force_continuous,
-        soln_init_value=(init if force_continuous else None), return_function=True)
+    ref_vals, ref = with_sol(run(solve_vie1, show_warnings=False, kernel=kernel, g=g, mesh=mesh, coll_nodes=np.asarray(choices) / coll_divs, continuous=force_continuous, y0=init if force_continuous else None))
     assert np.max(np.abs(vals - sampled_values(ref, t, Q))) < 1e-8   # reference quadrature tolerance
 
 
@@ -129,15 +123,9 @@ def test_polynomial_kernel_matches_exact_collocation_vector():
     for fc in (False, True):
         # consistent with the data: y(0) = K(0)^-1 g'(0) = A^-1 [1, 0.5]
         init = np.linalg.solve(A, [1.0, 0.5]) if fc else None
-        vals = solve_VIE_1(kernel_values=K, g_values=gv, time_step=dt, coll_divs=coll_divs,
-                           coll_choices=choices, quadrature="product", mesh_samples=Q,
-                           kernel_interp_degree=p, force_continuous=fc,
-                           soln_init_value=init, show_warnings=False)
+        vals = run(solve_vie1, show_warnings=False, kernel=K, g=gv, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p, continuous=fc, y0=init if fc else None).y
         mesh = np.arange(N // Q + 1) * (Q * dt)
-        _, ref = function_solve_VIE_1(
-            kernel=kernel, g=g, mesh_breakpoints=mesh, coll_divs=coll_divs,
-            coll_choices=choices, force_continuous=fc, soln_init_value=init,
-            return_function=True)
+        _, ref = with_sol(solve_vie1(kernel=kernel, g=g, mesh=mesh, coll_nodes=np.asarray(choices) / coll_divs, continuous=fc, y0=init if fc else None))
         assert np.max(np.abs(vals - sampled_values(ref, t, Q))) < 1e-8   # reference quadrature tolerance
 
 
@@ -156,15 +144,12 @@ def test_reproduces_polynomial_solutions_for_unit_kernel(coll_divs, choices):
     # discontinuous: degree m-1 in the trial space
     y = t ** (m - 1)
     g = t ** m / m
-    vals = solve_VIE_1(kernel_values=K, g_values=g, time_step=dt, coll_divs=coll_divs,
-                       coll_choices=choices, quadrature="product", mesh_samples=coll_divs, show_warnings=False)
+    vals = run(solve_vie1, show_warnings=False, kernel=K, g=g, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=coll_divs).y
     assert np.max(np.abs(vals - y)) < 1e-9
     # continuous: degree m
     y = t ** m
     g = t ** (m + 1) / (m + 1)
-    vals = solve_VIE_1(kernel_values=K, g_values=g, time_step=dt, coll_divs=coll_divs,
-                       coll_choices=choices, quadrature="product", mesh_samples=coll_divs, force_continuous=True,
-                       soln_init_value=0.0, show_warnings=False)
+    vals = run(solve_vie1, show_warnings=False, kernel=K, g=g, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=coll_divs, continuous=True, y0=0.0).y
     assert np.max(np.abs(vals - y)) < 1e-9
 
 
@@ -176,9 +161,7 @@ def test_continuous_amplification_factor(coll_divs, choices, rho):
     M = 8
     N = n_samples(Q, M)
     K = np.ones(N)
-    vals = solve_VIE_1(kernel_values=K, g_values=np.zeros(N), time_step=0.3,
-                       coll_divs=coll_divs, coll_choices=choices, quadrature="product", mesh_samples=coll_divs,
-                       force_continuous=True, soln_init_value=1.0, show_warnings=False)
+    vals = run(solve_vie1, show_warnings=False, kernel=K, g=np.zeros(N), dt=0.3, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=coll_divs, continuous=True, y0=1.0).y
     mesh_vals = vals[::Q]
     assert np.allclose(mesh_vals, rho ** np.arange(M + 1), atol=1e-10)
 
@@ -187,9 +170,7 @@ def test_one_node_continuous_is_trapezoidal_rule():
     dt = 0.125
     N = 200
     t, C, Cd, Kex = rubin(dt, N)
-    vals = solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=1,
-                       coll_choices=[1], quadrature="product", kernel_interp_degree=1,
-                       force_continuous=True, soln_init_value=-1.0, show_warnings=False)
+    vals = run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(1, [1]), quadrature="product", kernel_interp_degree=1, continuous=True, y0=-1.0).y
     # product trapezoidal rule on the interpolated (piecewise-linear) kernel is
     # the exact integral of the product of two linear functions, not the
     # classical trapezoidal rule on the product -- check against the direct sum
@@ -219,10 +200,7 @@ def _max_err(dt, coll_divs, choices, fc, model, T=18.0, Q=None, p=None):
     N = int(round(T / dt)) + 1
     N = (N - 1) // Q * Q + 1
     t, C, Cd, Kex = model(dt, N)
-    vals = solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=coll_divs,
-                       coll_choices=choices, quadrature="product", mesh_samples=Q,
-                       kernel_interp_degree=p, force_continuous=fc,
-                       soln_init_value=(-1.0 if fc else None), show_warnings=False)
+    vals = run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p, continuous=fc, y0=-1.0 if fc else None).y
     return np.max(np.abs(vals - Kex))
 
 
@@ -240,10 +218,9 @@ def test_mesh_samples_q_beats_present_scheme_on_coarse_data():
     dt = 0.125
     N = n_samples(9, 32)
     t, C, Cd, Kex = rubin(dt, N)
-    common = dict(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=3,
-                  coll_choices=[1, 2, 3], show_warnings=False)
-    err_coll = np.max(np.abs(solve_VIE_1(quadrature="collocation", **common) - Kex))
-    err_prod = np.max(np.abs(solve_VIE_1(quadrature="product", mesh_samples=3, **common) - Kex))
+    common = dict(kernel=C, g=Cd, dt=dt, coll_setting=(3, [1, 2, 3]))
+    err_coll = np.max(np.abs(solve_vie1(quadrature="collocation", **common).y - Kex))
+    err_prod = np.max(np.abs(solve_vie1(quadrature="product", samples_per_interval=3, **common).y - Kex))
     assert err_prod < err_coll / 10
 
 
@@ -255,19 +232,16 @@ def test_every_sample_is_used():
     dt, q = 0.1, 3
     N = n_samples(q, 12)
     t, C, Cd, _ = damped(dt, N)
-    base = solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=q,
-                       coll_choices=[1, 2, 3], quadrature="product", mesh_samples=q, show_warnings=False)
+    base = run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(q, [1, 2, 3]), quadrature="product", samples_per_interval=q).y
     for j in (1, 5, 7, 11, N - 2):       # lags the collocation quadrature never reads
         Cp = C.copy()
         Cp[j] += 0.1
-        pert = solve_VIE_1(kernel_values=Cp, g_values=Cd, time_step=dt, coll_divs=q,
-                           coll_choices=[1, 2, 3], quadrature="product", mesh_samples=q, show_warnings=False)
+        pert = run(solve_vie1, show_warnings=False, kernel=Cp, g=Cd, dt=dt, coll_setting=(q, [1, 2, 3]), quadrature="product", samples_per_interval=q).y
         assert np.max(np.abs(pert - base)) > 1e-6, j
     for j in (1, 2, 4, 5):               # g between collocation points of the coarse scheme
         gp = Cd.copy()
         gp[j] += 0.1
-        pert = solve_VIE_1(kernel_values=C, g_values=gp, time_step=dt, coll_divs=q,
-                           coll_choices=[1, 2, 3], quadrature="product", mesh_samples=q, show_warnings=False)
+        pert = run(solve_vie1, show_warnings=False, kernel=C, g=gp, dt=dt, coll_setting=(q, [1, 2, 3]), quadrature="product", samples_per_interval=q).y
         assert np.max(np.abs(pert - base)) > 1e-6, j
 
 
@@ -277,10 +251,9 @@ def test_mesh_samples_q_squared_is_not_the_collocation_scheme():
     for dt in (0.1, 0.05, 0.025):
         N = n_samples(q * q, int(round(9.0 / (q * q * dt))))
         t, C, Cd, Kex = damped(dt, N)
-        common = dict(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=q,
-                      coll_choices=choices, show_warnings=False)
-        a = solve_VIE_1(quadrature="collocation", **common)
-        b = solve_VIE_1(quadrature="product", mesh_samples=q * q, **common)
+        common = dict(kernel=C, g=Cd, dt=dt, coll_setting=(q, choices))
+        a = solve_vie1(quadrature="collocation", **common).y
+        b = solve_vie1(quadrature="product", samples_per_interval=q * q, **common).y
         diffs.append(np.max(np.abs(a - b)))
         assert diffs[-1] > 1e-12
     # the difference is a quadrature error of the collocation order
@@ -312,15 +285,9 @@ def test_vector_block_diagonal_matches_scalar():
     g = np.stack([Cd, Cd2], axis=1)
     for fc in (False, True):
         init = np.array([-1.0, -1.0]) if fc else None
-        vec = solve_VIE_1(kernel_values=K, g_values=g, time_step=dt, coll_divs=q,
-                          coll_choices=[1, 2], quadrature="product", force_continuous=fc,
-                          soln_init_value=init, show_warnings=False)
-        s0 = solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=q,
-                         coll_choices=[1, 2], quadrature="product", force_continuous=fc,
-                         soln_init_value=(-1.0 if fc else None), show_warnings=False)
-        s1 = solve_VIE_1(kernel_values=C2, g_values=Cd2, time_step=dt, coll_divs=q,
-                         coll_choices=[1, 2], quadrature="product", force_continuous=fc,
-                         soln_init_value=(-1.0 if fc else None), show_warnings=False)
+        vec = run(solve_vie1, show_warnings=False, kernel=K, g=g, dt=dt, coll_setting=(q, [1, 2]), quadrature="product", continuous=fc, y0=init if fc else None).y
+        s0 = run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(q, [1, 2]), quadrature="product", continuous=fc, y0=-1.0 if fc else None).y
+        s1 = run(solve_vie1, show_warnings=False, kernel=C2, g=Cd2, dt=dt, coll_setting=(q, [1, 2]), quadrature="product", continuous=fc, y0=-1.0 if fc else None).y
         assert np.allclose(vec[:, 0], s0, atol=1e-11)
         assert np.allclose(vec[:, 1], s1, atol=1e-11)
 
@@ -336,12 +303,9 @@ def test_matrix_columns_and_return_function():
     for j in range(3):
         g[:, 0, j] = (j + 1) * Cd
         g[:, 1, j] = -(j + 1) * Cd
-    vals, sol = solve_VIE_1(kernel_values=K, g_values=g, time_step=dt, coll_divs=q,
-                            coll_choices=[1, 2], quadrature="product", mesh_samples=q,
-                            return_function=True, show_warnings=False)
+    vals, sol = with_sol(run(solve_vie1, show_warnings=False, kernel=K, g=g, dt=dt, coll_setting=(q, [1, 2]), quadrature="product", samples_per_interval=q))
     assert vals.shape == (N, 2, 3)
-    single = solve_VIE_1(kernel_values=C, g_values=2 * Cd, time_step=dt, coll_divs=q,
-                         coll_choices=[1, 2], quadrature="product", mesh_samples=q, show_warnings=False)
+    single = run(solve_vie1, show_warnings=False, kernel=C, g=2 * Cd, dt=dt, coll_setting=(q, [1, 2]), quadrature="product", samples_per_interval=q).y
     assert np.allclose(vals[:, 0, 1], single, atol=1e-11)
     assert np.allclose(vals[:, 1, 1], -single, atol=1e-11)
     # the callable evaluates to the returned values at interior grid points
@@ -356,10 +320,7 @@ def test_return_function_scalar_and_continuous():
     dt, q, Q = 0.05, 3, 6
     N = n_samples(Q, 10)
     t, C, Cd, _ = damped(dt, N)
-    vals, sol = solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=q,
-                            coll_choices=[1, 2, 3], quadrature="product", mesh_samples=Q,
-                            force_continuous=True, soln_init_value=-1.0,
-                            return_function=True, show_warnings=False)
+    vals, sol = with_sol(run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(q, [1, 2, 3]), quadrature="product", samples_per_interval=Q, continuous=True, y0=-1.0))
     assert np.allclose(sol(t), vals, atol=1e-10)
     assert abs(sol(0.0) + 1.0) < 1e-12
     assert len(sol) == (N - 1) // Q
@@ -372,8 +333,7 @@ def test_uncompiled_setting_works_with_product_quadrature():
     dt, q = 0.05, 5
     N = n_samples(q, 30)
     t, C, Cd, Kex = damped(dt, N)
-    vals = solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=q,
-                       coll_choices=[1, 2, 3, 4, 5], quadrature="product", show_warnings=False)
+    vals = run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(q, [1, 2, 3, 4, 5]), quadrature="product").y
     assert np.max(np.abs(vals - Kex)) < 1e-4
 
 
@@ -383,10 +343,8 @@ def test_complex_passthrough():
     t, C, Cd, _ = damped(dt, N)
     Kc = C * (1.0 + 0.5j)
     gc = Cd * (1.0 + 0.5j)
-    vals = solve_VIE_1(kernel_values=Kc, g_values=gc, time_step=dt, coll_divs=q,
-                       coll_choices=[1, 2], quadrature="product", show_warnings=False)
-    real = solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=q,
-                       coll_choices=[1, 2], quadrature="product", show_warnings=False)
+    vals = run(solve_vie1, show_warnings=False, kernel=Kc, g=gc, dt=dt, coll_setting=(q, [1, 2]), quadrature="product").y
+    real = run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(q, [1, 2]), quadrature="product").y
     assert np.allclose(vals, real, atol=1e-10)
 
 
@@ -398,31 +356,26 @@ def test_validation():
     dt, q = 0.05, 3
     N = n_samples(9, 4)
     t, C, Cd, _ = damped(dt, N)
-    common = dict(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=q,
-                  coll_choices=[1, 2, 3], show_warnings=False)
+    common = dict(kernel=C, g=Cd, dt=dt, coll_setting=(q, [1, 2, 3]))
     with pytest.raises(ValueError):
-        solve_VIE_1(quadrature="gauss", **common)
+        solve_vie1(quadrature="gauss", **common).y
     with pytest.raises(ValueError):
-        solve_VIE_1(quadrature="collocation", kernel_interp_degree=3, **common)              # collocation quadrature
+        solve_vie1(quadrature="collocation", kernel_interp_degree=3, **common).y              # collocation quadrature
     with pytest.raises(ValueError):
-        solve_VIE_1(quadrature="collocation", mesh_samples=3, **common)                      # collocation quadrature
-    solve_VIE_1(quadrature="collocation", mesh_samples=9, **common)                          # allowed: the default
+        solve_vie1(quadrature="collocation", samples_per_interval=3, **common).y                      # collocation quadrature
+    solve_vie1(quadrature="collocation", samples_per_interval=9, **common).y                          # allowed: the default
     with pytest.raises(ValueError):
-        solve_VIE_1(quadrature="product", mesh_samples=4, **common)  # not a multiple of q
+        solve_vie1(quadrature="product", samples_per_interval=4, **common).y  # not a multiple of q
     with pytest.raises(ValueError):
-        solve_VIE_1(quadrature="product", kernel_interp_degree=0, **common)
+        solve_vie1(quadrature="product", kernel_interp_degree=0, **common).y
     with pytest.raises(ValueError):
-        solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=4,
-                    coll_choices=[1, 2], quadrature="product", show_warnings=False)  # rho_m = 3
+        run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(4, [1, 2]), quadrature="product").y  # rho_m = 3
     with pytest.raises(ValueError):
-        solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=5,
-                    coll_choices=[1, 2], quadrature="product", show_warnings=False)  # |rho_m| > 1
+        run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(5, [1, 2]), quadrature="product").y  # |rho_m| > 1
     with pytest.raises(ValueError):
-        solve_VIE_1(quadrature="product", force_continuous=True, **common)  # no initial value
+        solve_vie1(quadrature="product", continuous=True, **common).y  # no initial value
     with pytest.raises(ValueError):
-        solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=3,
-                    coll_choices=[1, 2], quadrature="product", force_continuous=True,
-                    soln_init_value=0.0, show_warnings=False)      # c_m != 1
+        run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(3, [1, 2]), quadrature="product", continuous=True, y0=0.0).y      # c_m != 1
 
 
 def test_odd_length_is_solved_in_full(voles_warnings):
@@ -431,8 +384,7 @@ def test_odd_length_is_solved_in_full(voles_warnings):
     dt, q = 0.05, 3
     N = n_samples(q, 10) + 2
     t, C, Cd, exact = damped(dt, N)
-    vals = solve_VIE_1(kernel_values=C, g_values=Cd, time_step=dt, coll_divs=q,
-                       coll_choices=[1, 2, 3], quadrature="product")
+    vals = solve_vie1(kernel=C, g=Cd, dt=dt, coll_setting=(q, [1, 2, 3]), quadrature="product").y
     assert len(vals) == N
     assert voles_warnings.text() == ""
     assert np.max(np.abs(vals - exact)) < 1e-3
@@ -448,36 +400,31 @@ def _smooth_problem(N, h=0.01):
 
 
 @pytest.mark.parametrize("kwargs", [
-    dict(mesh_samples=2.6),              # used to run silently as mesh_samples=2
-    dict(mesh_samples=6.0),
+    dict(samples_per_interval=2.6),              # used to run silently as mesh_samples=2
+    dict(samples_per_interval=6.0),
     dict(kernel_interp_degree=2.5),
-    dict(coll_divs=2.7),                 # used to run silently as coll_divs=2
-    dict(mesh_samples=True),
+    dict(coll_setting=(2.7, [1, 2])),    # used to run silently as divs = 2
+    dict(samples_per_interval=True),
 ])
 def test_product_rejects_non_integer_parameters(kwargs):
     K, g = _smooth_problem(61)
-    base = dict(kernel_values=K, g_values=g, time_step=0.01, coll_divs=2,
-                coll_choices=[1, 2], quadrature="product", show_warnings=False)
+    base = dict(kernel=K, g=g, dt=0.01, coll_setting=(2, [1, 2]), quadrature="product")
     base.update(kwargs)
     with pytest.raises(TypeError, match="integer"):
-        solve_VIE_1(**base)
+        solve_vie1(**base).y
 
 
 def test_collocation_rejects_non_integer_mesh_samples():
     """mesh_samples=9.9 used to be truncated to 9 == coll_divs**2 and accepted."""
     K, g = _smooth_problem(91)
     with pytest.raises(TypeError, match="integer"):
-        solve_VIE_1(kernel_values=K, g_values=g, time_step=0.01, mesh_samples=9.9)
+        solve_vie1(kernel=K, g=g, dt=0.01, samples_per_interval=9.9).y
 
 
 def test_numpy_integer_parameters_are_accepted():
     K, g = _smooth_problem(61)
-    a = solve_VIE_1(kernel_values=K, g_values=g, time_step=0.01, coll_divs=np.int64(2),
-                    coll_choices=[np.int32(1), np.int64(2)], quadrature="product",
-                    mesh_samples=np.int64(4), kernel_interp_degree=np.int32(2))
-    b = solve_VIE_1(kernel_values=K, g_values=g, time_step=0.01, coll_divs=2,
-                    coll_choices=[1, 2], quadrature="product", mesh_samples=4,
-                    kernel_interp_degree=2)
+    a = solve_vie1(kernel=K, g=g, dt=0.01, coll_setting=(np.int64(2), [np.int32(1), np.int64(2)]), quadrature="product", samples_per_interval=np.int64(4), kernel_interp_degree=np.int32(2)).y
+    b = solve_vie1(kernel=K, g=g, dt=0.01, coll_setting=(2, [1, 2]), quadrature="product", samples_per_interval=4, kernel_interp_degree=2).y
     assert np.array_equal(a, b)
 
 
@@ -486,13 +433,12 @@ def test_rho_plus_one_setting_warns_about_reduced_order(quadrature, voles_warnin
     """(3, [1, 2]) has rho_m = +1 exactly: admitted, but it converges at order
     m - 1 = 1, and says so unless warnings are off."""
     K, g = _smooth_problem(91)
-    kw = dict(kernel_values=K, g_values=g, time_step=0.01, coll_divs=3,
-              coll_choices=[1, 2], quadrature=quadrature)
-    solve_VIE_1(**kw)
+    kw = dict(kernel=K, g=g, dt=0.01, coll_setting=(3, [1, 2]), quadrature=quadrature)
+    solve_vie1(**kw).y
     assert "order 1 rather than 2" in voles_warnings.text()
-    solve_VIE_1(show_warnings=False, **kw)
+    run(solve_vie1, show_warnings=False, **kw).y
     assert voles_warnings.text() == ""
-    solve_VIE_1(**{**kw, "coll_choices": [1, 2, 3]})           # rho_m = 0
+    solve_vie1(**{**kw, "coll_setting": (3, [1, 2, 3])}).y      # rho_m = 0
     assert voles_warnings.text() == ""
 
 
@@ -504,8 +450,7 @@ def test_rho_plus_one_really_is_first_order_with_product_quadrature():
         t = h * np.arange(N)
         K = np.exp(-t)
         g = (np.cos(2 * t) + 2 * np.sin(2 * t) - np.exp(-t)) / 5
-        s = solve_VIE_1(kernel_values=K, g_values=g, time_step=h, coll_divs=3,
-                        coll_choices=[1, 2], quadrature="product", show_warnings=False)
+        s = run(solve_vie1, show_warnings=False, kernel=K, g=g, dt=h, coll_setting=(3, [1, 2]), quadrature="product").y
         errs.append(np.max(np.abs(s - np.cos(2 * t))))
     rates = np.log2(np.array(errs[:-1]) / np.array(errs[1:]))
     assert np.all(np.abs(rates - 1.0) < 0.25), rates
@@ -518,21 +463,20 @@ def test_matrix_g_must_match_the_kernel_length(quadrature):
     N, d = 9 * 4 + 3, 2                                     # truncates to 37
     K = np.broadcast_to(np.eye(d), (N, d, d)).copy()
     with pytest.raises(ValueError, match=rf"\({N}, {d}, {d}\)"):
-        solve_VIE_1(kernel_values=K, g_values=np.zeros((N - 2, d, 3)), time_step=0.1,
-                    quadrature=quadrature, show_warnings=False)
+        run(solve_vie1, show_warnings=False, kernel=K, g=np.zeros((N - 2, d, 3)), dt=0.1, quadrature=quadrature).y
 
 
 def test_stale_extension_fallback_is_announced_and_agrees(monkeypatch, voles_warnings):
     from voles import _dlang
     K, g = _smooth_problem(151)
-    kw = dict(kernel_values=K, g_values=g, time_step=0.01, quadrature="product")
-    fast = solve_VIE_1(**kw)
+    kw = dict(kernel=K, g=g, dt=0.01, quadrature="product")
+    fast = solve_vie1(**kw).y
     assert voles_warnings.text() == ""
     monkeypatch.setattr(_dlang, "have_block_driver", lambda name: False)
-    slow = solve_VIE_1(**kw)
+    slow = solve_vie1(**kw).y
     assert "falling back to the NumPy stepper" in voles_warnings.text()
     assert np.max(np.abs(fast - slow)) < 1e-9
-    solve_VIE_1(show_warnings=False, **kw)
+    run(solve_vie1, show_warnings=False, **kw).y
     assert voles_warnings.text() == ""
 
 
@@ -559,9 +503,7 @@ def test_zero_kernel_raises_linalg_error(use_extension, monkeypatch):
         monkeypatch.setattr(_dlang, "have_block_driver", lambda name: False)
     for fc in (False, True):
         with pytest.raises(np.linalg.LinAlgError):
-            solve_VIE_1(kernel_values=np.zeros(31), g_values=np.ones(31), time_step=0.1,
-                        quadrature="product", force_continuous=fc, soln_init_value=0.0,
-                        show_warnings=False)
+            run(solve_vie1, show_warnings=False, kernel=np.zeros(31), g=np.ones(31), dt=0.1, quadrature="product", continuous=fc, y0=0.0 if fc else None).y
 
 
 def test_matrix_columns_share_one_set_of_blocks(monkeypatch):
@@ -580,14 +522,9 @@ def test_matrix_columns_share_one_set_of_blocks(monkeypatch):
     init = rng.standard_normal((d, m_cols))
     for fc in (False, True):
         calls.clear()
-        soln, fn = solve_VIE_1(kernel_values=K, g_values=G, time_step=0.01, quadrature="product",
-                               force_continuous=fc, soln_init_value=init, return_function=True,
-                               show_warnings=False)
+        soln, fn = with_sol(run(solve_vie1, show_warnings=False, kernel=K, g=G, dt=0.01, quadrature="product", continuous=fc, y0=init if fc else None))
         assert len(calls) == 1
         for j in range(m_cols):
-            col, col_fn = solve_VIE_1(kernel_values=K, g_values=G[:, :, j], time_step=0.01,
-                                      quadrature="product", force_continuous=fc,
-                                      soln_init_value=init[:, j], return_function=True,
-                                      show_warnings=False)
+            col, col_fn = with_sol(run(solve_vie1, show_warnings=False, kernel=K, g=G[:, :, j], dt=0.01, quadrature="product", continuous=fc, y0=init[:, j] if fc else None))
             assert np.array_equal(soln[:, :, j], col)
             assert np.allclose(fn(0.123)[:, j], col_fn(0.123), rtol=0, atol=1e-13)

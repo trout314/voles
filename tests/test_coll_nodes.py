@@ -5,11 +5,15 @@ import numpy as np
 import pytest
 
 from voles import (
-    function_solve_VIE_1, function_solve_VIE_2, function_solve_VIDE,
-    gauss_legendre_nodes, radau_iia_nodes, lobatto_nodes,
+    solve_vie1,
+    solve_vie2,
+    solve_vide,
+    gauss_legendre_nodes,
+    radau_iia_nodes,
+    lobatto_nodes,
     optimal_graded_mesh,
 )
-from voles import solve_VIE_1, solve_VIE_2, solve_VIDE
+from conftest import run, with_sol
 
 
 # ---------------------------------------------------------------------------
@@ -73,10 +77,8 @@ def test_vie2_coll_nodes_matches_rational():
     mesh = np.linspace(0, 1, 6)
     K = lambda u: np.exp(-u)
     g = lambda t: t**2 + 1.0
-    y_int = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
-                                 coll_divs=2, coll_choices=[1, 2])
-    y_nod = function_solve_VIE_2(kernel=K, g=g, mesh_breakpoints=mesh,
-                                 coll_nodes=[0.5, 1.0])
+    y_int = solve_vie2(kernel=K, g=g, mesh=mesh, coll_nodes=np.asarray([1, 2]) / 2).node_values
+    y_nod = solve_vie2(kernel=K, g=g, mesh=mesh, coll_nodes=[0.5, 1.0]).node_values
     assert np.allclose(y_int, y_nod, atol=1e-12, rtol=0)
 
 
@@ -84,12 +86,8 @@ def test_vide_coll_nodes_matches_rational():
     mesh = np.linspace(0, 1, 5)
     K = lambda u: np.cos(u)
     g = lambda t: np.sin(t)
-    y_int = function_solve_VIDE(kernel=K, g=g, soln_init_value=0.3,
-                                mesh_breakpoints=mesh, coll_divs=3,
-                                coll_choices=[1, 2, 3])
-    y_nod = function_solve_VIDE(kernel=K, g=g, soln_init_value=0.3,
-                                mesh_breakpoints=mesh,
-                                coll_nodes=[1 / 3, 2 / 3, 1.0])
+    y_int = solve_vide(kernel=K, g=g, y0=0.3, mesh=mesh, coll_nodes=np.asarray([1, 2, 3]) / 3).node_values
+    y_nod = solve_vide(kernel=K, g=g, y0=0.3, mesh=mesh, coll_nodes=[1 / 3, 2 / 3, 1.0]).node_values
     assert np.allclose(y_int, y_nod, atol=1e-12, rtol=0)
 
 
@@ -97,10 +95,8 @@ def test_vie1_coll_nodes_matches_rational():
     mesh = np.linspace(0, 1, 6)
     K = lambda u: 1.0 + u
     g = lambda t: t**2
-    y_int = function_solve_VIE_1(kernel=K, g=g, mesh_breakpoints=mesh,
-                                 coll_divs=2, coll_choices=[1, 2])
-    y_nod = function_solve_VIE_1(kernel=K, g=g, mesh_breakpoints=mesh,
-                                 coll_nodes=[0.5, 1.0])
+    y_int = solve_vie1(kernel=K, g=g, mesh=mesh, coll_nodes=np.asarray([1, 2]) / 2).node_values
+    y_nod = solve_vie1(kernel=K, g=g, mesh=mesh, coll_nodes=[0.5, 1.0]).node_values
     assert np.allclose(y_int, y_nod, atol=1e-12, rtol=0)
 
 
@@ -109,12 +105,8 @@ def test_radau_helper_matches_rational_for_p2():
     mesh = np.linspace(0, 1, 5)
     K = lambda u: np.exp(-2 * u)
     g = lambda t: t
-    y_int = function_solve_VIDE(kernel=K, g=g, soln_init_value=0.0,
-                                mesh_breakpoints=mesh, coll_divs=3,
-                                coll_choices=[1, 3])
-    y_nod = function_solve_VIDE(kernel=K, g=g, soln_init_value=0.0,
-                                mesh_breakpoints=mesh,
-                                coll_nodes=radau_iia_nodes(2))
+    y_int = solve_vide(kernel=K, g=g, y0=0.0, mesh=mesh, coll_nodes=np.asarray([1, 3]) / 3).node_values
+    y_nod = solve_vide(kernel=K, g=g, y0=0.0, mesh=mesh, coll_nodes=radau_iia_nodes(2)).node_values
     assert np.allclose(y_int, y_nod, atol=1e-12, rtol=0)
 
 
@@ -147,10 +139,7 @@ def test_vie2_gauss_third_order():
     # y(t) = g(t) + \int_0^t y(s) ds with K=1, g=1  ->  y(t) = e^t.
     # Gauss(3) collocation is globally third order at interior points.
     def solve(M):
-        _, yf = function_solve_VIE_2(kernel=lambda u: 1.0, g=lambda t: 1.0,
-                                     mesh_breakpoints=np.linspace(0, 1, M + 1),
-                                     coll_nodes=gauss_legendre_nodes(3),
-                                     return_function=True)
+        _, yf = with_sol(solve_vie2(kernel=lambda u: 1.0, g=lambda t: 1.0, mesh=np.linspace(0, 1, M + 1), coll_nodes=gauss_legendre_nodes(3)))
         return yf
     rates = _convergence_rates(solve, np.exp, (20, 40, 80))
     assert min(rates) > 2.7, rates
@@ -160,11 +149,7 @@ def test_vide_radau_fourth_order():
     # y' = g + \int_0^t y ds with K=1, g=1, y(0)=1  ->  y(t) = e^t.
     # Radau IIA(3) yields ~fourth-order accuracy for the recovered y.
     def solve(M):
-        _, yf = function_solve_VIDE(kernel=lambda u: 1.0, g=lambda t: 1.0,
-                                    soln_init_value=1.0,
-                                    mesh_breakpoints=np.linspace(0, 1, M + 1),
-                                    coll_nodes=radau_iia_nodes(3),
-                                    return_function=True)
+        _, yf = with_sol(solve_vide(kernel=lambda u: 1.0, g=lambda t: 1.0, y0=1.0, mesh=np.linspace(0, 1, M + 1), coll_nodes=radau_iia_nodes(3)))
         return yf
     rates = _convergence_rates(solve, np.exp, (20, 40, 80))
     assert min(rates) > 3.5, rates
@@ -175,11 +160,7 @@ def test_vie1_gauss_third_order():
     # A non-polynomial solution so there is a genuine rate to measure; Gauss(3)
     # is third order (Gauss(2) would show the first-kind order reduction to 1).
     def solve(M):
-        _, yf = function_solve_VIE_1(kernel=lambda u: 1.0,
-                                     g=lambda t: np.exp(t) - 1.0,
-                                     mesh_breakpoints=np.linspace(0, 1, M + 1),
-                                     coll_nodes=gauss_legendre_nodes(3),
-                                     return_function=True)
+        _, yf = with_sol(solve_vie1(kernel=lambda u: 1.0, g=lambda t: np.exp(t) - 1.0, mesh=np.linspace(0, 1, M + 1), coll_nodes=gauss_legendre_nodes(3)))
         return yf
     rates = _convergence_rates(solve, np.exp, (20, 40, 80))
     assert min(rates) > 2.7, rates
@@ -188,10 +169,7 @@ def test_vie1_gauss_third_order():
 def test_lobatto_runs_on_vie2():
     # Lobatto includes node 0; valid for VIE-2.
     mesh = np.linspace(0, 1, 11)
-    _, yf = function_solve_VIE_2(kernel=lambda u: 1.0, g=lambda t: 1.0,
-                                 mesh_breakpoints=mesh,
-                                 coll_nodes=lobatto_nodes(3),
-                                 return_function=True)
+    _, yf = with_sol(solve_vie2(kernel=lambda u: 1.0, g=lambda t: 1.0, mesh=mesh, coll_nodes=lobatto_nodes(3)))
     assert _max_err(yf, np.exp, 1.0) < 1e-4
 
 
@@ -199,48 +177,29 @@ def test_lobatto_runs_on_vie2():
 # Validation of the coll_nodes path
 # ---------------------------------------------------------------------------
 
-def test_conflict_coll_nodes_and_coll_divs():
-    with pytest.raises(ValueError, match="not both"):
-        function_solve_VIE_2(kernel=lambda u: 1.0, mesh_breakpoints=np.linspace(0, 1, 5),
-                             coll_nodes=[0.5, 1.0], coll_divs=2)
-
-
-def test_conflict_coll_nodes_and_coll_choices():
-    with pytest.raises(ValueError, match="not both"):
-        function_solve_VIDE(kernel=lambda u: 1.0, soln_init_value=0.0,
-                            mesh_breakpoints=np.linspace(0, 1, 5),
-                            coll_nodes=[0.5, 1.0], coll_choices=[1, 2])
-
-
 def test_coll_nodes_out_of_range():
     with pytest.raises(ValueError, match=r"\[0, 1\]"):
-        function_solve_VIE_2(kernel=lambda u: 1.0, mesh_breakpoints=np.linspace(0, 1, 5),
-                             coll_nodes=[0.5, 1.5])
+        solve_vie2(kernel=lambda u: 1.0, mesh=np.linspace(0, 1, 5), coll_nodes=[0.5, 1.5]).node_values
 
 
 def test_coll_nodes_vie1_excludes_zero():
     with pytest.raises(ValueError, match=r"\(0, 1\]"):
-        function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
-                             mesh_breakpoints=np.linspace(0, 1, 5),
-                             coll_nodes=[0.0, 0.5])
+        solve_vie1(kernel=lambda u: 1.0, g=lambda t: t, mesh=np.linspace(0, 1, 5), coll_nodes=[0.0, 0.5]).node_values
 
 
 def test_coll_nodes_distinct():
     with pytest.raises(ValueError, match="distinct"):
-        function_solve_VIE_2(kernel=lambda u: 1.0, mesh_breakpoints=np.linspace(0, 1, 5),
-                             coll_nodes=[0.5, 0.5])
+        solve_vie2(kernel=lambda u: 1.0, mesh=np.linspace(0, 1, 5), coll_nodes=[0.5, 0.5]).node_values
 
 
 def test_coll_nodes_empty():
     with pytest.raises(ValueError, match="at least one"):
-        function_solve_VIE_2(kernel=lambda u: 1.0, mesh_breakpoints=np.linspace(0, 1, 5),
-                             coll_nodes=[])
+        solve_vie2(kernel=lambda u: 1.0, mesh=np.linspace(0, 1, 5), coll_nodes=[]).node_values
 
 
 def test_coll_nodes_nonfinite():
     with pytest.raises(ValueError, match="finite"):
-        function_solve_VIE_2(kernel=lambda u: 1.0, mesh_breakpoints=np.linspace(0, 1, 5),
-                             coll_nodes=[0.5, np.nan])
+        solve_vie2(kernel=lambda u: 1.0, mesh=np.linspace(0, 1, 5), coll_nodes=[0.5, np.nan]).node_values
 
 
 # ---------------------------------------------------------------------------
@@ -250,24 +209,18 @@ def test_coll_nodes_nonfinite():
 def test_vie1_coll_nodes_nonconvergent_rejected():
     # Single node c = 0.25 < 0.5  ->  |rho_1| = 3 > 1: divergent.
     with pytest.raises(ValueError, match="convergent"):
-        function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
-                             mesh_breakpoints=np.linspace(0, 1, 5),
-                             coll_nodes=[0.25])
+        solve_vie1(kernel=lambda u: 1.0, g=lambda t: t, mesh=np.linspace(0, 1, 5), coll_nodes=[0.25]).node_values
 
 
 def test_vie1_coll_nodes_convergent_accepted():
     # Including c = 1 gives a zero factor  ->  |rho| = 0, always convergent.
-    y = function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
-                             mesh_breakpoints=np.linspace(0, 1, 5),
-                             coll_nodes=[0.3, 1.0])
+    y = solve_vie1(kernel=lambda u: 1.0, g=lambda t: t, mesh=np.linspace(0, 1, 5), coll_nodes=[0.3, 1.0]).node_values
     assert y.shape == (4, 2)
 
 
 def test_vie1_gauss_nodes_are_boundary_but_accepted():
     # Symmetric (Gauss) nodes give |rho_m| == 1 exactly; treated as convergent.
-    y = function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: np.exp(t) - 1.0,
-                             mesh_breakpoints=np.linspace(0, 1, 6),
-                             coll_nodes=gauss_legendre_nodes(3))
+    y = solve_vie1(kernel=lambda u: 1.0, g=lambda t: np.exp(t) - 1.0, mesh=np.linspace(0, 1, 6), coll_nodes=gauss_legendre_nodes(3)).node_values
     assert np.all(np.isfinite(y))
 
 
@@ -275,20 +228,15 @@ def test_vie1_integer_path_rejects_beyond_original_blocklist():
     # node 0.4 (coll_divs=5, coll_choices=[2]) has |rho_1| = 1.5 > 1: divergent,
     # yet was never in the hard-coded blocklist. The analytic test rejects it.
     with pytest.raises(ValueError, match="convergent"):
-        function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
-                             mesh_breakpoints=np.linspace(0, 1, 6),
-                             coll_divs=5, coll_choices=[2])
+        solve_vie1(kernel=lambda u: 1.0, g=lambda t: t, mesh=np.linspace(0, 1, 6), coll_nodes=np.asarray([2]) / 5).node_values
 
 
 def test_vie1_singular_kernel_skips_convergence_guard():
     # |rho_m| = 2 > 1 (node 1/3) would be rejected for a smooth kernel, but with
     # a declared singularity the smooth criterion does not apply (Thm 2.4.2(b)),
     # so the guard is skipped. K(u)=u^-1/2, y=1 -> g(t)=2 sqrt(t).
-    mesh = optimal_graded_mesh(alpha=0.5, T=1.0, M=8, order=1)
-    y = function_solve_VIE_1(kernel=lambda u: 1.0 / np.sqrt(u),
-                             g=lambda t: 2.0 * np.sqrt(t),
-                             mesh_breakpoints=mesh, coll_nodes=[1 / 3],
-                             kernel_singularity=0.0, show_warnings=False)
+    mesh = optimal_graded_mesh(alpha=0.5, t_end=1.0, n_intervals=8, order=1)
+    y = run(solve_vie1, show_warnings=False, kernel=lambda u: 1.0 / np.sqrt(u), g=lambda t: 2.0 * np.sqrt(t), mesh=mesh, coll_nodes=[1 / 3], kernel_singularity=0.0).node_values
     assert np.all(np.isfinite(y))
 
 
@@ -303,12 +251,7 @@ def _vie1_cont_rates(nodes, meshes=(20, 40, 80)):
     ts = np.linspace(0.05, 1, 40)
     errs = []
     for M in meshes:
-        _, yf = function_solve_VIE_1(kernel=lambda u: 1.0,
-                                     g=lambda t: np.exp(t) - 1.0,
-                                     soln_init_value=1.0,
-                                     mesh_breakpoints=np.linspace(0, 1, M + 1),
-                                     coll_nodes=nodes, force_continuous=True,
-                                     return_function=True, show_warnings=False)
+        _, yf = with_sol(run(solve_vie1, show_warnings=False, kernel=lambda u: 1.0, g=lambda t: np.exp(t) - 1.0, y0=1.0, mesh=np.linspace(0, 1, M + 1), coll_nodes=nodes, continuous=True))
         errs.append(np.max(np.abs([float(yf(t)) for t in ts] - np.exp(ts))))
     return [np.log2(errs[i] / errs[i + 1]) for i in range(len(errs) - 1)]
 
@@ -331,19 +274,13 @@ def test_vie1_continuous_even_m_boundary_order_reduction():
 
 def test_vie1_continuous_requires_right_endpoint():
     with pytest.raises(ValueError, match="c_m = 1"):
-        function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
-                             soln_init_value=0.0,
-                             mesh_breakpoints=np.linspace(0, 1, 6),
-                             coll_nodes=[0.3, 0.7], force_continuous=True)
+        solve_vie1(kernel=lambda u: 1.0, g=lambda t: t, y0=0.0, mesh=np.linspace(0, 1, 6), coll_nodes=[0.3, 0.7], continuous=True).node_values
 
 
 def test_vie1_continuous_rejects_large_leading_amplification():
     # c_m=1 but |rho_{m-1}| = 2 > 1: divergent by Thm 2.4.5.
     with pytest.raises(ValueError, match="leading-node"):
-        function_solve_VIE_1(kernel=lambda u: 1.0, g=lambda t: t,
-                             soln_init_value=0.0,
-                             mesh_breakpoints=np.linspace(0, 1, 6),
-                             coll_nodes=[1 / 3, 1.0], force_continuous=True)
+        solve_vie1(kernel=lambda u: 1.0, g=lambda t: t, y0=0.0, mesh=np.linspace(0, 1, 6), coll_nodes=[1 / 3, 1.0], continuous=True).node_values
 
 
 # ---------------------------------------------------------------------------
@@ -358,11 +295,7 @@ def _vide_mesh_rates(nodes, meshes=(8, 16, 32)):
     em = []
     for M in meshes:
         mesh = np.linspace(0, 1, M + 1)
-        _, yf = function_solve_VIDE(kernel=lambda u: 1.0,
-                                    g=lambda t: (3 * np.exp(2 * t) + 1) / 2,
-                                    soln_init_value=1.0, mesh_breakpoints=mesh,
-                                    coll_nodes=nodes, return_function=True,
-                                    show_warnings=False)
+        _, yf = with_sol(run(solve_vide, show_warnings=False, kernel=lambda u: 1.0, g=lambda t: (3 * np.exp(2 * t) + 1) / 2, y0=1.0, mesh=mesh, coll_nodes=nodes))
         tm = mesh[1:]
         em.append(np.max(np.abs([float(yf(t)) for t in tm] - np.exp(2 * tm))))
     return [np.log2(em[i] / em[i + 1]) for i in range(len(em) - 1)]
@@ -386,16 +319,10 @@ def _vie2_iterated_mesh_rates(nodes, meshes=(8, 16, 32)):
     et = []
     for M in meshes:
         mesh = np.linspace(0, 1, M + 1)
-        _, yf = function_solve_VIE_2(kernel=lambda u: 1.0, g=g2,
-                                     mesh_breakpoints=mesh, coll_nodes=nodes,
-                                     return_function=True, show_warnings=False)
-        antis = [p.integ() for p in yf.polynomials]
-        cum = 0.0
-        e = 0.0
-        for n in range(M):
-            cum += float(antis[n](mesh[n + 1]) - antis[n](mesh[n]))
-            e = max(e, abs(g2(mesh[n + 1]) + cum - np.exp(2 * mesh[n + 1])))
-        et.append(e)
+        sol = run(solve_vie2, show_warnings=False, kernel=lambda u: 1.0, g=g2, mesh=mesh,
+                  coll_nodes=nodes)
+        cum = sol.to_ppoly().antiderivative()(mesh[1:])     # int_0^{t_n} u_h ds
+        et.append(np.max(np.abs(g2(mesh[1:]) + cum - np.exp(2 * mesh[1:]))))
     return [np.log2(et[i] / et[i + 1]) for i in range(len(et) - 1)]
 
 
@@ -425,13 +352,8 @@ def test_array_path_matches_callable_vie2():
     c, ch, M = 2, [0, 1, 2], 4
     dt, N, ts = _array_grid(M, c)
     g = lambda t: (np.exp(2 * t) + 1) / 2
-    _, fa = solve_VIE_2(kernel_values=np.ones(N), g_values=g(ts), time_step=dt,
-                        coll_divs=c, coll_choices=ch, return_function=True, quadrature="collocation",
-                        show_warnings=False)
-    _, fc = function_solve_VIE_2(kernel=lambda u: 1.0, g=g,
-                                 mesh_breakpoints=np.linspace(0, 1, M + 1),
-                                 coll_nodes=[i / c for i in ch],
-                                 return_function=True, show_warnings=False)
+    _, fa = with_sol(run(solve_vie2, show_warnings=False, kernel=np.ones(N), g=g(ts), dt=dt, coll_setting=(c, ch), quadrature="collocation"))
+    _, fc = with_sol(run(solve_vie2, show_warnings=False, kernel=lambda u: 1.0, g=g, mesh=np.linspace(0, 1, M + 1), coll_nodes=[i / c for i in ch]))
     tc = np.linspace(0.03, 0.97, 41)
     assert np.max(np.abs([fa(t) - fc(t) for t in tc])) < 1e-12
 
@@ -440,13 +362,8 @@ def test_array_path_matches_callable_vie1():
     c, ch, M = 2, [1, 2], 4
     dt, N, ts = _array_grid(M, c)
     g = lambda t: (np.exp(2 * t) - 1) / 2
-    _, fa = solve_VIE_1(kernel_values=np.ones(N), g_values=g(ts), time_step=dt,
-                        coll_divs=c, coll_choices=ch, return_function=True, quadrature="collocation",
-                        show_warnings=False)
-    _, fc = function_solve_VIE_1(kernel=lambda u: 1.0, g=g,
-                                 mesh_breakpoints=np.linspace(0, 1, M + 1),
-                                 coll_nodes=[i / c for i in ch],
-                                 return_function=True, show_warnings=False)
+    _, fa = with_sol(run(solve_vie1, show_warnings=False, kernel=np.ones(N), g=g(ts), dt=dt, coll_setting=(c, ch), quadrature="collocation"))
+    _, fc = with_sol(run(solve_vie1, show_warnings=False, kernel=lambda u: 1.0, g=g, mesh=np.linspace(0, 1, M + 1), coll_nodes=[i / c for i in ch]))
     tc = np.linspace(0.03, 0.97, 41)
     assert np.max(np.abs([fa(t) - fc(t) for t in tc])) < 1e-12
 
@@ -455,14 +372,8 @@ def test_array_path_matches_callable_vide():
     c, ch, M = 2, [0, 1, 2], 4
     dt, N, ts = _array_grid(M, c)
     g = lambda t: (3 * np.exp(2 * t) + 1) / 2
-    _, fa = solve_VIDE(kernel_values=np.ones(N), a_values=np.zeros(N),
-                       g_values=g(ts), soln_init_value=1.0, time_step=dt,
-                       coll_divs=c, coll_choices=ch, return_function=True, quadrature="collocation",
-                       show_warnings=False)
-    _, fc = function_solve_VIDE(kernel=lambda u: 1.0, g=g, soln_init_value=1.0,
-                                mesh_breakpoints=np.linspace(0, 1, M + 1),
-                                coll_nodes=[i / c for i in ch],
-                                return_function=True, show_warnings=False)
+    _, fa = with_sol(run(solve_vide, show_warnings=False, kernel=np.ones(N), a=np.zeros(N), g=g(ts), y0=1.0, dt=dt, coll_setting=(c, ch), quadrature="collocation"))
+    _, fc = with_sol(run(solve_vide, show_warnings=False, kernel=lambda u: 1.0, g=g, y0=1.0, mesh=np.linspace(0, 1, M + 1), coll_nodes=[i / c for i in ch]))
     tc = np.linspace(0.03, 0.97, 41)
     assert np.max(np.abs([fa(t) - fc(t) for t in tc])) < 1e-12
 
@@ -475,11 +386,7 @@ def test_vie1_continuous_vector_order_m_plus_1():
     ts = np.linspace(0.05, 1, 30)
 
     def err(M):
-        _, yf = function_solve_VIE_1(kernel=K, g=g,
-                                     soln_init_value=np.array([1.0, 1.0]),
-                                     mesh_breakpoints=np.linspace(0, 1, M + 1),
-                                     coll_nodes=[0.7, 1.0], force_continuous=True,
-                                     return_function=True, show_warnings=False)
+        _, yf = with_sol(run(solve_vie1, show_warnings=False, kernel=K, g=g, y0=np.array([1.0, 1.0]), mesh=np.linspace(0, 1, M + 1), coll_nodes=[0.7, 1.0], continuous=True))
         return np.max(np.abs(np.array([yf(t) for t in ts]) - np.exp(ts)[:, None]))
 
     es = [err(M) for M in (20, 40, 80)]

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-from voles import solve_VIE_1
-from conftest import TOLERANCE
+from voles import solve_vie1
+from conftest import TOLERANCE, run, with_sol
 
 
 # ---------------------------------------------------------------------------
@@ -27,8 +27,8 @@ def _make_vec_data(time_step=0.01, coll_divs=3, n_mesh=10):
     exact = np.zeros((num_pts, 2))
     exact[:, 0] = np.cos(times) - np.sin(times)
     exact[:, 1] = np.cos(times) - np.sin(times)
-    return dict(times=times, kernel=kernel, g=g, exact=exact,
-                time_step=time_step, coll_divs=coll_divs, coll_choices=[1, 2, 3])
+    return dict(times=times, kernel=kernel, g=g, exact=exact, time_step=time_step,
+                coll_divs=coll_divs, coll_choices=[1, 2, 3])
 
 
 def test_vie1_vec_diagonal_matches_scalar():
@@ -37,17 +37,11 @@ def test_vie1_vec_diagonal_matches_scalar():
     times = d["times"]
 
     # Vector solve
-    soln_vec = solve_VIE_1(
-        kernel_values=d["kernel"], g_values=d["g"],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"])
+    soln_vec = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert soln_vec.shape == d["exact"].shape
 
     # Scalar solve for component 0
-    soln_s = solve_VIE_1(
-        kernel_values=d["kernel"][:, 0, 0], g_values=d["g"][:, 0],
-        time_step=d["time_step"], coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"])
+    soln_s = solve_vie1(kernel=d["kernel"][:, 0, 0], g=d["g"][:, 0], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
 
     assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < TOLERANCE
     assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < TOLERANCE
@@ -72,10 +66,7 @@ def test_vie1_vec_analytic_2d():
     exact[:, 0] = times
     exact[:, 1] = times
 
-    soln = solve_VIE_1(
-        kernel_values=kernel, g_values=g,
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[1, 2, 3])
+    soln = solve_vie1(kernel=kernel, g=g, dt=time_step, coll_setting=(coll_divs, [1, 2, 3])).y
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
@@ -97,10 +88,7 @@ def test_vie1_vec_analytic_d9_runtime_path():
     exact = np.zeros((num_pts, d))
     exact[:] = times[:, None]
 
-    soln = solve_VIE_1(
-        kernel_values=kernel, g_values=g,
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[1, 2, 3])
+    soln = solve_vie1(kernel=kernel, g=g, dt=time_step, coll_setting=(coll_divs, [1, 2, 3])).y
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
@@ -125,11 +113,7 @@ def test_vie1_vec_force_continuous():
     exact[:, 0] = times
     exact[:, 1] = times
 
-    soln = solve_VIE_1(
-        kernel_values=kernel, g_values=g,
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[1, 2, 3],
-        soln_init_value=np.array([0.0, 0.0]), force_continuous=True)
+    soln = solve_vie1(kernel=kernel, g=g, dt=time_step, coll_setting=(coll_divs, [1, 2, 3]), y0=np.array([0.0, 0.0]), continuous=True).y
     assert soln.shape == exact.shape
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
@@ -148,13 +132,7 @@ def test_vie1_vec_coupled_generated_accuracy(coupled_vie1, pair):
         spec_a, spec_b, [[1, 1], [1, -1]],
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3],
     )
-    soln = solve_VIE_1(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -178,38 +156,19 @@ def test_make_coupled_vie1_reproduces_handwritten(coupled_vie1):
 
 def test_vie1_accuracy(vie1_data):
     d = vie1_data
-    soln = solve_VIE_1(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_vie1_damped_accuracy(vie1_damped_data):
     d = vie1_damped_data
-    soln = solve_VIE_1(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_vie1_return_polys(vie1_data):
     d = vie1_data
-    result = solve_VIE_1(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-        return_function=True,
-    )
+    result = with_sol(solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
     assert isinstance(result, tuple) and len(result) == 2
     soln, polys = result
     assert isinstance(soln, np.ndarray)
@@ -219,43 +178,20 @@ def test_vie1_return_polys(vie1_data):
 
 def test_vie1_poly_accuracy(vie1_poly_data):
     d = vie1_poly_data
-    soln = solve_VIE_1(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-    )
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_vie1_poly_force_continuous(vie1_poly_data):
     d = vie1_poly_data
-    soln = solve_VIE_1(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-        soln_init_value=float(d["exact"][0]),
-        force_continuous=True,
-    )
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"]), y0=float(d["exact"][0]), continuous=True).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_vie1_polys_continuous_at_mesh_boundaries(vie1_data):
     """force_continuous=True: adjacent polynomial pieces must agree at shared endpoints."""
     d = vie1_data
-    _, polys = solve_VIE_1(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-        soln_init_value=float(d["exact"][0]),
-        force_continuous=True,
-        return_function=True,
-    )
+    _, polys = with_sol(solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"]), y0=float(d["exact"][0]), continuous=True))
     h = d["coll_divs"] ** 2 * d["time_step"]
     for n in range(len(polys) - 1):
         t_boundary = (n + 1) * h
@@ -276,12 +212,7 @@ def test_vie1_vec_polys_continuous_at_mesh_boundaries():
     g[:, 0] = times**2 + times**3 / 6
     g[:, 1] = times**2 + times**3 / 6
 
-    _, polys = solve_VIE_1(
-        kernel_values=kernel, g_values=g,
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[1, 2, 3],
-        soln_init_value=np.array([0.0, 0.0]), force_continuous=True,
-        return_function=True)
+    _, polys = with_sol(solve_vie1(kernel=kernel, g=g, dt=time_step, coll_setting=(coll_divs, [1, 2, 3]), y0=np.array([0.0, 0.0]), continuous=True))
 
     h = coll_divs**2 * time_step
     for n in range(len(polys) - 1):
@@ -307,12 +238,7 @@ def test_vie1_matrix_polys_continuous_at_mesh_boundaries():
     g_matrix[:, 0, 1] = g_col
     g_matrix[:, 1, 1] = g_col
 
-    _, polys = solve_VIE_1(
-        kernel_values=kernel, g_values=g_matrix,
-        time_step=time_step, coll_divs=coll_divs,
-        coll_choices=[1, 2, 3],
-        soln_init_value=np.zeros((2, 2)), force_continuous=True,
-        return_function=True)
+    _, polys = with_sol(solve_vie1(kernel=kernel, g=g_matrix, dt=time_step, coll_setting=(coll_divs, [1, 2, 3]), y0=np.zeros((2, 2)), continuous=True))
 
     h = coll_divs**2 * time_step
     for n in range(len(polys) - 1):
@@ -324,15 +250,7 @@ def test_vie1_matrix_polys_continuous_at_mesh_boundaries():
 
 def test_vie1_force_continuous(vie1_data):
     d = vie1_data
-    soln = solve_VIE_1(
-        kernel_values=d["kernel"],
-        g_values=d["g"],
-        time_step=d["time_step"],
-        coll_divs=d["coll_divs"],
-        coll_choices=d["coll_choices"],
-        soln_init_value=d["exact"][0],
-        force_continuous=True,
-    )
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"]), y0=d["exact"][0], continuous=True).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -351,32 +269,32 @@ def _k0_problem(K0, dt=0.01, d=0):
     if d:
         K = K[:, None, None] * np.eye(d)
         g = np.outer(g, np.ones(d))
-    return dict(kernel_values=K, g_values=g, time_step=dt)
+    return dict(kernel=K, g=g, dt=dt)
 
 
 @pytest.mark.parametrize("K0", [0.0, 1e-3])
 def test_warns_when_kernel_start_unresolved(K0, voles_warnings):
     """K(0) = 0 diverges without bound under refinement (1e18 -> 1e83 as dt
     halves); K(0) small next to H*K'(0) diverges too."""
-    solve_VIE_1(quadrature="collocation", **_k0_problem(K0))
+    solve_vie1(quadrature="collocation", **_k0_problem(K0)).y
     assert _K0_MSG in voles_warnings.text()
 
 
 def test_warns_for_singular_matrix_kernel_start(voles_warnings):
-    solve_VIE_1(quadrature="collocation", **_k0_problem(0.0, d=2))
+    solve_vie1(quadrature="collocation", **_k0_problem(0.0, d=2)).y
     assert _K0_MSG in voles_warnings.text()
 
 
 @pytest.mark.parametrize("kw", [dict(quadrature="product"), dict(show_warnings=False)])
 def test_no_kernel_start_warning_for_product_or_when_silenced(kw, voles_warnings):
-    solve_VIE_1(**_k0_problem(0.0), **kw)
+    run(solve_vie1, **_k0_problem(0.0), **kw)
     assert _K0_MSG not in voles_warnings.text()
 
 
 @pytest.mark.parametrize("d", [0, 3])
 def test_no_kernel_start_warning_for_resolved_kernel(d, voles_warnings):
     """K(0) = 1 with the same slope: ratio H*K'(0)/K(0) = 0.09, stable."""
-    y = solve_VIE_1(**_k0_problem(1.0, d=d))
+    y = solve_vie1(**_k0_problem(1.0, d=d)).y
     assert _K0_MSG not in voles_warnings.text()
     assert np.all(np.isfinite(y))
 
@@ -390,23 +308,23 @@ _G0_MSG = "g(0) is not zero"
 
 def _g0_problem(g0_offset):
     t = np.arange(4 * 9 * 10 + 1) * 0.01
-    return dict(kernel_values=np.exp(-t), g_values=np.sin(t) + g0_offset, time_step=0.01)
+    return dict(kernel=np.exp(-t), g=np.sin(t) + g0_offset, dt=0.01)
 
 
 @pytest.mark.parametrize("quad", ["collocation", "product"])
 def test_warns_when_g_start_nonzero(quad, voles_warnings):
-    solve_VIE_1(**_g0_problem(0.5), quadrature=quad)
+    solve_vie1(**_g0_problem(0.5), quadrature=quad).y
     assert _G0_MSG in voles_warnings.text()
 
 
 @pytest.mark.parametrize("offset", [0.0, 1e-15])
 def test_no_g_start_warning_for_zero_or_rounding(offset, voles_warnings):
-    solve_VIE_1(**_g0_problem(offset))
+    solve_vie1(**_g0_problem(offset)).y
     assert _G0_MSG not in voles_warnings.text()
 
 
 def test_no_g_start_warning_when_silenced(voles_warnings):
-    solve_VIE_1(**_g0_problem(0.5), show_warnings=False)
+    run(solve_vie1, show_warnings=False, **_g0_problem(0.5)).y
     assert _G0_MSG not in voles_warnings.text()
 
 
@@ -417,7 +335,7 @@ def test_g_start_warning_names_worst_column_for_matrix(voles_warnings):
     K = np.exp(-t)[:, None, None] * np.eye(2)
     g = np.outer(np.sin(t), [1.0, 2.0])
     G = np.stack([g, g + [0.0, 0.3], g], axis=2)        # only column 1 has g(0) != 0
-    solve_VIE_1(kernel_values=K, g_values=G, time_step=0.01)
+    solve_vie1(kernel=K, g=G, dt=0.01).y
     out = voles_warnings.text()
     assert "g(0) is not zero in 1 of 3 columns; worst column 1" in out
 
@@ -426,10 +344,10 @@ def test_rejected_g_shape_gets_no_g_start_warning(voles_warnings):
     """A g the solver is about to reject used to print the g(0) warning
     first; now only a g whose shape fits the kernel is diagnosed."""
     t = np.arange(37) * 0.01
-    with pytest.raises(ValueError, match="g_values shape"):
-        solve_VIE_1(kernel_values=np.exp(-t), g_values=np.ones((3, 3)), time_step=0.01)
+    with pytest.raises(ValueError, match="g must have shape"):
+        solve_vie1(kernel=np.exp(-t), g=np.ones((3, 3)), dt=0.01)
     assert "g(0) is not zero" not in voles_warnings.text()
     # a non-square kernel is rejected before any warning as well
     with pytest.raises(ValueError, match=r"\(N, d, d\)"):
-        solve_VIE_1(kernel_values=np.ones((37, 2, 3)), g_values=np.ones((37, 2)), time_step=0.01)
+        solve_vie1(kernel=np.ones((37, 2, 3)), g=np.ones((37, 2)), dt=0.01).y
     assert voles_warnings.text() == ""

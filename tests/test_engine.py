@@ -19,9 +19,9 @@ import voles
 from voles import _functional, _sampled
 from voles._product import mesh_split, snap_nodes
 
-ENGINE = {"vie1": voles.solve_VIE_1, "vie2": voles.solve_VIE_2, "vide": voles.solve_VIDE}
-FENGINE = {"vie1": voles.function_solve_VIE_1, "vie2": voles.function_solve_VIE_2,
-           "vide": voles.function_solve_VIDE}
+ENGINE = {"vie1": _sampled.vie1, "vie2": _sampled.vie2, "vide": _sampled.vide}
+FENGINE = {"vie1": _functional.vie1, "vie2": _functional.vie2,
+           "vide": _functional.vide}
 
 
 def sampled_kw(eq, N, d, m, cplx, continuous=False):
