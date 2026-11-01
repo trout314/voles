@@ -73,7 +73,7 @@ on a graded mesh, and show what the problem setup costs:
 - **VIE-2 (weakly singular, exponent declared)** is the setup the docs
   recommend: a vectorised kernel (`u**-0.5`) and the exponent declared
   (`kernel_singularity={0.0: 0.5}`), so those blocks use Gauss–Jacobi rules.
-  It is 12–20× faster, with the same accuracy.
+  It is 9–16× faster, more so as M grows, with the same accuracy.
 
 <!-- CALLABLE_BENCHMARKS:START -->
 | Solver \ M | 25 | 50 | 100 | 200 |

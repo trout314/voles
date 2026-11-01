@@ -9,7 +9,7 @@
   faster, and more with a kernel that accepts arrays.
 - New benchmark row "VIE-2 (weakly singular, exponent declared)": the same
   Abel problem as the existing weakly singular row, set up as recommended
-  (vectorised kernel, declared exponent); 12–20× faster. The benchmarks page
+  (vectorised kernel, declared exponent); 9–16× faster. The benchmarks page
   explains what the two rows measure.
 
 ## [0.11.0] - 2026-11-01

@@ -91,7 +91,7 @@ declared-exponent solve on a 50-interval graded mesh takes about 4× longer
 quadrature dominates whichever form the kernel has. The
 two weakly singular rows on the [Benchmarks](../benchmarks.md) page compare
 the slowest setup (scalar kernel, location only) with the recommended one
-(12–20× faster):
+(9–16× faster):
 
 ```python
 import numpy as np
