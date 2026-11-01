@@ -1,0 +1,2067 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Collocation-method solvers for Volterra integral and integro-differential equations">
+      
+      
+      
+      
+        <link rel="prev" href="../../getting_started/">
+      
+      
+        <link rel="next" href="../warnings/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Conventions - voles</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#conventions" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="voles" class="md-header__button md-logo" aria-label="voles" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            voles
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Conventions
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/trout314/voles" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting_started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../api/vie1/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../examples/vie1/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="voles" class="md-nav__button md-logo" aria-label="voles" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    voles
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/trout314/voles" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conventions
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conventions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-three-equations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The three equations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-input-regimes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two input regimes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Two input regimes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-sampled-mesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The sampled mesh
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#collocation-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collocation nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#shapes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shapes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-solution-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The solution object
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The solution object">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#values-at-breakpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Values at breakpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vie-1-mesh-width-and-noisy-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VIE-1: mesh width and noisy data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#threads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Threads
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../warnings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Warnings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration from 0.10
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stability policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_1" id="__nav_4_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solvers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Solvers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vie1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve_vie1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vie2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve_vie2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/vide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve_vide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/solution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VolterraSolution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/warnings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Warnings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Helpers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/optimal_graded_mesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    optimal_graded_mesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/coll_nodes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collocation node helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/legacy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecated 0.10 solvers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/vie1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VIE Type 1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/vie2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VIE Type 2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/vide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VIDE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/product_integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Product integration for sampled kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/function_solvers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Callable inputs and arbitrary meshes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/matrix_vector/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vector- and matrix-valued equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/complex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complex-valued equations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/polynomial_solutions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Working with the solution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-three-equations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The three equations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-input-regimes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two input regimes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Two input regimes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-sampled-mesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The sampled mesh
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#collocation-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collocation nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#shapes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shapes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-solution-object" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The solution object
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The solution object">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#values-at-breakpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Values at breakpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vie-1-mesh-width-and-noisy-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VIE-1: mesh width and noisy data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#threads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Threads
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="conventions">Conventions</h1>
+<p>This page collects the rules every solver follows: how the input types
+select a regime, what the shapes mean, how a solution is evaluated, and why
+the first-kind solver uses a wider mesh by default.</p>
+<h2 id="the-three-equations">The three equations</h2>
+<p>All kernels are of convolution type, <span class="arithmatex">\(K(t - s)\)</span>:</p>
+<div class="arithmatex">\[\text{VIE-1:}\quad g(t) = \int_0^t K(t-s)\,y(s)\,ds\]</div>
+<div class="arithmatex">\[\text{VIE-2:}\quad y(t) = g(t) + \int_0^t K(t-s)\,y(s)\,ds\]</div>
+<div class="arithmatex">\[\text{VIDE:}\quad y'(t) = a(t)\,y(t) + g(t) + \int_0^t K(t-s)\,y(s)\,ds,\qquad y(0) = y_0\]</div>
+<p>They are solved by <code>solve_vie1</code>, <code>solve_vie2</code> and <code>solve_vide</code>. Every
+parameter is keyword-only. <code>g=None</code> means g ≡ 0 and <code>a=None</code> means a ≡ 0;
+<code>solve_vide</code> requires <code>y0</code>.</p>
+<h2 id="two-input-regimes">Two input regimes</h2>
+<p>The types of the data inputs (<code>kernel</code>, <code>g</code>, and for the VIDE <code>a</code>) decide
+how the problem is posed:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>sampled</th>
+<th>functional</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Inputs</td>
+<td>arrays of samples at t = 0, dt, …, (N−1)·dt</td>
+<td>callables, <code>kernel(u)</code>, <code>g(t)</code>, <code>a(t)</code></td>
+</tr>
+<tr>
+<td>Grid</td>
+<td><code>dt</code> (default 1.0); the solver builds a uniform mesh</td>
+<td><code>mesh</code>, required: the breakpoints, from 0 to T</td>
+</tr>
+<tr>
+<td>Node set</td>
+<td><code>coll_setting</code></td>
+<td><code>coll_nodes</code></td>
+</tr>
+<tr>
+<td>Options of this regime only</td>
+<td><code>coll_setting</code>, <code>quadrature</code>, <code>samples_per_interval</code>, <code>kernel_interp_degree</code></td>
+<td><code>mesh</code>, <code>coll_nodes</code>, <code>kernel_singularity</code>, <code>reuse_adaptive_blocks</code></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Anything for which <code>callable(x)</code> is true counts as a callable: functions,
+  lambdas, <code>numpy.polynomial.Polynomial</code>, scipy interpolators, numba
+  functions. NumPy arrays are not callable.</li>
+<li>An option of the other regime is a <code>ValueError</code> that names the regime and
+  why it was chosen. In particular <code>mesh=</code> with arrays and <code>coll_setting=</code>
+  with callables are errors, so you can't silently get a different method
+  from the one you asked for.</li>
+<li>Mixing the two, e.g. an analytic kernel with sampled <code>g</code>, raises
+  <code>NotImplementedError</code> for now. The combination is reserved for a later
+  release.</li>
+</ul>
+<pre><code class="language-python">import numpy as np
+import voles
+
+t = np.linspace(0, 2, 201)
+sampled = voles.solve_vie2(kernel=np.exp(-t), g=np.cos(t), dt=t[1])
+functional = voles.solve_vie2(kernel=lambda u: np.exp(-u), g=np.cos,
+                              mesh=np.linspace(0, 2, 41))
+print(sampled.regime, functional.regime)          # sampled functional
+print(abs(sampled(1.3) - functional(1.3)) &lt; 1e-5)  # True
+</code></pre>
+<h3 id="the-sampled-mesh">The sampled mesh</h3>
+<p>In the sampled regime the mesh is uniform, <code>samples_per_interval</code> (Q)
+samples wide, so its width is h = Q·dt. When N − 1 is not a multiple of Q,
+the final interval is made longer (up to 2Q samples) to take up the
+leftover samples. The solution is still returned at every sample, and the
+convergence order is kept. The kernel needs at least Q + 1 samples.</p>
+<table>
+<thead>
+<tr>
+<th><code>quadrature</code></th>
+<th>allowed Q</th>
+<th>default Q</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"product"</code> (default)</td>
+<td>any positive multiple of <code>divs</code></td>
+<td><code>divs²</code> for VIE-1, <code>divs</code> for VIE-2 and VIDE</td>
+</tr>
+<tr>
+<td><code>"collocation"</code></td>
+<td>exactly <code>divs²</code></td>
+<td><code>divs²</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>"product"</code> integrates a piecewise polynomial interpolant of the kernel
+exactly, uses every sample and accepts any node set. <code>"collocation"</code> uses
+the interpolatory rule on the nodes. It is a few times faster, but runs only
+the settings compiled into the extension (<code>divs</code> ≤ 4 in current builds) or,
+for scalar problems, the numba fallback. See
+<a href="../../examples/product_integration/">Product integration</a>.</p>
+<h2 id="collocation-nodes">Collocation nodes</h2>
+<p>On each mesh interval the solution is a polynomial, fixed by requiring the
+equation to hold at p collocation nodes cᵢ ∈ [0, 1] (local coordinates).</p>
+<p><strong>Sampled regime: <code>coll_setting</code>.</strong> The nodes must sit on samples, so they
+are given as integers: <code>coll_setting=(divs, choices)</code> means
+cᵢ = choicesᵢ / divs.</p>
+<table>
+<thead>
+<tr>
+<th>value</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>None</code></td>
+<td>VIE-1 <code>(3, [1, 2, 3])</code>; VIE-2 and VIDE <code>(2, [0, 1, 2])</code></td>
+</tr>
+<tr>
+<td><code>divs</code></td>
+<td>every admissible point: <code>(divs, [1, …, divs])</code> for VIE-1, <code>(divs, [0, …, divs])</code> otherwise</td>
+</tr>
+<tr>
+<td><code>(divs, choices)</code></td>
+<td>nodes <code>choices / divs</code>; <code>choices</code> in any order, distinct</td>
+</tr>
+</tbody>
+</table>
+<p><code>divs</code> also fixes the mesh width (above), so settings with the same node
+positions but different <code>divs</code> are different methods. Floats are rejected,
+even integer-valued ones, rather than rounded: running a different
+discretisation silently is worse than an error.</p>
+<p><strong>Functional regime: <code>coll_nodes</code>.</strong> Any distinct floats in [0, 1]
+((0, 1] for VIE-1). The default has the same positions as the sampled
+default. The classical families come from
+<a href="../../api/coll_nodes/"><code>gauss_legendre_nodes</code></a>,
+<code>radau_iia_nodes</code> and <code>lobatto_nodes</code>.</p>
+<p><strong>VIE-1 admissibility.</strong> A first-kind collocation method converges only if
+the node set's amplification factor satisfies |ρ| ≤ 1, where</p>
+<div class="arithmatex">\[\rho = (-1)^p \prod_{i=1}^{p} \frac{1 - c_i}{c_i}\]</div>
+<p>for the default discontinuous method (Brunner 2004, Theorem 2.4.2), and the
+same product over i &lt; p, with c_p = 1, for <code>continuous=True</code> (Theorem
+2.4.5). Other node sets are a <code>ValueError</code>. ρ = 1 converges one order lower
+and gives an <code>AccuracyWarning</code>. Radau IIA nodes have ρ = 0 and give the full
+order p; Gauss–Legendre nodes have |ρ| = 1 and lose an order.</p>
+<h2 id="shapes">Shapes</h2>
+<p>The time axis comes first. The component shape <code>cs</code> is <code>()</code> for a scalar
+problem, <code>(d,)</code> for a system of d equations, and <code>(d, m)</code> for m right-hand
+sides solved together.</p>
+<table>
+<thead>
+<tr>
+<th>input</th>
+<th>sampled</th>
+<th>functional (the callable's return value)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kernel</code></td>
+<td><code>(N,)</code> or <code>(N, d, d)</code></td>
+<td>scalar or <code>(d, d)</code></td>
+</tr>
+<tr>
+<td><code>g</code></td>
+<td><code>(N,)</code>, <code>(N, d)</code> or <code>(N, d, m)</code></td>
+<td>scalar, <code>(d,)</code> or <code>(d, m)</code></td>
+</tr>
+<tr>
+<td><code>a</code> (VIDE)</td>
+<td><code>(N,)</code> or <code>(N, d, d)</code></td>
+<td>scalar or <code>(d, d)</code></td>
+</tr>
+<tr>
+<td><code>y0</code></td>
+<td>scalar, <code>(d,)</code> or <code>(d, m)</code></td>
+<td>the same</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Matrix mode.</strong> The problem has m columns exactly when some input has a
+  column axis (<code>g</code> of <code>(N, d, m)</code> or <code>(d, m)</code>, or <code>y0</code> of <code>(d, m)</code>). Inputs
+  without one are shared by all columns, so a <code>(d,)</code> <code>y0</code> with a matrix <code>g</code>,
+  or a vector <code>g</code> with a <code>(d, m)</code> <code>y0</code>, both work. The columns are
+  independent problems with a common kernel; the kernel's work is shared
+  and the columns may run in parallel threads.</li>
+<li><strong>Callable kernels</strong> are called with one argument u = t − s ≥ 0. A kernel
+  that also accepts a 1-D array of u, returning the stacked values, is
+  detected and used vectorised, which is much faster. For a matrix kernel
+  <code>np.multiply.outer(np.exp(-u), A)</code> vectorises, <code>np.exp(-u) * A</code> does not.</li>
+<li><strong>Complex</strong> inputs give a complex solution. Integer and <code>float32</code> inputs
+  are converted to <code>float64</code>.</li>
+<li><strong>Non-finite data</strong> (NaN or inf in an array, or returned by <code>g</code> or <code>a</code> at
+  a collocation time) is a <code>ValueError</code> naming the input and the first bad
+  index. Callable kernels are not checked: a weakly singular kernel may
+  return inf at u = 0, which the quadrature never samples.</li>
+<li>A 2-D sampled kernel is rejected; that shape is reserved for
+  non-convolution kernels K(t, s) in a later release.</li>
+</ul>
+<h2 id="the-solution-object">The solution object</h2>
+<p>Every solver returns a <a href="../../api/solution/"><code>VolterraSolution</code></a>:</p>
+<table>
+<thead>
+<tr>
+<th>attribute</th>
+<th>shape</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>t</code></td>
+<td><code>(K,)</code></td>
+<td>the grid the problem was posed on: the sample times, or the mesh breakpoints</td>
+</tr>
+<tr>
+<td><code>y</code></td>
+<td><code>(K, *cs)</code></td>
+<td>the solution at <code>t</code></td>
+</tr>
+<tr>
+<td><code>mesh</code></td>
+<td><code>(M + 1,)</code></td>
+<td>the breakpoints</td>
+</tr>
+<tr>
+<td><code>node_times</code>, <code>node_values</code></td>
+<td><code>(M, p)</code>, <code>(M, p, *cs)</code></td>
+<td>the collocation times and the solution there</td>
+</tr>
+<tr>
+<td><code>coefficients</code></td>
+<td><code>(M, P, *cs)</code></td>
+<td>each interval's polynomial in x = (t − tₙ)/hₙ ∈ [0, 1], monomial, lowest degree first</td>
+</tr>
+</tbody>
+</table>
+<p><code>sol(t)</code> evaluates the piecewise polynomial:</p>
+<ul>
+<li>a scalar <code>t</code> gives a Python <code>float</code> (or <code>complex</code>) for a scalar problem,
+  and an array of shape <code>cs</code> otherwise; an array <code>t</code> gives
+  <code>(*t.shape, *cs)</code>;</li>
+<li>outside [0, T] the result is NaN. The solution is never extrapolated;</li>
+<li><code>sol(sol.t)</code> equals <code>sol.y</code> to rounding.</li>
+</ul>
+<p><code>sol.to_ppoly()</code> gives the same function as a <code>scipy.interpolate.PPoly</code>,
+for derivatives, antiderivatives, integrals and roots.</p>
+<h3 id="values-at-breakpoints">Values at breakpoints</h3>
+<p>Collocation solutions of VIE-1 and VIE-2 are in general discontinuous: at
+an interior breakpoint the polynomials of the two neighbouring intervals
+give two different one-sided limits. By default <code>sol(t)</code> and <code>sol.y</code> report
+their <strong>mean</strong>. <code>sol(t, at_breakpoints="left")</code> or <code>"right"</code> gives either
+limit. A point within a few ulps of a breakpoint counts as the breakpoint.
+VIDE solutions, and VIE-1 with <code>continuous=True</code>, are continuous, and the
+three choices agree to rounding.</p>
+<p>The mean is the most accurate choice for most node sets. Measured errors at
+interior breakpoints, for K(u) = e⁻ᵘ and y = cos t on [0, 4]:</p>
+<table>
+<thead>
+<tr>
+<th>method</th>
+<th>left</th>
+<th>right</th>
+<th>mean</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>VIE-1, default nodes {1/3, 2/3, 1}</td>
+<td>O(h³)</td>
+<td>O(h³)</td>
+<td><strong>O(h⁴)</strong></td>
+</tr>
+<tr>
+<td>VIE-1, Radau IIA, p = 3</td>
+<td>O(h³)</td>
+<td>O(h³)</td>
+<td>O(h³), smallest constant</td>
+</tr>
+<tr>
+<td>VIE-2, default nodes {0, 1/2, 1}</td>
+<td>O(h⁴)</td>
+<td>the same (the limits agree to 10⁻¹⁶)</td>
+<td>the same</td>
+</tr>
+<tr>
+<td>VIE-2, Gauss–Legendre, p = 3</td>
+<td>O(h³)</td>
+<td>O(h³)</td>
+<td><strong>O(h⁴)</strong></td>
+</tr>
+<tr>
+<td>VIE-2, Radau IIA, p = 3</td>
+<td><strong>O(h⁵)</strong></td>
+<td>O(h³)</td>
+<td>O(h³)</td>
+</tr>
+</tbody>
+</table>
+<p>So with VIE-2 and a node set that ends at c_p = 1 (Radau IIA) ask for
+<code>at_breakpoints="left"</code>: the left limit there is the collocation value at
+the last node, which is superconvergent.</p>
+<pre><code class="language-python">import numpy as np
+import voles
+
+sol = voles.solve_vie2(kernel=lambda u: np.exp(-u),
+                       g=lambda t: (np.cos(t) - np.sin(t) + np.exp(-t)) / 2,
+                       mesh=np.linspace(0, 4, 41), coll_nodes=voles.radau_iia_nodes(3))
+inner = sol.mesh[1:-1]                                 # y = cos t
+for side in (&quot;left&quot;, &quot;mean&quot;, &quot;right&quot;):
+    err = np.max(np.abs(sol(inner, at_breakpoints=side) - np.cos(inner)))
+    print(f&quot;{side:5s} {err:.1e}&quot;)
+# left  1.4e-10
+# mean  8.5e-06
+# right 1.7e-05
+</code></pre>
+<h2 id="vie-1-mesh-width-and-noisy-data">VIE-1: mesh width and noisy data</h2>
+<p>A first-kind equation is ill-posed: recovering y from g amounts to
+differentiating g. The collocation method regularises it through the mesh
+width h, and the error behaves like</p>
+<div class="arithmatex">\[\lVert y_h - y \rVert \lesssim C_1 h^{m} + C_2 \frac{\varepsilon}{|K(0)|\, h},\]</div>
+<p>with m the method's order and ε the noise in g. Shrinking the mesh reduces
+the first term but amplifies the noise. This is why the sampled VIE-1
+default is <code>samples_per_interval = divs²</code> rather than the finest mesh
+<code>divs</code>, and why <code>samples_per_interval</code> is the parameter to tune on real
+data. (Noise in the kernel is not amplified this way; it enters as an O(ε)
+error.) VIE-2 and VIDE are well posed and have no such trade-off, so their
+default is the finest mesh.</p>
+<p>Measured on K(u) = e⁻ᵘ, y = cos t, t ∈ [0, 4] with dt = 10⁻³, the default
+nodes, and Gaussian noise of standard deviation ε added to g:</p>
+<table>
+<thead>
+<tr>
+<th>ε \ <code>samples_per_interval</code></th>
+<th>3</th>
+<th>9 (default)</th>
+<th>27</th>
+<th>81</th>
+<th>243</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>3.8e-10</td>
+<td>1.5e-08</td>
+<td>2.0e-07</td>
+<td>9.3e-06</td>
+<td>2.6e-04</td>
+</tr>
+<tr>
+<td>10⁻⁶</td>
+<td>8.5e-03</td>
+<td>2.4e-03</td>
+<td>1.2e-03</td>
+<td>3.9e-04</td>
+<td>2.8e-04</td>
+</tr>
+<tr>
+<td>10⁻⁴</td>
+<td>8.5e-01</td>
+<td>2.4e-01</td>
+<td>1.2e-01</td>
+<td>3.9e-02</td>
+<td>1.0e-02</td>
+</tr>
+</tbody>
+</table>
+<p>(maximum error over the samples). With exact data the finest mesh wins by
+six orders of magnitude; with noise of 10⁻⁶ it is the worst choice, and the
+best mesh is 80 to 240 samples wide. The noise term is about 20 ε / h here.
+The same noise realisation is used in every row.</p>
+<pre><code class="language-python">import numpy as np
+import voles
+
+dt = 1e-3
+t = np.arange(4001) * dt
+g = (np.cos(t) + np.sin(t) - np.exp(-t)) / 2          # y = cos t
+noisy = g + 1e-6 * np.random.default_rng(0).standard_normal(t.size)
+noisy[0] = 0.0
+for Q in (3, 9, 81):
+    sol = voles.solve_vie1(kernel=np.exp(-t), g=noisy, dt=dt, samples_per_interval=Q)
+    print(Q, f&quot;{np.max(np.abs(sol.y - np.cos(t))):.1e}&quot;)
+</code></pre>
+<h2 id="threads">Threads</h2>
+<p>Solver calls are thread-safe: concurrent calls from different threads give
+the same results as serial ones. The compiled code releases the GIL. A
+matrix-mode solve may use a thread pool of its own, sized by the column
+count and the number of CPUs.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
