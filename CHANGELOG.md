@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-01
+
+0.11 is the transition release towards 1.0. It adds the 1.0 API, three
+solvers that take either sampled arrays or callables and return a
+`VolterraSolution`, alongside the 0.10 functions, which still work but are
+deprecated and will be removed in 1.0. See the
+[migration guide](https://trout314.github.io/voles/guide/migration/).
+
 ### Added
 - **The 1.0 solvers `voles.solve_vie1`, `solve_vie2` and `solve_vide`.**
   One function per equation for both kinds of input:
@@ -19,7 +27,8 @@
 
   An input without a column axis is now shared by every column of a
   matrix-valued problem, in every solver: for example a `(N, d)` forcing
-  with a `(d, m)` initial value. The 0.10 functions keep working unchanged.
+  with a `(d, m)` initial value. The 0.10 functions keep working (see
+  Deprecated).
 - **Warning classes.** `voles.VolesWarning` (a `UserWarning`) with
   subclasses `voles.AccuracyWarning` (reduced order, g(0) ≠ 0 for VIE-1,
   K(0) too small for collocation quadrature, a singularity declared on a
@@ -43,74 +52,6 @@
   Dense evaluation no longer copies the coefficients per point: peak memory
   is about a third of the 0.10 object's on a matrix-valued solution. The 0.10
   solvers still return their 0.10 solution object.
-
-### Deprecated
-These still work in 0.11, exactly as in 0.10, and are removed in 1.0 (see
-the [migration guide](https://trout314.github.io/voles/guide/migration/)):
-- **`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`** and
-  **`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`**:
-  use `solve_vie1`, `solve_vie2`, `solve_vide`. Each call warns with the
-  equivalent new call built from your arguments, e.g. "use
-  voles.solve_vie2(kernel=<array of shape (81,)>, g=<array of shape (81,)>,
-  dt=0.0125, coll_setting=3) instead". Results, return types and error
-  messages are unchanged.
-- **`fast_coll_settings_VIE_1`, `_VIE_2`, `_VIDE`**: product quadrature (the
-  default) accepts every valid setting. They are no longer in `__all__`.
-- **The `voles.solvers` module**: import from `voles`.
-- **`optimal_graded_mesh(T=, M=)`**: renamed `t_end=` and `n_intervals=`.
-- **The `[callable]` and `[numba]` extras** will be removed in 1.0: scipy is
-  a core dependency, and `voles[full]` installs numba. Use `voles` or
-  `voles[full]`.
-
-### Documentation
-- New user guide: **Conventions** (input regimes, shapes, collocation
-  settings, evaluation and the breakpoint convention, with measured orders,
-  and the VIE-1 mesh-width/noise trade-off with measurements), **Warnings**,
-  **Migration from 0.10** and **Stability policy**.
-- README, Getting Started, the home page, all eight example pages and the
-  API reference use the new solvers. "Polynomial solutions" is now "Working
-  with the solution" (`to_ppoly`, coefficients, breakpoints). The 0.10
-  functions are documented together on a "Deprecated 0.10 solvers" page.
-- The public docstrings have runnable Examples (run by the test suite),
-  linked See Also sections, and Raises/Warns sections.
-- The benchmarks call the new solvers; their names, and so the published
-  history, are unchanged. The small-N timings include the new layer's
-  per-call overhead (about 40–60 µs on the benchmark machine).
-
-### Fixed
-- The Numba fallback passed `coll_choices` as a Python list, which Numba
-  deprecates ("reflected list"); it is now an int64 array.
-- **`function_solve_*` accepted a float `coll_divs`.** `coll_divs=2.5`
-  silently ran with nodes {0, 0.4, 0.8}. It now raises `TypeError`, as the
-  array-based solvers already did for floats.
-- **`solve_VIDE` and `function_solve_VIDE` accepted
-  `soln_init_value=None`** and returned an all-NaN solution. They now raise
-  `TypeError`.
-- An invalid `kernel_singularity` declaration (e.g. a bool location or
-  `alpha` outside (0, 1)) no longer emits the uniform-mesh warning before
-  raising its error.
-- **Threaded solves could hang (Windows) or segfault (Linux)** when the D
-  garbage collector ran while Python threads were executing the extension:
-  the matrix fan-out's per-call thread pool, or a user's own threads. Both
-  were bugs in how the D runtime suspends and scans threads it doesn't own:
-  - **Windows:** a thread can be suspended with its stack pointer already
-    inside its stack's guard page, which only the owning thread may touch.
-    The collector read that page from its own thread, the fault unwound out
-    of the collection with the other threads still suspended (one of them
-    holding the GIL), and Python froze.
-  - **Linux:** with the D runtime linked statically, LDC locates a thread's
-    thread-local storage as if the library were an executable, so the
-    collector scanned unrelated memory instead. For the main thread that
-    range can start in an unmapped page, and the first collection crashed
-    (about 2% of processes in CI).
-
-  The extension no longer uses the garbage collector at all. Every solver
-  entry point is `@nogc`, so the compiler rejects any GC use on a solver
-  path; scratch memory lives on the C heap and is freed when each call
-  returns. Calling threads no longer register with the D runtime, and
-  nothing ever suspends or scans them. Results are bitwise identical to
-  before. Array-based solves are about 8% faster on Linux CI; peak memory
-  moves within about ±15% depending on the workload.
 
 ### Changed
 - **Diagnostics are warnings, not prints.** Every message voles used to
@@ -156,9 +97,9 @@ the [migration guide](https://trout314.github.io/voles/guide/migration/)):
     spelling out its arguments.
 - Internal modules were reorganised for the 1.0 API: the solvers now live in
   the private `voles._sampled` and `voles._functional`, with shared helpers in
-  `voles._common`. `voles.solvers` still re-exports `solve_VIE_1`,
-  `solve_VIE_2` and `solve_VIDE`, but no longer its private helpers.
-  Import the public names from `voles`.
+  `voles._common`. The deprecated `voles.solvers` re-exports only
+  `solve_VIE_1`, `solve_VIE_2` and `solve_VIDE`, no longer its private
+  helpers.
 - The private `_smooth_gl_order` keyword is gone from the `function_solve_*`
   signatures.
 - An internal error code from the D extension now raises a `RuntimeError`
@@ -171,6 +112,75 @@ the [migration guide](https://trout314.github.io/voles/guide/migration/)):
   is replaced by `tests/test_threading.py`, which requires threaded solves to
   match serial ones bit for bit. The private `voles._dlang.gc_collect_d` is
   gone.
+
+### Deprecated
+These still work in 0.11, with a `DeprecationWarning`, and are removed in
+1.0 (see the [migration guide](https://trout314.github.io/voles/guide/migration/)):
+- **`solve_VIE_1`, `solve_VIE_2`, `solve_VIDE`** and
+  **`function_solve_VIE_1`, `function_solve_VIE_2`, `function_solve_VIDE`**:
+  use `solve_vie1`, `solve_vie2`, `solve_vide`. Each call warns with the
+  equivalent new call built from your arguments, e.g. "use
+  voles.solve_vie2(kernel=<array of shape (81,)>, g=<array of shape (81,)>,
+  dt=0.0125, coll_setting=3) instead". Results and return types are those
+  of 0.10, including the 0.10 solution object for `return_function=True`;
+  invalid input is handled as described under Changed.
+- **`fast_coll_settings_VIE_1`, `_VIE_2`, `_VIDE`**: product quadrature (the
+  default) accepts every valid setting. They are no longer in `__all__`.
+- **The `voles.solvers` module** (it warns on import): import from `voles`.
+- **`optimal_graded_mesh(T=, M=)`**: renamed `t_end=` and `n_intervals=`.
+- **The `[callable]` and `[numba]` extras** will be removed in 1.0: scipy is
+  a core dependency, and `voles[full]` installs numba. Use `voles` or
+  `voles[full]`.
+
+### Fixed
+- The Numba fallback passed `coll_choices` as a Python list, which Numba
+  deprecates ("reflected list"); it is now an int64 array.
+- **`function_solve_*` accepted a float `coll_divs`.** `coll_divs=2.5`
+  silently ran with nodes {0, 0.4, 0.8}. It now raises `TypeError`, as the
+  array-based solvers already did for floats.
+- **`solve_VIDE` and `function_solve_VIDE` accepted
+  `soln_init_value=None`** and returned an all-NaN solution. They now raise
+  `TypeError`.
+- An invalid `kernel_singularity` declaration (e.g. a bool location or
+  `alpha` outside (0, 1)) no longer emits the uniform-mesh warning before
+  raising its error.
+- **Threaded solves could hang (Windows) or segfault (Linux)** when the D
+  garbage collector ran while Python threads were executing the extension:
+  the matrix fan-out's per-call thread pool, or a user's own threads. Both
+  were bugs in how the D runtime suspends and scans threads it doesn't own:
+  - **Windows:** a thread can be suspended with its stack pointer already
+    inside its stack's guard page, which only the owning thread may touch.
+    The collector read that page from its own thread, the fault unwound out
+    of the collection with the other threads still suspended (one of them
+    holding the GIL), and Python froze.
+  - **Linux:** with the D runtime linked statically, LDC locates a thread's
+    thread-local storage as if the library were an executable, so the
+    collector scanned unrelated memory instead. For the main thread that
+    range can start in an unmapped page, and the first collection crashed
+    (about 2% of processes in CI).
+
+  The extension no longer uses the garbage collector at all. Every solver
+  entry point is `@nogc`, so the compiler rejects any GC use on a solver
+  path; scratch memory lives on the C heap and is freed when each call
+  returns. Calling threads no longer register with the D runtime, and
+  nothing ever suspends or scans them. Results are bitwise identical to
+  before. Array-based solves are about 8% faster on Linux CI; peak memory
+  moves within about ±15% depending on the workload.
+
+### Documentation
+- New user guide: **Conventions** (input regimes, shapes, collocation
+  settings, evaluation and the breakpoint convention, with measured orders,
+  and the VIE-1 mesh-width/noise trade-off with measurements), **Warnings**,
+  **Migration from 0.10** and **Stability policy**.
+- README, Getting Started, the home page, all eight example pages and the
+  API reference use the new solvers. "Polynomial solutions" is now "Working
+  with the solution" (`to_ppoly`, coefficients, breakpoints). The 0.10
+  functions are documented together on a "Deprecated 0.10 solvers" page.
+- The public docstrings have runnable Examples (run by the test suite),
+  linked See Also sections, and Raises/Warns sections.
+- The benchmarks call the new solvers; their names, and so the published
+  history, are unchanged. The small-N timings include the new layer's
+  per-call overhead (about 40–60 µs on the benchmark machine).
 
 ## [0.10.0] - 2026-10-12
 

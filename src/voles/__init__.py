@@ -2,7 +2,7 @@
 
 # The single source of the package version: pyproject.toml reads it from here
 # ([tool.hatch.version]). Bump it here when releasing.
-__version__ = "0.10.0"
+__version__ = "0.11.0"
 
 from ._api import solve_vie1, solve_vie2, solve_vide
 from ._solution import VolterraSolution
