@@ -36,7 +36,7 @@ from numpy.polynomial import polynomial as npp
 
 from ._solution import _SolutionFunction, _complex_solution
 from . import _validate as _v
-from ._warnings import _warn, AccuracyWarning, VolesWarning
+from ._warnings import _warn, AccuracyWarning, PerformanceWarning, VolesWarning
 
 
 try:
@@ -444,6 +444,31 @@ def _integrate_smooth_batch(W, n, ls, tau_n, ok_off, *, kernel, mesh_breakpoints
             ok_off[:, n - lb] = ok.all(axis=2).T
 
 
+def _touch_tol(a_int, b_int):
+    """How close a singular location must be to an end of [a_int, b_int] to
+    count as sitting on it: relative to the block's width, so it stays below
+    the width on the tiny first intervals of a strongly graded mesh, but
+    never below a few ulps of the endpoints, so a node computed one ulp past
+    an endpoint still counts as touching it. (An absolute 1e-12 floor made
+    every singularity in a block narrower than 1e-12 an endpoint one.)"""
+    return max(1e-12 * abs(b_int - a_int),
+               8.0 * float(np.spacing(max(abs(a_int), abs(b_int)))))
+
+
+def _warn_jacobi_fallbacks(stats):
+    """One `PerformanceWarning` per solve when declared power laws didn't
+    hold: blocks whose Gauss-Jacobi estimate failed the two-order acceptance
+    check were integrated adaptively instead (correct, but much slower)."""
+    failed = stats.get("jacobi_fallbacks", 0)
+    if failed:
+        _warn(f"kernel_singularity declares a power law, but on {failed} of the "
+              f"{stats['jacobi_blocks']} blocks the singularity touches the Gauss-Jacobi "
+              f"estimate failed its accuracy check, so those blocks used adaptive "
+              f"quadrature instead, which is much slower. The result is still accurate. "
+              f"The declared exponent is probably wrong, or the kernel has other "
+              f"structure there (e.g. a logarithmic factor).", PerformanceWarning)
+
+
 def _classify_sing_block(sing, a_int, b_int):
     """Classify block [a_int, b_int] against declared singular locations.
 
@@ -454,7 +479,7 @@ def _classify_sing_block(sing, a_int, b_int):
     touching singularity, with a declared power -- deterministic fixed-order
     rule), or 'adaptive'; ``jinfo`` is the (s0, alpha) pair when mode is
     'jacobi', else None."""
-    tol = 1e-12 * max(1.0, abs(b_int - a_int))
+    tol = _touch_tol(a_int, b_int)
     touching = []
     interior = []
     for sp, alpha in sing:
@@ -527,7 +552,7 @@ def _maybe_singular_blocks(sing_per_i, mesh_breakpoints, n):
     if n == 0:
         return flagged
     bps = mesh_breakpoints[:n + 1]
-    # >= every per-block tol 1e-12 * max(1, width) used by the classifier
+    # >= every per-block tol (_touch_tol) used by the classifier
     tol = 2e-12 * max(1.0, float(bps[-1] - bps[0]))
     for sing in sing_per_i:
         for sp, _alpha in sing:
@@ -606,7 +631,8 @@ def _build_w_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
                                 kernel_singularity,
                                 smooth_gl_order: int, basis: np.ndarray,
                                 smooth_check_tol: float = 1e-9,
-                                reuse_adaptive_blocks: bool = False) -> np.ndarray:
+                                reuse_adaptive_blocks: bool = False,
+                                report=None, warn_fallbacks=False) -> np.ndarray:
     """Build the weight tensor W[n, i, l, k] = integral of K(tau_{n,i} - s)
     times basis[k](s_norm) on interval l. Shape (M, p, M, n_basis).
 
@@ -711,6 +737,7 @@ def _build_w_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             est.append(half * np.einsum('kq,q,iq->ik', B_off[o], weights, kvals))
         return est[0], est[1]
 
+    stats = report if report is not None else {}
     quad = None
     W = np.zeros((M, p, M, n_basis), dtype=np.float64)
 
@@ -755,7 +782,7 @@ def _build_w_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
         absorbed into the Jacobi weight and the smooth remainder
         g_k(s) = K(tau - s) |s - s0|^alpha L_k(s_norm) is sampled at the
         (interior) Jacobi nodes. Returns two length-n_basis arrays."""
-        tol = 1e-12 * max(1.0, abs(b_int - a_int))
+        tol = _touch_tol(a_int, b_int)
         if s0 <= a_int + tol:
             segs = [(a_int, b_int, True)]
         elif s0 >= b_int - tol:
@@ -799,7 +826,11 @@ def _build_w_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             return val
         ok = _store_two_order(W, n, [i], [l], v1[None, None], v2[None, None],
                               smooth_check_tol, fallback)
-        return bool(ok.all())
+        clean = bool(ok.all())
+        stats["jacobi_blocks"] = stats.get("jacobi_blocks", 0) + 1
+        if not clean:
+            stats["jacobi_fallbacks"] = stats.get("jacobi_fallbacks", 0) + 1
+        return clean
 
     def store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2):
         """Diagonal block of node i: store the order-(ord+2) estimate v2 under
@@ -961,19 +992,22 @@ def _build_w_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             "appears to be singular. Pass `kernel_singularity=<location(s)>` "
             "to declare the singular point(s)."
         )
-
+    if warn_fallbacks:
+        _warn_jacobi_fallbacks(stats)
     return W
 
 
 def _build_w_scalar(kernel, mesh_breakpoints, node_pos,
                     kernel_singularity, smooth_gl_order,
-                    smooth_check_tol=1e-9, reuse_adaptive_blocks=False):
+                    smooth_check_tol=1e-9, reuse_adaptive_blocks=False,
+                    warn_fallbacks=False):
     """VIE-2 weight tensor: Lagrange basis, shape (M, p, M, p)."""
     basis = _lagrange_basis_coefs(node_pos)
     return _build_w_with_basis_scalar(kernel, mesh_breakpoints, node_pos,
                                        kernel_singularity,
                                        smooth_gl_order, basis, smooth_check_tol,
-                                       reuse_adaptive_blocks)
+                                       reuse_adaptive_blocks,
+                                       warn_fallbacks=warn_fallbacks)
 
 
 def _build_w_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
@@ -981,7 +1015,8 @@ def _build_w_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
                                 kernel_singularity, smooth_gl_order: int,
                                 d: int, basis: np.ndarray,
                                 smooth_check_tol: float = 1e-9,
-                                reuse_adaptive_blocks: bool = False) -> np.ndarray:
+                                reuse_adaptive_blocks: bool = False,
+                                report=None, warn_fallbacks=False) -> np.ndarray:
     """Vector analogue of _build_w_with_basis_scalar. Returns (M, p, M, n_basis, d, d)."""
     M = len(mesh_breakpoints) - 1
     node_pos = np.asarray(node_pos, dtype=float)
@@ -1063,6 +1098,7 @@ def _build_w_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             est.append(half * np.einsum('kq,q,iqde->ikde', B_off[o], weights, kvals))
         return est[0], est[1]
 
+    stats = report if report is not None else {}
     quad_vec = None
     W = np.zeros((M, p, M, n_basis, d, d), dtype=np.float64)
 
@@ -1118,7 +1154,7 @@ def _build_w_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
         """Vector analogue of the scalar builder's jacobi_vals: two-order
         Gauss-Jacobi estimates for a block touched by one declared power-law
         singularity. Returns two (n_basis, d, d) arrays."""
-        tol = 1e-12 * max(1.0, abs(b_int - a_int))
+        tol = _touch_tol(a_int, b_int)
         if s0 <= a_int + tol:
             segs = [(a_int, b_int, True)]
         elif s0 >= b_int - tol:
@@ -1161,7 +1197,11 @@ def _build_w_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             return val
         ok = _store_two_order(W, n, [i], [l], v1[None, None], v2[None, None],
                               smooth_check_tol, fallback)
-        return bool(ok.all())
+        clean = bool(ok.all())
+        stats["jacobi_blocks"] = stats.get("jacobi_blocks", 0) + 1
+        if not clean:
+            stats["jacobi_fallbacks"] = stats.get("jacobi_fallbacks", 0) + 1
+        return clean
 
     def store_smooth(n, i, l, tau, t_l, h_l, a_int, b_int, v1, v2):
         """Diagonal block of node i: store the order-(ord+2) estimate v2 under
@@ -1317,19 +1357,22 @@ def _build_w_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             "appears to be singular. Pass `kernel_singularity=<location(s)>` "
             "to declare the singular point(s)."
         )
-
+    if warn_fallbacks:
+        _warn_jacobi_fallbacks(stats)
     return W
 
 
 def _build_w_vector(kernel, mesh_breakpoints, node_pos,
                     kernel_singularity, smooth_gl_order, d,
-                    smooth_check_tol=1e-9, reuse_adaptive_blocks=False):
+                    smooth_check_tol=1e-9, reuse_adaptive_blocks=False,
+                    warn_fallbacks=False):
     """VIE-2 vector weight tensor: Lagrange basis, shape (M, p, M, p, d, d)."""
     basis = _lagrange_basis_coefs(node_pos)
     return _build_w_with_basis_vector(kernel, mesh_breakpoints, node_pos,
                                        kernel_singularity,
                                        smooth_gl_order, d, basis, smooth_check_tol,
-                                       reuse_adaptive_blocks)
+                                       reuse_adaptive_blocks,
+                                       warn_fallbacks=warn_fallbacks)
 
 
 # ---------------------------------------------------------------------------
@@ -1692,7 +1735,8 @@ def vie2(*, kernel, g=None, mesh_breakpoints,
     if not is_vector:
         W = _build_w_scalar(kernel, mesh_breakpoints, node_pos,
                             kernel_singularity, _smooth_gl_order,
-                            reuse_adaptive_blocks=reuse_adaptive_blocks)
+                            reuse_adaptive_blocks=reuse_adaptive_blocks,
+            warn_fallbacks=show_warnings)
         g_arr = np.zeros((M, p), dtype=np.float64)
         if g is not None:
             for n in range(M):
@@ -1718,7 +1762,8 @@ def vie2(*, kernel, g=None, mesh_breakpoints,
     # shared across all right-hand sides in the matrix case.
     W = _build_w_vector(kernel, mesh_breakpoints, node_pos,
                         kernel_singularity, _smooth_gl_order, d,
-                        reuse_adaptive_blocks=reuse_adaptive_blocks)
+                        reuse_adaptive_blocks=reuse_adaptive_blocks,
+            warn_fallbacks=show_warnings)
 
     sample_t = float(mesh_breakpoints[0] + node_pos[0] * widths[0])
     m = _detect_g_matrix_cols(g, d, sample_t)
@@ -1878,7 +1923,8 @@ def vide(*, kernel, a=None, g=None, soln_init_value,
         W = _build_w_with_basis_scalar(
             kernel, mesh_breakpoints, node_pos,
             kernel_singularity, _smooth_gl_order, vide_basis,
-            reuse_adaptive_blocks=reuse_adaptive_blocks)
+            reuse_adaptive_blocks=reuse_adaptive_blocks,
+            warn_fallbacks=show_warnings)
         g_arr = _sample_callable_scalar(g, "g")
         a_arr = _sample_callable_scalar(a, "a")
         y_prime, y_boundary = _dlang_module.function_solve_vide_d(
@@ -1907,7 +1953,8 @@ def vide(*, kernel, a=None, g=None, soln_init_value,
     W = _build_w_with_basis_vector(
         kernel, mesh_breakpoints, node_pos,
         kernel_singularity, _smooth_gl_order, d, vide_basis,
-        reuse_adaptive_blocks=reuse_adaptive_blocks)
+        reuse_adaptive_blocks=reuse_adaptive_blocks,
+            warn_fallbacks=show_warnings)
     a_arr = _sample_a_at_coll(a, mesh_breakpoints, node_pos, widths, M, p, d)
 
     # Matrix-valued problem is signalled by a 2-D (d, m) initial value.
@@ -2486,7 +2533,8 @@ def vie1(*, kernel, g=None, soln_init_value=None,
             W = _build_w_with_basis_scalar(
                 kernel, mesh_breakpoints, node_pos,
                 kernel_singularity, _smooth_gl_order, cont_basis,
-                reuse_adaptive_blocks=reuse_adaptive_blocks)
+                reuse_adaptive_blocks=reuse_adaptive_blocks,
+            warn_fallbacks=show_warnings)
             adv_U, adv_0 = _vie1_cont_advance(node_pos)
             y, boundary = _dlang_module.function_solve_vie1_cont_d(
                 W, g_arr, adv_U, adv_0, _scalar_init(soln_init_value))
@@ -2496,7 +2544,8 @@ def vie1(*, kernel, g=None, soln_init_value=None,
 
         W = _build_w_scalar(kernel, mesh_breakpoints, node_pos,
                             kernel_singularity, _smooth_gl_order,
-                            reuse_adaptive_blocks=reuse_adaptive_blocks)
+                            reuse_adaptive_blocks=reuse_adaptive_blocks,
+            warn_fallbacks=show_warnings)
         y = _dlang_module.function_solve_vie1_d(W, g_arr)
         if return_function:
             return y, _lagrange_solution(y, mesh_breakpoints, node_pos)
@@ -2516,12 +2565,14 @@ def vie1(*, kernel, g=None, soln_init_value=None,
         W = _build_w_with_basis_vector(kernel, mesh_breakpoints, node_pos,
                                        kernel_singularity, _smooth_gl_order, d,
                                        cont_basis,
-                                       reuse_adaptive_blocks=reuse_adaptive_blocks)
+                                       reuse_adaptive_blocks=reuse_adaptive_blocks,
+            warn_fallbacks=show_warnings)
         adv_U, adv_0 = _vie1_cont_advance(node_pos)
     else:
         W = _build_w_vector(kernel, mesh_breakpoints, node_pos,
                             kernel_singularity, _smooth_gl_order, d,
-                            reuse_adaptive_blocks=reuse_adaptive_blocks)
+                            reuse_adaptive_blocks=reuse_adaptive_blocks,
+            warn_fallbacks=show_warnings)
 
     sample_t = float(mesh_breakpoints[0] + node_pos[0] * widths[0])
     m = _detect_g_matrix_cols(g, d, sample_t)

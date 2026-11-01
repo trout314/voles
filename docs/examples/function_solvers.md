@@ -107,7 +107,12 @@ sol = voles.solve_vie2(kernel=kernel, g=g, mesh=mesh,
 
 A wrongly declared exponent is caught by a two-order acceptance check and
 falls back to the adaptive treatment automatically, so the dict form is never
-less accurate than the location-only form. Relatedly, on uniform meshes
+less accurate than the location-only form; a `voles.PerformanceWarning` then
+says how many blocks fell back.
+
+The first solve in a process that needs scipy's quadrature (any declared
+singularity) imports it, which takes about half a second; time the solves
+after that one. Relatedly, on uniform meshes
 `reuse_adaptive_blocks=True` (the default) speeds up the location-only
 (adaptive) path by reusing adaptive blocks across the Toeplitz assembly, at
 the price of deviations bounded by the quadrature tolerance (~1e-8); with a

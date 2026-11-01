@@ -1101,7 +1101,8 @@ def solve(equation, **engine_kw):
     continuous = equation == "vide" or (equation == "vie1"
                                         and bool(engine_kw.get("force_continuous", False)))
     sol = _from_sampled_engine(values, engine_sol, equation=equation, continuous=continuous,
-                               coll_setting=(divs, choices), samples_per_interval=Q, dt=dt)
+                               coll_setting=(divs, choices), samples_per_interval=Q, dt=dt,
+                               quadrature=quadrature)
     M_reg, Qp = mesh_split(len(values), Q)
     mesh = sol.mesh
     if len(mesh) - 1 != M_reg + (1 if Qp else 0) or (M_reg and mesh[1] != Q * dt):

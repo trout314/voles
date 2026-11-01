@@ -264,6 +264,8 @@ def _recorded(call, **kw):
     (f2, dict(kernel=lambda u: np.asarray(u, dtype=float) ** -0.5, kernel_singularity=0.0),
      AccuracyWarning, "appears uniform"),
     (f2, dict(kernel_singularity=[0.0, 5.0], mesh=MESH ** 2), VolesWarning, "outside"),
+    (f2, dict(kernel=lambda u: np.asarray(u, dtype=float) ** -0.5, mesh=MESH ** 2,
+              kernel_singularity={0.0: 0.3}), PerformanceWarning, "failed its accuracy check"),
 ])
 def test_warnings_use_1_0_names_and_point_at_the_caller(call, kw, category, text):
     rec = _recorded(call, **kw)
@@ -279,6 +281,15 @@ def test_gauss_legendre_odd_p_and_rho_below_one_do_not_warn(nodes):
     """rho = (-1)^p for Gauss-Legendre nodes: odd p gives rho = -1, full order."""
     assert _recorded(f1, coll_nodes=nodes) == []
     assert _recorded(f1, coll_nodes=voles.gauss_legendre_nodes(3)) == []
+
+
+@pytest.mark.parametrize("call", [f1, f2])
+def test_correctly_declared_exponent_does_not_warn(call):
+    kw = dict(kernel=lambda u: np.asarray(u, dtype=float) ** -0.5, mesh=MESH ** 2,
+              kernel_singularity={0.0: 0.5})
+    if call is f1:
+        kw["g"] = lambda t: t
+    assert _recorded(call, **kw) == []
 
 
 def test_numba_fallback_warns():

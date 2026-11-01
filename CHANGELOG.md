@@ -2,10 +2,44 @@
 
 ## [Unreleased]
 
+### Added
+- **A constant `a`** for `solve_vide`: a number or a `(d, d)` array, with
+  either kind of input. It takes no part in choosing the regime, so
+  `a=-0.5` works with callables and with arrays (it used to need
+  `lambda t: -0.5`, or `np.full(N, -0.5)`).
+- `VolterraSolution.dt`, `.samples_per_interval` and `.quadrature`: the
+  sampled-regime settings a solution was computed with (`None` for callable
+  inputs); the `repr` shows them.
+- A `PerformanceWarning` when a declared exponent
+  (`kernel_singularity={u0: alpha}`) fails its accuracy check and the
+  singular blocks fall back to adaptive quadrature: the result is correct,
+  but the solve is several times slower, and the exponent is probably wrong.
+  A correctly declared exponent never triggers it.
+
 ### Changed
 - Python 3.14 is supported and tested in CI (Linux, macOS, Windows).
 
+### Fixed
+- **Singular kernels on strongly graded meshes.** Whether a declared
+  singularity touches a mesh interval was decided with an absolute 1e-12
+  tolerance. On intervals narrower than that (graded meshes for order 3
+  with 256 or more intervals, or for higher orders), a singularity inside
+  an interval was treated as sitting at its end. With a declared exponent
+  the solution's values near t = 0 then had up to about 60% relative error,
+  and the error stopped converging under refinement. The tolerance is now
+  relative to the interval; the regression battery's results (no such
+  intervals) are bitwise unchanged.
+
 ### Documentation
+- New user-guide page **Accuracy**: what controls the error, measured
+  convergence orders for the common node sets (anywhere, at breakpoints, at
+  nodes), how to check the accuracy of a solve by refinement or
+  sub-sampling, and a procedure for choosing `samples_per_interval` for
+  noisy first-kind data when y is unknown.
+- Conventions: constant `a`, equal sample counts, `g` and `a` called with
+  scalar t, why the VIE-1 default nodes are not Radau IIA. Warnings: the
+  `g(0) is not zero` warning for measured data. The first solve that needs
+  scipy's quadrature imports it (about half a second).
 - The pages and docstrings about weakly singular kernels say what declaring
   the exponent (`kernel_singularity={0.0: alpha}`, not only the location)
   buys: Gauss–Jacobi rules instead of adaptive quadrature, typically 3–10×

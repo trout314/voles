@@ -113,7 +113,10 @@ the method's full order; ρ = +1 converges one order lower and gives an
 - Radau IIA nodes have ρ = 0 and the full order p, which makes them the
   usual choice for the discontinuous method. They don't suit
   `continuous=True`: there |ρ| = p, so that method diverges for every
-  p ≥ 2. The default nodes {1/3, 2/3, 1} work for both methods.
+  p ≥ 2. The default nodes {1/3, 2/3, 1} work for both methods, which is
+  why they are the default; with the default mean at the breakpoints they
+  are also one order more accurate there than Radau IIA (see
+  [Accuracy](accuracy.md#convergence-orders)).
 - Gauss–Legendre nodes are symmetric, so ρ = (−1)ᵖ: odd p keeps the full
   order, even p loses one.
 
@@ -128,6 +131,7 @@ sides solved together.
 | `kernel` | `(N,)` or `(N, d, d)` | scalar or `(d, d)` |
 | `g` | `(N,)`, `(N, d)` or `(N, d, m)` | scalar, `(d,)` or `(d, m)` |
 | `a` (VIDE) | `(N,)` or `(N, d, d)` | scalar or `(d, d)` |
+| constant `a` (VIDE) | a number, or a `(d, d)` array | the same |
 | `y0` | scalar, `(d,)` or `(d, m)` | the same |
 
 - **Matrix mode.** The problem has m columns exactly when some input has a
@@ -136,10 +140,16 @@ sides solved together.
   or a vector `g` with a `(d, m)` `y0`, both work. The columns are
   independent problems with a common kernel; the kernel's work is shared
   and the columns may run in parallel threads.
+- **Sampled inputs** all have the same number of samples N, at the same
+  times n·dt.
+- **A constant `a`**, a number or a `(d, d)` array, works with either kind of
+  input; it doesn't take part in choosing the regime.
 - **Callable kernels** are called with one argument u = t − s ≥ 0. A kernel
   that also accepts a 1-D array of u, returning the stacked values, is
   detected and used vectorised, which is much faster. For a matrix kernel
   `np.multiply.outer(np.exp(-u), A)` vectorises, `np.exp(-u) * A` does not.
+  `g` and `a` are called with one time t at a time, so they need not accept
+  arrays.
 - **Complex** inputs give a complex solution. Integer and `float32` inputs
   are converted to `float64`.
 - **Non-finite data** (NaN or inf in an array, or returned by `g` or `a` at
@@ -162,6 +172,7 @@ Every solver returns a [`VolterraSolution`](../api/solution.md):
 | `mesh` | `(M + 1,)` | the breakpoints |
 | `node_times`, `node_values` | `(M, p)`, `(M, p, *cs)` | the collocation times and the solution there |
 | `coefficients` | `(M, P, *cs)` | each interval's polynomial in x = (t − tₙ)/hₙ ∈ [0, 1], monomial, lowest degree first |
+| `dt`, `samples_per_interval`, `quadrature` | — | the sampled-regime settings used; `None` for callable inputs |
 
 `sol(t)` evaluates the piecewise polynomial:
 
@@ -227,7 +238,8 @@ with m the method's order and ε the noise in g. Shrinking the mesh reduces
 the first term but amplifies the noise. This is why the sampled VIE-1
 default is `samples_per_interval = divs²` rather than the finest mesh
 `divs`, and why `samples_per_interval` is the parameter to tune on real
-data. (Noise in the kernel is not amplified this way; it enters as an O(ε)
+data; [Accuracy](accuracy.md#noisy-first-kind-data) gives a procedure for
+choosing it when y is unknown. (Noise in the kernel is not amplified this way; it enters as an O(ε)
 error.) VIE-2 and VIDE are well posed and have no such trade-off, so their
 default is the finest mesh.
 

@@ -238,6 +238,9 @@ class VolterraSolution:
         The nominal node positions in ``[0, 1]``, sorted.
     coll_setting : tuple or None
         ``(divs, choices)`` for sampled inputs, ``None`` for callable inputs.
+    dt, samples_per_interval, quadrature : float, int, str or None
+        For sampled inputs: the sample spacing, the mesh width in samples, and
+        ``"product"`` or ``"collocation"``. ``None`` for callable inputs.
     equation : {"vie1", "vie2", "vide"}
     regime : {"sampled", "functional"}
     continuous : bool
@@ -306,6 +309,8 @@ class VolterraSolution:
     _t: Optional[np.ndarray]
     _dt: Optional[float]
     _n: Optional[int]
+    _Q: Optional[int]
+    _quadrature: Optional[str]
     _d: int
     _m: int
 
@@ -318,7 +323,8 @@ class VolterraSolution:
     @classmethod
     def _build(cls, *, coefficients, mesh, nodes, equation, regime, continuous, d, m,
                local_nodes=None, node_times=None, node_layout=None, coll_setting=None,
-               y=None, node_values=None, dt=None, n_samples=None, copy_mesh=True):
+               y=None, node_values=None, dt=None, n_samples=None, copy_mesh=True,
+               samples_per_interval=None, quadrature=None):
         """The solvers' constructor.
 
         ``local_nodes`` (M, p): each interval's node positions in its local
@@ -359,9 +365,11 @@ class VolterraSolution:
                 raise ValueError("the sampled regime needs y, dt and n_samples")
             self._y = np.asarray(y)
             self._dt, self._n = float(dt), int(n_samples)
+            self._Q = None if samples_per_interval is None else int(samples_per_interval)
+            self._quadrature = quadrature
         else:
             self._y = None if y is None else np.asarray(y)
-            self._dt = self._n = None
+            self._dt = self._n = self._Q = self._quadrature = None
         self._t = None
         return self
 
@@ -401,6 +409,20 @@ class VolterraSolution:
     @property
     def nodes(self) -> np.ndarray:
         return self._nodes
+
+    # Sampled-regime settings (None for callable inputs). getattr: a 0.11.0
+    # pickle has no _Q / _quadrature.
+    @property
+    def dt(self) -> Optional[float]:
+        return self._dt
+
+    @property
+    def samples_per_interval(self) -> Optional[int]:
+        return getattr(self, "_Q", None)
+
+    @property
+    def quadrature(self) -> Optional[str]:
+        return getattr(self, "_quadrature", None)
 
     @property
     def t(self) -> np.ndarray:
@@ -538,6 +560,8 @@ class VolterraSolution:
         M = len(self._mesh) - 1
         nodes = (f"coll_setting={self.coll_setting}" if self.coll_setting is not None
                  else "coll_nodes=[" + ", ".join(f"{c:.4g}" for c in self._nodes) + "]")
+        if self.samples_per_interval is not None:
+            nodes += f", samples_per_interval={self.samples_per_interval}, {self.quadrature}"
         shape = f", shape={self._shape}" if self._shape else ""
         return (f"<VolterraSolution {self.equation}, {self.regime}, {M} intervals on "
                 f"[0, {self._mesh[-1]:.6g}], degree {self._coef.shape[1] - 1}, {nodes}"
@@ -551,7 +575,7 @@ class VolterraSolution:
 # ---------------------------------------------------------------------------
 
 def _from_sampled_engine(values, legacy, *, equation, continuous, coll_setting,
-                         samples_per_interval, dt):
+                         samples_per_interval, dt, quadrature=None):
     """`VolterraSolution` from the sampled engine's ``(values,
     _SolutionFunction)`` pair, given the resolved setting and mesh width."""
     divs, choices = coll_setting[0], sorted(int(c) for c in coll_setting[1])
@@ -564,7 +588,8 @@ def _from_sampled_engine(values, legacy, *, equation, continuous, coll_setting,
         node_layout=(tuple(choices), int(divs), int(samples_per_interval), N, float(dt)),
         nodes=np.array(choices) / divs,
         equation=equation, regime="sampled", continuous=continuous, d=legacy._d,
-        m=legacy._m, coll_setting=(divs, choices), y=values, dt=dt, n_samples=N)
+        m=legacy._m, coll_setting=(divs, choices), y=values, dt=dt, n_samples=N,
+        samples_per_interval=int(samples_per_interval), quadrature=quadrature)
 
 
 def _sampled_layout(choices, divs, Q, N, dt):

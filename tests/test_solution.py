@@ -410,3 +410,17 @@ def test_truthiness_does_not_warn():
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         assert sol
+
+
+def test_sampled_settings_are_recorded():
+    import voles
+    t = np.linspace(0, 1, 101)
+    s = voles.solve_vie1(kernel=np.exp(-t), g=np.sin(t), dt=0.01)
+    assert (s.dt, s.samples_per_interval, s.quadrature) == (0.01, 9, "product")
+    s = voles.solve_vie2(kernel=np.exp(-t), g=np.sin(t), dt=0.01, coll_setting=3,
+                         quadrature="Collocation")
+    assert (s.samples_per_interval, s.quadrature) == (9, "collocation")
+    s = voles.solve_vide(kernel=np.exp(-t), y0=1.0, dt=0.01, samples_per_interval=4)
+    assert s.samples_per_interval == 4
+    f = voles.solve_vie2(kernel=np.exp, g=np.sin, mesh=np.linspace(0, 1, 5))
+    assert (f.dt, f.samples_per_interval, f.quadrature) == (None, None, None)

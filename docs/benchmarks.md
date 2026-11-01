@@ -4,7 +4,9 @@ Mean wall-clock execution time, measured on a GitHub Actions `ubuntu-22.04`
 runner (2-core x86_64 VM on an Intel Xeon 8370C, 2.8 GHz base / 3.5 GHz boost).
 Mean time is averaged over a variable number of calibrated rounds (from ~3 for
 large inputs up to ~6000 for small inputs). A dash (—) marks sizes a row is
-not benchmarked at (to keep the CI job fast).
+not benchmarked at (to keep the CI job fast). The timings are for warm calls:
+the first solve in a process that needs scipy's quadrature (callable inputs
+with a declared singularity) also imports it, about half a second once.
 
 These tables are regenerated automatically by the benchmark CI job on pushes
 to `main` that touch code (docs-only pushes are skipped), and this page is

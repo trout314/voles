@@ -7,7 +7,7 @@ voles never prints. Every diagnostic is a warning issued with
 |---|---|---|
 | `VolesWarning` | `UserWarning` | the base class of all of them; also a `kernel_singularity` location outside [0, T] |
 | `AccuracyWarning` | `VolesWarning` | the result is less accurate than the method's nominal order: a VIE-1 node set with ρ = 1 (one order lower); VIE-1 with g(0) ≠ 0; VIE-1 with a small or singular K(0) under `quadrature="collocation"`; a kernel singularity declared on a uniform mesh |
-| `PerformanceWarning` | `VolesWarning` | the result is correct but came from a slower path: the numba fallback, or an extension build without a fast path |
+| `PerformanceWarning` | `VolesWarning` | the result is correct but came from a slower path: the numba fallback; a declared exponent (`kernel_singularity={u0: alpha}`) that failed its accuracy check, so adaptive quadrature was used; or an extension build without a fast path |
 
 - A warning points at the line that called the solver, not at voles'
   internals, and a solve issues each diagnostic at most once, from the
@@ -19,6 +19,9 @@ voles never prints. Every diagnostic is a warning issued with
   `IntegrationWarning` from adaptive quadrature of a callable kernel.
 - New warning conditions may be added in a minor release; they are always
   `VolesWarning` subclasses.
+- A first-kind solve with measured data often warns `g(0) is not zero`: the
+  measured g[0] is zero plus noise. Set `g[0] = 0` (see
+  [Accuracy](accuracy.md#noisy-first-kind-data)).
 
 ## Filtering
 

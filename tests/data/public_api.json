@@ -36,10 +36,13 @@
       "members": {
         "__call__": "(self, t: 'ArrayLike', *, at_breakpoints: \"Literal['mean', 'left', 'right']\" = 'mean') -> 'Union[float, complex, np.ndarray]'",
         "coefficients": "property -> np.ndarray",
+        "dt": "property -> Optional[float]",
         "mesh": "property -> np.ndarray",
         "node_times": "property -> np.ndarray",
         "node_values": "property -> np.ndarray",
         "nodes": "property -> np.ndarray",
+        "quadrature": "property -> Optional[str]",
+        "samples_per_interval": "property -> Optional[int]",
         "t": "property -> np.ndarray",
         "to_ppoly": "(self) -> 'PPoly'",
         "y": "property -> np.ndarray"

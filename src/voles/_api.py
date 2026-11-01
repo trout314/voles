@@ -199,7 +199,25 @@ def _columns(m_values):
     return m
 
 
-def _sampled_inputs(equation, kernel, g, a, y0, Q, p, continuous):
+def _check_constant_a(a_const, d):
+    want = () if d == 0 else (d, d)
+    if a_const.shape != want:
+        raise ValueError(
+            f"a constant a must be {'a number' if d == 0 else f'a ({d}, {d}) matrix'} for "
+            f"{'a scalar equation' if d == 0 else f'a system of {d} equations'}, got shape "
+            f"{a_const.shape}")
+
+
+def _constant_function(value):
+    """A constant ``a`` for the callable engine: a Python scalar or a fresh
+    (d, d) array per call, so the engine may modify what it gets."""
+    if value.ndim == 0:
+        v = value.item()
+        return lambda t: v
+    return lambda t: value.copy()
+
+
+def _sampled_inputs(equation, kernel, g, a, y0, Q, p, continuous, a_const=None):
     """Validate and shape the sampled inputs for the engine. Returns the
     engine keyword arguments for the data."""
     K = _numeric_array("kernel", kernel)
@@ -226,11 +244,16 @@ def _sampled_inputs(equation, kernel, g, a, y0, Q, p, continuous):
             want = f"({N},)" if d == 0 else f"({N}, {d}) or ({N}, {d}, m)"
             raise ValueError(f"g must have shape {want} to match kernel {K.shape}, got {G.shape}")
     A = None
-    if equation == "vide" and a is not None:
+    if a_const is not None:
+        _check_constant_a(a_const, d)
+        A = np.broadcast_to(a_const, (N,) + a_const.shape)
+    elif equation == "vide" and a is not None:
         A = _numeric_array("a", a)
         want = (N,) if d == 0 else (N, d, d)
         if A.shape != want:
-            raise ValueError(f"a must have shape {want} to match kernel {K.shape}, got {A.shape}")
+            raise ValueError(f"a must have shape {want} to match kernel {K.shape}, or be a "
+                             f"constant ({'a number' if d == 0 else f'a ({d}, {d}) matrix'}), "
+                             f"got {A.shape}")
     Y0 = None if y0 is None else _initial_value(y0, d)
     # Matrix rule: m from whichever inputs carry a column axis; the rest are shared.
     m = None
@@ -279,7 +302,7 @@ def _check_compiled(equation, divs, choices, d, m):
 # ---------------------------------------------------------------------------
 
 def _solve_sampled(equation, *, kernel, g, a, y0, continuous, dt, coll_setting, quadrature,
-                   samples_per_interval, kernel_interp_degree):
+                   samples_per_interval, kernel_interp_degree, a_const=None):
     dt = _v.real("dt", dt, positive=True, value_msg=f"dt must be positive and finite, got {dt!r}")
     quadrature = _v.choice("quadrature", quadrature, ("product", "collocation"))
     divs, choices = _resolve_coll_setting(equation, coll_setting)
@@ -304,7 +327,7 @@ def _solve_sampled(equation, *, kernel, g, a, y0, continuous, dt, coll_setting, 
         p = _v.integer("kernel_interp_degree", kernel_interp_degree, minimum=1)
     else:
         p = len(choices) if quadrature == "product" else 0
-    data, d, m = _sampled_inputs(equation, kernel, g, a, y0, Q, p, continuous)
+    data, d, m = _sampled_inputs(equation, kernel, g, a, y0, Q, p, continuous, a_const)
     if quadrature == "collocation":
         _check_compiled(equation, divs, choices, d, m)
     kw = dict(data, time_step=dt, coll_divs=divs, coll_choices=choices, quadrature=quadrature,
@@ -352,7 +375,7 @@ def _warn_rho_one(node_pos, continuous):
 
 
 def _solve_functional(equation, *, kernel, g, a, y0, continuous, mesh, coll_nodes,
-                      kernel_singularity, reuse_adaptive_blocks):
+                      kernel_singularity, reuse_adaptive_blocks, a_const=None):
     mesh = _validate_mesh(mesh)
     reuse_adaptive_blocks = _v.flag("reuse_adaptive_blocks", reuse_adaptive_blocks)
     divs, choices = _DEFAULT_SETTING[equation]
@@ -369,6 +392,9 @@ def _solve_functional(equation, *, kernel, g, a, y0, continuous, mesh, coll_node
     widths = np.diff(mesh)
     is_vector, d = _functional._detect_kernel_shape(kernel, float(widths[0]) * 0.5)
     d = d if is_vector else 0
+    if a_const is not None:
+        _check_constant_a(a_const, d)
+        a = _constant_function(a_const)
     Y0 = None if y0 is None else _initial_value(y0, d)
     m = None
     if d:
@@ -397,6 +423,11 @@ def _solve(equation, *, kernel, g, a=None, y0=None, continuous=False, dt, coll_s
            kernel_singularity, reuse_adaptive_blocks):
     if kernel is None:
         raise TypeError(f"solve_{equation}: kernel is required")
+    a_const = None
+    if equation == "vide" and a is not None and not callable(a):
+        arr = _numeric_array("a", a)
+        if arr.ndim in (0, 2):            # a number or a (d, d) matrix: a constant
+            a_const, a = arr, None        # it never decides the regime
     data = [("kernel", kernel)] + [(n, v) for n, v in (("g", g), ("a", a)) if v is not None]
     regime = _classify(data)
     why = ("the inputs are callable" if regime == "functional"
@@ -422,7 +453,7 @@ def _solve(equation, *, kernel, g, a=None, y0=None, continuous=False, dt, coll_s
                              "continuous=True with it, or leave y0 out")
     if equation == "vide" and y0 is None:
         raise TypeError("solve_vide: y0 is required")
-    common = dict(kernel=kernel, g=g, a=a, y0=y0, continuous=continuous)
+    common = dict(kernel=kernel, g=g, a=a, y0=y0, continuous=continuous, a_const=a_const)
     if regime == "sampled":
         return _solve_sampled(equation, dt=dt, coll_setting=coll_setting, quadrature=quadrature,
                               samples_per_interval=samples_per_interval,
@@ -544,7 +575,9 @@ def solve_vie1(*, kernel: Data, g: Optional[Data] = None, continuous: bool = Fal
         $K(0)$ too small for collocation quadrature; a singularity declared
         on a uniform mesh.
     PerformanceWarning
-        The numba fallback is used.
+        The numba fallback is used; or a declared exponent in
+        ``kernel_singularity`` failed its accuracy check, so the singular
+        blocks used adaptive quadrature.
     VolesWarning
         A ``kernel_singularity`` location outside $[0, T]$.
 
@@ -704,7 +737,9 @@ def solve_vie2(*, kernel: Data, g: Optional[Data] = None,
     AccuracyWarning
         A singularity declared on a uniform mesh.
     PerformanceWarning
-        The numba fallback is used.
+        The numba fallback is used; or a declared exponent in
+        ``kernel_singularity`` failed its accuracy check, so the singular
+        blocks used adaptive quadrature.
     VolesWarning
         A ``kernel_singularity`` location outside $[0, T]$.
 
@@ -785,9 +820,10 @@ def solve_vide(*, kernel: Data, a: Optional[Data] = None, g: Optional[Data] = No
         equations, at $u = 0, dt, \ldots, (N-1)\,dt$. Callable: ``kernel(u)``
         returning a scalar or a ``(d, d)`` matrix; it may be vectorised
         over a 1-D ``u``, which is faster.
-    a : array_like or callable, optional
+    a : array_like, callable or constant, optional
         $a$. Sampled: ``(N,)`` or ``(N, d, d)``. Callable: ``a(t)`` returning
-        a scalar or a ``(d, d)`` matrix. Default zero.
+        a scalar or a ``(d, d)`` matrix. A constant, a number or a ``(d, d)``
+        array, works with either kind of input. Default zero.
     g : array_like or callable, optional
         $g$. Sampled: ``(N,)``, ``(N, d)`` or ``(N, d, m)`` for $m$
         right-hand sides. Callable: ``g(t)`` returning a scalar, ``(d,)`` or
@@ -863,7 +899,9 @@ def solve_vide(*, kernel: Data, a: Optional[Data] = None, g: Optional[Data] = No
     AccuracyWarning
         A singularity declared on a uniform mesh.
     PerformanceWarning
-        The numba fallback is used.
+        The numba fallback is used; or a declared exponent in
+        ``kernel_singularity`` failed its accuracy check, so the singular
+        blocks used adaptive quadrature.
     VolesWarning
         A ``kernel_singularity`` location outside $[0, T]$.
 

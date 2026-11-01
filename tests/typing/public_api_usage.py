@@ -46,6 +46,11 @@ deriv = pp.derivative()(0.3)
 setting = s1.coll_setting
 kind: str = s1.equation + s1.regime
 flag: bool = s1.continuous
+spacing = s1.dt
+width = s1.samples_per_interval
+quad = s1.quadrature
+f6 = voles.solve_vide(kernel=lambda u: np.exp(-u), a=-0.5, y0=1.0, mesh=[0.0, 0.5, 1.0])
+s5 = voles.solve_vide(kernel=np.exp(-t), a=np.array([[-0.5]]).item(), y0=1.0, dt=0.01)
 
 # Node helpers and warnings.
 nodes = [voles.gauss_legendre_nodes(3), voles.lobatto_nodes(3)]

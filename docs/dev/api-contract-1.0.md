@@ -51,6 +51,7 @@ inputs (`kernel`, `g`, and for VIDE `a`):
 | | sampled | functional |
 |---|---|---|
 | Selected when | at least one data input is an array (not `callable`) and none is callable | every data input given is callable |
+| (constant `a`) | a VIDE `a` that is a number or a `(d, d)` array is a constant: it takes no part in the choice and works in either regime | |
 | Grid | `dt` (sample spacing, default 1.0). Inputs are samples at t = 0, dt, …, (N−1)·dt, where N is the kernel's length. The solver builds a uniform mesh of `samples_per_interval` samples per interval, with a longer final interval when the samples don't divide evenly. | `mesh`, required: 1-D, finite, strictly increasing, `mesh[0] == 0` |
 | Node set | `coll_setting` (§5.1) | `coll_nodes` (§5.2) |
 | Options that apply only here | `coll_setting`, `quadrature`, `samples_per_interval`, `kernel_interp_degree` | `mesh`, `coll_nodes`, `kernel_singularity`, `reuse_adaptive_blocks` |
@@ -173,7 +174,7 @@ solve_vide(*, kernel, a=None, g=None, y0,
 |---|---|---|
 | `kernel` | `(N,)` scalar, `(N, d, d)` vector/matrix | `K(u)` → scalar or `(d, d)` |
 | `g` | `(N,)`, `(N, d)`, `(N, d, m)` | `g(t)` → scalar, `(d,)`, `(d, m)` |
-| `a` (VIDE) | `(N,)` or `(N, d, d)` | `a(t)` → scalar or `(d, d)` |
+| `a` (VIDE) | `(N,)` or `(N, d, d)`, or a constant: scalar or `(d, d)` | `a(t)` → scalar or `(d, d)`, or the same constants |
 | `y0` | scalar, `(d,)`, `(d, m)` | the same |
 
 - **Matrix mode.** The problem is matrix-valued exactly when some input has
@@ -254,6 +255,7 @@ piecewise polynomial on `mesh`. Users don't construct it.
 | `coefficients` | `(M, P, *cs)` | interval n's polynomial in the local variable x = (t − tₙ)/hₙ ∈ [0, 1], as monomial coefficients, lowest degree first |
 | `nodes` | `(p,)` | the nominal node positions in [0, 1], sorted |
 | `coll_setting` | — | `(divs, choices)` with `choices` a sorted list, or `None` in the functional regime |
+| `dt`, `samples_per_interval`, `quadrature` | — | the sampled regime's settings as used (`quadrature` canonical lower case); `None` in the functional regime |
 | `equation` | — | `"vie1"`, `"vie2"` or `"vide"` |
 | `regime` | — | `"sampled"` or `"functional"` |
 | `continuous` | — | `True` when the solution space is C⁰ (VIDE; VIE-1 with `continuous=True`) |
@@ -319,7 +321,7 @@ Outside [0, T] it returns NaN, like `sol(t)`.
 |---|---|---|
 | `VolesWarning` | `UserWarning` | base class; also: `kernel_singularity` locations outside [0, T] |
 | `AccuracyWarning` | `VolesWarning` | ρ = +1 order reduction; VIE-1 with g(0) ≠ 0; VIE-1 with K(0) small or singular under collocation quadrature; a declared singularity on a uniform mesh |
-| `PerformanceWarning` | `VolesWarning` | the numba fallback; an extension build lacking a fast path |
+| `PerformanceWarning` | `VolesWarning` | the numba fallback; a declared `kernel_singularity` exponent whose Gauss–Jacobi estimates failed the acceptance check (adaptive quadrature used instead); an extension build lacking a fast path |
 
 - Warnings are emitted with `warnings.warn`. Each points at the user's call,
   is emitted at most once per solve call, and comes from the calling

@@ -158,3 +158,44 @@ def test_scalar_problems_have_no_column_axis():
         solve_vie2(kernel=np.exp(-T), g=np.ones((N, 3)), dt=DT)
     with pytest.raises(ValueError):
         solve_vide(kernel=np.exp(-T), g=np.sin(T), y0=np.ones(3), dt=DT)
+
+
+# ------------------------------------------------------------- constant a
+
+A_CONST = np.array([[0.0, 1.0], [-1.0, -0.1]])
+
+
+def test_constant_a_sampled_equals_broadcast_samples():
+    for a, A in ((-0.5, np.full(N, -0.5)), ):
+        np.testing.assert_array_equal(
+            solve_vide(kernel=np.exp(-T), a=a, g=np.cos(T), y0=1.0, dt=DT).y,
+            solve_vide(kernel=np.exp(-T), a=A, g=np.cos(T), y0=1.0, dt=DT).y)
+    np.testing.assert_array_equal(
+        solve_vide(kernel=K, a=A_CONST, y0=Y0, dt=DT).y,
+        solve_vide(kernel=K, a=np.broadcast_to(A_CONST, (N, D, D)), y0=Y0, dt=DT).y)
+
+
+def test_constant_a_functional_equals_constant_callable():
+    np.testing.assert_array_equal(
+        solve_vide(kernel=lambda u: np.exp(-u), a=-0.5, g=np.cos, y0=1.0, mesh=MESH).node_values,
+        solve_vide(kernel=lambda u: np.exp(-u), a=lambda t: -0.5, g=np.cos, y0=1.0,
+                   mesh=MESH).node_values)
+    np.testing.assert_array_equal(
+        solve_vide(kernel=kern, a=A_CONST, y0=Y0, mesh=MESH).node_values,
+        solve_vide(kernel=kern, a=lambda t: A_CONST, y0=Y0, mesh=MESH).node_values)
+
+
+def test_constant_a_does_not_decide_the_regime():
+    assert solve_vide(kernel=lambda u: np.exp(-u), a=0.3, y0=1.0, mesh=MESH).regime == "functional"
+    assert solve_vide(kernel=np.exp(-T), a=0.3, y0=1.0, dt=DT).regime == "sampled"
+
+
+@pytest.mark.parametrize("kw, text", [
+    (dict(kernel=K, a=-0.5, y0=Y0[:, 0], dt=DT), "a (2, 2) matrix"),
+    (dict(kernel=np.exp(-T), a=A_CONST, y0=1.0, dt=DT), "a number"),
+    (dict(kernel=lambda u: np.exp(-u), a=A_CONST, y0=1.0, mesh=MESH), "a number"),
+    (dict(kernel=np.exp(-T), a=np.ones(5), y0=1.0, dt=DT), "or be a constant"),
+])
+def test_constant_a_shape_errors(kw, text):
+    with pytest.raises(ValueError, match=text.replace("(", r"\(").replace(")", r"\)")):
+        solve_vide(**kw)

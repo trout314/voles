@@ -38,6 +38,7 @@ nav:
   - Getting Started: getting_started.md
   - User Guide:
       - Conventions: guide/conventions.md
+      - Accuracy: guide/accuracy.md
       - Warnings: guide/warnings.md
       - Migration from 0.10: guide/migration.md
       - Stability policy: guide/stability.md
