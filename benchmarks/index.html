@@ -1331,10 +1331,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#array-based-solvers" class="md-nav__link">
+  <a href="#sampled-inputs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Array-based solvers
+        Sampled inputs
       
     </span>
   </a>
@@ -1342,10 +1342,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#callable-input-solvers" class="md-nav__link">
+  <a href="#callable-inputs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Callable-input solvers
+        Callable inputs
       
     </span>
   </a>
@@ -1387,10 +1387,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#array-based-solvers" class="md-nav__link">
+  <a href="#sampled-inputs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Array-based solvers
+        Sampled inputs
       
     </span>
   </a>
@@ -1398,10 +1398,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#callable-input-solvers" class="md-nav__link">
+  <a href="#callable-inputs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Callable-input solvers
+        Callable inputs
       
     </span>
   </a>
@@ -1441,9 +1441,10 @@ measurements is published at the
 <a href="https://trout314.github.io/voles/dev/bench/">benchmark dashboard</a>.</p>
 <p>For the asymptotic complexity (which is what stays fixed as the implementation
 evolves), see the <a href="https://github.com/trout314/voles#benchmarks">Benchmarks section of the README</a>.</p>
-<h2 id="array-based-solvers">Array-based solvers</h2>
-<p>Mean time in milliseconds for the <strong>array-based</strong> solvers, by input length <span class="arithmatex">\(N\)</span>
-(number of sampled points):</p>
+<h2 id="sampled-inputs">Sampled inputs</h2>
+<p>Mean time in milliseconds with <strong>sampled inputs</strong> (arrays, <code>dt=</code>), by input
+length <span class="arithmatex">\(N\)</span> (number of samples). These rows use <code>quadrature="collocation"</code>, the
+compiled path:</p>
 <!-- BENCHMARKS:START -->
 <table>
 <thead>
@@ -1565,15 +1566,15 @@ evolves), see the <a href="https://github.com/trout314/voles#benchmarks">Benchma
 
 <p>Notes on the rows:</p>
 <ul>
-<li><strong>VIE-1 with <code>force_continuous=True</code></strong> is not shown separately: its timings
+<li><strong>VIE-1 with <code>continuous=True</code></strong> is not shown separately: its timings
   are indistinguishable from the default (discontinuous) VIE-1 rows.</li>
 <li><strong>d=8</strong> is the largest compile-time-specialized dimension in the D
   extension; <strong>d=16</strong> exercises the runtime-dimension path (LAPACK, or the
   pure-D LU fallback used on the CI runner). Cost grows as <span class="arithmatex">\(d^2\)</span> either way.</li>
 <li><strong>Numba fallback</strong>: scalar equations with a collocation setting that is not
   compiled into the D extension fall back to a Numba JIT solver. Every setting
-  with <code>coll_divs</code> ≤ 4 is compiled, so this row uses <code>coll_divs=5,
-  coll_choices=[0, 3, 5]</code> — a 3-node rule comparable to the default — whose
+  with <code>divs</code> ≤ 4 is compiled, so this row uses
+  <code>coll_setting=(5, [0, 3, 5])</code> — a 3-node rule comparable to the default — whose
   mesh intervals are 25 fine steps wide instead of 4. The fallback therefore
   takes ~6× <em>fewer</em> (larger) steps at equal <span class="arithmatex">\(N\)</span> than the D rows above, and is
   still one to two orders of magnitude slower: its history sum is quadratic in
@@ -1581,11 +1582,11 @@ evolves), see the <a href="https://github.com/trout314/voles#benchmarks">Benchma
   scheme. The one-time JIT compilation cost (seconds, on first call in a
   fresh environment) is excluded from the timings via a warmup round.</li>
 </ul>
-<h2 id="callable-input-solvers">Callable-input solvers</h2>
-<p>The <strong>callable-input</strong> solvers run the general path (Python + adaptive
-quadrature, no Toeplitz reuse), so they are benchmarked on much smaller
-problems, sized by the number of mesh intervals <span class="arithmatex">\(M\)</span> (each carrying
-<code>len(coll_choices)</code> collocation nodes). The <em>weakly singular</em> row uses an Abel
+<h2 id="callable-inputs">Callable inputs</h2>
+<p>With <strong>callable inputs</strong> (<code>mesh=</code>) the solvers run the general path (Python +
+adaptive quadrature, no Toeplitz reuse), so they are benchmarked on much
+smaller problems, sized by the number of mesh intervals <span class="arithmatex">\(M\)</span> (each carrying
+<code>len(coll_nodes)</code> collocation nodes). The <em>weakly singular</em> row uses an Abel
 kernel <span class="arithmatex">\(K(u) = u^{-1/2}\)</span> on a graded mesh with the singularity declared:</p>
 <!-- CALLABLE_BENCHMARKS:START -->
 <table>
@@ -1600,35 +1601,35 @@ kernel <span class="arithmatex">\(K(u) = u^{-1/2}\)</span> on a graded mesh with
 </thead>
 <tbody>
 <tr>
-<td>function_solve_VIE_1</td>
+<td>VIE-1</td>
 <td>0.85</td>
 <td>1.12</td>
 <td>1.70</td>
 <td>4.06</td>
 </tr>
 <tr>
-<td>function_solve_VIE_2</td>
+<td>VIE-2</td>
 <td>0.87</td>
 <td>1.19</td>
 <td>1.86</td>
 <td>3.96</td>
 </tr>
 <tr>
-<td>function_solve_VIE_2 (vector, d=3)</td>
+<td>VIE-2 (vector, d=3)</td>
 <td>1.06</td>
 <td>1.59</td>
 <td>2.99</td>
 <td>7.18</td>
 </tr>
 <tr>
-<td>function_solve_VIDE</td>
+<td>VIDE</td>
 <td>1.38</td>
 <td>1.99</td>
 <td>3.30</td>
 <td>7.06</td>
 </tr>
 <tr>
-<td>function_solve_VIE_2 (weakly singular)</td>
+<td>VIE-2 (weakly singular)</td>
 <td>137</td>
 <td>320</td>
 <td>832</td>

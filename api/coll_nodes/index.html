@@ -1577,9 +1577,7 @@ Prefer <code>radau_iia_nodes</code> for VIE-1.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_functional.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2092</span>
-<span class="normal">2093</span>
-<span class="normal">2094</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2094</span>
 <span class="normal">2095</span>
 <span class="normal">2096</span>
 <span class="normal">2097</span>
@@ -1607,7 +1605,9 @@ Prefer <code>radau_iia_nodes</code> for VIE-1.</p>
 <span class="normal">2119</span>
 <span class="normal">2120</span>
 <span class="normal">2121</span>
-<span class="normal">2122</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">gauss_legendre_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">2122</span>
+<span class="normal">2123</span>
+<span class="normal">2124</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">gauss_legendre_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Return the ``p`` Gauss-Legendre collocation nodes on $[0, 1]$.</span>
 
 <span class="sd">    These interior nodes (none at 0 or 1) give the maximal collocation order.</span>
@@ -1725,9 +1725,7 @@ ascending.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_functional.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2125</span>
-<span class="normal">2126</span>
-<span class="normal">2127</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2127</span>
 <span class="normal">2128</span>
 <span class="normal">2129</span>
 <span class="normal">2130</span>
@@ -1765,7 +1763,9 @@ ascending.</p>
 <span class="normal">2162</span>
 <span class="normal">2163</span>
 <span class="normal">2164</span>
-<span class="normal">2165</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">radau_iia_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">2165</span>
+<span class="normal">2166</span>
+<span class="normal">2167</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">radau_iia_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Return the ``p`` Radau IIA collocation nodes on $[0, 1]$.</span>
 
 <span class="sd">    The Radau IIA nodes include the right endpoint (``1.0``) and exclude 0.</span>
@@ -1889,9 +1889,7 @@ sorted ascending.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_functional.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2168</span>
-<span class="normal">2169</span>
-<span class="normal">2170</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">2170</span>
 <span class="normal">2171</span>
 <span class="normal">2172</span>
 <span class="normal">2173</span>
@@ -1928,7 +1926,9 @@ sorted ascending.</p>
 <span class="normal">2204</span>
 <span class="normal">2205</span>
 <span class="normal">2206</span>
-<span class="normal">2207</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">lobatto_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">2207</span>
+<span class="normal">2208</span>
+<span class="normal">2209</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">lobatto_nodes</span><span class="p">(</span><span class="n">p</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Return the ``p`` Gauss-Lobatto collocation nodes on $[0, 1]$ (``p &gt;= 2``).</span>
 
 <span class="sd">    The Lobatto nodes include both endpoints (``0.0`` and ``1.0``) and have</span>

@@ -1679,7 +1679,36 @@ deferred to after 1.0. <strong>Phase 0 done 2026-10-31:</strong>
   1936 vs 1796 µs (vie2, N=8000), mostly <code>_from_sampled_engine</code> and the
   coefficient request. That's for Phase 7.
 - CONTRIBUTING, CLAUDE.md and the CHANGELOG (Documentation section, the F34
-  extras notice, the breakpoint mean) are updated.
+  extras notice, the breakpoint mean) are updated.</p>
+<p><strong>Phase 7 done 2026-11-01:</strong>
+- Performance. Overhead of the 1.0 path over the 0.10 values path, before →
+  after, at N≈500: 60–74 → 41–49 µs; at N=8000, 140 → 68 µs. The fixes:
+  - the sampled node arrays are built lazily (they cost 15–64 µs);
+  - the exact VIE-1 ρ is lru-cached (Fraction arithmetic, three times per
+    solve);
+  - no defensive copy of the engine-built mesh.</p>
+<p>Tried and reverted: a sum-based finiteness fast path. It needs
+  <code>np.errstate</code>, which costs more than the <code>isfinite</code> it saves.</p>
+<p>What remains is structural: the engine re-validates what <code>_api</code> already
+  checked, the coefficient request costs 11 µs at N=500 (32 µs at 8000),
+  and there's about 10 µs of object construction. Removing the double
+  validation would need the check/run split of each engine function that
+  the lighter-engine choice avoided.
+- F33: <code>__version__ = "..."</code> in <code>src/voles/__init__.py</code> is the source;
+  pyproject has <code>dynamic = ["version"]</code> with <code>[tool.hatch.version]</code>. A wheel
+  built and its metadata checked. (The dev env's editable metadata said
+  0.7.0.)
+- F30: aliases <code>Data</code>, <code>CollSetting</code>, <code>KernelSingularity</code> and <code>Quadrature</code>
+  in <code>_api</code>; <code>VolterraSolution</code> attributes, properties, <code>__call__</code> and
+  <code>to_ppoly</code> are annotated, and its private state is declared. mypy is clean
+  on <code>_api</code>, <code>_solution</code>, <code>_warnings</code> and <code>__init__</code>.
+  <code>tests/typing/public_api_usage.py</code> (the documented calls) must run and
+  type-check (<code>tests/test_typing.py</code>; mypy added to <code>dev</code>). pyright can't
+  run on this machine (its Node build needs macOS 13.5), so there's no
+  pyright CI step; <code>py.typed</code> waits for 1.0 as planned.
+- F32: <code>tests/test_public_api.py</code> and <code>tests/data/public_api.json</code>
+  (regenerate with <code>--update</code>).
+- Benchmarks moved to the 1.0 API (held back from the Phase 6 commit).
 Inputs: <code>docs/dev/api-review-1.0.md</code> (34 findings, F1–F34) and the
 2026-10-31 decision to merge the array-input and callable-input families.</p>
 <hr />

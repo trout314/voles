@@ -1853,12 +1853,7 @@ an error. Mixing callable and sampled inputs is not supported yet.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/voles/_api.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">723</span>
-<span class="normal">724</span>
-<span class="normal">725</span>
-<span class="normal">726</span>
-<span class="normal">727</span>
-<span class="normal">728</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">728</span>
 <span class="normal">729</span>
 <span class="normal">730</span>
 <span class="normal">731</span>
@@ -2002,14 +1997,19 @@ an error. Mixing callable and sampled inputs is not supported yet.</p>
 <span class="normal">869</span>
 <span class="normal">870</span>
 <span class="normal">871</span>
-<span class="normal">872</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_vide</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="normal">872</span>
+<span class="normal">873</span>
+<span class="normal">874</span>
+<span class="normal">875</span>
+<span class="normal">876</span>
+<span class="normal">877</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">solve_vide</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">kernel</span><span class="p">:</span> <span class="n">Data</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Data</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">y0</span><span class="p">:</span> <span class="n">ArrayLike</span><span class="p">,</span>
                <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">coll_setting</span><span class="p">:</span> <span class="n">CollSetting</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-               <span class="n">quadrature</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"product"</span><span class="p">,</span> <span class="s2">"collocation"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"product"</span><span class="p">,</span>
+               <span class="n">quadrature</span><span class="p">:</span> <span class="n">Quadrature</span> <span class="o">=</span> <span class="s2">"product"</span><span class="p">,</span>
                <span class="n">samples_per_interval</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">kernel_interp_degree</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">mesh</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ArrayLike</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">coll_nodes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ArrayLike</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-               <span class="n">kernel_singularity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+               <span class="n">kernel_singularity</span><span class="p">:</span> <span class="n">KernelSingularity</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">reuse_adaptive_blocks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VolterraSolution</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Solve a Volterra integro-differential equation.</span>
 
