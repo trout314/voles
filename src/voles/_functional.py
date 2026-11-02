@@ -42,7 +42,7 @@ _ComplexWarning: type[Warning]
 try:
     _ComplexWarning = np.exceptions.ComplexWarning
 except AttributeError:  # numpy < 1.25
-    _ComplexWarning = np.ComplexWarning
+    _ComplexWarning = np.ComplexWarning  # type: ignore[attr-defined, unused-ignore]
 
 
 # Gauss-Legendre order of the smooth-block quadrature (formerly the private
