@@ -76,7 +76,7 @@ jobs:
           python -m venv /tmp/test-venv
           /tmp/test-venv/bin/pip install numpy
           /tmp/test-venv/bin/pip install dist/*.whl
-          /tmp/test-venv/bin/python -c "from voles import solve_VIE_1, solve_VIE_2, solve_VIDE; print('Import OK')"
+          /tmp/test-venv/bin/python -c "import numpy as np, voles; t = np.arange(101) * 0.01; s = voles.solve_vie2(kernel=np.exp(-t), g=np.ones_like(t), dt=0.01); assert np.isfinite(s.y).all(); print('voles', voles.__version__, 'OK')"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -136,7 +136,7 @@ jobs:
           python3 -m venv /tmp/test-venv
           /tmp/test-venv/bin/pip install numpy
           /tmp/test-venv/bin/pip install dist/*.whl
-          /tmp/test-venv/bin/python -c "from voles import solve_VIE_1, solve_VIE_2, solve_VIDE; print('Import OK')"
+          /tmp/test-venv/bin/python -c "import numpy as np, voles; t = np.arange(101) * 0.01; s = voles.solve_vie2(kernel=np.exp(-t), g=np.ones_like(t), dt=0.01); assert np.isfinite(s.y).all(); print('voles', voles.__version__, 'OK')"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -202,7 +202,7 @@ jobs:
           python -m venv test-venv
           test-venv/Scripts/pip install numpy
           test-venv/Scripts/pip install dist/*.whl
-          test-venv/Scripts/python -c "from voles import solve_VIE_1, solve_VIE_2, solve_VIDE; print('Import OK')"
+          test-venv/Scripts/python -c "import numpy as np, voles; t = np.arange(101) * 0.01; s = voles.solve_vie2(kernel=np.exp(-t), g=np.ones_like(t), dt=0.01); assert np.isfinite(s.y).all(); print('voles', voles.__version__, 'OK')"
 
       - uses: actions/upload-artifact@v4
         with:
