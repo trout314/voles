@@ -524,3 +524,34 @@ def test_matrix_columns_share_one_set_of_blocks(monkeypatch):
             col, col_fn = with_sol(run(solve_vie1, show_warnings=False, kernel=K, g=G[:, :, j], dt=0.01, quadrature="product", continuous=fc, y0=init[:, j] if fc else None))
             assert np.array_equal(soln[:, :, j], col)
             assert np.allclose(fn(0.123)[:, j], col_fn(0.123), rtol=0, atol=1e-13)
+
+
+def _record_calls(monkeypatch, owner, name, calls):
+    original = getattr(owner, name)
+
+    def wrapper(*args, **kwargs):
+        calls.append(name)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(owner, name, wrapper)
+
+
+def test_continuous_solve_uses_the_compiled_driver(monkeypatch, voles_warnings):
+    K, g = _smooth_problem(151)
+    calls = []
+    _record_calls(monkeypatch, _dlang, "solve_vie1_cont_blocks_d", calls)
+    _record_calls(monkeypatch, _product, "step_cont_blocks_numpy", calls)
+    solve_vie1(kernel=K, g=g, dt=0.01, quadrature="product", continuous=True, y0=1.0)
+    assert calls == ["solve_vie1_cont_blocks_d"]
+
+
+def test_continuous_solve_falls_back_without_the_driver(monkeypatch, voles_warnings):
+    K, g = _smooth_problem(151)
+    kw = dict(kernel=K, g=g, dt=0.01, quadrature="product", continuous=True, y0=1.0)
+    fast = solve_vie1(**kw).y
+    calls = []
+    monkeypatch.setattr(_dlang, "have_block_driver", lambda name: False)
+    _record_calls(monkeypatch, _dlang, "solve_vie1_cont_blocks_d", calls)
+    _record_calls(monkeypatch, _product, "step_cont_blocks_numpy", calls)
+    slow = solve_vie1(**kw).y
+    assert calls == ["step_cont_blocks_numpy"]
+    assert np.max(np.abs(fast - slow)) < 1e-9

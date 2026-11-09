@@ -211,6 +211,39 @@ def test_vie1_near_singular_matrix_raises_linalgerror(d, quadrature):
         run(solve_vie1, show_warnings=False, kernel=K, g=np.outer(np.arange(len(K)), np.ones(d)), quadrature=quadrature, coll_setting=(3, [1, 2, 3])).y
 
 
+# One node at c = 1 makes the local system 1 - dt*K for VIE-2 (a = 0) and
+# 1 - dt*a for the VIDE (K = 0), so dt = 1/4 with K or a = 4 is singular.
+_SINGULAR_SHAPES = pytest.mark.parametrize("d, m", [(0, 0), (2, 0), (2, 3), (9, 0)],
+                                           ids=["scalar", "vector", "matrix", "runtime-d"])
+
+
+def _singular_data(K_value, d, m, N=9):
+    K = K_value * np.ones(N)
+    g, y0 = np.ones(N), 1.0
+    if d:
+        K, g, y0 = K[:, None, None] * np.eye(d), np.ones((N, d)), np.ones(d)
+    if m:
+        g, y0 = np.ones((N, d, m)), np.ones((d, m))
+    return K, g, y0
+
+
+@_SINGULAR_SHAPES
+def test_vie2_singular_system_raises_linalgerror(d, m):
+    K, g, _ = _singular_data(4.0, d, m)
+    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+        solve_vie2(kernel=K, g=g, dt=0.25, quadrature="collocation", coll_setting=(1, [1]))
+
+
+@_SINGULAR_SHAPES
+def test_vide_singular_system_raises_linalgerror(d, m, quadrature):
+    K, g, y0 = _singular_data(0.0, d, m)
+    a = 4.0 * np.ones(len(K))
+    if d:
+        a = a[:, None, None] * np.eye(d)
+    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+        solve_vide(kernel=K, g=g, a=a, y0=y0, dt=0.25, quadrature=quadrature, coll_setting=(1, [1]))
+
+
 # ---------------------------------------------------------------------------
 # Matrix (multi-RHS) input edges
 # ---------------------------------------------------------------------------
