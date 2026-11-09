@@ -9,6 +9,10 @@
 - A `VolterraSolution` restored by `pickle` or `copy.deepcopy` keeps its
   structure arrays (`mesh`, `coefficients`, `nodes`, `node_times`,
   `node_values`) read-only, as the contract requires.
+- Second-kind and integro-differential solves now raise `LinAlgError` when
+  `I - B` is numerically singular. A pivot cancelled to rounding level with
+  nothing larger left in the matrix went undetected, and the solve returned
+  values around `1e125` without an error.
 
 ## [1.0.0] - 2026-11-01
 

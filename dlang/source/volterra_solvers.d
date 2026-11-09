@@ -26,6 +26,17 @@ import buffers : HeapArray;
 // on Windows DLLs LDC's SEH unwinding through a C ABI is unreliable and
 // causes access violations. Bool returns are portable.
 
+//
+// The relative test alone cannot see a pivot that cancellation has made tiny
+// in a matrix with nothing larger left to compare it with: a 1 x 1 or diagonal
+// I - B with B = 1 to rounding has pivot ~1e-16, which is also its largest
+// pivot. Drivers solving second-kind systems (I - B) therefore pass
+// identity_pivot_scale as pivot_scale, a floor under max_pivot_seen that
+// stands for the identity's unit scale. The factor of 16 allows for the
+// rounding accumulated in forming I - B. First-kind systems have no such
+// scale and leave pivot_scale = 0.
+enum double identity_pivot_scale = 16.0;
+
 version (Have_lapack)
 {
     extern(C) void dgesv_(int* n, int* nrhs, double* a, int* lda,
@@ -40,7 +51,8 @@ version (Have_lapack)
 //
 // Dispatches to LAPACK dgesv_ when built with -d-version=Have_lapack,
 // otherwise to the pure-D lin_solve_rt (Gaussian elimination with partial pivoting).
-bool lin_solve_lapack(double[] a_colmaj, double[] b, int dm, int[] ipiv) @nogc
+bool lin_solve_lapack(double[] a_colmaj, double[] b, int dm, int[] ipiv,
+                      double pivot_scale = 0.0) @nogc
 {
     version (Have_lapack)
     {
@@ -63,21 +75,22 @@ bool lin_solve_lapack(double[] a_colmaj, double[] b, int dm, int[] ipiv) @nogc
             double u = a_colmaj[k + cast(size_t) k * dm];
             if (u < 0) u = -u;
             if (u > max_pivot_seen) max_pivot_seen = u;
-            if (u <= dm * eps * max_pivot_seen)
+            if (u <= dm * eps * (max_pivot_seen > pivot_scale ? max_pivot_seen : pivot_scale))
                 return false;
         }
         return true;
     }
     else
     {
-        return lin_solve_rt(a_colmaj, b, dm, ipiv);
+        return lin_solve_rt(a_colmaj, b, dm, ipiv, pivot_scale);
     }
 }
 
 // Pure-D fallback: in-place LU with partial pivoting on a column-major buffer.
 // Same signature/semantics as the LAPACK path so callers can be agnostic.
 // Returns false if any pivot magnitude falls below dm * eps * max_pivot_seen.
-bool lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv) @nogc
+bool lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv,
+                  double pivot_scale = 0.0) @nogc
 {
     enum double eps = double.epsilon;
     double max_pivot_seen = 0.0;
@@ -111,7 +124,7 @@ bool lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv) @nogc
         // Singular / nearly singular check: pivot must dominate the
         // largest |pivot| seen so far by at least dm * eps.
         if (max_val > max_pivot_seen) max_pivot_seen = max_val;
-        double threshold = dm * eps * max_pivot_seen;
+        double threshold = dm * eps * (max_pivot_seen > pivot_scale ? max_pivot_seen : pivot_scale);
         if (max_val <= threshold)
             return false;
 
@@ -148,7 +161,7 @@ bool lin_solve_rt(double[] a_colmaj, double[] b, int dm, int[] ipiv) @nogc
 // records the row swaps in ipiv, applying exactly lin_solve_rt's singularity
 // test; lu_solve_rt then solves in place for any number of right-hand sides
 // at O(dm^2) each instead of O(dm^3).
-bool lu_factor_rt(double[] a_colmaj, int dm, int[] ipiv) @nogc
+bool lu_factor_rt(double[] a_colmaj, int dm, int[] ipiv, double pivot_scale = 0.0) @nogc
 {
     enum double eps = double.epsilon;
     double max_pivot_seen = 0.0;
@@ -177,7 +190,7 @@ bool lu_factor_rt(double[] a_colmaj, int dm, int[] ipiv) @nogc
         }
 
         if (max_val > max_pivot_seen) max_pivot_seen = max_val;
-        if (max_val <= dm * eps * max_pivot_seen)
+        if (max_val <= dm * eps * (max_pivot_seen > pivot_scale ? max_pivot_seen : pivot_scale))
             return false;
 
         double pivot_val = a_colmaj[k + k * dm];
@@ -229,7 +242,8 @@ void lu_solve_rt(const double[] lu_colmaj, double[] b, int dm, const int[] ipiv)
 double[dim] lin_solve(int dim)(
     double[dim][dim] a,
     double[dim] b,
-    ref bool ok)
+    ref bool ok,
+    double pivot_scale = 0.0)
 {
     enum double eps = double.epsilon;
     double max_pivot_seen = 0.0;
@@ -250,7 +264,7 @@ double[dim] lin_solve(int dim)(
             double tmp_b = b[k]; b[k] = b[pivot]; b[pivot] = tmp_b;
         }
         if (max_val > max_pivot_seen) max_pivot_seen = max_val;
-        if (max_val <= dim * eps * max_pivot_seen)
+        if (max_val <= dim * eps * (max_pivot_seen > pivot_scale ? max_pivot_seen : pivot_scale))
         {
             ok = false;
             return b;
@@ -2001,7 +2015,7 @@ bool solve_VIE_2_vec_impl(int coll_divs, int[] coll_choices, int d)(
         auto rhs = g_vec_ct!(coll_divs, coll_choices, d)(n, g_values);
         auto G_v = hist.G(n);
         rhs[] += G_v[];
-        solution_U[n] = lin_solve!(dm)(coef_matrix, rhs, lin_ok);
+        solution_U[n] = lin_solve!(dm)(coef_matrix, rhs, lin_ok, identity_pivot_scale);
         if (!lin_ok) return false;
         hist.push(solution_U[n]);
     }
@@ -2095,7 +2109,7 @@ bool solve_VIE_2_vec_runtime_impl(int coll_divs, int[] coll_choices)(
         foreach (i; 0 .. dm)
             rhs[i] += G_hist[i];
         coef_work[] = coef_orig[];
-        if (!lin_solve_lapack(coef_work, rhs, dm, ipiv))
+        if (!lin_solve_lapack(coef_work, rhs, dm, ipiv, identity_pivot_scale))
             return false;
         solution_U_flat[n*dm .. (n+1)*dm] = rhs[];
         hist.push(solution_U_flat[n*dm .. (n+1)*dm]);
@@ -2240,7 +2254,7 @@ bool solve_VIDE_vec_impl(int coll_divs, int[] coll_choices, int d)(
                 coef_matrix[ri][sj] -= dt * AN_m[ri][sj] + dt * dt * CN_m[ri][sj];
         }
 
-        solution_Y[n] = lin_solve!(dm)(coef_matrix, rhs, lin_ok);
+        solution_Y[n] = lin_solve!(dm)(coef_matrix, rhs, lin_ok, identity_pivot_scale);
         if (!lin_ok) return false;
 
         // Boundary propagation: y_r(t_{n+1}) = y_r(t_n) + dt * Σ_j Y_{r,j} * w_j
@@ -2378,7 +2392,7 @@ bool solve_VIDE_vec_runtime_impl(int coll_divs, int[] coll_choices)(
                 rhs[ri] += boundary_flat[n*d + s] * kappa_n_buf[ri * d + s];
         }
 
-        if (!lin_solve_lapack(coef_buf, rhs, dm, ipiv))
+        if (!lin_solve_lapack(coef_buf, rhs, dm, ipiv, identity_pivot_scale))
             return false;
         solution_Y_flat[n*dm .. (n+1)*dm] = rhs[];
 
@@ -2513,7 +2527,7 @@ bool solve_VIE_2_impl(int coll_divs, int[] coll_choices)(
         auto g_vector = g!coll_info(n, g_values);
         auto G_vector = hist.G(n);
         rhs_vector[] = g_vector[] + G_vector[];
-        solution_U[n] = lin_solve(coef_matrix, rhs_vector, lin_ok);
+        solution_U[n] = lin_solve(coef_matrix, rhs_vector, lin_ok, identity_pivot_scale);
         if (!lin_ok) return false;
         hist.push(solution_U[n]);
     }
@@ -2610,7 +2624,7 @@ bool solve_VIDE_impl(int coll_divs, int[] coll_choices)(
                 coef_matrix[i][j] -= dt * (An_matrix[i][j] + dt * CN_matrix[i][j]);
             }
         }
-        solution_Y[n] = lin_solve(coef_matrix, rhs_vector, lin_ok);
+        solution_Y[n] = lin_solve(coef_matrix, rhs_vector, lin_ok, identity_pivot_scale);
         if (!lin_ok) return false;
         boundary_values[n + 1] = poly_piece_VIDE_f!coll_info(double(1.0), n, solution_Y, boundary_values[n], dt);
 
@@ -3089,7 +3103,8 @@ int volterra_rt_init()
 // ---------------------------------------------------------------------------
 
 @nogc int volterra_solve_vie1_blocks(
-    double* lagB, double* g, int M, int Db, double* out_U)
+    double* lagB, double* g, int M, int Db, double* out_U,
+    double pivot_scale)
 {
     if (M < 1 || Db < 1) return 1;
     if (cast(long) M * Db * Db >= (cast(long) 1 << 31)) return 3;
@@ -3113,7 +3128,7 @@ int volterra_rt_init()
     foreach (i; 0 .. Db)
         foreach (j; 0 .. Db)
             a_lu[i + j * Db] = lag_s[cast(size_t) i * Dsz + j];
-    if (!lu_factor_rt(a_lu, Db, ipiv))
+    if (!lu_factor_rt(a_lu, Db, ipiv, pivot_scale))
         return 2;
 
     foreach (n; 0 .. M)
@@ -3272,7 +3287,7 @@ int volterra_rt_init()
             v -= bC[cast(size_t) i * mz + k] * a_s[((cast(size_t) n * mz + i) * dz + aa) * dz + bb];
             a_col[row + col * Dbz] = v;
         }
-        if (!lin_solve_lapack(a_col, rhs, Db, ipiv))
+        if (!lin_solve_lapack(a_col, rhs, Db, ipiv, identity_pivot_scale))
             return 2;
         Y_s[nb .. nb + Dbz] = rhs[];
         source[0 .. Dbz] = rhs[];

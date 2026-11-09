@@ -38,6 +38,7 @@ def _setup_argtypes() -> None:
             _dp, _dp,                                         # lagB, g
             ctypes.c_int, ctypes.c_int,                       # M, Db
             _dp,                                              # out_U
+            ctypes.c_double,                                  # pivot_scale
         ]
     if _block_drivers["vie1_cont"]:
         _lib.volterra_solve_vie1_cont_blocks.restype = ctypes.c_int
@@ -900,7 +901,7 @@ def have_block_drivers() -> bool:
     return all(_block_drivers.values())
 
 
-def solve_vie1_blocks_d(lagB, g, name="volterra_solve_vie1_blocks"):
+def solve_vie1_blocks_d(lagB, g, name="volterra_solve_vie1_blocks", pivot_scale=0.0):
     """Step precomputed lag blocks through the D Toeplitz history
     (discontinuous VIE-1).
 
@@ -908,6 +909,8 @@ def solve_vie1_blocks_d(lagB, g, name="volterra_solve_vie1_blocks"):
     ----------
     lagB : ndarray, shape (M, Db, Db); ``lagB[0]`` is the diagonal block.
     g : ndarray, shape (M, Db); right-hand side at the collocation points.
+    pivot_scale : float; floor under the singularity test's pivot scale, for
+        a diagonal block of the form I - B (see `_product.IDENTITY_PIVOT_SCALE`).
 
     Returns
     -------
@@ -922,7 +925,7 @@ def solve_vie1_blocks_d(lagB, g, name="volterra_solve_vie1_blocks"):
     ret = _lib.volterra_solve_vie1_blocks(
         lb.ctypes.data_as(_dp), gg.ctypes.data_as(_dp),
         ctypes.c_int(M), ctypes.c_int(Db),
-        out.ctypes.data_as(_dp))
+        out.ctypes.data_as(_dp), ctypes.c_double(pivot_scale))
     _check_return(ret, name)
     return out
 
