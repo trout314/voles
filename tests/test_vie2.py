@@ -9,13 +9,13 @@ from conftest import with_sol
 # Vector-valued VIE-2 tests
 # ---------------------------------------------------------------------------
 
-def test_vie2_vec_diagonal_matches_scalar(quadrature):
+@pytest.mark.parametrize("coll_divs", [2, 3])
+def test_vie2_vec_diagonal_matches_scalar(coll_divs, quadrature):
     """Diagonal 2×2 kernel: vector result equals two independent scalar solves.
 
     K_rs(t) = delta_rs, g_r(t) = t - t^2/2, exact y_r(t) = t.
     """
     time_step = 0.1
-    coll_divs = 2
     num_pts = 10 * coll_divs**2 + 1
     times = np.arange(num_pts) * time_step
     K0 = np.ones(num_pts)
@@ -29,34 +29,14 @@ def test_vie2_vec_diagonal_matches_scalar(quadrature):
     exact[:, 0] = times
     exact[:, 1] = times
 
-    soln_vec = solve_vie2(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [0, 1, 2])).y
+    soln_vec = solve_vie2(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, list(range(coll_divs + 1)))).y
     assert soln_vec.shape == exact.shape
 
-    soln_s = solve_vie2(kernel=K0, g=g[:, 0], dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [0, 1, 2])).y
+    soln_s = solve_vie2(kernel=K0, g=g[:, 0], dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, list(range(coll_divs + 1)))).y
 
     assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < TOLERANCE
     assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < TOLERANCE
     assert np.max(np.abs(soln_vec - exact)) < TOLERANCE
-
-
-def test_vie2_vec_analytic_2d(quadrature):
-    """2×2 case with known analytic solution; K_rs=delta_rs, g_r=t-t²/2, y_r=t."""
-    time_step = 0.1
-    coll_divs = 3
-    num_pts = 10 * coll_divs**2 + 1
-    times = np.arange(num_pts) * time_step
-    kernel = np.zeros((num_pts, 2, 2))
-    kernel[:, 0, 0] = 1.0
-    kernel[:, 1, 1] = 1.0
-    g = np.zeros((num_pts, 2))
-    g[:, 0] = times - times**2 / 2
-    g[:, 1] = times - times**2 / 2
-    exact = np.zeros((num_pts, 2))
-    exact[:, 0] = times
-    exact[:, 1] = times
-
-    soln = solve_vie2(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [0, 1, 2, 3])).y
-    assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
 def test_vie2_accuracy(vie2_data, quadrature):

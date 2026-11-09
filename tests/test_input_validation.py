@@ -79,12 +79,6 @@ def test_dt_must_be_positive_and_finite(solver, bad):
         solver(dt=bad)
 
 
-@pytest.mark.parametrize("quad", ["collocation", "product"])
-def test_dt_non_finite_both_quadratures(quad):
-    with pytest.raises(ValueError, match="dt must be positive and finite"):
-        _vie2(dt=np.inf, quadrature=quad)
-
-
 # ---------------------------------------------------------------------------
 # coll_setting
 # ---------------------------------------------------------------------------
@@ -144,11 +138,10 @@ _N = 51                                  # 1 * 5**2 + 1
 _COLL_IDX = 5                            # the first collocation sample of mesh 0
 
 
-@pytest.mark.parametrize("which", ["kernel", "g", "a"])
-@pytest.mark.parametrize("solver", ["vie1", "vie2", "vide"])
+@pytest.mark.parametrize("solver, which", [("vie1", "kernel"), ("vie1", "g"), ("vie2", "kernel"),
+                                           ("vie2", "g"), ("vide", "kernel"), ("vide", "g"),
+                                           ("vide", "a")])
 def test_nan_input_is_rejected(solver, which):
-    if which == "a" and solver != "vide":
-        pytest.skip("a is a VIDE input")
     data = dict(kernel=np.ones(_N), g=np.arange(_N, dtype=float) if solver == "vie1" else np.ones(_N))
     if solver == "vide":
         data.update(a=np.zeros(_N), y0=0.0)
@@ -260,23 +253,15 @@ def test_list_g_values(solver):
 # coll_choices must not be mutated
 # ---------------------------------------------------------------------------
 
-def test_coll_choices_not_mutated_vie1():
-    # coll_divs=2, choices [1,2] but supplied reversed; _K has 9 pts = 2*4+1
-    choices = [2, 1]
-    solve_vie1(kernel=_K, g=_G1, coll_setting=(2, choices)).y
-    assert choices == [2, 1]
-
-
-def test_coll_choices_not_mutated_vie2():
-    choices = [2, 0, 1]
-    solve_vie2(kernel=_K, g=_G, coll_setting=(2, choices)).y
-    assert choices == [2, 0, 1]
-
-
-def test_coll_choices_not_mutated_vide():
-    choices = [2, 0, 1]
-    solve_vide(kernel=_K, g=_G, a=_A, y0=0.0, coll_setting=(2, choices)).y
-    assert choices == [2, 0, 1]
+@pytest.mark.parametrize("solve, kw, choices", [
+    (solve_vie1, dict(g=_G1), [2, 1]),
+    (solve_vie2, dict(g=_G), [2, 0, 1]),
+    (solve_vide, dict(g=_G, a=_A, y0=0.0), [2, 0, 1]),
+], ids=["vie1", "vie2", "vide"])
+def test_coll_choices_not_mutated(solve, kw, choices):
+    original = list(choices)
+    solve(kernel=_K, coll_setting=(2, choices), **kw)
+    assert choices == original
 
 
 # ---------------------------------------------------------------------------

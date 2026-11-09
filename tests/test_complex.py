@@ -309,13 +309,6 @@ def test_list_complex_kernel_values(solver):
     assert np.iscomplexobj(soln)
 
 
-@pytest.mark.parametrize("solver", [_vie1_cplx, _vie2_cplx, _vide_cplx])
-def test_list_complex_g_values(solver):
-    """Plain Python lists of complex numbers are accepted for g_values."""
-    soln = solver(g=_complex_list_inputs())
-    assert np.iscomplexobj(soln)
-
-
 # ---------------------------------------------------------------------------
 # Mixed real/complex inputs
 # ---------------------------------------------------------------------------

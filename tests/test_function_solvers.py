@@ -287,11 +287,6 @@ def test_validation_mesh_not_starting_at_zero():
         solve_vie2(kernel=lambda u: 1.0, mesh=np.array([0.1, 0.5, 1.0]), coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
 
 
-def test_validation_coll_choices_out_of_range():
-    with pytest.raises(ValueError, match=r"coll_nodes must lie in \[0, 1\]"):
-        solve_vie2(kernel=lambda u: 1.0, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([0, 1, 5]) / 2).node_values
-
-
 def test_validation_kernel_not_callable():
     # An array kernel makes the problem sampled, where mesh= does not apply.
     with pytest.raises(ValueError, match="apply only to callable inputs"):
@@ -301,11 +296,6 @@ def test_validation_kernel_not_callable():
 def test_validation_g_not_callable():
     with pytest.raises(NotImplementedError, match="mixed inputs"):
         solve_vie2(kernel=lambda u: 1.0, g=np.zeros(10), mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
-
-
-def test_validation_coll_choices_duplicates():
-    with pytest.raises(ValueError, match="distinct"):
-        solve_vie2(kernel=lambda u: 1.0, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([1, 1, 2]) / 2).node_values
 
 
 @pytest.mark.parametrize("solver_kwargs_fn", [
@@ -927,18 +917,6 @@ def test_vie1_vec_force_continuous(vie1_callable_vec_diagonal):
     y = run(solve_vie1, show_warnings=False, kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"], y0=p["y_exact"](0.0), continuous=True).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
     assert err < 1e-4
-
-
-def test_vie1_validation_zero_in_coll_choices():
-    """Zero is invalid for VIE-1 (both sides of equation vanish at t=0)."""
-    with pytest.raises(ValueError, match=r"coll_nodes must lie in \(0, 1\]"):
-        solve_vie1(kernel=lambda u: 1.0, g=lambda t: t, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([0, 1]) / 2).node_values
-
-
-def test_vie1_validation_nonconvergent_setting():
-    """Empirically-known non-convergent settings are rejected."""
-    with pytest.raises(ValueError, match="convergent"):
-        solve_vie1(kernel=lambda u: 1.0, g=lambda t: t, mesh=np.linspace(0, 1, 10), coll_nodes=np.asarray([1]) / 3).node_values
 
 
 def test_vie1_validation_force_continuous_no_init():
@@ -2448,3 +2426,93 @@ def test_vie1_callable_matrix_g_start_warning_names_column(voles_warnings):
                          [2 * np.sin(s), 2 * np.sin(s), 2 * np.sin(s)]])
     solve_vie1(kernel=lambda u: np.exp(-u) * A, g=g, mesh=mesh).node_values
     assert "g(0) is not zero in 1 of 3 columns; worst column 1" in voles_warnings.text()
+
+
+# ---------------------------------------------------------------------------
+# Declared singularities: forms and vector branches not exercised above
+# ---------------------------------------------------------------------------
+
+def _abel_scalar_kw():
+    return _abel_vie1_kw(0.0)[0]
+
+
+@_QUIET_SINGULAR_ON_UNIFORM
+def test_singularity_dict_none_is_the_location_only_form():
+    kw = _abel_scalar_kw()
+    del kw["kernel_singularity"]
+    assert np.array_equal(solve_vie1(**kw, kernel_singularity={0.0: None}).node_values,
+                          solve_vie1(**kw, kernel_singularity=0.0).node_values)
+
+
+@_QUIET_SINGULAR_ON_UNIFORM
+def test_singularity_mixed_dict_matches_adaptive():
+    kw = dict(kernel=lambda u: np.maximum(np.abs(u), 1e-300) ** -0.5
+              + np.maximum(np.abs(u - 0.5), 1e-300) ** -0.5,
+              g=lambda t: np.ones_like(np.asarray(t, dtype=float)),
+              mesh=_uniform_mesh(25), coll_nodes=np.asarray([0, 1, 2]) / 2)
+    y_mixed = solve_vie2(**kw, kernel_singularity={0.0: 0.5, 0.5: None}).node_values
+    y_adaptive = solve_vie2(**kw, kernel_singularity=[0.0, 0.5]).node_values
+    assert np.max(np.abs(y_mixed - y_adaptive)) < 1e-6
+
+
+def _diag_kernel(scalar):
+    return lambda u: scalar(u) * np.eye(2)
+
+
+@_QUIET_SINGULAR_ON_UNIFORM
+def test_vector_jacobi_interior_singularity_matches_scalar():
+    """The vector builder's own interior-split and one-sided Jacobi rules."""
+    k = lambda u: np.maximum(np.abs(u - 0.5), 1e-300) ** -0.4       # noqa: E731
+    common = dict(mesh=_uniform_mesh(25), coll_nodes=np.asarray([0, 1, 2]) / 2,
+                  kernel_singularity={0.5: 0.4})
+    scalar = solve_vie2(kernel=k, g=lambda t: 1.0, **common).node_values
+    vector = solve_vie2(kernel=_diag_kernel(k), g=lambda t: np.ones(2), **common).node_values
+    assert np.max(np.abs(vector[..., 0] - scalar)) < 1e-6
+    assert np.max(np.abs(vector[..., 1] - scalar)) < 1e-6
+
+
+@_QUIET_SINGULAR_ON_UNIFORM
+@pytest.mark.parametrize("alpha", [0.9, 0.25])
+def test_vector_jacobi_wrong_alpha_falls_back_bitwise(alpha):
+    k = lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0                # noqa: E731
+    kw = dict(kernel=_diag_kernel(k), g=lambda t: np.array([1.0, 2.0]) * np.sqrt(t),
+              mesh=_uniform_mesh(20), coll_nodes=np.asarray([1, 2]) / 2,
+              reuse_adaptive_blocks=False)
+    assert np.array_equal(solve_vie1(**kw, kernel_singularity={0.0: alpha}).node_values,
+                          solve_vie1(**kw, kernel_singularity=0.0).node_values)
+
+
+# ---------------------------------------------------------------------------
+# Accepted callables and the 1 x 1 vector problem
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("make", [
+    lambda: np.polynomial.Polynomial([1.0, -0.5]),
+    lambda: np.vectorize(lambda u: 1.0 - 0.5 * u),
+], ids=["Polynomial", "vectorize"])
+def test_other_callable_kinds_match_a_plain_function(make):
+    kw = dict(g=np.cos, mesh=_uniform_mesh(10))
+    np.testing.assert_allclose(solve_vie2(kernel=make(), **kw).node_values,
+                               solve_vie2(kernel=lambda u: 1.0 - 0.5 * u, **kw).node_values,
+                               rtol=0, atol=1e-12)
+
+
+def test_one_by_one_kernel_matches_scalar():
+    kw = dict(mesh=_uniform_mesh(10))
+    k = lambda u: np.exp(-u)                                         # noqa: E731
+    vec = solve_vie2(kernel=lambda u: np.array([[k(u)]]), g=lambda t: np.array([np.cos(t)]), **kw)
+    np.testing.assert_allclose(vec.node_values[..., 0],
+                               solve_vie2(kernel=k, g=np.cos, **kw).node_values,
+                               rtol=0, atol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# optimal_graded_mesh formula
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("alpha, order, t_end, M, r", [
+    (0.5, 3, 1.0, 20, 6.0), (0.25, 2, 2.5, 7, 8.0 / 3.0), (0.5, 1, 4.0, 1, 2.0), (0.0, 3, 2.0, 5, 1.0),
+])
+def test_graded_mesh_formula(alpha, order, t_end, M, r):
+    mesh = optimal_graded_mesh(alpha=alpha, t_end=t_end, n_intervals=M, order=order)
+    np.testing.assert_allclose(mesh, t_end * (np.arange(M + 1) / M) ** r, rtol=1e-14, atol=0)

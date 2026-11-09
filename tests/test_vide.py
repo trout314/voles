@@ -9,7 +9,8 @@ from conftest import with_sol
 # Vector-valued VIDE tests
 # ---------------------------------------------------------------------------
 
-def test_vide_vec_diagonal_matches_scalar(quadrature):
+@pytest.mark.parametrize("coll_divs", [2, 3])
+def test_vide_vec_diagonal_matches_scalar(coll_divs, quadrature):
     """Diagonal 2×2 kernel+a: vector result equals two independent scalar solves.
 
     K_rs(t) = delta_rs, a_rs = 0, g_r = 1, exact y_r(t) = exp(t), y_r(0) = 1.
@@ -17,7 +18,6 @@ def test_vide_vec_diagonal_matches_scalar(quadrature):
            = 1 + exp(t) - 1 = exp(t) ✓
     """
     time_step = 0.01
-    coll_divs = 2
     num_pts = 10 * coll_divs**2 + 1
     times = np.arange(num_pts) * time_step
     kernel = np.zeros((num_pts, 2, 2))
@@ -31,35 +31,16 @@ def test_vide_vec_diagonal_matches_scalar(quadrature):
     exact[:, 0] = np.exp(times)
     exact[:, 1] = np.exp(times)
 
-    soln_vec = solve_vide(kernel=kernel, a=a, g=g, y0=np.array([1.0, 1.0]), dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [0, 1, 2])).y
+    soln_vec = solve_vide(kernel=kernel, a=a, g=g, y0=np.array([1.0, 1.0]), dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, list(range(coll_divs + 1)))).y
     assert soln_vec.shape == exact.shape
 
     k_scalar = np.ones(num_pts)
     a_scalar = np.zeros(num_pts)
-    soln_s = solve_vide(kernel=k_scalar, a=a_scalar, g=g[:, 0], y0=1.0, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [0, 1, 2])).y
+    soln_s = solve_vide(kernel=k_scalar, a=a_scalar, g=g[:, 0], y0=1.0, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, list(range(coll_divs + 1)))).y
 
     assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < TOLERANCE
     assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < TOLERANCE
     assert np.max(np.abs(soln_vec - exact)) < TOLERANCE
-
-
-def test_vide_vec_analytic_2d(quadrature):
-    """2×2 case with analytic solution; K_rs=delta_rs, a=0, g_r=1, y_r=exp(t)."""
-    time_step = 0.01
-    coll_divs = 3
-    num_pts = 10 * coll_divs**2 + 1
-    times = np.arange(num_pts) * time_step
-    kernel = np.zeros((num_pts, 2, 2))
-    kernel[:, 0, 0] = 1.0
-    kernel[:, 1, 1] = 1.0
-    a = np.zeros((num_pts, 2, 2))
-    g = np.ones((num_pts, 2))
-    exact = np.zeros((num_pts, 2))
-    exact[:, 0] = np.exp(times)
-    exact[:, 1] = np.exp(times)
-
-    soln = solve_vide(kernel=kernel, a=a, g=g, y0=np.array([1.0, 1.0]), dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [0, 1, 2, 3])).y
-    assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
 @pytest.mark.parametrize("pair", [

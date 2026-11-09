@@ -29,6 +29,7 @@ from conftest import (TOLERANCE, make_coupled_data_nd,
                       VIDE_SPEC_ODE, VIDE_SPEC_LOG,
                       as_array)
 from conftest import run, with_sol
+from voles._sampled import _fast_settings_VIDE, _fast_settings_VIE_1, _fast_settings_VIE_2
 
 # Accuracy bounds in this file are a few times the measured discretization
 # error of each scheme, which is what lets them notice a wrong history sum.
@@ -306,3 +307,77 @@ def test_vie2_largest_compiled_setting_accuracy(quadrature):
                  coll_choices=[0, 1, 2, 3, 4], num_blocks=10)
     soln = run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < 1e-11
+
+
+# ---------------------------------------------------------------------------
+# 6. Every compiled collocation setting, and the compile-time/runtime boundary
+# ---------------------------------------------------------------------------
+
+def _vie1_admissible(divs, choices):
+    return 0 not in choices and np.prod([(divs - c) / c for c in choices]) <= 1.0
+
+
+_SWEEP_N_INTERVALS = 6
+
+
+def _sweep_problem(equation, divs, choices, d):
+    """y = 1, which every collocation space contains. K = 1 + u needs a rule
+    exact for linear integrands, which a single node is only at the midpoint,
+    so one-node settings get K = 1."""
+    N = _SWEEP_N_INTERVALS * divs**2 + 1
+    dt = 0.05
+    t = np.arange(N) * dt
+    K = 1.0 + t if len(choices) > 1 else np.ones(N)
+    integral = t + 0.5 * t**2 if len(choices) > 1 else t
+    g = {"vie1": integral, "vie2": 1.0 - integral, "vide": -integral}[equation]
+    kw = dict(kernel=K, g=g, dt=dt)
+    if d:
+        kw.update(kernel=K[:, None, None] * np.eye(d), g=np.tile(g[:, None], (1, d)))
+    if equation == "vide":
+        kw["y0"] = np.ones(d) if d else 1.0
+    return kw
+
+
+_SWEEP = ([("vie1", *s) for s in _fast_settings_VIE_1 if _vie1_admissible(*s)]
+          + [("vie2", *s) for s in _fast_settings_VIE_2]
+          + [("vide", *s) for s in _fast_settings_VIDE])
+
+
+@pytest.mark.parametrize("d", [0, 2], ids=["scalar", "vector"])
+@pytest.mark.parametrize("equation, divs, choices", _SWEEP,
+                         ids=[f"{e}-{dv}-{''.join(map(str, c))}" for e, dv, c in _SWEEP])
+def test_every_compiled_setting_reproduces_a_constant(equation, divs, choices, d):
+    solve = dict(vie1=solve_vie1, vie2=solve_vie2, vide=solve_vide)[equation]
+    y = run(solve, show_warnings=False, quadrature="collocation", coll_setting=(divs, choices),
+            **_sweep_problem(equation, divs, choices, d)).y
+    assert np.max(np.abs(y - 1.0)) < 1e-9
+
+
+@pytest.mark.parametrize("d", [8, 9], ids=["last-compiled", "first-runtime"])
+@pytest.mark.parametrize("specs, solve, choices", [
+    ([VIE1_SPEC_POLY_A, VIE1_SPEC_POLY_B, VIE1_SPEC_SMOOTH, VIE1_SPEC_POLY, VIE1_SPEC_DAMPED],
+     solve_vie1, [1, 2, 3]),
+    ([VIE2_SPEC_SMOOTH, VIE2_SPEC_EXP, VIE2_SPEC_POLY, VIE2_SPEC_RATIONAL, VIE2_SPEC_POLY2],
+     solve_vie2, [0, 1, 2, 3]),
+    ([VIDE_SPEC_POLY_A, VIDE_SPEC_POLY_B, VIDE_SPEC_SMOOTH, VIDE_SPEC_ODE, VIDE_SPEC_LOG],
+     solve_vide, [1, 2, 3]),
+], ids=["vie1", "vie2", "vide"])
+def test_dimension_boundary_accuracy(specs, solve, choices, d, quadrature):
+    data = make_coupled_data_nd((specs * 2)[:d], coupling_matrix(d), time_step=0.01, coll_divs=3,
+                                coll_choices=choices, num_blocks=10)
+    kw = dict(kernel=data["kernel"], g=data["g"], dt=data["time_step"])
+    if solve is solve_vide:
+        kw.update(a=data["a"], y0=data["soln_init_value"])
+    soln = solve(quadrature=quadrature, coll_setting=(3, choices), **kw).y
+    assert np.max(np.abs(soln - data["exact"])) < TOLERANCE
+
+
+def test_runtime_dimension_fft_accuracy():
+    """d > 8 past the FFT cutoff, against the analytic solution."""
+    specs = [VIE2_SPEC_SMOOTH, VIE2_SPEC_EXP, VIE2_SPEC_POLY, VIE2_SPEC_RATIONAL, VIE2_SPEC_POLY2]
+    data = make_coupled_data_nd(specs * 2, coupling_matrix(10), time_step=0.005, coll_divs=3,
+                                coll_choices=[0, 1, 2, 3], num_blocks=FFT_BLOCKS)
+    sol = solve_vie2(kernel=data["kernel"], g=data["g"], dt=data["time_step"],
+                     quadrature="collocation", coll_setting=(3, [0, 1, 2, 3]))
+    assert len(sol.mesh) - 1 == FFT_BLOCKS
+    assert np.max(np.abs(sol.y - data["exact"])) < TOLERANCE

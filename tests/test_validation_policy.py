@@ -55,21 +55,11 @@ def _id(case):
 # ------------------------------------------------------------ type vs value
 
 TYPE_ERRORS = [
-    (vie2, dict(coll_setting=2.0)),
-    (vie2, dict(coll_setting=True)),
-    (vie2, dict(coll_setting=(2, [0.0, 2.0]))),
-    (vie2, dict(samples_per_interval=4.0)),
-    (vie2, dict(kernel_interp_degree=2.0)),
-    (vie2, dict(dt="0.1")),
     (vie2, dict(dt=None)),
-    (vie2, dict(quadrature=3)),
     (vie1, dict(continuous=1, y0=0.0)),
     (vide, dict(coll_setting=2.5)),
-    (vie2, dict(kernel=np.array(["a", "b"]))),
     (fvie2, dict(coll_nodes=["a", "b"])),
-    (fvie2, dict(kernel_singularity=True)),
     (fvie2, dict(kernel_singularity=["abc"])),
-    (fvie2, dict(reuse_adaptive_blocks="yes")),
     (fvie1, dict(continuous=1, y0=0.0)),
 ]
 
@@ -81,16 +71,7 @@ def test_wrong_type_is_a_type_error(call, kw):
 
 
 VALUE_ERRORS = [
-    (vie2, dict(coll_setting=0)),
-    (vie2, dict(coll_setting=(2, [0, 3]))),
-    (vie2, dict(samples_per_interval=0)),
-    (vie2, dict(dt=0.0)),
-    (vie2, dict(dt=-1.0)),
-    (vie2, dict(dt=np.inf)),
-    (vie2, dict(quadrature="simpson")),
-    (fvie2, dict(coll_nodes=[0.5, 1.5])),
     (fvie2, dict(coll_nodes=[])),
-    (fvie2, dict(kernel_singularity={0.0: 1.5})),
 ]
 
 

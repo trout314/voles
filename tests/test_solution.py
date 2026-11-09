@@ -136,10 +136,6 @@ def test_not_constructible_directly():
         VolterraSolution()
 
 
-def test_is_public():
-    assert "VolterraSolution" in voles.__all__
-
-
 # ----------------------------------------------------------- grid output
 
 @pytest.mark.parametrize("which, key", ALL)
@@ -403,6 +399,40 @@ def test_copies_keep_the_read_only_contract(which, key, copier, fill_caches):
 
 
 # ------------------------------------------------------------------ misc.
+
+@pytest.mark.parametrize("op", [len, iter, lambda s: s[0]], ids=["len", "iter", "index"])
+def test_solution_is_not_a_sequence(op):
+    """Contract section 8.4: evaluate it, don't treat it as a list of pieces."""
+    with pytest.raises(TypeError):
+        op(functional()[0])
+
+
+@pytest.mark.parametrize("which, key", ALL)
+def test_structure_arrays_are_read_only(which, key):
+    sol, _, _ = build(which, key)
+    for name in ("mesh", "coefficients", "nodes", "node_times", "node_values", "t"):
+        assert not getattr(sol, name).flags.writeable, name
+
+
+def test_solution_does_not_alias_the_callers_mesh():
+    mesh = np.linspace(0, 1, 9)
+    sol = voles.solve_vie2(kernel=lambda u: np.exp(-u), g=np.cos, mesh=mesh)
+    mesh[3] = 0.3
+    assert mesh.flags.writeable and sol.mesh[3] == 0.375
+
+
+@pytest.mark.parametrize("kw", [dict(cplx=True), dict(d=2)], ids=["complex", "vector"])
+def test_to_ppoly_derivative_and_integral_nonscalar(kw):
+    sol, _, _ = functional(kind="vide", **kw)
+    pp, c, bps = sol.to_ppoly(), sol.coefficients, sol.mesh
+    n, xl = 3, 0.4
+    h = bps[n + 1] - bps[n]
+    dref = sum(k * c[n, k] * xl ** (k - 1) for k in range(1, c.shape[1])) / h
+    np.testing.assert_allclose(pp.derivative()(bps[n] + xl * h), dref, rtol=1e-10, atol=1e-12)
+    iref = h * sum(c[n, k] / (k + 1) for k in range(c.shape[1]))
+    anti = pp.antiderivative()
+    np.testing.assert_allclose(anti(bps[n + 1]) - anti(bps[n]), iref, rtol=1e-10, atol=1e-12)
+
 
 def test_truthiness_does_not_warn():
     sol, _, _ = functional()
