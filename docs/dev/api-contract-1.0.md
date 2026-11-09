@@ -200,7 +200,9 @@ solve_vide(*, kernel, a=None, g=None, y0,
     error.
   - Callable kernels are **not** checked: a weakly singular kernel
     legitimately returns inf at u = 0, which the quadrature never samples.
-    Non-finite kernel values elsewhere give non-finite results.
+    A kernel that is non-finite where the quadrature does sample it raises
+    `ValueError`, suggesting `kernel_singularity` in case the kernel is
+    singular there.
 
 ## 7. Kernel convention and reserved extensions
 

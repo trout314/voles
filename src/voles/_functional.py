@@ -988,8 +988,9 @@ def _build_w_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
 
     if not np.isfinite(W).all():
         raise ValueError(
-            "Kernel weight tensor contains non-finite entries -- your kernel "
-            "appears to be singular. Pass `kernel_singularity=<location(s)>` "
+            "Kernel weight tensor contains non-finite entries: the kernel "
+            "returned NaN or inf where the quadrature samples it. If the "
+            "kernel is singular there, pass `kernel_singularity=<location(s)>` "
             "to declare the singular point(s)."
         )
     if warn_fallbacks:
@@ -1353,8 +1354,9 @@ def _build_w_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
 
     if not np.isfinite(W).all():
         raise ValueError(
-            "Kernel weight tensor contains non-finite entries -- your kernel "
-            "appears to be singular. Pass `kernel_singularity=<location(s)>` "
+            "Kernel weight tensor contains non-finite entries: the kernel "
+            "returned NaN or inf where the quadrature samples it. If the "
+            "kernel is singular there, pass `kernel_singularity=<location(s)>` "
             "to declare the singular point(s)."
         )
     if warn_fallbacks:

@@ -17,6 +17,12 @@
   applies the same singularity test. It used `np.linalg.solve`, which reports
   only exactly singular systems.
 
+### Documentation
+- The API contract (§6) said a callable kernel that is non-finite where the
+  quadrature samples it gives non-finite results; it raises `ValueError`, as
+  the user guide says. The error message no longer assumes the kernel is
+  singular, since a kernel returning NaN over a range has the same symptom.
+
 ## [1.0.0] - 2026-11-01
 
 The first stable release. The API is the one 0.11 introduced, without the
