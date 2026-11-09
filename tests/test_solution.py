@@ -6,6 +6,7 @@ the same solve through the 0.10 API, for comparison. What is tested is the
 object itself: grid output, structure, evaluation, breakpoint conventions,
 to_ppoly and pickling.
 """
+import copy
 import pathlib
 import pickle
 import warnings
@@ -382,6 +383,23 @@ def test_pickle_round_trip(which, key):
     np.testing.assert_array_equal(back.node_values, sol.node_values)
     assert (back.equation, back.regime, back.coll_setting) == (sol.equation, sol.regime,
                                                                 sol.coll_setting)
+
+
+@pytest.mark.parametrize("fill_caches", [False, True])
+@pytest.mark.parametrize("copier", [lambda s: pickle.loads(pickle.dumps(s)), copy.deepcopy],
+                         ids=["pickle", "deepcopy"])
+@pytest.mark.parametrize("which, key", [("s", "vie1"), ("s", "vie2-matrix"), ("f", "vide-gauss"),
+                                        ("f", "vie2-complex")])
+def test_copies_keep_the_read_only_contract(which, key, copier, fill_caches):
+    """Contract §8.2: the structure arrays and t are read-only, on a copy too
+    (numpy drops the flag when it pickles or deep-copies an array)."""
+    sol, _, _ = build(which, key)
+    if fill_caches:
+        _ = sol.t, sol.node_values
+    back = copier(sol)
+    for name in ("mesh", "coefficients", "nodes", "node_times", "node_values", "t"):
+        assert not getattr(back, name).flags.writeable, name
+    assert back.y.flags.writeable                      # y stays writable (§8.1)
 
 
 # ------------------------------------------------------------------ misc.

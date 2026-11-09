@@ -139,6 +139,23 @@ def test_functional_vie1_continuous_shared_g_with_matrix_y0():
                          mesh=MESH).node_values)
 
 
+def test_functional_vie1_continuous_no_g_with_matrix_y0():
+    sol = solve_vie1(kernel=kern, continuous=True, y0=Y0, mesh=MESH)
+    assert sol.y.shape == (len(MESH), D, M)
+    for j in range(M):
+        close(sol.y[..., j],
+              solve_vie1(kernel=kern, continuous=True, y0=Y0[:, j], mesh=MESH).y)
+
+
+def test_functional_vie1_continuous_no_g_with_complex_matrix_y0():
+    Yc = Y0 * (1 + 0.5j)
+    sol = solve_vie1(kernel=kern, continuous=True, y0=Yc, mesh=MESH)
+    assert sol.y.shape == (len(MESH), D, M) and np.iscomplexobj(sol.y)
+    for j in range(M):
+        close(sol.y[..., j],
+              solve_vie1(kernel=kern, continuous=True, y0=Yc[:, j], mesh=MESH).y)
+
+
 def test_functional_complex():
     sol = solve_vide(kernel=lambda u: np.exp(-u) * (1 + 0.5j), g=np.cos, y0=1.0, mesh=MESH)
     assert np.iscomplexobj(sol.y) and type(sol(0.3)) is complex

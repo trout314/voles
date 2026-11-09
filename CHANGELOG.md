@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- `solve_vie1` with a callable kernel, `continuous=True`, no `g` and a `(d, m)`
+  `y0` now solves the `m` columns; it raised a `ValueError`. The sampled form
+  already worked.
+- A `VolterraSolution` restored by `pickle` or `copy.deepcopy` keeps its
+  structure arrays (`mesh`, `coefficients`, `nodes`, `node_times`,
+  `node_values`) read-only, as the contract requires.
+
 ## [1.0.0] - 2026-11-01
 
 The first stable release. The API is the one 0.11 introduced, without the
