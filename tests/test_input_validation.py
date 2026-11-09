@@ -211,6 +211,96 @@ def test_vie1_near_singular_matrix_raises_linalgerror(d, quadrature):
         run(solve_vie1, show_warnings=False, kernel=K, g=np.outer(np.arange(len(K)), np.ones(d)), quadrature=quadrature, coll_setting=(3, [1, 2, 3])).y
 
 
+# One node at c = 1 makes the local system 1 - dt*K for VIE-2 (a = 0) and
+# 1 - dt*a for the VIDE (K = 0), so dt = 1/4 with K or a = 4 is singular.
+_SINGULAR_SHAPES = pytest.mark.parametrize("d, m", [(0, 0), (2, 0), (2, 3), (9, 0)],
+                                           ids=["scalar", "vector", "matrix", "runtime-d"])
+
+
+def _singular_data(K_value, d, m, N=9):
+    K = K_value * np.ones(N)
+    g, y0 = np.ones(N), 1.0
+    if d:
+        K, g, y0 = K[:, None, None] * np.eye(d), np.ones((N, d)), np.ones(d)
+    if m:
+        g, y0 = np.ones((N, d, m)), np.ones((d, m))
+    return K, g, y0
+
+
+@_SINGULAR_SHAPES
+def test_vie2_singular_system_raises_linalgerror(d, m, quadrature):
+    K, g, _ = _singular_data(4.0, d, m)
+    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+        solve_vie2(kernel=K, g=g, dt=0.25, quadrature=quadrature, coll_setting=(1, [1]))
+
+
+# The pivot of I - B cancels to rounding level with nothing larger left in the
+# matrix to compare it with; these used to return values around 1e125.
+@_SINGULAR_SHAPES
+@pytest.mark.parametrize("relative_offset", [0.0, 1e-15])
+def test_vie2_numerically_singular_raises(relative_offset, d, m, quadrature):
+    K, g, _ = _singular_data(4.0 * (1.0 + relative_offset), d, m)
+    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+        solve_vie2(kernel=K, g=g, dt=0.25, quadrature=quadrature, coll_setting=(1, [1]))
+
+
+@pytest.mark.parametrize("quadrature", ["collocation", "product"])
+def test_vide_numerically_singular_raises(quadrature):
+    a = 4.0 * (1.0 + 1e-15) * np.ones(9)
+    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+        solve_vide(kernel=np.zeros(9), g=np.ones(9), a=a, y0=1.0, dt=0.25, quadrature=quadrature,
+                   coll_setting=(1, [1]))
+
+
+@pytest.mark.parametrize("d", [0, 2], ids=["scalar", "vector"])
+def test_numerically_singular_callable_problems_raise(d):
+    eye, one = (np.eye(d), np.ones(d)) if d else (1.0, 1.0)
+    kw = dict(mesh=np.linspace(0, 1, 5), coll_nodes=[1.0])
+    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+        solve_vie2(kernel=lambda u: 4.0 * eye, g=lambda t: one, **kw)
+    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+        solve_vide(kernel=lambda u: 0.0 * eye, a=lambda t: 4.0 * eye, g=lambda t: one, y0=one, **kw)
+
+
+def test_numerically_singular_final_interval_raises():
+    """dt = 1/3 with three leftover samples: a final interval of width 1."""
+    kw = dict(g=np.ones(4), dt=1 / 3, quadrature="product", coll_setting=(1, [1]), samples_per_interval=2)
+    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+        solve_vie2(kernel=np.ones(4), **kw)
+    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+        solve_vide(kernel=np.zeros(4), a=np.ones(4), y0=1.0, **kw)
+
+
+@pytest.mark.parametrize("quadrature", ["collocation", "product"])
+def test_close_to_but_not_numerically_singular_is_solved(quadrature):
+    K = 4.0 * (1.0 + 1e-10) * np.ones(9)
+    y = solve_vie2(kernel=K, g=np.ones(9), dt=0.25, quadrature=quadrature, coll_setting=(1, [1])).y
+    assert np.all(np.isfinite(y))
+
+
+@pytest.mark.parametrize("d", [0, 2], ids=["scalar", "vector"])
+def test_first_kind_tiny_kernel_is_not_called_singular(d, quadrature):
+    """A first-kind system has no identity, so only its own scale counts:
+    K = 1e-20 and y = 1 is a perfectly good problem."""
+    N, dt = 9, 0.25
+    t = np.arange(N) * dt
+    K, g = 1e-20 * np.ones(N), 1e-20 * t
+    if d:
+        K, g = K[:, None, None] * np.eye(d), np.tile(g[:, None], (1, d))
+    y = run(solve_vie1, show_warnings=False, kernel=K, g=g, dt=dt, quadrature=quadrature, coll_setting=(2, [1, 2])).y
+    np.testing.assert_allclose(y, np.ones_like(y), rtol=0, atol=1e-12)
+
+
+@_SINGULAR_SHAPES
+def test_vide_singular_system_raises_linalgerror(d, m, quadrature):
+    K, g, y0 = _singular_data(0.0, d, m)
+    a = 4.0 * np.ones(len(K))
+    if d:
+        a = a[:, None, None] * np.eye(d)
+    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+        solve_vide(kernel=K, g=g, a=a, y0=y0, dt=0.25, quadrature=quadrature, coll_setting=(1, [1]))
+
+
 # ---------------------------------------------------------------------------
 # Matrix (multi-RHS) input edges
 # ---------------------------------------------------------------------------

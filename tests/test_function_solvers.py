@@ -558,6 +558,18 @@ def test_vie1_complex_matches_exact():
     assert err < 1e-5
 
 
+def test_complex_detection_samples_late_in_the_interval():
+    """A kernel that turns complex only after 0.75 T is seen by the last probe."""
+    T = 1.7
+    def K(u):
+        return 0.5 + 0.1j if u >= 0.85 * T else 0.5
+    common = dict(g=lambda t: 1.0, mesh=np.linspace(0, T, 35), coll_nodes=np.asarray([0, 1, 2]) / 2)
+    y = solve_vie2(kernel=K, **common).node_values
+    assert y.dtype == np.complex128
+    ref = solve_vie2(kernel=lambda u: complex(K(u)), **common).node_values
+    np.testing.assert_allclose(y, ref, rtol=0, atol=1e-12)
+
+
 def test_complex_detection_catches_late_complex_returns():
     """Kernel returns real near 0 but complex at later u: multi-point sampling
     should still detect this and route through the complex dispatch."""
@@ -1791,6 +1803,15 @@ def test_d_exceeds_compiled_max_raises():
     eye = np.eye(d)
     with pytest.raises(ValueError, match="exceeds the maximum"):
         solve_vie2(kernel=lambda u: np.exp(-u) * eye, g=lambda t: np.zeros(d), mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
+
+
+def test_d_at_compiled_max_is_accepted():
+    from voles._dlang import function_solve_max_d_d
+    d = function_solve_max_d_d()
+    common = dict(mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([0, 1, 2]) / 2)
+    y = solve_vie2(kernel=lambda u: np.exp(-u) * np.eye(d), g=lambda t: np.ones(d), **common).node_values
+    scalar = solve_vie2(kernel=lambda u: np.exp(-u), g=lambda t: 1.0, **common).node_values
+    np.testing.assert_allclose(y, scalar[..., None] * np.ones(d), rtol=0, atol=1e-12)
 
 
 # --- (6) Vectorized vs non-vectorized kernel agree -------------------------

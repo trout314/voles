@@ -1,6 +1,6 @@
 module volterra_function_solvers;
 
-import volterra_solvers : lin_solve;
+import volterra_solvers : lin_solve, identity_pivot_scale;
 
 // ---------------------------------------------------------------------------
 // Callable-input VIE-2 solver (scalar)
@@ -54,7 +54,7 @@ bool function_solve_vie2_impl(int p)(
                 A[i][j] = (i == j ? 1.0 : 0.0) - W[row_base + j];
         }
 
-        auto y_n = lin_solve!p(A, rhs, lin_ok);
+        auto y_n = lin_solve!p(A, rhs, lin_ok, identity_pivot_scale);
         if (!lin_ok) return false;
         foreach (i; 0 .. p)
             out_y[n * p + i] = y_n[i];
@@ -132,7 +132,7 @@ bool function_solve_vie2_vec_impl(int p, int d)(
             }
         }
 
-        auto Y_n = lin_solve!pd(A, rhs, lin_ok);
+        auto Y_n = lin_solve!pd(A, rhs, lin_ok, identity_pivot_scale);
         if (!lin_ok) return false;
         foreach (i; 0 .. p)
             foreach (a; 0 .. d)
@@ -538,7 +538,7 @@ bool function_solve_vide_impl(int p)(
             }
         }
 
-        auto Y_n = lin_solve!p(A, rhs, lin_ok);
+        auto Y_n = lin_solve!p(A, rhs, lin_ok, identity_pivot_scale);
         if (!lin_ok) return false;
         foreach (i; 0 .. p)
             out_y_prime[n * p + i] = Y_n[i];
@@ -662,7 +662,7 @@ bool function_solve_vide_vec_impl(int p, int d)(
             }
         }
 
-        auto Yn = lin_solve!pd(A, rhs, lin_ok);
+        auto Yn = lin_solve!pd(A, rhs, lin_ok, identity_pivot_scale);
         if (!lin_ok) return false;
         foreach (i; 0 .. p)
             foreach (aa; 0 .. d)

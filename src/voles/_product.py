@@ -200,7 +200,13 @@ def flatten_blocks(lagB, d):
 # Reference stepping (direct history sums), also the fallback
 # ---------------------------------------------------------------------------
 
-def _lu_factor_checked(A, name):
+# Floor under the singularity test's pivot scale for systems of the form I - B,
+# whose unit scale cancellation may have removed (the extension's
+# identity_pivot_scale; see volterra_solvers.d).
+IDENTITY_PIVOT_SCALE = 16.0
+
+
+def _lu_factor_checked(A, name, pivot_scale=0.0):
     """LU factorisation with partial pivoting, ``P A = L U`` packed in one
     array, applying the D extension's singularity test: a pivot no larger
     than ``dim * eps * (largest pivot so far)`` raises LinAlgError.
@@ -219,7 +225,7 @@ def _lu_factor_checked(A, name):
             LU[[k, r]] = LU[[r, k]]
         pivot = abs(LU[k, k])
         max_pivot = max(max_pivot, pivot)
-        if pivot <= n * np.finfo(float).eps * max_pivot:
+        if pivot <= n * np.finfo(float).eps * max(max_pivot, pivot_scale):
             raise np.linalg.LinAlgError(
                 f"{name}: singular or nearly singular coefficient matrix")
         LU[k + 1:, k] /= LU[k, k]
@@ -241,14 +247,14 @@ def _lu_solve(LU, piv, b):
     return x
 
 
-def step_blocks_numpy(lagB, g):
+def step_blocks_numpy(lagB, g, pivot_scale=0.0):
     """Discontinuous stepping with direct O(M^2) history sums.
 
     lagB : (M, Db, Db), g : (M, Db).  Returns U : (M, Db).  The diagonal
     block is the same for every interval and is factorised once."""
     M, Db = g.shape
     U = np.zeros((M, Db))
-    LU, piv = _lu_factor_checked(lagB[0], "step_blocks_numpy")
+    LU, piv = _lu_factor_checked(lagB[0], "step_blocks_numpy", pivot_scale)
     for n in range(M):
         rhs = g[n].copy()
         if n > 0:
@@ -549,7 +555,8 @@ def solve_tail(kind, coef, unit_reg, g_tail, a_tail, y_prev, coll_choices, coll_
         U = np.linalg.solve(_flat(Ab, d), (g_at - hist).ravel())
         unit = np.einsum('kr,kj->jr', U.reshape(m, dd), basis_p)
     elif kind == "vie2":
-        U = np.linalg.solve(I - _flat(Ab, d), (g_at + hist).ravel())
+        LU, piv = _lu_factor_checked(I - _flat(Ab, d), "solve_tail", IDENTITY_PIVOT_SCALE)
+        U = _lu_solve(LU, piv, (g_at + hist).ravel())
         unit = np.einsum('kr,kj->jr', U.reshape(m, dd), basis_p)
     elif kind == "vie1_cont":                                 # basis [L_1..L_m, L_0]
         yp = np.asarray(y_prev, dtype=float).reshape(dd)
@@ -572,7 +579,8 @@ def solve_tail(kind, coef, unit_reg, g_tail, a_tail, y_prev, coll_choices, coll_
             for k in range(m):
                 Aloc[i*dd:(i+1)*dd, k*dd:(k+1)*dd] -= betaC[i, k] * a_at[i]
         rhs = g_at + hist + np.einsum('iab,b->ia', P_bnd + a_at, yp)
-        Y = np.linalg.solve(Aloc, rhs.ravel())
+        LU, piv = _lu_factor_checked(Aloc, "solve_tail", IDENTITY_PIVOT_SCALE)
+        Y = _lu_solve(LU, piv, rhs.ravel())
         unit = (np.einsum('kr,kj->jr', Y.reshape(m, dd), basis_p[:m])
                 + yp[None, :] * basis_p[m][:, None])
     else:
@@ -821,9 +829,10 @@ def solve_vie2_product(kernel_values, g_values, time_step, coll_divs, coll_choic
     if M == 0:
         U = np.zeros((0, setup.m * max(d, 1)))
     elif block_drivers_available("vie2", use_extension, show_warnings):
-        U = _dlang_module.solve_vie1_blocks_d(setup.lagB, g_coll, name="solve_vie2 product step")
+        U = _dlang_module.solve_vie1_blocks_d(setup.lagB, g_coll, name="solve_vie2 product step",
+                                              pivot_scale=IDENTITY_PIVOT_SCALE)
     else:
-        U = step_blocks_numpy(setup.lagB, g_coll)
+        U = step_blocks_numpy(setup.lagB, g_coll, IDENTITY_PIVOT_SCALE)
     return _finish(setup, U, None, g_values, None, return_function)
 
 
@@ -864,7 +873,7 @@ def step_vide_blocks_numpy(lagB, g, a_coll, betaC, beta1, y0, m, d):
                 Aloc[i * d:(i + 1) * d, k * d:(k + 1) * d] -= betaC[i, k] * a_coll[n, i]
         if n > 0:
             rhs += np.einsum('lab,lb->a', lagB[n:0:-1], src[:n])
-        LU, piv = _lu_factor_checked(Aloc, "step_vide_blocks_numpy")
+        LU, piv = _lu_factor_checked(Aloc, "step_vide_blocks_numpy", IDENTITY_PIVOT_SCALE)
         Y[n] = _lu_solve(LU, piv, rhs)
         src[n, :Db] = Y[n]
         src[n, Db:] = y[n]

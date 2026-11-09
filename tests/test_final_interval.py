@@ -135,3 +135,32 @@ def test_vide_with_coefficient_and_matrix_init_on_the_tail():
     np.testing.assert_allclose(ym[:, 0, 1], y, rtol=0, atol=1e-12)
 
 
+@pytest.mark.filterwarnings("ignore:.*rho = 1:voles.AccuracyWarning")
+@pytest.mark.parametrize("quad", ["collocation", "product"])
+@pytest.mark.parametrize("d, m", [(0, 0), (2, 0), (2, 3), (9, 0)],
+                         ids=["scalar", "vector", "matrix", "runtime-d"])
+@pytest.mark.parametrize("kind", ["vie1", "vie1_cont", "vie2", "vide"])
+def test_only_a_final_interval_reproduces_a_linear_solution(kind, d, m, quad):
+    """Fewer samples than two regular intervals, for every shape: K = 1, y = 1 + t."""
+    N, dt = 7, 0.05
+    t = np.arange(N) * dt
+    y = 1 + t
+    integral = t + t**2 / 2
+    g = {"vie1": integral, "vie1_cont": integral, "vie2": y - integral, "vide": 1 - integral}[kind]
+    K = np.ones(N)
+    y0 = 1.0
+    if d:
+        K, g, y, y0 = K[:, None, None] * np.eye(d), np.tile(g[:, None], (1, d)), np.tile(y[:, None], (1, d)), np.ones(d)
+    if m:
+        g, y, y0 = g[..., None] * np.ones(m), y[..., None] * np.ones(m), np.ones((d, m))
+    kw = dict(kernel=K, g=g, dt=dt, quadrature=quad, coll_setting=(2, [1, 2]))
+    if quad == "product":
+        kw["samples_per_interval"] = 4
+    if kind == "vie1_cont":
+        kw.update(continuous=True, y0=y0)
+    elif kind == "vide":
+        kw["y0"] = y0
+    solve = solve_vide if kind == "vide" else solve_vie2 if kind == "vie2" else solve_vie1
+    sol = solve(**kw)
+    assert len(sol.mesh) == 2
+    np.testing.assert_allclose(sol.y, y, rtol=0, atol=1e-12)
