@@ -20,7 +20,7 @@ drivers on a mesh of num_blocks * coll_divs intervals.
 import numpy as np
 import pytest
 from voles import solve_vide, solve_vie1, solve_vie2
-from conftest import (TOLERANCE, make_coupled_data_nd,
+from conftest import (make_coupled_data_nd,
                       VIE1_SPEC_POLY_A, VIE1_SPEC_POLY_B, VIE1_SPEC_SMOOTH,
                       VIE1_SPEC_POLY, VIE1_SPEC_DAMPED,
                       VIE2_SPEC_SMOOTH, VIE2_SPEC_EXP, VIE2_SPEC_POLY,
@@ -78,7 +78,7 @@ def test_vide_fft_path_accuracy(quadrature):
     d = as_array(VIDE_SPEC_SMOOTH, time_step=0.01, coll_divs=3,
                  coll_choices=[1, 2, 3], num_blocks=FFT_BLOCKS)
     soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < (5e-5 if quadrature == "product" else TOLERANCE)
+    assert np.max(np.abs(soln - d["exact"])) < (5e-5 if quadrature == "product" else 1e-3)
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +88,7 @@ def test_vide_fft_path_accuracy(quadrature):
 def test_vie2_vec_fft_path_accuracy(quadrature):
     # time_step keeps T = 3.6: with the rational spec's K = 1 the second-kind
     # resolvent grows like e^t, so longer horizons amplify discretization
-    # error past TOLERANCE. mesh_divs = 80 is what engages the FFT path.
+    # error past the bound. mesh_divs = 80 is what engages the FFT path.
     d = make_coupled_data_nd(
         [VIE2_SPEC_SMOOTH, VIE2_SPEC_RATIONAL], [[1, 1], [1, -1]],
         time_step=0.005, coll_divs=3, coll_choices=[0, 1, 2, 3],
@@ -138,7 +138,7 @@ def test_vide_runtime_d10_accuracy(quadrature):
         specs, coupling_matrix(10),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=40)
     soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < (2e-4 if quadrature == "product" else TOLERANCE)
+    assert np.max(np.abs(soln - d["exact"])) < (2e-4 if quadrature == "product" else 1e-3)
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +177,7 @@ def test_vie2_runtime_d9_return_function_matches_scalar(quadrature):
                      coll_choices=[0, 1, 2], num_blocks=10)
         _, f_s = with_sol(run(solve_vie2, show_warnings=False, kernel=s["kernel"], g=s["g"], dt=s["time_step"], quadrature=quadrature, coll_setting=(s["coll_divs"], s["coll_choices"])))
         for t in _poly_eval_points(d):
-            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-9
+            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-12
 
 
 def test_vie1_runtime_d9_return_function_matches_scalar(quadrature):
@@ -190,7 +190,7 @@ def test_vie1_runtime_d9_return_function_matches_scalar(quadrature):
                      coll_choices=[1, 2, 3], num_blocks=10)
         _, f_s = with_sol(run(solve_vie1, show_warnings=False, kernel=s["kernel"], g=s["g"], dt=s["time_step"], quadrature=quadrature, coll_setting=(s["coll_divs"], s["coll_choices"])))
         for t in _poly_eval_points(d):
-            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-9
+            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-12
 
 
 def test_vie1_runtime_d9_force_continuous_return_function_matches_scalar(quadrature):
@@ -203,7 +203,7 @@ def test_vie1_runtime_d9_force_continuous_return_function_matches_scalar(quadrat
                      coll_choices=[1, 2, 3], num_blocks=10)
         _, f_s = with_sol(run(solve_vie1, show_warnings=False, kernel=s["kernel"], g=s["g"], y0=s["exact"][0], continuous=True, dt=s["time_step"], quadrature=quadrature, coll_setting=(s["coll_divs"], s["coll_choices"])))
         for t in _poly_eval_points(d):
-            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-9
+            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-12
 
 
 def test_vide_runtime_d9_return_function_matches_scalar(quadrature):
@@ -216,7 +216,7 @@ def test_vide_runtime_d9_return_function_matches_scalar(quadrature):
                      coll_choices=[1, 2, 3], num_blocks=10)
         _, f_s = with_sol(run(solve_vide, show_warnings=False, kernel=s["kernel"], a=s["a"], g=s["g"], y0=s["soln_init_value"], dt=s["time_step"], quadrature=quadrature, coll_setting=(s["coll_divs"], s["coll_choices"])))
         for t in _poly_eval_points(d):
-            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-9
+            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-12
 
 
 # ---------------------------------------------------------------------------
@@ -350,7 +350,7 @@ def test_every_compiled_setting_reproduces_a_constant(equation, divs, choices, d
     solve = dict(vie1=solve_vie1, vie2=solve_vie2, vide=solve_vide)[equation]
     y = run(solve, show_warnings=False, quadrature="collocation", coll_setting=(divs, choices),
             **_sweep_problem(equation, divs, choices, d)).y
-    assert np.max(np.abs(y - 1.0)) < 1e-9
+    assert np.max(np.abs(y - 1.0)) < 2e-11
 
 
 @pytest.mark.parametrize("d", [8, 9], ids=["last-compiled", "first-runtime"])
@@ -369,7 +369,7 @@ def test_dimension_boundary_accuracy(specs, solve, choices, d, quadrature):
     if solve is solve_vide:
         kw.update(a=data["a"], y0=data["soln_init_value"])
     soln = solve(quadrature=quadrature, coll_setting=(3, choices), **kw).y
-    assert np.max(np.abs(soln - data["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - data["exact"])) < (2e-4 if quadrature == "product" else 5e-4)
 
 
 def test_runtime_dimension_fft_accuracy():
@@ -380,4 +380,4 @@ def test_runtime_dimension_fft_accuracy():
     sol = solve_vie2(kernel=data["kernel"], g=data["g"], dt=data["time_step"],
                      quadrature="collocation", coll_setting=(3, [0, 1, 2, 3]))
     assert len(sol.mesh) - 1 == FFT_BLOCKS
-    assert np.max(np.abs(sol.y - data["exact"])) < TOLERANCE
+    assert np.max(np.abs(sol.y - data["exact"])) < 1e-5

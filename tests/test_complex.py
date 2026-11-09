@@ -8,7 +8,6 @@ that pure-real inputs still produce real (not complex) outputs.
 import numpy as np
 import pytest
 from voles import solve_vie1, solve_vie2, solve_vide
-from conftest import TOLERANCE
 from conftest import run, with_sol
 
 
@@ -50,18 +49,18 @@ class TestVIE2Complex:
     def test_accuracy(self, quadrature):
         soln = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (1e-6 if quadrature == "product" else 5e-4)
 
     def test_return_polys(self, quadrature):
         soln, polys = with_sol(solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)))
         assert np.iscomplexobj(soln)
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (1e-6 if quadrature == "product" else 5e-4)
         # Polynomials should evaluate to complex values
         h = self.coll_divs**2 * self.time_step
         t_mid = 0.5 * h
         val = polys[0](t_mid)
         assert np.iscomplexobj(val)
-        assert abs(val - np.exp(1j * t_mid)) < TOLERANCE
+        assert abs(val - np.exp(1j * t_mid)) < 1e-4
 
 
 class TestVIE2ComplexPurelyImaginaryKernel:
@@ -83,7 +82,7 @@ class TestVIE2ComplexPurelyImaginaryKernel:
 
     def test_accuracy(self, quadrature):
         soln = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (2e-6 if quadrature == "product" else 2e-4)
 
 
 class TestVIE2ComplexVector:
@@ -109,14 +108,14 @@ class TestVIE2ComplexVector:
         soln = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
         assert soln.shape == self.exact.shape
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (1e-6 if quadrature == "product" else 5e-4)
 
     def test_matches_scalar(self, quadrature):
         """Vector solve with diagonal kernel should match scalar solve."""
         soln_vec = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         soln_scalar = solve_vie2(kernel=self.kernel[:, 0, 0], g=self.g[:, 0], dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
-        assert np.max(np.abs(soln_vec[:, 0] - soln_scalar)) < TOLERANCE
-        assert np.max(np.abs(soln_vec[:, 1] - soln_scalar)) < TOLERANCE
+        assert np.max(np.abs(soln_vec[:, 0] - soln_scalar)) < 1e-12
+        assert np.max(np.abs(soln_vec[:, 1] - soln_scalar)) < 1e-12
 
 
 # ---------------------------------------------------------------------------
@@ -148,12 +147,12 @@ class TestVIE1Complex:
     def test_accuracy(self, quadrature):
         soln = solve_vie1(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (5e-5 if quadrature == "product" else 5e-4)
 
     def test_return_polys(self, quadrature):
         soln, polys = with_sol(solve_vie1(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)))
         assert np.iscomplexobj(soln)
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (5e-5 if quadrature == "product" else 5e-4)
         h = self.coll_divs**2 * self.time_step
         t_mid = 0.5 * h
         val = polys[0](t_mid)
@@ -162,7 +161,7 @@ class TestVIE1Complex:
     def test_force_continuous(self, quadrature):
         soln = solve_vie1(kernel=self.kernel, g=self.g, y0=1.0 + 0j, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices), continuous=True).y
         assert np.iscomplexobj(soln)
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < 1e-6
 
 
 class TestVIE1ComplexVector:
@@ -188,7 +187,7 @@ class TestVIE1ComplexVector:
         soln = solve_vie1(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
         assert soln.shape == self.exact.shape
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (5e-5 if quadrature == "product" else 5e-4)
 
 
 # ---------------------------------------------------------------------------
@@ -231,12 +230,12 @@ class TestVIDEComplex:
     def test_accuracy(self, quadrature):
         soln = solve_vide(kernel=self.kernel, a=self.a, g=self.g, y0=self.soln_init, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (5e-6 if quadrature == "product" else 2e-4)
 
     def test_return_polys(self, quadrature):
         soln, polys = with_sol(solve_vide(kernel=self.kernel, a=self.a, g=self.g, y0=self.soln_init, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)))
         assert np.iscomplexobj(soln)
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (5e-6 if quadrature == "product" else 2e-4)
         h = self.coll_divs**2 * self.time_step
         t_mid = 0.5 * h
         val = polys[0](t_mid)
@@ -271,7 +270,7 @@ class TestVIDEComplexVector:
         soln = solve_vide(kernel=self.kernel, a=self.a, g=self.g, y0=self.soln_init, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
         assert soln.shape == self.exact.shape
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (5e-6 if quadrature == "product" else 2e-4)
 
 
 # ---------------------------------------------------------------------------
@@ -327,7 +326,7 @@ class TestMixedInputs:
         g = exact - integral  # complex
         soln = solve_vie2(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, coll_choices)).y
         assert np.iscomplexobj(soln)
-        assert np.max(np.abs(soln - exact)) < TOLERANCE
+        assert np.max(np.abs(soln - exact)) < (1e-6 if quadrature == "product" else 5e-4)
 
     def test_vide_real_kernel_complex_a(self, quadrature):
         """Real kernel, complex a, complex init."""
@@ -342,7 +341,7 @@ class TestMixedInputs:
         g = (exact * (1 + 1j) / (2 + 1j) + np.exp(-times) / (2 + 1j))
         soln = solve_vide(kernel=kernel, a=a, g=g, y0=1.0 + 0j, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, coll_choices)).y
         assert np.iscomplexobj(soln)
-        assert np.max(np.abs(soln - exact)) < TOLERANCE
+        assert np.max(np.abs(soln - exact)) < (5e-6 if quadrature == "product" else 2e-4)
 
 
 # ---------------------------------------------------------------------------
@@ -398,7 +397,7 @@ class TestVIE2ComplexMatrix:
         soln = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
         assert soln.shape == self.exact.shape
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (1e-6 if quadrature == "product" else 5e-4)
 
 
 # ---------------------------------------------------------------------------
@@ -463,11 +462,11 @@ def test_complex_vector_d5_runtime_return_function_matches_scalar(quadrature):
 
     for i in range(d):
         s_soln, f_s = with_sol(run(solve_vie2, show_warnings=False, kernel=K[:, i, i].copy(), g=g[:, i].copy(), dt=ts, quadrature=quadrature, coll_setting=(3, [0, 1, 2])))
-        assert np.max(np.abs(soln[:, i] - s_soln)) < 1e-9
+        assert np.max(np.abs(soln[:, i] - s_soln)) < 1e-12
         for tt in (0.13, 0.45, 0.77):
             v_vec = np.asarray(f_vec(tt)).ravel()[i]
             v_s = np.asarray(f_s(tt)).ravel()[0]
-            assert abs(v_vec - v_s) < 1e-9
+            assert abs(v_vec - v_s) < 1e-12
 
 
 def test_complex_solution_object_is_built_from_complex_coefficients():
@@ -486,7 +485,7 @@ def test_complex_solution_object_is_built_from_complex_coefficients():
     assert len(f) == (len(t) - 1) // 2 and f[3].shape == (2,)   # product mesh: 2 samples
     assert f[3][1].coef.dtype == np.complex128
     assert isinstance(f(0.37), np.ndarray) and f(0.37).shape == (2,)
-    np.testing.assert_allclose(f(t[::25]), y[::25], rtol=0, atol=1e-10)
+    np.testing.assert_allclose(f(t[::25]), y[::25], rtol=0, atol=1e-12)
     # the Polynomial objects and the Horner evaluation agree
     n = int(np.searchsorted(f.mesh_breakpoints, 0.37, side="right") - 1)
     np.testing.assert_allclose([p(0.37) for p in f[n]], f(0.37), rtol=0, atol=1e-12)

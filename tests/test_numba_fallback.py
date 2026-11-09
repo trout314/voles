@@ -12,7 +12,7 @@ path, which has no fallback.
 import numpy as np
 import pytest
 from voles import solve_vide, solve_vie1, solve_vie2
-from conftest import (TOLERANCE, as_array,
+from conftest import (as_array,
                       VIE1_SPEC_DAMPED, VIE2_SPEC_SMOOTH, VIDE_SPEC_SMOOTH)
 from conftest import run
 
@@ -22,7 +22,7 @@ def test_numba_vie2_accuracy():
                  coll_choices=[0, 1, 2], num_blocks=8)
     pytest.importorskip("numba")
     soln = run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature="collocation", coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < 5e-5
 
 
 def test_numba_vie1_accuracy():
@@ -32,7 +32,7 @@ def test_numba_vie1_accuracy():
                  coll_choices=[3, 4, 5], num_blocks=8)
     pytest.importorskip("numba")
     soln = run(solve_vie1, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature="collocation", coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < 5e-4
 
 
 def test_numba_vide_accuracy():
@@ -40,7 +40,7 @@ def test_numba_vide_accuracy():
                  coll_choices=[1, 2, 3], num_blocks=8)
     pytest.importorskip("numba")
     soln = run(solve_vide, show_warnings=False, kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature="collocation", coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < 5e-7
 
 
 def test_vector_beyond_compiled_settings_raises():

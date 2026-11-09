@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from voles import solve_vie1
-from conftest import TOLERANCE, with_sol
+from conftest import with_sol
 
 
 # ---------------------------------------------------------------------------
@@ -43,9 +43,9 @@ def test_vie1_vec_diagonal_matches_scalar(quadrature):
     # Scalar solve for component 0
     soln_s = solve_vie1(kernel=d["kernel"][:, 0, 0], g=d["g"][:, 0], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
 
-    assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < TOLERANCE
-    assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < TOLERANCE
-    assert np.max(np.abs(soln_vec - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < 1e-12
+    assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < 1e-12
+    assert np.max(np.abs(soln_vec - d["exact"])) < (5e-5 if quadrature == "product" else 5e-4)
 
 
 def test_vie1_vec_analytic_2d(quadrature):
@@ -67,7 +67,7 @@ def test_vie1_vec_analytic_2d(quadrature):
     exact[:, 1] = times
 
     soln = solve_vie1(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [1, 2, 3])).y
-    assert np.max(np.abs(soln - exact)) < TOLERANCE
+    assert np.max(np.abs(soln - exact)) < 5e-12
 
 
 def test_vie1_vec_analytic_d9_runtime_path(quadrature):
@@ -89,7 +89,7 @@ def test_vie1_vec_analytic_d9_runtime_path(quadrature):
     exact[:] = times[:, None]
 
     soln = solve_vie1(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [1, 2, 3])).y
-    assert np.max(np.abs(soln - exact)) < TOLERANCE
+    assert np.max(np.abs(soln - exact)) < 5e-12
 
 
 def test_vie1_vec_force_continuous(quadrature):
@@ -115,7 +115,7 @@ def test_vie1_vec_force_continuous(quadrature):
 
     soln = solve_vie1(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [1, 2, 3]), y0=np.array([0.0, 0.0]), continuous=True).y
     assert soln.shape == exact.shape
-    assert np.max(np.abs(soln - exact)) < TOLERANCE
+    assert np.max(np.abs(soln - exact)) < 1e-11
 
 
 @pytest.mark.parametrize("pair", [
@@ -133,7 +133,7 @@ def test_vie1_vec_coupled_generated_accuracy(coupled_vie1, pair, quadrature):
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3],
     )
     soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (5e-5 if quadrature == "product" else 5e-4)
 
 
 def test_make_coupled_vie1_reproduces_handwritten(coupled_vie1):
@@ -157,13 +157,13 @@ def test_make_coupled_vie1_reproduces_handwritten(coupled_vie1):
 def test_vie1_accuracy(vie1_data, quadrature):
     d = vie1_data
     soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (5e-5 if quadrature == "product" else 5e-4)
 
 
 def test_vie1_damped_accuracy(vie1_damped_data, quadrature):
     d = vie1_damped_data
     soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (2e-4 if quadrature == "product" else 5e-4)
 
 
 def test_vie1_return_polys(vie1_data, quadrature):
@@ -179,13 +179,13 @@ def test_vie1_return_polys(vie1_data, quadrature):
 def test_vie1_poly_accuracy(vie1_poly_data, quadrature):
     d = vie1_poly_data
     soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < 5e-12
 
 
 def test_vie1_poly_force_continuous(vie1_poly_data, quadrature):
     d = vie1_poly_data
     soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"]), y0=float(d["exact"][0]), continuous=True).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < 1e-11
 
 
 def test_vie1_polys_continuous_at_mesh_boundaries(vie1_data, quadrature):
@@ -251,7 +251,7 @@ def test_vie1_matrix_polys_continuous_at_mesh_boundaries(quadrature):
 def test_vie1_force_continuous(vie1_data, quadrature):
     d = vie1_data
     soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"]), y0=d["exact"][0], continuous=True).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < 1e-6
 
 
 # ---------------------------------------------------------------------------

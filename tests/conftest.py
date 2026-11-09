@@ -3,8 +3,6 @@ import warnings
 import numpy as np
 import pytest
 
-TOLERANCE = 1e-3
-
 
 class _VolesWarningLog:
     """What a test sees of voles' diagnostics: ``text()`` returns the voles

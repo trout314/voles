@@ -247,7 +247,7 @@ def test_breakpoints_are_matched_within_a_few_ulps():
         assert sol(b + k * np.spacing(b)) == exact
     off = b + 1e-9
     assert sol(off) != exact
-    assert abs(sol(off) - sol(b, at_breakpoints="right")) < 1e-7
+    assert abs(sol(off) - sol(b, at_breakpoints="right")) < 5e-8
 
 
 def test_endpoints_use_the_only_limit():

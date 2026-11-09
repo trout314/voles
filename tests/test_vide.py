@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 from voles import solve_vide
-from conftest import TOLERANCE
 from conftest import with_sol
 
 
@@ -38,9 +37,9 @@ def test_vide_vec_diagonal_matches_scalar(coll_divs, quadrature):
     a_scalar = np.zeros(num_pts)
     soln_s = solve_vide(kernel=k_scalar, a=a_scalar, g=g[:, 0], y0=1.0, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, list(range(coll_divs + 1)))).y
 
-    assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < TOLERANCE
-    assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < TOLERANCE
-    assert np.max(np.abs(soln_vec - exact)) < TOLERANCE
+    assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < 1e-12
+    assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < 1e-12
+    assert np.max(np.abs(soln_vec - exact)) < (1e-8 if quadrature == "product" else 2e-7)
 
 
 @pytest.mark.parametrize("pair", [
@@ -58,7 +57,7 @@ def test_vide_vec_coupled_generated_accuracy(coupled_vide, pair, quadrature):
         time_step=0.02, coll_divs=3, coll_choices=[1, 2, 3],
     )
     soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (2e-5 if quadrature == "product" else 5e-4)
 
 
 def test_make_coupled_vide_reproduces_handwritten(coupled_vide):
@@ -88,25 +87,25 @@ def test_make_coupled_vide_reproduces_handwritten(coupled_vide):
 def test_vide_accuracy(vide_data, quadrature):
     d = vide_data
     soln = solve_vide(kernel=d["kernel"], g=d["g"], a=d["a"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (5e-7 if quadrature == "product" else 2e-5)
 
 
 def test_vide_ode_accuracy(vide_ode_data, quadrature):
     d = vide_ode_data
     soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (1e-6 if quadrature == "product" else 2e-5)
 
 
 def test_vide_log_accuracy(vide_log_data, quadrature):
     d = vide_log_data
     soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (5e-6 if quadrature == "product" else 1e-4)
 
 
 def test_vide_stiff_accuracy(vide_stiff_data, quadrature):
     d = vide_stiff_data
     soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (5e-8 if quadrature == "product" else 5e-6)
 
 
 def test_vide_return_polys(vide_data, quadrature):

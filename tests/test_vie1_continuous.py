@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 from scipy.special import j1, jv
 from voles import solve_vie1
-from conftest import TOLERANCE, as_array, VIE1_SPEC_DAMPED
+from conftest import as_array, VIE1_SPEC_DAMPED
 from conftest import run
 
 try:
@@ -97,7 +97,7 @@ def test_continuous_one_node_is_product_trapezoidal_rule():
     soln = solve_vie1(kernel=kernel, g=g, dt=h, quadrature="collocation", coll_setting=(1, [1]), continuous=True, y0=1.0).y
     # Rounding level only: the D driver accumulates the history in a
     # different (blocked) order than the direct sum.
-    assert np.max(np.abs(soln - _product_trapezoid(kernel, g, h, 1.0))) < 1e-10
+    assert np.max(np.abs(soln - _product_trapezoid(kernel, g, h, 1.0))) < 5e-11
 
 
 @needs_numba
@@ -106,7 +106,7 @@ def test_continuous_one_node_is_product_trapezoidal_rule_numba():
     t = h * np.arange(41)
     kernel, g = np.exp(t), np.sin(t)
     soln, _ = _numba_solvers.solve_vie1_jit(g, kernel, 1.0, h, 1, np.array([1]), False, True)
-    assert np.max(np.abs(soln - _product_trapezoid(kernel, g, h, 1.0))) < 1e-10
+    assert np.max(np.abs(soln - _product_trapezoid(kernel, g, h, 1.0))) < 5e-12
 
 
 def test_continuous_one_node_uses_initial_value():
@@ -146,7 +146,7 @@ def test_continuous_reproduces_polynomial_vector(d, quadrature):
         kernel_d[:, r, r] = 1.0
     scale = 1.0 + np.arange(d)
     soln = solve_vie1(kernel=kernel_d, g=g[:, None] * scale, dt=0.1, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=np.zeros(d)).y
-    assert np.max(np.abs(soln - exact[:, None] * scale)) < 1e-9
+    assert np.max(np.abs(soln - exact[:, None] * scale)) < 5e-10
 
 
 def test_continuous_reproduces_polynomial_matrix(quadrature):
@@ -157,7 +157,7 @@ def test_continuous_reproduces_polynomial_matrix(quadrature):
     kernel_d[:, 0, 0] = kernel_d[:, 1, 1] = 1.0
     scale = np.array([[1.0, 3.0], [2.0, 4.0]])          # (d, m_cols)
     soln = solve_vie1(kernel=kernel_d, g=g[:, None, None] * scale, dt=0.1, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=np.zeros((2, 2))).y
-    assert np.max(np.abs(soln - exact[:, None, None] * scale)) < 1e-9
+    assert np.max(np.abs(soln - exact[:, None, None] * scale)) < 5e-12
 
 
 @needs_numba
@@ -167,7 +167,7 @@ def test_continuous_reproduces_polynomial_numba_fallback():
     coll_divs, coll_choices = 5, [1, 2, 3, 4, 5]
     t, kernel, g, exact = _polynomial_problem(coll_divs, 5, num_blocks=4)
     soln = run(solve_vie1, show_warnings=False, kernel=kernel, g=g, dt=0.1, quadrature="collocation", coll_setting=(coll_divs, coll_choices), continuous=True, y0=0.0).y
-    assert np.max(np.abs(soln - exact)) < 1e-6
+    assert np.max(np.abs(soln - exact)) < 2e-8
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ def test_continuous_amplification_factor(coll_divs, coll_choices, rho, quadratur
     N = num_blocks * coll_divs**2 + 1
     soln = solve_vie1(kernel=np.ones(N), g=np.zeros(N), dt=0.1, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=1.0).y
     mesh_values = soln[::coll_divs**2]
-    assert np.max(np.abs(mesh_values - rho ** np.arange(num_blocks + 1))) < 1e-10
+    assert np.max(np.abs(mesh_values - rho ** np.arange(num_blocks + 1))) < 1e-12
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +214,7 @@ def test_continuous_even_m_equispaced_converges(coll_divs, coll_choices, quadrat
     d = as_array(VIE1_SPEC_DAMPED, time_step=0.01, coll_divs=coll_divs,
                  coll_choices=coll_choices, num_blocks=40)
     soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"]), continuous=True, y0=d["exact"][0]).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < 1e-3
 
 
 @needs_numba
@@ -225,7 +225,7 @@ def test_continuous_numba_matches_d_extension():
     soln_nb, _ = _numba_solvers.solve_vie1_jit(
         d["g"], d["kernel"], float(d["exact"][0]), d["time_step"], 3, np.array([1, 2, 3]),
         False, True)
-    assert np.max(np.abs(soln_d - soln_nb)) < 1e-10
+    assert np.max(np.abs(soln_d - soln_nb)) < 1e-12
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +268,7 @@ def test_continuous_nonzero_initial_value_long_history(quadrature):
     t = h * np.arange(N)
     exact = 1 + t - t**2
     soln = solve_vie1(kernel=np.ones(N), g=t + t**2 / 2 - t**3 / 3, dt=h, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=1.0).y
-    assert np.max(np.abs(soln - exact)) < 1e-9
+    assert np.max(np.abs(soln - exact)) < 1e-10
 
 
 @pytest.mark.parametrize("d", [2, 9])   # compile-time and runtime-dimension drivers
@@ -286,7 +286,7 @@ def test_continuous_vector_nonzero_initial_value(d, quadrature):
     exact = amp * (1 - t**2) + t**3
     integ = amp * (t - t**3 / 3) + t**4 / 4
     soln = solve_vie1(kernel=np.broadcast_to(M, (N, d, d)).copy(), g=integ @ M.T, dt=h, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=exact[0]).y
-    assert np.max(np.abs(soln - exact)) < 1e-9
+    assert np.max(np.abs(soln - exact)) < 5e-10
 
 
 def test_continuous_matrix_without_init_value_raises_value_error():
@@ -336,7 +336,7 @@ def test_boundary_rho_setting_still_admitted_on_numba_fallback():
     N = 36 * 4 + 1
     t = 0.01 * np.arange(N)
     soln = run(solve_vie1, show_warnings=False, kernel=np.ones(N), g=t, dt=0.01, quadrature="collocation", coll_setting=(coll_divs, coll_choices)).y
-    assert np.max(np.abs(soln - 1.0)) < 1e-9
+    assert np.max(np.abs(soln - 1.0)) < 1e-12
 
 
 def test_d_extension_guards_the_continuous_method_itself():

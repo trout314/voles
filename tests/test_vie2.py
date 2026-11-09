@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 from voles import solve_vie2
-from conftest import TOLERANCE
 from conftest import with_sol
 
 
@@ -34,27 +33,27 @@ def test_vie2_vec_diagonal_matches_scalar(coll_divs, quadrature):
 
     soln_s = solve_vie2(kernel=K0, g=g[:, 0], dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, list(range(coll_divs + 1)))).y
 
-    assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < TOLERANCE
-    assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < TOLERANCE
-    assert np.max(np.abs(soln_vec - exact)) < TOLERANCE
+    assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < 1e-12
+    assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < 1e-12
+    assert np.max(np.abs(soln_vec - exact)) < (1e-10 if quadrature == "product" else 1e-11)
 
 
 def test_vie2_accuracy(vie2_data, quadrature):
     d = vie2_data
     soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (1e-6 if quadrature == "product" else 5e-4)
 
 
 def test_vie2_exp_accuracy(vie2_exp_data, quadrature):
     d = vie2_exp_data
     soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (5e-7 if quadrature == "product" else 2e-4)
 
 
 def test_vie2_rational_accuracy(vie2_rational_data, quadrature):
     d = vie2_rational_data
     soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (5e-7 if quadrature == "product" else 5e-5)
 
 
 @pytest.mark.parametrize("pair", [
@@ -73,7 +72,7 @@ def test_vie2_vec_coupled_generated_accuracy(coupled_vie2, pair, quadrature):
         time_step=0.02, coll_divs=3, coll_choices=[0, 1, 2, 3],
     )
     soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (5e-7 if quadrature == "product" else 5e-5)
 
 
 def test_make_coupled_vie2_reproduces_handwritten(coupled_vie2):
@@ -130,7 +129,7 @@ def test_vie2_return_function_callable_and_list_semantics(vie2_data, quadrature)
     assert len(sol) == len(sol.polynomials)
     assert list(sol) == sol.polynomials
     # Callable agrees with the array solution at the final node.
-    assert sol(d["time_step"] * (len(soln) - 1)) == pytest.approx(soln[-1], abs=TOLERANCE)
+    assert sol(d["time_step"] * (len(soln) - 1)) == pytest.approx(soln[-1], abs=1e-3)
 
 
 # ---------------------------------------------------------------------------

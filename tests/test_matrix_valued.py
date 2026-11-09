@@ -7,7 +7,6 @@ independently using the vector-valued interface.
 import numpy as np
 import pytest
 from voles import solve_vie1, solve_vie2, solve_vide
-from conftest import TOLERANCE
 from conftest import with_sol
 
 
@@ -75,7 +74,7 @@ class TestVIE2Matrix:
 
     def test_accuracy(self, quadrature):
         soln = solve_vie2(kernel=self.kernel, g=self.g_matrix, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (1e-6 if quadrature == "product" else 5e-4)
 
     def test_matches_independent_columns(self, quadrature):
         soln = solve_vie2(kernel=self.kernel, g=self.g_matrix, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
@@ -139,7 +138,7 @@ class TestVIE1Matrix:
 
     def test_accuracy(self, quadrature):
         soln = solve_vie1(kernel=self.kernel, g=self.g_matrix, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (5e-5 if quadrature == "product" else 5e-4)
 
     def test_matches_independent_columns(self, quadrature):
         soln = solve_vie1(kernel=self.kernel, g=self.g_matrix, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
@@ -208,7 +207,7 @@ class TestVIDEMatrix:
 
     def test_accuracy(self, quadrature):
         soln = solve_vide(kernel=self.kernel, a=self.a_values, g=self.g_matrix, y0=self.soln_init, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
-        assert np.max(np.abs(soln - self.exact)) < TOLERANCE
+        assert np.max(np.abs(soln - self.exact)) < (5e-7 if quadrature == "product" else 2e-5)
 
     def test_matches_independent_columns(self, quadrature):
         soln = solve_vide(kernel=self.kernel, a=self.a_values, g=self.g_matrix, y0=self.soln_init, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
@@ -238,7 +237,7 @@ class TestVIDEMatrix:
         assert soln.shape == (num_pts, 2, 2)
         # y should be constant = init for each column
         for j in range(2):
-            assert np.max(np.abs(soln[:, :, j] - init[:, j])) < TOLERANCE
+            assert np.max(np.abs(soln[:, :, j] - init[:, j])) < 1e-12
 
 
 # ---------------------------------------------------------------------------
@@ -278,7 +277,7 @@ class TestVectorReturnPolys:
         for n, poly_arr in enumerate(polys):
             t_mid = (n + 0.5) * h
             for r in range(2):
-                assert abs(poly_arr[r](t_mid) - np.sin(t_mid)) < TOLERANCE
+                assert abs(poly_arr[r](t_mid) - np.sin(t_mid)) < 5e-4
 
     def test_vie1_vec_return_polys_shape(self, quadrature):
         # VIE-1: K(s)=exp(s)*I₂, g=sin(t), exact y=cos(t)-sin(t)

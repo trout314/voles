@@ -44,7 +44,7 @@ pytest tests/test_vie1.py -v  # single test file
 pytest tests/ -k "test_name"  # single test by name
 ```
 
-Test tolerance is `1e-3`. No linter/formatter is configured. pytest runs with `filterwarnings = ["error"]`.
+Tolerances are set per assertion: about `1e-12` where the result should be exact to rounding, and a few times the measured error (per quadrature) where it is real discretization error. No linter/formatter is configured. pytest runs with `filterwarnings = ["error"]`.
 
 Docstring Examples are doctested by `tests/test_docstring_examples.py` (print rounded values); the docs' code blocks run with `pytest --markdown-docs docs/ README.md`. User guide pages live in `docs/guide/`.
 
