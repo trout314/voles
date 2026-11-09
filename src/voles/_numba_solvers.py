@@ -4,6 +4,57 @@ from numba import jit
 
 ncjit = jit(nopython=True, cache=True)
 
+# The D extension's singularity test (volterra_solvers.d): a pivot no larger
+# than dim * eps * max(largest pivot so far, pivot_scale) is singular.
+# Second-kind systems I - B pass IDENTITY_PIVOT_SCALE, which stands for the
+# identity's unit scale that cancellation can remove; first-kind systems pass 0.
+# np.linalg.solve only reports exactly singular matrices.
+IDENTITY_PIVOT_SCALE = 16.0
+_EPS = np.finfo(np.float64).eps
+
+
+@ncjit
+def _checked_solve(A, b, pivot_scale):
+    """Solve A x = b by LU with partial pivoting, raising LinAlgError on a
+    singular or nearly singular A (the D extension's test)."""
+    n = A.shape[0]
+    LU = A.copy()
+    x = b.copy()
+    max_pivot = 0.0
+    for k in range(n):
+        r = k
+        max_val = abs(LU[k, k])
+        for i in range(k + 1, n):
+            if abs(LU[i, k]) > max_val:
+                max_val = abs(LU[i, k])
+                r = i
+        if r != k:
+            for j in range(n):
+                tmp = LU[k, j]
+                LU[k, j] = LU[r, j]
+                LU[r, j] = tmp
+            tmp = x[k]
+            x[k] = x[r]
+            x[r] = tmp
+        max_pivot = max(max_pivot, max_val)
+        if max_val <= n * _EPS * max(max_pivot, pivot_scale):
+            raise np.linalg.LinAlgError(
+                "numba fallback: singular or nearly singular coefficient matrix")
+        for i in range(k + 1, n):
+            m = LU[i, k] / LU[k, k]
+            LU[i, k] = m
+            for j in range(k + 1, n):
+                LU[i, j] -= m * LU[k, j]
+    for i in range(1, n):
+        for j in range(i):
+            x[i] -= LU[i, j] * x[j]
+    for i in range(n - 1, -1, -1):
+        for j in range(i + 1, n):
+            x[i] -= LU[i, j] * x[j]
+        x[i] /= LU[i, i]
+    return x
+
+
 @ncjit
 def _poly_mul_linear(coefs, root):
     """Multiply polynomial (coefficients stored lowest-power-first) by (x - root)."""
@@ -369,7 +420,7 @@ def solve_vide_jit(g_values, kernel_values, a_values, soln_init_value, time_step
         coef_matrix = np.identity(num_coll_params)  \
                         - dt*(An(n, a_values, coll_info) \
                     + dt*CN(kernel_values, coll_info))
-        solution_Y[n] = np.linalg.solve(coef_matrix, rhs_vector)
+        solution_Y[n] = _checked_solve(coef_matrix, rhs_vector, IDENTITY_PIVOT_SCALE)
         boundary_vals[n+1] = poly_piece_vide_f(1.0, n, solution_Y, coll_info, boundary_vals[n], dt)
 
     soln_values = np.zeros_like(g_values)
@@ -409,7 +460,7 @@ def solve_vie1_jit(g_values, kernel_values, soln_init_value, time_step, coll_div
         for n in range(mesh_divs):
             rhs_vector = g(n, g_values, coll_info) - G(n, solution_U, kernel_values, coll_info, dt)
             coef_matrix = dt*BN(kernel_values, coll_info)
-            solution_U[n] = np.linalg.solve(coef_matrix, rhs_vector)
+            solution_U[n] = _checked_solve(coef_matrix, rhs_vector, 0.0)
     else:
         boundary_vals = np.zeros((num_mesh_points))
         boundary_vals[0] = soln_init_value
@@ -425,7 +476,7 @@ def solve_vie1_jit(g_values, kernel_values, soln_init_value, time_step, coll_div
             rhs_vector = g(n, g_values, coll_info) \
                 - G_cont(n, solution_U, boundary_vals, kernel_values, coll_info, b_hat, dt) \
                 - boundary_column*boundary_vals[n]
-            solution_U[n] = np.linalg.solve(coef_matrix, rhs_vector)
+            solution_U[n] = _checked_solve(coef_matrix, rhs_vector, 0.0)
             # c_m = 1, so the trial polynomial's value at the right endpoint is
             # the last collocation unknown itself.
             boundary_vals[n+1] = solution_U[n, -1]
@@ -470,7 +521,7 @@ def solve_vie2_jit(g_values, kernel_values, time_step, coll_divs,
     for n in range(mesh_divs):
         coef_matrix = np.identity(num_coll_params) - dt * BN(kernel_values, coll_info)
         rhs_vector = g(n, g_values, coll_info) + G(n, solution_U, kernel_values, coll_info, dt)
-        solution_U[n] = np.linalg.solve(coef_matrix, rhs_vector)
+        solution_U[n] = _checked_solve(coef_matrix, rhs_vector, IDENTITY_PIVOT_SCALE)
 
     soln_values = np.zeros_like(g_values)
 

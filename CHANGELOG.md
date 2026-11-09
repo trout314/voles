@@ -13,6 +13,9 @@
   `I - B` is numerically singular. A pivot cancelled to rounding level with
   nothing larger left in the matrix went undetected, and the solve returned
   values around `1e125` without an error.
+- The Numba fallback (collocation settings not compiled into the extension)
+  applies the same singularity test. It used `np.linalg.solve`, which reports
+  only exactly singular systems.
 
 ## [1.0.0] - 2026-11-01
 
