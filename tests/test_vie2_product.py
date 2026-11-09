@@ -180,10 +180,10 @@ def test_vector_matrix_and_return_function():
     assert vals.shape == (N, 2, 3)
     s0 = run(solve_vie2, show_warnings=False, kernel=K1, g=2 * g1, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
     s1 = run(solve_vie2, show_warnings=False, kernel=0.5 * K1, g=-g1, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
-    assert np.allclose(vals[:, 0, 1], s0, atol=1e-11)
-    assert np.allclose(vals[:, 1, 1], s1, atol=1e-11)
+    assert np.allclose(vals[:, 0, 1], s0, atol=1e-11, rtol=0)
+    assert np.allclose(vals[:, 1, 1], s1, atol=1e-11, rtol=0)
     interior = np.array([i for i in range(N) if i % q != 0], dtype=int)
-    assert np.allclose(sol(t[interior]), vals[interior], atol=1e-10)
+    assert np.allclose(sol(t[interior]), vals[interior], atol=1e-10, rtol=0)
     assert len(sol) == (N - 1) // q
 
 
@@ -253,8 +253,8 @@ def test_blocks_are_transformed_in_place_without_a_second_copy():
     t, K, g, _ = cos_problem(dt, N)
     s1 = _product.ProductSetup("vie1", K, dt, q, [1, 2], Q, 2)
     s2 = _product.ProductSetup("vie2", K, dt, q, [1, 2], Q, 2)
-    assert np.allclose(s2.lagB[1:], -s1.lagB[1:])
-    assert np.allclose(s2.lagB[0], np.eye(2) - s1.lagB[0])
+    assert np.allclose(s2.lagB[1:], -s1.lagB[1:], rtol=0, atol=1e-14)
+    assert np.allclose(s2.lagB[0], np.eye(2) - s1.lagB[0], rtol=0, atol=1e-14)
 
 
 def test_linalg_error_names_the_second_kind_solver(monkeypatch):

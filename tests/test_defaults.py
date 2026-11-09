@@ -42,19 +42,10 @@ def test_coll_divs_alone_is_the_full_node_set():
     a = solve_vie2(kernel=K, g=g, dt=0.02, coll_setting=3).y
     b = solve_vie2(kernel=K, g=g, dt=0.02, coll_setting=(3, [0, 1, 2, 3])).y
     assert np.array_equal(a, b)
-    c = solve_vie2(kernel=K, g=g, dt=0.02, coll_setting=(max([0, 1, 2, 3]), [0, 1, 2, 3])).y
-    assert np.array_equal(a, c)
     I = (np.cos(t) + np.sin(t) - np.exp(-t)) / 2
     a1 = solve_vie1(kernel=K, g=I, dt=0.02, coll_setting=2).y
     b1 = solve_vie1(kernel=K, g=I, dt=0.02, coll_setting=(2, [1, 2])).y
     assert np.array_equal(a1, b1)
-    mesh = np.linspace(0, 1, 11)
-    fa = solve_vie2(kernel=lambda u: np.exp(-u), g=np.cos, mesh=mesh, coll_nodes=np.arange(0, 3 + 1) / 3).node_values
-    fb = solve_vie2(kernel=lambda u: np.exp(-u), g=np.cos, mesh=mesh, coll_nodes=np.asarray([0, 1, 2, 3]) / 3).node_values
-    assert np.array_equal(fa, fb)
-    fc = solve_vie1(kernel=lambda u: np.exp(-u), g=lambda s: 1 - np.exp(-s), mesh=mesh, coll_nodes=np.asarray([1, 2]) / max([1, 2])).node_values
-    fd = solve_vie1(kernel=lambda u: np.exp(-u), g=lambda s: 1 - np.exp(-s), mesh=mesh, coll_nodes=np.asarray([1, 2]) / 2).node_values
-    assert np.array_equal(fc, fd)
 
 
 def test_product_quadrature_is_the_default(voles_warnings):

@@ -163,8 +163,8 @@ def test_nan_input_is_rejected(solver, which):
 # Singular coefficient matrix raises numpy.linalg.LinAlgError.
 #
 # VIE-1's coefficient matrix is dt * BN_vec(kernel); a zero kernel makes it
-# the zero matrix, which is singular. d=9 exercises the runtime LU path;
-# d=1 (scalar) and d=2 exercise the compile-time path, whose lin_solve used
+# the zero matrix, which is singular. Under quadrature="collocation", d=9
+# exercises the runtime LU path; scalar and d=2 exercise the compile-time path, whose lin_solve used
 # to abort the whole process via a D assert escaping extern(C) rather than
 # reporting failure (regression tests below).
 # ---------------------------------------------------------------------------

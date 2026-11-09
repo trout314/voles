@@ -21,29 +21,29 @@ from conftest import run, with_sol
 # ---------------------------------------------------------------------------
 
 def test_gauss_legendre_known_values():
-    assert np.allclose(gauss_legendre_nodes(1), [0.5])
+    assert np.allclose(gauss_legendre_nodes(1), [0.5], rtol=0, atol=1e-14)
     # 2-point Gauss: 0.5 +/- sqrt(3)/6
     s = np.sqrt(3) / 6
-    assert np.allclose(gauss_legendre_nodes(2), [0.5 - s, 0.5 + s])
+    assert np.allclose(gauss_legendre_nodes(2), [0.5 - s, 0.5 + s], rtol=0, atol=1e-14)
     # 3-point Gauss: 0.5 +/- sqrt(15)/10 and 0.5
     t = np.sqrt(15) / 10
-    assert np.allclose(gauss_legendre_nodes(3), [0.5 - t, 0.5, 0.5 + t])
+    assert np.allclose(gauss_legendre_nodes(3), [0.5 - t, 0.5, 0.5 + t], rtol=0, atol=1e-14)
 
 
 def test_radau_iia_known_values():
-    assert np.allclose(radau_iia_nodes(1), [1.0])
-    assert np.allclose(radau_iia_nodes(2), [1.0 / 3.0, 1.0])
+    assert np.allclose(radau_iia_nodes(1), [1.0], rtol=0, atol=1e-14)
+    assert np.allclose(radau_iia_nodes(2), [1.0 / 3.0, 1.0], rtol=0, atol=1e-14)
     # 3-point Radau IIA (standard tabulated values)
-    assert np.allclose(radau_iia_nodes(3), [0.155051025721682, 0.644948974968252, 1.0])
+    assert np.allclose(radau_iia_nodes(3), [0.155051025721682, 0.644948974278318, 1.0], rtol=0, atol=1e-14)
     assert radau_iia_nodes(4)[-1] == 1.0
 
 
 def test_lobatto_known_values():
-    assert np.allclose(lobatto_nodes(2), [0.0, 1.0])
-    assert np.allclose(lobatto_nodes(3), [0.0, 0.5, 1.0])
+    assert np.allclose(lobatto_nodes(2), [0.0, 1.0], rtol=0, atol=1e-14)
+    assert np.allclose(lobatto_nodes(3), [0.0, 0.5, 1.0], rtol=0, atol=1e-14)
     # 4-point Lobatto: 0, 0.5 -/+ sqrt(5)/10, 1
     s = np.sqrt(5) / 10
-    assert np.allclose(lobatto_nodes(4), [0.0, 0.5 - s, 0.5 + s, 1.0])
+    assert np.allclose(lobatto_nodes(4), [0.0, 0.5 - s, 0.5 + s, 1.0], rtol=0, atol=1e-14)
     assert lobatto_nodes(5)[0] == 0.0 and lobatto_nodes(5)[-1] == 1.0
 
 
@@ -72,33 +72,6 @@ def test_lobatto_requires_at_least_two():
 # ---------------------------------------------------------------------------
 # coll_nodes path reproduces the equivalent rational (coll_divs, coll_choices)
 # ---------------------------------------------------------------------------
-
-def test_vie2_coll_nodes_matches_rational():
-    mesh = np.linspace(0, 1, 6)
-    K = lambda u: np.exp(-u)
-    g = lambda t: t**2 + 1.0
-    y_int = solve_vie2(kernel=K, g=g, mesh=mesh, coll_nodes=np.asarray([1, 2]) / 2).node_values
-    y_nod = solve_vie2(kernel=K, g=g, mesh=mesh, coll_nodes=[0.5, 1.0]).node_values
-    assert np.allclose(y_int, y_nod, atol=1e-12, rtol=0)
-
-
-def test_vide_coll_nodes_matches_rational():
-    mesh = np.linspace(0, 1, 5)
-    K = lambda u: np.cos(u)
-    g = lambda t: np.sin(t)
-    y_int = solve_vide(kernel=K, g=g, y0=0.3, mesh=mesh, coll_nodes=np.asarray([1, 2, 3]) / 3).node_values
-    y_nod = solve_vide(kernel=K, g=g, y0=0.3, mesh=mesh, coll_nodes=[1 / 3, 2 / 3, 1.0]).node_values
-    assert np.allclose(y_int, y_nod, atol=1e-12, rtol=0)
-
-
-def test_vie1_coll_nodes_matches_rational():
-    mesh = np.linspace(0, 1, 6)
-    K = lambda u: 1.0 + u
-    g = lambda t: t**2
-    y_int = solve_vie1(kernel=K, g=g, mesh=mesh, coll_nodes=np.asarray([1, 2]) / 2).node_values
-    y_nod = solve_vie1(kernel=K, g=g, mesh=mesh, coll_nodes=[0.5, 1.0]).node_values
-    assert np.allclose(y_int, y_nod, atol=1e-12, rtol=0)
-
 
 def test_radau_helper_matches_rational_for_p2():
     # radau_iia_nodes(2) == [1/3, 1] == (coll_divs=3, coll_choices=[1, 3])

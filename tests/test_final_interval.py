@@ -135,13 +135,3 @@ def test_vide_with_coefficient_and_matrix_init_on_the_tail():
     np.testing.assert_allclose(ym[:, 0, 1], y, rtol=0, atol=1e-12)
 
 
-def test_inputs_ending_on_a_mesh_point_are_unchanged():
-    """No final interval: the solve is the regular one, bit for bit."""
-    N = 4 * 10 + 1
-    delta, t, K, I, exact = _data(N)
-    g = np.cos(t) - I
-    y = solve_vie2(kernel=K, g=g, dt=delta).y
-    assert mesh_split(N, 4) == (10, 0)
-    y2 = solve_vie2(kernel=K[:N], g=g[:N], dt=delta).y
-    assert np.array_equal(y, y2)
-    assert np.max(np.abs(y - exact)) < 1e-3

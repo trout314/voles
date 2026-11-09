@@ -30,6 +30,9 @@ from conftest import (TOLERANCE, make_coupled_data_nd,
                       as_array)
 from conftest import run, with_sol
 
+# Accuracy bounds in this file are a few times the measured discretization
+# error of each scheme, which is what lets them notice a wrong history sum.
+
 # mesh_divs for the scalar FFT-path tests; must be well above FFT_CUTOFF = 32.
 FFT_BLOCKS = 80
 
@@ -51,7 +54,7 @@ def test_vie1_fft_path_accuracy(quadrature):
     d = as_array(VIE1_SPEC_DAMPED, time_step=0.01, coll_divs=3,
                  coll_choices=[1, 2, 3], num_blocks=FFT_BLOCKS)
     soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (6e-5 if quadrature == "product" else 4e-4)
 
 
 def test_vie1_fft_path_force_continuous_accuracy(quadrature):
@@ -60,21 +63,21 @@ def test_vie1_fft_path_force_continuous_accuracy(quadrature):
     d = as_array(VIE1_SPEC_DAMPED, time_step=0.01, coll_divs=3,
                  coll_choices=[1, 2, 3], num_blocks=FFT_BLOCKS)
     soln = solve_vie1(kernel=d["kernel"], g=d["g"], y0=d["exact"][0], continuous=True, dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (1.5e-5 if quadrature == "product" else 1e-5)
 
 
 def test_vie2_fft_path_accuracy(quadrature):
     d = as_array(VIE2_SPEC_SMOOTH, time_step=0.02, coll_divs=3,
                  coll_choices=[0, 1, 2, 3], num_blocks=FFT_BLOCKS)
     soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (2e-8 if quadrature == "product" else 8e-6)
 
 
 def test_vide_fft_path_accuracy(quadrature):
     d = as_array(VIDE_SPEC_SMOOTH, time_step=0.01, coll_divs=3,
                  coll_choices=[1, 2, 3], num_blocks=FFT_BLOCKS)
     soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (5e-5 if quadrature == "product" else TOLERANCE)
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +93,7 @@ def test_vie2_vec_fft_path_accuracy(quadrature):
         time_step=0.005, coll_divs=3, coll_choices=[0, 1, 2, 3],
         num_blocks=FFT_BLOCKS)
     soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (7e-9 if quadrature == "product" else 6e-7)
 
 
 def test_vide_vec_fft_path_accuracy(quadrature):
@@ -100,7 +103,7 @@ def test_vide_vec_fft_path_accuracy(quadrature):
         time_step=0.005, coll_divs=3, coll_choices=[1, 2, 3],
         num_blocks=FFT_BLOCKS)
     soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (2.5e-5 if quadrature == "product" else 5e-4)
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +117,7 @@ def test_vie1_runtime_d10_accuracy(quadrature):
         specs, coupling_matrix(10),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=40)
     soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (7e-5 if quadrature == "product" else 4e-4)
 
 
 def test_vie2_runtime_d10_accuracy(quadrature):
@@ -124,7 +127,7 @@ def test_vie2_runtime_d10_accuracy(quadrature):
         specs, coupling_matrix(10),
         time_step=0.01, coll_divs=3, coll_choices=[0, 1, 2, 3], num_blocks=40)
     soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (5e-7 if quadrature == "product" else 1.5e-4)
 
 
 def test_vide_runtime_d10_accuracy(quadrature):
@@ -134,7 +137,7 @@ def test_vide_runtime_d10_accuracy(quadrature):
         specs, coupling_matrix(10),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=40)
     soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    assert np.max(np.abs(soln - d["exact"])) < (2e-4 if quadrature == "product" else TOLERANCE)
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +253,7 @@ def _vie2_soln_at_blocks(num_blocks, scheme, coll_divs=2, coll_choices=[0, 1, 2]
 def test_fft_cutoff_boundary_accuracy(scheme):
     for num_blocks in (63, 64, 65):
         soln, d = _vie2_soln_at_blocks(num_blocks, scheme)
-        assert np.max(np.abs(soln - d["exact"])) < 1e-5
+        assert np.max(np.abs(soln - d["exact"])) < 2e-7
 
 
 @same_mesh
@@ -302,4 +305,4 @@ def test_vie2_largest_compiled_setting_accuracy(quadrature):
     d = as_array(VIE2_SPEC_SMOOTH, time_step=0.002, coll_divs=4,
                  coll_choices=[0, 1, 2, 3, 4], num_blocks=10)
     soln = run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < 1e-6
+    assert np.max(np.abs(soln - d["exact"])) < 1e-11

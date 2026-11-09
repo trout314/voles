@@ -182,12 +182,12 @@ def test_vector_matrix_and_return_function():
     vals, sol = with_sol(run(solve_vide, show_warnings=False, kernel=K, a=A, g=G, y0=Y0, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product"))
     assert vals.shape == (N, 2, 3)
     for j in range(3):
-        assert np.allclose(vals[:, 0, j], (j + 1) * y1, atol=1e-6)
-        assert np.allclose(vals[:, 1, j], y1, atol=1e-6)
-    assert np.allclose(sol(t), vals, atol=1e-10)
+        assert np.allclose(vals[:, 0, j], (j + 1) * y1, atol=(j + 1) * 1e-6, rtol=0)
+        assert np.allclose(vals[:, 1, j], y1, atol=1e-6, rtol=0)
+    assert np.allclose(sol(t), vals, atol=1e-10, rtol=0)
     assert len(sol) == (N - 1) // q
     single, s1 = with_sol(run(solve_vide, show_warnings=False, kernel=K1, a=a1, g=g1, y0=1.0, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product"))
-    assert np.allclose(single, y1, atol=1e-6)
+    assert np.allclose(single, y1, atol=1e-6, rtol=0)
     assert abs(s1(0.0) - 1.0) < 1e-12
 
 
@@ -197,8 +197,8 @@ def test_complex_passthrough():
     t, K, a, g, y = exp_problem(dt, N)
     vals = run(solve_vide, show_warnings=False, kernel=K.astype(complex), a=a, g=g, y0=1.0 + 0j, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
     assert np.iscomplexobj(vals)
-    assert np.allclose(vals.real, y, atol=1e-6)
-    assert np.allclose(vals.imag, 0.0, atol=1e-10)
+    assert np.allclose(vals.real, y, atol=1e-6, rtol=0)
+    assert np.allclose(vals.imag, 0.0, atol=1e-10, rtol=0)
 
 
 def test_validation():

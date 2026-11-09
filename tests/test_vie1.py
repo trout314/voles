@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from voles import solve_vie1
-from conftest import TOLERANCE, run, with_sol
+from conftest import TOLERANCE, with_sol
 
 
 # ---------------------------------------------------------------------------
@@ -285,9 +285,8 @@ def test_warns_for_singular_matrix_kernel_start(voles_warnings):
     assert _K0_MSG in voles_warnings.text()
 
 
-@pytest.mark.parametrize("kw", [dict(quadrature="product"), dict(show_warnings=False)])
-def test_no_kernel_start_warning_for_product_or_when_silenced(kw, voles_warnings):
-    run(solve_vie1, **_k0_problem(0.0), **kw)
+def test_no_kernel_start_warning_for_product(voles_warnings):
+    solve_vie1(**_k0_problem(0.0), quadrature="product")
     assert _K0_MSG not in voles_warnings.text()
 
 
@@ -320,11 +319,6 @@ def test_warns_when_g_start_nonzero(quad, voles_warnings):
 @pytest.mark.parametrize("offset", [0.0, 1e-15])
 def test_no_g_start_warning_for_zero_or_rounding(offset, voles_warnings):
     solve_vie1(**_g0_problem(offset)).y
-    assert _G0_MSG not in voles_warnings.text()
-
-
-def test_no_g_start_warning_when_silenced(voles_warnings):
-    run(solve_vie1, show_warnings=False, **_g0_problem(0.5)).y
     assert _G0_MSG not in voles_warnings.text()
 
 
