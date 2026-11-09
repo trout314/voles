@@ -9,8 +9,10 @@ exactly the results of single-threaded solves.
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
+import pytest
+from voles._common import _column_workers
 from voles import solve_vide, solve_vie1, solve_vie2
-from conftest import (TOLERANCE, make_coupled_data_nd,
+from conftest import (make_coupled_data_nd,
                       VIE2_SPEC_SMOOTH, VIE2_SPEC_RATIONAL)
 from conftest import run
 
@@ -43,7 +45,7 @@ def test_matrix_fanout_matches_serial_columns():
                            for j in range(g_mat.shape[2])], axis=-1)
         for _ in range(5):
             assert np.array_equal(_solve(d, g_mat, quad), serial)
-    assert np.max(np.abs(serial - exact_mat)) < TOLERANCE
+    assert np.max(np.abs(serial - exact_mat)) < 5e-8
 
 
 def test_independent_solves_from_user_threads():
@@ -87,3 +89,9 @@ def test_product_block_drivers_on_fresh_threads():
     for _ in range(8):
         for c, f in zip(calls, first):
             assert np.array_equal(c(), f)
+
+
+@pytest.mark.parametrize("cpus, columns, workers", [(8, 3, 3), (2, 3, 2), (None, 3, 1)])
+def test_column_workers_is_capped_by_the_core_count(monkeypatch, cpus, columns, workers):
+    monkeypatch.setattr("voles._common.os.cpu_count", lambda: cpus)
+    assert _column_workers(columns) == workers

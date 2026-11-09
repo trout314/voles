@@ -239,11 +239,6 @@ def test_signature_is_keyword_only_without_private_parameters(fn):
         fn(K, G)
 
 
-def test_public_names():
-    for name in ("solve_vie1", "solve_vie2", "solve_vide", "VolterraSolution"):
-        assert name in voles.__all__
-
-
 # ------------------------------------------------------------------- warnings
 
 def _recorded(call, **kw):
@@ -298,3 +293,30 @@ def test_numba_fallback_warns():
     except NotImplementedError:
         pytest.skip("numba not available")
     assert any(issubclass(w.category, PerformanceWarning) for w in rec)
+
+
+# ---------------------------------------------------------------- uncovered errors
+
+UNCOMPILED = dict(kernel=np.ones(51), g=np.ones(51), quadrature="collocation", coll_setting=5)
+
+
+def test_uncompiled_setting_without_numba_says_what_to_do(monkeypatch):
+    monkeypatch.setattr("voles._sampled._numba_available", False)
+    with pytest.raises(NotImplementedError, match=r"pip install numba.*quadrature='product'"):
+        solve_vie2(**UNCOMPILED)
+
+
+def test_uncompiled_setting_for_a_complex_problem_is_refused():
+    with pytest.raises(NotImplementedError, match="not compiled"):
+        solve_vie2(**{**UNCOMPILED, "g": np.ones(51) * (1 + 1j)})
+
+
+@pytest.mark.parametrize("solve, g", [(solve_vie1, None), (solve_vie2, None)],
+                         ids=["vie1", "vie2"])
+def test_sampled_no_forcing_gives_the_zero_solution(solve, g):
+    assert np.array_equal(solve(kernel=K, g=g, dt=DT).y, np.zeros(N))
+
+
+def test_continuous_even_divs_warns_about_reduced_order():
+    with pytest.warns(AccuracyWarning, match="rho = 1"):
+        v1(coll_setting=2, continuous=True, y0=0.0)

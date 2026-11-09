@@ -42,19 +42,10 @@ def test_coll_divs_alone_is_the_full_node_set():
     a = solve_vie2(kernel=K, g=g, dt=0.02, coll_setting=3).y
     b = solve_vie2(kernel=K, g=g, dt=0.02, coll_setting=(3, [0, 1, 2, 3])).y
     assert np.array_equal(a, b)
-    c = solve_vie2(kernel=K, g=g, dt=0.02, coll_setting=(max([0, 1, 2, 3]), [0, 1, 2, 3])).y
-    assert np.array_equal(a, c)
     I = (np.cos(t) + np.sin(t) - np.exp(-t)) / 2
     a1 = solve_vie1(kernel=K, g=I, dt=0.02, coll_setting=2).y
     b1 = solve_vie1(kernel=K, g=I, dt=0.02, coll_setting=(2, [1, 2])).y
     assert np.array_equal(a1, b1)
-    mesh = np.linspace(0, 1, 11)
-    fa = solve_vie2(kernel=lambda u: np.exp(-u), g=np.cos, mesh=mesh, coll_nodes=np.arange(0, 3 + 1) / 3).node_values
-    fb = solve_vie2(kernel=lambda u: np.exp(-u), g=np.cos, mesh=mesh, coll_nodes=np.asarray([0, 1, 2, 3]) / 3).node_values
-    assert np.array_equal(fa, fb)
-    fc = solve_vie1(kernel=lambda u: np.exp(-u), g=lambda s: 1 - np.exp(-s), mesh=mesh, coll_nodes=np.asarray([1, 2]) / max([1, 2])).node_values
-    fd = solve_vie1(kernel=lambda u: np.exp(-u), g=lambda s: 1 - np.exp(-s), mesh=mesh, coll_nodes=np.asarray([1, 2]) / 2).node_values
-    assert np.array_equal(fc, fd)
 
 
 def test_product_quadrature_is_the_default(voles_warnings):
@@ -65,7 +56,7 @@ def test_product_quadrature_is_the_default(voles_warnings):
     a = solve_vie2(**kw).y
     assert "falling back" not in voles_warnings.text()
     assert np.array_equal(a, solve_vie2(quadrature="product", **kw).y)
-    assert np.max(np.abs(a - y)) < 1e-8
+    assert np.max(np.abs(a - y)) < 5e-12
 
 
 def test_first_kind_default_mesh_is_coll_divs_squared():
@@ -91,4 +82,4 @@ def test_adaptive_block_reuse_is_the_default():
     y = solve_vie2(**kw).node_values
     assert np.array_equal(y, solve_vie2(reuse_adaptive_blocks=True, **kw).node_values)
     y_rows = solve_vie2(reuse_adaptive_blocks=False, **kw).node_values
-    assert np.max(np.abs(y - y_rows)) < 1e-7                              # within the quadrature tolerance
+    assert np.max(np.abs(y - y_rows)) < 2e-8                              # within the quadrature tolerance

@@ -257,6 +257,13 @@ class VolterraSolution:
         state["_t"] = None               # rebuilt on demand
         return state
 
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # numpy doesn't keep the read-only flag through pickle or deepcopy
+        for name in ("_coef", "_mesh", "_local_nodes", "_node_times", "_nodes", "_node_values"):
+            if state.get(name) is not None:
+                state[name].setflags(write=False)
+
     # ------------------------------------------------------------ attributes
 
     @property

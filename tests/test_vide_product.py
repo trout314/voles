@@ -59,7 +59,7 @@ def test_polynomial_kernel_matches_exact_collocation(coll_divs, choices, Q_facto
     vals = run(solve_vide, show_warnings=False, kernel=kernel(t), a=a(t), g=g(t), y0=y0, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p).y
     mesh = np.arange(N // Q + 1) * (Q * dt)
     _, ref = with_sol(solve_vide(kernel=kernel, a=a, g=g, y0=y0, mesh=mesh, coll_nodes=np.asarray(choices) / coll_divs))
-    assert np.max(np.abs(vals - ref(t))) < 1e-8
+    assert np.max(np.abs(vals - ref(t))) < 1e-12
 
 
 def test_polynomial_kernel_matches_exact_collocation_vector():
@@ -79,7 +79,7 @@ def test_polynomial_kernel_matches_exact_collocation_vector():
     vals = run(solve_vide, show_warnings=False, kernel=K, a=av, g=gv, y0=y0, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p).y
     mesh = np.arange(N // Q + 1) * (Q * dt)
     _, ref = with_sol(solve_vide(kernel=kernel, a=a, g=g, y0=y0, mesh=mesh, coll_nodes=np.asarray(choices) / coll_divs))
-    assert np.max(np.abs(vals - ref(t))) < 1e-8
+    assert np.max(np.abs(vals - ref(t))) < 1e-12
 
 
 @pytest.mark.parametrize("coll_divs,choices", SETTINGS)
@@ -92,11 +92,11 @@ def test_reproduces_polynomial_solutions(coll_divs, choices):
     # ODE limit K == 0 with a = 1/2: y' = a y + g
     g = m * t ** (m - 1) - 0.5 * y
     vals = run(solve_vide, show_warnings=False, kernel=np.zeros(N), a=0.5 * np.ones(N), g=g, y0=0.0, dt=dt, coll_setting=(coll_divs, choices), quadrature="product").y
-    assert np.max(np.abs(vals - y)) < 1e-9
+    assert np.max(np.abs(vals - y)) < 1e-12
     # K == 1, a == 0: y' = g + int_0^t y
     g = m * t ** (m - 1) - t ** (m + 1) / (m + 1)
     vals = run(solve_vide, show_warnings=False, kernel=np.ones(N), g=g, y0=0.0, dt=dt, coll_setting=(coll_divs, choices), quadrature="product").y
-    assert np.max(np.abs(vals - y)) < 1e-9
+    assert np.max(np.abs(vals - y)) < 1e-12
 
 
 def _max_err(dt, coll_divs, choices, T=12.0):
@@ -160,7 +160,7 @@ def test_extension_matches_numpy_reference():
                                        use_extension=True)
     z, _ = _product.solve_vide_product(K, a, g, dt, q, [0, 1, 2], Q, 3, 1.0, False,
                                        use_extension=False)
-    assert np.max(np.abs(x - z)) < 1e-11
+    assert np.max(np.abs(x - z)) < 1e-12
 
 
 def test_vector_matrix_and_return_function():
@@ -182,12 +182,12 @@ def test_vector_matrix_and_return_function():
     vals, sol = with_sol(run(solve_vide, show_warnings=False, kernel=K, a=A, g=G, y0=Y0, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product"))
     assert vals.shape == (N, 2, 3)
     for j in range(3):
-        assert np.allclose(vals[:, 0, j], (j + 1) * y1, atol=1e-6)
-        assert np.allclose(vals[:, 1, j], y1, atol=1e-6)
-    assert np.allclose(sol(t), vals, atol=1e-10)
+        assert np.allclose(vals[:, 0, j], (j + 1) * y1, atol=(j + 1) * 1e-6, rtol=0)
+        assert np.allclose(vals[:, 1, j], y1, atol=1e-6, rtol=0)
+    assert np.allclose(sol(t), vals, atol=1e-12, rtol=0)
     assert len(sol) == (N - 1) // q
     single, s1 = with_sol(run(solve_vide, show_warnings=False, kernel=K1, a=a1, g=g1, y0=1.0, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product"))
-    assert np.allclose(single, y1, atol=1e-6)
+    assert np.allclose(single, y1, atol=1e-6, rtol=0)
     assert abs(s1(0.0) - 1.0) < 1e-12
 
 
@@ -197,8 +197,8 @@ def test_complex_passthrough():
     t, K, a, g, y = exp_problem(dt, N)
     vals = run(solve_vide, show_warnings=False, kernel=K.astype(complex), a=a, g=g, y0=1.0 + 0j, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
     assert np.iscomplexobj(vals)
-    assert np.allclose(vals.real, y, atol=1e-6)
-    assert np.allclose(vals.imag, 0.0, atol=1e-10)
+    assert np.allclose(vals.real, y, atol=1e-6, rtol=0)
+    assert np.allclose(vals.imag, 0.0, atol=1e-12, rtol=0)
 
 
 def test_validation():

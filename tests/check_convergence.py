@@ -38,7 +38,7 @@ def _vie2_error(n_intervals, coll_divs, coll_choices, T):
     t = np.arange(N) * h
     kernel = np.exp(-t)
     g = np.sin(t) - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
-    soln = run(solve_vie2, show_warnings=False, kernel=kernel, g=g, dt=h, coll_setting=(coll_divs, coll_choices)).y
+    soln = run(solve_vie2, show_warnings=False, kernel=kernel, g=g, dt=h, quadrature="collocation", coll_setting=(coll_divs, coll_choices)).y
     return np.max(np.abs(soln - np.sin(t)))
 
 # Checked using Mathematica commands:
@@ -58,7 +58,7 @@ def _vide_error(n_intervals, coll_divs, coll_choices, T):
     g = (np.cos(t)
          - 0.5 * (np.exp(-t) + np.sin(t) - np.cos(t))
          - np.sin(t) / (1.0 + t**2))
-    soln = run(solve_vide, show_warnings=False, kernel=kernel, g=g, a=a, y0=0.0, dt=h, coll_setting=(coll_divs, coll_choices)).y
+    soln = run(solve_vide, show_warnings=False, kernel=kernel, g=g, a=a, y0=0.0, dt=h, quadrature="collocation", coll_setting=(coll_divs, coll_choices)).y
     return np.max(np.abs(soln - np.sin(t)))
 
 # Checked using Mathematica commands:
@@ -78,7 +78,7 @@ def _vie1_error(n_intervals, coll_divs, coll_choices, T):
     kernel = np.exp(t)
     g = np.sin(t)
     g[0] = 0.0
-    soln = run(solve_vie1, show_warnings=False, kernel=kernel, g=g, dt=h, coll_setting=(coll_divs, coll_choices)).y
+    soln = run(solve_vie1, show_warnings=False, kernel=kernel, g=g, dt=h, quadrature="collocation", coll_setting=(coll_divs, coll_choices)).y
     exact = np.cos(t) - np.sin(t)
     return np.max(np.abs(soln[1:] - exact[1:]))  # skip t=0
 
@@ -98,7 +98,7 @@ def check_convergence(error_fn, coll_divs, coll_choices,
                       T=1.0, n_base=10, n_levels=4):
     """Solve at n_base, 2*n_base, 4*n_base, ... mesh intervals.
 
-    Returns (converges, mean_order, errors).
+    Returns (converges, mean_order, errors, exception text or None).
     'converges' is True if every refinement strictly reduces the error.
     """
     errors = []

@@ -6,6 +6,7 @@ the same solve through the 0.10 API, for comparison. What is tested is the
 object itself: grid output, structure, evaluation, breakpoint conventions,
 to_ppoly and pickling.
 """
+import copy
 import pathlib
 import pickle
 import warnings
@@ -135,10 +136,6 @@ def test_not_constructible_directly():
         VolterraSolution()
 
 
-def test_is_public():
-    assert "VolterraSolution" in voles.__all__
-
-
 # ----------------------------------------------------------- grid output
 
 @pytest.mark.parametrize("which, key", ALL)
@@ -250,7 +247,7 @@ def test_breakpoints_are_matched_within_a_few_ulps():
         assert sol(b + k * np.spacing(b)) == exact
     off = b + 1e-9
     assert sol(off) != exact
-    assert abs(sol(off) - sol(b, at_breakpoints="right")) < 1e-7
+    assert abs(sol(off) - sol(b, at_breakpoints="right")) < 5e-8
 
 
 def test_endpoints_use_the_only_limit():
@@ -384,7 +381,58 @@ def test_pickle_round_trip(which, key):
                                                                 sol.coll_setting)
 
 
+@pytest.mark.parametrize("fill_caches", [False, True])
+@pytest.mark.parametrize("copier", [lambda s: pickle.loads(pickle.dumps(s)), copy.deepcopy],
+                         ids=["pickle", "deepcopy"])
+@pytest.mark.parametrize("which, key", [("s", "vie1"), ("s", "vie2-matrix"), ("f", "vide-gauss"),
+                                        ("f", "vie2-complex")])
+def test_copies_keep_the_read_only_contract(which, key, copier, fill_caches):
+    """Contract §8.2: the structure arrays and t are read-only, on a copy too
+    (numpy drops the flag when it pickles or deep-copies an array)."""
+    sol, _, _ = build(which, key)
+    if fill_caches:
+        _ = sol.t, sol.node_values
+    back = copier(sol)
+    for name in ("mesh", "coefficients", "nodes", "node_times", "node_values", "t"):
+        assert not getattr(back, name).flags.writeable, name
+    assert back.y.flags.writeable                      # y stays writable (§8.1)
+
+
 # ------------------------------------------------------------------ misc.
+
+@pytest.mark.parametrize("op", [len, iter, lambda s: s[0]], ids=["len", "iter", "index"])
+def test_solution_is_not_a_sequence(op):
+    """Contract section 8.4: evaluate it, don't treat it as a list of pieces."""
+    with pytest.raises(TypeError):
+        op(functional()[0])
+
+
+@pytest.mark.parametrize("which, key", ALL)
+def test_structure_arrays_are_read_only(which, key):
+    sol, _, _ = build(which, key)
+    for name in ("mesh", "coefficients", "nodes", "node_times", "node_values", "t"):
+        assert not getattr(sol, name).flags.writeable, name
+
+
+def test_solution_does_not_alias_the_callers_mesh():
+    mesh = np.linspace(0, 1, 9)
+    sol = voles.solve_vie2(kernel=lambda u: np.exp(-u), g=np.cos, mesh=mesh)
+    mesh[3] = 0.3
+    assert mesh.flags.writeable and sol.mesh[3] == 0.375
+
+
+@pytest.mark.parametrize("kw", [dict(cplx=True), dict(d=2)], ids=["complex", "vector"])
+def test_to_ppoly_derivative_and_integral_nonscalar(kw):
+    sol, _, _ = functional(kind="vide", **kw)
+    pp, c, bps = sol.to_ppoly(), sol.coefficients, sol.mesh
+    n, xl = 3, 0.4
+    h = bps[n + 1] - bps[n]
+    dref = sum(k * c[n, k] * xl ** (k - 1) for k in range(1, c.shape[1])) / h
+    np.testing.assert_allclose(pp.derivative()(bps[n] + xl * h), dref, rtol=1e-10, atol=1e-12)
+    iref = h * sum(c[n, k] / (k + 1) for k in range(c.shape[1]))
+    anti = pp.antiderivative()
+    np.testing.assert_allclose(anti(bps[n + 1]) - anti(bps[n]), iref, rtol=1e-10, atol=1e-12)
+
 
 def test_truthiness_does_not_warn():
     sol, _, _ = functional()

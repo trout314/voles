@@ -112,12 +112,12 @@ def test_vector_matrix_and_complex_agree_with_scalar_columns(quad):
     gv = np.stack([g, 2 * g], axis=1)
     yv = solve_vie2(kernel=Kv, g=gv, **kw).y
     np.testing.assert_allclose(yv[:, 0], ys, rtol=0, atol=1e-12)
-    np.testing.assert_allclose(yv[:, 1], 2 * ys, rtol=0, atol=1e-11)
+    np.testing.assert_allclose(yv[:, 1], 2 * ys, rtol=0, atol=1e-12)
     ym = solve_vie2(kernel=Kv, g=np.stack([gv, -gv], axis=2), **kw).y
     np.testing.assert_allclose(ym[:, :, 0], yv, rtol=0, atol=1e-12)
     np.testing.assert_allclose(ym[:, :, 1], -yv, rtol=0, atol=1e-12)
     yc = solve_vie2(kernel=K + 0j, g=g * (1 + 2j), **kw).y
-    np.testing.assert_allclose(yc, ys * (1 + 2j), rtol=0, atol=1e-11)
+    np.testing.assert_allclose(yc, ys * (1 + 2j), rtol=0, atol=1e-12)
 
 
 def test_vide_with_coefficient_and_matrix_init_on_the_tail():
@@ -129,19 +129,9 @@ def test_vide_with_coefficient_and_matrix_init_on_the_tail():
     g = -np.sin(t) - a * np.cos(t) - I                              # y' = a y + g + int K y
     kw = dict(dt=delta, coll_setting=(2, [0, 1, 2]))
     y = solve_vide(kernel=K, a=a, g=g, y0=1.0, **kw).y
-    assert np.max(np.abs(y - exact)) < 1e-5
+    assert np.max(np.abs(y - exact)) < 1e-6
     Kv = K[:, None, None] * np.eye(2)
     ym = solve_vide(kernel=Kv, a=a[:, None, None] * np.eye(2), g=np.stack([g, g], axis=1), y0=np.ones((2, 2)), **kw).y
     np.testing.assert_allclose(ym[:, 0, 1], y, rtol=0, atol=1e-12)
 
 
-def test_inputs_ending_on_a_mesh_point_are_unchanged():
-    """No final interval: the solve is the regular one, bit for bit."""
-    N = 4 * 10 + 1
-    delta, t, K, I, exact = _data(N)
-    g = np.cos(t) - I
-    y = solve_vie2(kernel=K, g=g, dt=delta).y
-    assert mesh_split(N, 4) == (10, 0)
-    y2 = solve_vie2(kernel=K[:N], g=g[:N], dt=delta).y
-    assert np.array_equal(y, y2)
-    assert np.max(np.abs(y - exact)) < 1e-3

@@ -2,20 +2,25 @@
 uniform-mesh optimization (PR #1) that the rest of the suite does not reach:
 
 1. The blocked-FFT merge in dlang/source/toeplitz_history.d engages only for
-   merge blocks of size S >= FFT_CUTOFF = 32, i.e. mesh_divs >= 33; every other
-   test stays far below that, so these tests solve at mesh_divs = 80 (several
-   FFT merges: S = 32 at boundaries 32 and 96-ish, S = 64 at 64) and compare
-   against analytic solutions.
+   merge blocks with S >= FFT_CUTOFF = 32 and output width >= 32, which first
+   happens at 64 mesh intervals. These tests solve at num_blocks = 80 and
+   compare against analytic solutions.
 
 2. The runtime-dimension (d > 8) drivers take a separate lag-block fill and
    LAPACK solve path. The d = 10 tests below are built from ten scalar specs
    with known solutions via the constant change of coordinates Z = P Y (see
-   conftest's coupled-fixture section) and are value-checked, with
-   mesh_divs = 40 so the runtime drivers also cross the FFT cutoff.
+   conftest's coupled-fixture section) and are value-checked; section 4 takes
+   the runtime drivers across the FFT cutoff.
+
+Every test runs under both quadratures: num_blocks is the number of collocation
+mesh intervals, and these drivers are reached only with
+quadrature="collocation". Under the default, product, voles uses the block
+drivers on a mesh of num_blocks * coll_divs intervals.
 """
 import numpy as np
+import pytest
 from voles import solve_vide, solve_vie1, solve_vie2
-from conftest import (TOLERANCE, make_coupled_data_nd,
+from conftest import (make_coupled_data_nd,
                       VIE1_SPEC_POLY_A, VIE1_SPEC_POLY_B, VIE1_SPEC_SMOOTH,
                       VIE1_SPEC_POLY, VIE1_SPEC_DAMPED,
                       VIE2_SPEC_SMOOTH, VIE2_SPEC_EXP, VIE2_SPEC_POLY,
@@ -24,6 +29,10 @@ from conftest import (TOLERANCE, make_coupled_data_nd,
                       VIDE_SPEC_ODE, VIDE_SPEC_LOG,
                       as_array)
 from conftest import run, with_sol
+from voles._sampled import _fast_settings_VIDE, _fast_settings_VIE_1, _fast_settings_VIE_2
+
+# Accuracy bounds in this file are a few times the measured discretization
+# error of each scheme, which is what lets them notice a wrong history sum.
 
 # mesh_divs for the scalar FFT-path tests; must be well above FFT_CUTOFF = 32.
 FFT_BLOCKS = 80
@@ -42,94 +51,94 @@ def coupling_matrix(d):
 # 1. Blocked-FFT history path (mesh_divs >= 33), scalar drivers
 # ---------------------------------------------------------------------------
 
-def test_vie1_fft_path_accuracy():
+def test_vie1_fft_path_accuracy(quadrature):
     d = as_array(VIE1_SPEC_DAMPED, time_step=0.01, coll_divs=3,
                  coll_choices=[1, 2, 3], num_blocks=FFT_BLOCKS)
-    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    assert np.max(np.abs(soln - d["exact"])) < (6e-5 if quadrature == "product" else 4e-4)
 
 
-def test_vie1_fft_path_force_continuous_accuracy():
+def test_vie1_fft_path_force_continuous_accuracy(quadrature):
     """The continuous VIE-1 driver is a separate D entry point with its own
     ToeplitzHistory instance; exercise its FFT path too."""
     d = as_array(VIE1_SPEC_DAMPED, time_step=0.01, coll_divs=3,
                  coll_choices=[1, 2, 3], num_blocks=FFT_BLOCKS)
-    soln = solve_vie1(kernel=d["kernel"], g=d["g"], y0=d["exact"][0], continuous=True, dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], y0=d["exact"][0], continuous=True, dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    assert np.max(np.abs(soln - d["exact"])) < (1.5e-5 if quadrature == "product" else 1e-5)
 
 
-def test_vie2_fft_path_accuracy():
+def test_vie2_fft_path_accuracy(quadrature):
     d = as_array(VIE2_SPEC_SMOOTH, time_step=0.02, coll_divs=3,
                  coll_choices=[0, 1, 2, 3], num_blocks=FFT_BLOCKS)
-    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    assert np.max(np.abs(soln - d["exact"])) < (2e-8 if quadrature == "product" else 8e-6)
 
 
-def test_vide_fft_path_accuracy():
+def test_vide_fft_path_accuracy(quadrature):
     d = as_array(VIDE_SPEC_SMOOTH, time_step=0.01, coll_divs=3,
                  coll_choices=[1, 2, 3], num_blocks=FFT_BLOCKS)
-    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    assert np.max(np.abs(soln - d["exact"])) < (5e-5 if quadrature == "product" else 1e-3)
 
 
 # ---------------------------------------------------------------------------
 # 1b. Blocked-FFT history path, compiled vector (d = 2) drivers
 # ---------------------------------------------------------------------------
 
-def test_vie2_vec_fft_path_accuracy():
+def test_vie2_vec_fft_path_accuracy(quadrature):
     # time_step keeps T = 3.6: with the rational spec's K = 1 the second-kind
     # resolvent grows like e^t, so longer horizons amplify discretization
-    # error past TOLERANCE. mesh_divs = 80 is what engages the FFT path.
+    # error past the bound. mesh_divs = 80 is what engages the FFT path.
     d = make_coupled_data_nd(
         [VIE2_SPEC_SMOOTH, VIE2_SPEC_RATIONAL], [[1, 1], [1, -1]],
         time_step=0.005, coll_divs=3, coll_choices=[0, 1, 2, 3],
         num_blocks=FFT_BLOCKS)
-    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    assert np.max(np.abs(soln - d["exact"])) < (7e-9 if quadrature == "product" else 6e-7)
 
 
-def test_vide_vec_fft_path_accuracy():
+def test_vide_vec_fft_path_accuracy(quadrature):
     # As above: the log spec's a = 1 gives e^t error growth, so keep T = 3.6.
     d = make_coupled_data_nd(
         [VIDE_SPEC_SMOOTH, VIDE_SPEC_LOG], [[1, 1], [1, -1]],
         time_step=0.005, coll_divs=3, coll_choices=[1, 2, 3],
         num_blocks=FFT_BLOCKS)
-    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    assert np.max(np.abs(soln - d["exact"])) < (2.5e-5 if quadrature == "product" else 5e-4)
 
 
 # ---------------------------------------------------------------------------
 # 2. Runtime-dimension (d > 8) drivers, value-checked at d = 10
 # ---------------------------------------------------------------------------
 
-def test_vie1_runtime_d10_accuracy():
+def test_vie1_runtime_d10_accuracy(quadrature):
     specs = 2 * [VIE1_SPEC_POLY_A, VIE1_SPEC_POLY_B, VIE1_SPEC_SMOOTH,
                  VIE1_SPEC_POLY, VIE1_SPEC_DAMPED]
     d = make_coupled_data_nd(
         specs, coupling_matrix(10),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=40)
-    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    assert np.max(np.abs(soln - d["exact"])) < (7e-5 if quadrature == "product" else 4e-4)
 
 
-def test_vie2_runtime_d10_accuracy():
+def test_vie2_runtime_d10_accuracy(quadrature):
     specs = 2 * [VIE2_SPEC_SMOOTH, VIE2_SPEC_EXP, VIE2_SPEC_POLY,
                  VIE2_SPEC_RATIONAL, VIE2_SPEC_POLY2]
     d = make_coupled_data_nd(
         specs, coupling_matrix(10),
         time_step=0.01, coll_divs=3, coll_choices=[0, 1, 2, 3], num_blocks=40)
-    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    soln = solve_vie2(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    assert np.max(np.abs(soln - d["exact"])) < (5e-7 if quadrature == "product" else 1.5e-4)
 
 
-def test_vide_runtime_d10_accuracy():
+def test_vide_runtime_d10_accuracy(quadrature):
     specs = 2 * [VIDE_SPEC_POLY_A, VIDE_SPEC_POLY_B, VIDE_SPEC_SMOOTH,
                  VIDE_SPEC_ODE, VIDE_SPEC_LOG]
     d = make_coupled_data_nd(
         specs, coupling_matrix(10),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=40)
-    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
+    soln = solve_vide(kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    assert np.max(np.abs(soln - d["exact"])) < (2e-4 if quadrature == "product" else 1e-3)
 
 
 # ---------------------------------------------------------------------------
@@ -158,56 +167,56 @@ def _poly_eval_points(data):
     return [0.137 * T, 0.5 * T, 0.861 * T]
 
 
-def test_vie2_runtime_d9_return_function_matches_scalar():
+def test_vie2_runtime_d9_return_function_matches_scalar(quadrature):
     d = make_coupled_data_nd(
         VIE2_SPECS_9, np.eye(9),
         time_step=0.01, coll_divs=3, coll_choices=[0, 1, 2], num_blocks=10)
-    _, f_vec = with_sol(run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
+    _, f_vec = with_sol(run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])))
     for i, spec in enumerate(VIE2_SPECS_9):
         s = as_array(spec, time_step=0.01, coll_divs=3,
                      coll_choices=[0, 1, 2], num_blocks=10)
-        _, f_s = with_sol(run(solve_vie2, show_warnings=False, kernel=s["kernel"], g=s["g"], dt=s["time_step"], coll_setting=(s["coll_divs"], s["coll_choices"])))
+        _, f_s = with_sol(run(solve_vie2, show_warnings=False, kernel=s["kernel"], g=s["g"], dt=s["time_step"], quadrature=quadrature, coll_setting=(s["coll_divs"], s["coll_choices"])))
         for t in _poly_eval_points(d):
-            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-9
+            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-12
 
 
-def test_vie1_runtime_d9_return_function_matches_scalar():
+def test_vie1_runtime_d9_return_function_matches_scalar(quadrature):
     d = make_coupled_data_nd(
         VIE1_SPECS_9, np.eye(9),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=10)
-    _, f_vec = with_sol(run(solve_vie1, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
+    _, f_vec = with_sol(run(solve_vie1, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])))
     for i, spec in enumerate(VIE1_SPECS_9):
         s = as_array(spec, time_step=0.01, coll_divs=3,
                      coll_choices=[1, 2, 3], num_blocks=10)
-        _, f_s = with_sol(run(solve_vie1, show_warnings=False, kernel=s["kernel"], g=s["g"], dt=s["time_step"], coll_setting=(s["coll_divs"], s["coll_choices"])))
+        _, f_s = with_sol(run(solve_vie1, show_warnings=False, kernel=s["kernel"], g=s["g"], dt=s["time_step"], quadrature=quadrature, coll_setting=(s["coll_divs"], s["coll_choices"])))
         for t in _poly_eval_points(d):
-            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-9
+            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-12
 
 
-def test_vie1_runtime_d9_force_continuous_return_function_matches_scalar():
+def test_vie1_runtime_d9_force_continuous_return_function_matches_scalar(quadrature):
     d = make_coupled_data_nd(
         VIE1_SPECS_9, np.eye(9),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=10)
-    _, f_vec = with_sol(run(solve_vie1, show_warnings=False, kernel=d["kernel"], g=d["g"], y0=d["exact"][0], continuous=True, dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
+    _, f_vec = with_sol(run(solve_vie1, show_warnings=False, kernel=d["kernel"], g=d["g"], y0=d["exact"][0], continuous=True, dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])))
     for i, spec in enumerate(VIE1_SPECS_9):
         s = as_array(spec, time_step=0.01, coll_divs=3,
                      coll_choices=[1, 2, 3], num_blocks=10)
-        _, f_s = with_sol(run(solve_vie1, show_warnings=False, kernel=s["kernel"], g=s["g"], y0=s["exact"][0], continuous=True, dt=s["time_step"], coll_setting=(s["coll_divs"], s["coll_choices"])))
+        _, f_s = with_sol(run(solve_vie1, show_warnings=False, kernel=s["kernel"], g=s["g"], y0=s["exact"][0], continuous=True, dt=s["time_step"], quadrature=quadrature, coll_setting=(s["coll_divs"], s["coll_choices"])))
         for t in _poly_eval_points(d):
-            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-9
+            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-12
 
 
-def test_vide_runtime_d9_return_function_matches_scalar():
+def test_vide_runtime_d9_return_function_matches_scalar(quadrature):
     d = make_coupled_data_nd(
         VIDE_SPECS_9, np.eye(9),
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3], num_blocks=10)
-    _, f_vec = with_sol(run(solve_vide, show_warnings=False, kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
+    _, f_vec = with_sol(run(solve_vide, show_warnings=False, kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])))
     for i, spec in enumerate(VIDE_SPECS_9):
         s = as_array(spec, time_step=0.01, coll_divs=3,
                      coll_choices=[1, 2, 3], num_blocks=10)
-        _, f_s = with_sol(run(solve_vide, show_warnings=False, kernel=s["kernel"], a=s["a"], g=s["g"], y0=s["soln_init_value"], dt=s["time_step"], coll_setting=(s["coll_divs"], s["coll_choices"])))
+        _, f_s = with_sol(run(solve_vide, show_warnings=False, kernel=s["kernel"], a=s["a"], g=s["g"], y0=s["soln_init_value"], dt=s["time_step"], quadrature=quadrature, coll_setting=(s["coll_divs"], s["coll_choices"])))
         for t in _poly_eval_points(d):
-            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-9
+            assert abs(np.asarray(f_vec(t)).ravel()[i] - float(f_s(t))) < 1e-12
 
 
 # ---------------------------------------------------------------------------
@@ -225,42 +234,54 @@ def test_vide_runtime_d9_return_function_matches_scalar():
 # run skips the two-sided average, so it is excluded.)
 # ---------------------------------------------------------------------------
 
-def _vie2_soln_at_blocks(num_blocks, coll_divs=2, coll_choices=[0, 1, 2],
+# coll_divs**2 samples per interval in both schemes, so num_blocks really is the
+# number of mesh intervals (product's own default would be coll_divs).
+SAME_MESH = [dict(quadrature="collocation"),
+             dict(quadrature="product", samples_per_interval=4)]
+same_mesh = pytest.mark.parametrize("scheme", SAME_MESH, ids=lambda s: s["quadrature"])
+
+
+def _vie2_soln_at_blocks(num_blocks, scheme, coll_divs=2, coll_choices=[0, 1, 2],
                          time_step=0.004):
     d = as_array(VIE2_SPEC_SMOOTH, time_step=time_step, coll_divs=coll_divs,
                  coll_choices=coll_choices, num_blocks=num_blocks)
-    soln = run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    return soln, d
+    sol = run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"]), **scheme)
+    assert len(sol.mesh) - 1 == num_blocks
+    return sol.y, d
 
 
-def test_fft_cutoff_boundary_accuracy():
+@same_mesh
+def test_fft_cutoff_boundary_accuracy(scheme):
     for num_blocks in (63, 64, 65):
-        soln, d = _vie2_soln_at_blocks(num_blocks)
-        assert np.max(np.abs(soln - d["exact"])) < 1e-5
+        soln, d = _vie2_soln_at_blocks(num_blocks, scheme)
+        assert np.max(np.abs(soln - d["exact"])) < 2e-7
 
 
-def test_fft_vs_direct_prefix_consistency():
+@same_mesh
+def test_fft_vs_direct_prefix_consistency(scheme):
     # Q = 63: every merge is direct. Q = 64: the S = 32 merge at boundary 32
     # gets output width 32 and routes through the FFT. The first 63 blocks
     # solve identical collocation equations either way.
-    s63, _ = _vie2_soln_at_blocks(63)
-    s64, _ = _vie2_soln_at_blocks(64)
+    s63, _ = _vie2_soln_at_blocks(63, scheme)
+    s64, _ = _vie2_soln_at_blocks(64, scheme)
     n_shared = 63 * 4  # samples strictly before the 63rd mesh boundary
     scale = np.max(np.abs(s63[:n_shared]))
     assert np.max(np.abs(s63[:n_shared] - s64[:n_shared])) < 1e-12 * scale
 
 
-def test_clamped_merge_prefix_consistency():
+@same_mesh
+def test_clamped_merge_prefix_consistency(scheme):
     # Q = 129 = 2^7 + 1 appends the pathological clamped tail merges after
     # the full power-of-two schedule of Q = 128.
-    s128, _ = _vie2_soln_at_blocks(128)
-    s129, _ = _vie2_soln_at_blocks(129)
+    s128, _ = _vie2_soln_at_blocks(128, scheme)
+    s129, _ = _vie2_soln_at_blocks(129, scheme)
     n_shared = 128 * 4
     scale = np.max(np.abs(s128[:n_shared]))
     assert np.max(np.abs(s128[:n_shared] - s129[:n_shared])) < 1e-12 * scale
 
 
-def test_runtime_d10_fft_boundary_prefix_consistency():
+@same_mesh
+def test_runtime_d10_fft_boundary_prefix_consistency(scheme):
     # Same boundary check through the runtime-dimension (d > 8) driver.
     def solve_at(num_blocks):
         d = make_coupled_data_nd(
@@ -268,7 +289,7 @@ def test_runtime_d10_fft_boundary_prefix_consistency():
              VIE2_SPEC_RATIONAL, VIE2_SPEC_POLY2] * 2, coupling_matrix(10),
             time_step=0.004, coll_divs=2, coll_choices=[0, 1, 2],
             num_blocks=num_blocks)
-        return run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
+        return run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"]), **scheme).y
     s63 = solve_at(63)
     s64 = solve_at(64)
     n_shared = 63 * 4
@@ -281,8 +302,82 @@ def test_runtime_d10_fft_boundary_prefix_consistency():
 # (the largest compiled setting; everything above falls back or errors).
 # ---------------------------------------------------------------------------
 
-def test_vie2_largest_compiled_setting_accuracy():
+def test_vie2_largest_compiled_setting_accuracy(quadrature):
     d = as_array(VIE2_SPEC_SMOOTH, time_step=0.002, coll_divs=4,
                  coll_choices=[0, 1, 2, 3, 4], num_blocks=10)
-    soln = run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    assert np.max(np.abs(soln - d["exact"])) < 1e-6
+    soln = run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    assert np.max(np.abs(soln - d["exact"])) < 1e-11
+
+
+# ---------------------------------------------------------------------------
+# 6. Every compiled collocation setting, and the compile-time/runtime boundary
+# ---------------------------------------------------------------------------
+
+def _vie1_admissible(divs, choices):
+    return 0 not in choices and np.prod([(divs - c) / c for c in choices]) <= 1.0
+
+
+_SWEEP_N_INTERVALS = 6
+
+
+def _sweep_problem(equation, divs, choices, d):
+    """y = 1, which every collocation space contains. K = 1 + u needs a rule
+    exact for linear integrands, which a single node is only at the midpoint,
+    so one-node settings get K = 1."""
+    N = _SWEEP_N_INTERVALS * divs**2 + 1
+    dt = 0.05
+    t = np.arange(N) * dt
+    K = 1.0 + t if len(choices) > 1 else np.ones(N)
+    integral = t + 0.5 * t**2 if len(choices) > 1 else t
+    g = {"vie1": integral, "vie2": 1.0 - integral, "vide": -integral}[equation]
+    kw = dict(kernel=K, g=g, dt=dt)
+    if d:
+        kw.update(kernel=K[:, None, None] * np.eye(d), g=np.tile(g[:, None], (1, d)))
+    if equation == "vide":
+        kw["y0"] = np.ones(d) if d else 1.0
+    return kw
+
+
+_SWEEP = ([("vie1", *s) for s in _fast_settings_VIE_1 if _vie1_admissible(*s)]
+          + [("vie2", *s) for s in _fast_settings_VIE_2]
+          + [("vide", *s) for s in _fast_settings_VIDE])
+
+
+@pytest.mark.parametrize("d", [0, 2], ids=["scalar", "vector"])
+@pytest.mark.parametrize("equation, divs, choices", _SWEEP,
+                         ids=[f"{e}-{dv}-{''.join(map(str, c))}" for e, dv, c in _SWEEP])
+def test_every_compiled_setting_reproduces_a_constant(equation, divs, choices, d):
+    solve = dict(vie1=solve_vie1, vie2=solve_vie2, vide=solve_vide)[equation]
+    y = run(solve, show_warnings=False, quadrature="collocation", coll_setting=(divs, choices),
+            **_sweep_problem(equation, divs, choices, d)).y
+    assert np.max(np.abs(y - 1.0)) < 2e-11
+
+
+@pytest.mark.parametrize("d", [8, 9], ids=["last-compiled", "first-runtime"])
+@pytest.mark.parametrize("specs, solve, choices", [
+    ([VIE1_SPEC_POLY_A, VIE1_SPEC_POLY_B, VIE1_SPEC_SMOOTH, VIE1_SPEC_POLY, VIE1_SPEC_DAMPED],
+     solve_vie1, [1, 2, 3]),
+    ([VIE2_SPEC_SMOOTH, VIE2_SPEC_EXP, VIE2_SPEC_POLY, VIE2_SPEC_RATIONAL, VIE2_SPEC_POLY2],
+     solve_vie2, [0, 1, 2, 3]),
+    ([VIDE_SPEC_POLY_A, VIDE_SPEC_POLY_B, VIDE_SPEC_SMOOTH, VIDE_SPEC_ODE, VIDE_SPEC_LOG],
+     solve_vide, [1, 2, 3]),
+], ids=["vie1", "vie2", "vide"])
+def test_dimension_boundary_accuracy(specs, solve, choices, d, quadrature):
+    data = make_coupled_data_nd((specs * 2)[:d], coupling_matrix(d), time_step=0.01, coll_divs=3,
+                                coll_choices=choices, num_blocks=10)
+    kw = dict(kernel=data["kernel"], g=data["g"], dt=data["time_step"])
+    if solve is solve_vide:
+        kw.update(a=data["a"], y0=data["soln_init_value"])
+    soln = solve(quadrature=quadrature, coll_setting=(3, choices), **kw).y
+    assert np.max(np.abs(soln - data["exact"])) < (2e-4 if quadrature == "product" else 5e-4)
+
+
+def test_runtime_dimension_fft_accuracy():
+    """d > 8 past the FFT cutoff, against the analytic solution."""
+    specs = [VIE2_SPEC_SMOOTH, VIE2_SPEC_EXP, VIE2_SPEC_POLY, VIE2_SPEC_RATIONAL, VIE2_SPEC_POLY2]
+    data = make_coupled_data_nd(specs * 2, coupling_matrix(10), time_step=0.005, coll_divs=3,
+                                coll_choices=[0, 1, 2, 3], num_blocks=FFT_BLOCKS)
+    sol = solve_vie2(kernel=data["kernel"], g=data["g"], dt=data["time_step"],
+                     quadrature="collocation", coll_setting=(3, [0, 1, 2, 3]))
+    assert len(sol.mesh) - 1 == FFT_BLOCKS
+    assert np.max(np.abs(sol.y - data["exact"])) < 1e-5

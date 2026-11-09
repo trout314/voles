@@ -51,4 +51,4 @@ def test_declared_exponent_matches_location_only():
               coll_nodes=voles.radau_iia_nodes(3))
     a = voles.solve_vie1(kernel_singularity={0.0: 0.5}, **kw)
     b = voles.solve_vie1(kernel_singularity=0.0, **kw)
-    np.testing.assert_allclose(a.node_values, b.node_values, rtol=1e-6, atol=1e-12)
+    np.testing.assert_allclose(a.node_values, b.node_values, rtol=2e-10, atol=1e-12)

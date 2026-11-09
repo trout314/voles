@@ -66,7 +66,7 @@ def test_polynomial_kernel_matches_exact_collocation(coll_divs, choices, Q_facto
     vals = run(solve_vie2, show_warnings=False, kernel=kernel(t), g=g(t), dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p).y
     mesh = np.arange(N // Q + 1) * (Q * dt)
     _, ref = with_sol(solve_vie2(kernel=kernel, g=g, mesh=mesh, coll_nodes=np.asarray(choices) / coll_divs))
-    assert np.max(np.abs(vals - sampled_values(ref, t, Q))) < 1e-8
+    assert np.max(np.abs(vals - sampled_values(ref, t, Q))) < 1e-12
 
 
 def test_polynomial_kernel_matches_exact_collocation_vector():
@@ -83,7 +83,7 @@ def test_polynomial_kernel_matches_exact_collocation_vector():
     vals = run(solve_vie2, show_warnings=False, kernel=K, g=gv, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p).y
     mesh = np.arange(N // Q + 1) * (Q * dt)
     _, ref = with_sol(solve_vie2(kernel=kernel, g=g, mesh=mesh, coll_nodes=np.asarray(choices) / coll_divs))
-    assert np.max(np.abs(vals - sampled_values(ref, t, Q))) < 1e-8
+    assert np.max(np.abs(vals - sampled_values(ref, t, Q))) < 1e-12
 
 
 @pytest.mark.parametrize("coll_divs,choices", SETTINGS)
@@ -95,7 +95,7 @@ def test_reproduces_polynomial_solutions_for_unit_kernel(coll_divs, choices):
     y = t ** (m - 1)
     g = y - t ** m / m                      # y = g + int_0^t y
     vals = run(solve_vie2, show_warnings=False, kernel=np.ones(N), g=g, dt=dt, coll_setting=(coll_divs, choices), quadrature="product").y
-    assert np.max(np.abs(vals - y)) < 1e-9
+    assert np.max(np.abs(vals - y)) < 1e-12
 
 
 def _max_err(dt, coll_divs, choices, T=12.0):
@@ -162,7 +162,7 @@ def test_extension_matches_numpy_reference():
     t, K, g, _ = cos_problem(dt, N)
     a, _ = _product.solve_vie2_product(K, g, dt, q, [0, 1, 2], Q, 3, False, use_extension=True)
     b, _ = _product.solve_vie2_product(K, g, dt, q, [0, 1, 2], Q, 3, False, use_extension=False)
-    assert np.max(np.abs(a - b)) < 1e-11
+    assert np.max(np.abs(a - b)) < 1e-12
 
 
 def test_vector_matrix_and_return_function():
@@ -180,10 +180,10 @@ def test_vector_matrix_and_return_function():
     assert vals.shape == (N, 2, 3)
     s0 = run(solve_vie2, show_warnings=False, kernel=K1, g=2 * g1, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
     s1 = run(solve_vie2, show_warnings=False, kernel=0.5 * K1, g=-g1, dt=dt, coll_setting=(q, [0, 1, 2]), quadrature="product").y
-    assert np.allclose(vals[:, 0, 1], s0, atol=1e-11)
-    assert np.allclose(vals[:, 1, 1], s1, atol=1e-11)
+    assert np.allclose(vals[:, 0, 1], s0, atol=1e-12, rtol=0)
+    assert np.allclose(vals[:, 1, 1], s1, atol=1e-12, rtol=0)
     interior = np.array([i for i in range(N) if i % q != 0], dtype=int)
-    assert np.allclose(sol(t[interior]), vals[interior], atol=1e-10)
+    assert np.allclose(sol(t[interior]), vals[interior], atol=1e-12, rtol=0)
     assert len(sol) == (N - 1) // q
 
 
@@ -253,8 +253,8 @@ def test_blocks_are_transformed_in_place_without_a_second_copy():
     t, K, g, _ = cos_problem(dt, N)
     s1 = _product.ProductSetup("vie1", K, dt, q, [1, 2], Q, 2)
     s2 = _product.ProductSetup("vie2", K, dt, q, [1, 2], Q, 2)
-    assert np.allclose(s2.lagB[1:], -s1.lagB[1:])
-    assert np.allclose(s2.lagB[0], np.eye(2) - s1.lagB[0])
+    assert np.allclose(s2.lagB[1:], -s1.lagB[1:], rtol=0, atol=1e-14)
+    assert np.allclose(s2.lagB[0], np.eye(2) - s1.lagB[0], rtol=0, atol=1e-14)
 
 
 def test_linalg_error_names_the_second_kind_solver(monkeypatch):

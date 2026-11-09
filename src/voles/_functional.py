@@ -2271,6 +2271,8 @@ def vie1(*, kernel, g, y0, mesh, nodes, kernel_singularity, reuse_adaptive_block
                             _SMOOTH_GL_ORDER, d, reuse_adaptive_blocks=reuse_adaptive_blocks,
                             warn_fallbacks=True)
     m = _detect_g_matrix_cols(g, d, float(mesh_breakpoints[0] + node_pos[0] * widths[0]))
+    if m is None and continuous and np.ndim(soln_init_value) == 2:
+        m = np.shape(soln_init_value)[1]            # g is None: y0 has the columns
     if m is not None:
         G = _sample_g_at_coll_matrix(g, mesh_breakpoints, node_pos, widths, M, p, d, m)
         _warn_vie1_g_start_callable(g, G, True)

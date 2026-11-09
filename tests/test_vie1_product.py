@@ -106,7 +106,7 @@ def test_polynomial_kernel_matches_exact_collocation(coll_divs, choices, force_c
     vals = run(solve_vie1, show_warnings=False, kernel=K, g=gv, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p, continuous=force_continuous, y0=init if force_continuous else None).y
     mesh = np.arange(N // Q + 1) * (Q * dt)
     ref_vals, ref = with_sol(run(solve_vie1, show_warnings=False, kernel=kernel, g=g, mesh=mesh, coll_nodes=np.asarray(choices) / coll_divs, continuous=force_continuous, y0=init if force_continuous else None))
-    assert np.max(np.abs(vals - sampled_values(ref, t, Q))) < 1e-8   # reference quadrature tolerance
+    assert np.max(np.abs(vals - sampled_values(ref, t, Q))) < 5e-12   # reference quadrature tolerance
 
 
 def test_polynomial_kernel_matches_exact_collocation_vector():
@@ -126,7 +126,7 @@ def test_polynomial_kernel_matches_exact_collocation_vector():
         vals = run(solve_vie1, show_warnings=False, kernel=K, g=gv, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=Q, kernel_interp_degree=p, continuous=fc, y0=init if fc else None).y
         mesh = np.arange(N // Q + 1) * (Q * dt)
         _, ref = with_sol(solve_vie1(kernel=kernel, g=g, mesh=mesh, coll_nodes=np.asarray(choices) / coll_divs, continuous=fc, y0=init if fc else None))
-        assert np.max(np.abs(vals - sampled_values(ref, t, Q))) < 1e-8   # reference quadrature tolerance
+        assert np.max(np.abs(vals - sampled_values(ref, t, Q))) < 1e-12   # reference quadrature tolerance
 
 
 # ---------------------------------------------------------------------------
@@ -145,12 +145,12 @@ def test_reproduces_polynomial_solutions_for_unit_kernel(coll_divs, choices):
     y = t ** (m - 1)
     g = t ** m / m
     vals = run(solve_vie1, show_warnings=False, kernel=K, g=g, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=coll_divs).y
-    assert np.max(np.abs(vals - y)) < 1e-9
+    assert np.max(np.abs(vals - y)) < 1e-11
     # continuous: degree m
     y = t ** m
     g = t ** (m + 1) / (m + 1)
     vals = run(solve_vie1, show_warnings=False, kernel=K, g=g, dt=dt, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=coll_divs, continuous=True, y0=0.0).y
-    assert np.max(np.abs(vals - y)) < 1e-9
+    assert np.max(np.abs(vals - y)) < 2e-11
 
 
 @pytest.mark.parametrize("coll_divs,choices,rho", [
@@ -163,7 +163,7 @@ def test_continuous_amplification_factor(coll_divs, choices, rho):
     K = np.ones(N)
     vals = run(solve_vie1, show_warnings=False, kernel=K, g=np.zeros(N), dt=0.3, coll_setting=(coll_divs, choices), quadrature="product", samples_per_interval=coll_divs, continuous=True, y0=1.0).y
     mesh_vals = vals[::Q]
-    assert np.allclose(mesh_vals, rho ** np.arange(M + 1), atol=1e-10)
+    assert np.allclose(mesh_vals, rho ** np.arange(M + 1), atol=1e-12, rtol=0)
 
 
 def test_one_node_continuous_is_trapezoidal_rule():
@@ -187,7 +187,7 @@ def test_one_node_continuous_is_trapezoidal_rule():
         # cell [t_{n-1}, t_n]: unknown y[n] with coefficient dt*Kb/3 + dt*Ka/6
         s += dt * (Ka * y[n - 1] / 3 + Kb * y[n - 1] / 6)
         y[n] = (Cd[n] - s) / (dt * (Kb / 3 + Ka / 6))
-    assert np.max(np.abs(vals - y)) < 1e-10
+    assert np.max(np.abs(vals - y)) < 1e-12
     assert np.max(np.abs(vals - Kex)) < 1e-2
 
 
@@ -270,7 +270,7 @@ def test_extension_matches_numpy_reference():
                                            use_extension=True)
         b, _ = _product.solve_vie1_product(C, Cd, dt, q, [1, 2, 3], Q, 3, fc, init, False,
                                            use_extension=False)
-        assert np.max(np.abs(a - b)) < 1e-11
+        assert np.max(np.abs(a - b)) < 1e-12
     assert _dlang.have_block_drivers()
 
 
@@ -288,8 +288,8 @@ def test_vector_block_diagonal_matches_scalar():
         vec = run(solve_vie1, show_warnings=False, kernel=K, g=g, dt=dt, coll_setting=(q, [1, 2]), quadrature="product", continuous=fc, y0=init if fc else None).y
         s0 = run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(q, [1, 2]), quadrature="product", continuous=fc, y0=-1.0 if fc else None).y
         s1 = run(solve_vie1, show_warnings=False, kernel=C2, g=Cd2, dt=dt, coll_setting=(q, [1, 2]), quadrature="product", continuous=fc, y0=-1.0 if fc else None).y
-        assert np.allclose(vec[:, 0], s0, atol=1e-11)
-        assert np.allclose(vec[:, 1], s1, atol=1e-11)
+        assert np.allclose(vec[:, 0], s0, atol=1e-12, rtol=0)
+        assert np.allclose(vec[:, 1], s1, atol=1e-12, rtol=0)
 
 
 def test_matrix_columns_and_return_function():
@@ -306,13 +306,13 @@ def test_matrix_columns_and_return_function():
     vals, sol = with_sol(run(solve_vie1, show_warnings=False, kernel=K, g=g, dt=dt, coll_setting=(q, [1, 2]), quadrature="product", samples_per_interval=q))
     assert vals.shape == (N, 2, 3)
     single = run(solve_vie1, show_warnings=False, kernel=C, g=2 * Cd, dt=dt, coll_setting=(q, [1, 2]), quadrature="product", samples_per_interval=q).y
-    assert np.allclose(vals[:, 0, 1], single, atol=1e-11)
-    assert np.allclose(vals[:, 1, 1], -single, atol=1e-11)
+    assert np.allclose(vals[:, 0, 1], single, atol=1e-12, rtol=0)
+    assert np.allclose(vals[:, 1, 1], -single, atol=1e-12, rtol=0)
     # the callable evaluates to the returned values at interior grid points
     interior = np.array([i for i in range(N) if i % q != 0], dtype=int)
     ev = sol(t[interior])
     assert ev.shape == (len(interior), 2, 3)
-    assert np.allclose(ev, vals[interior], atol=1e-10)
+    assert np.allclose(ev, vals[interior], atol=1e-12, rtol=0)
     assert len(sol) == (N - 1) // q
 
 
@@ -321,10 +321,10 @@ def test_return_function_scalar_and_continuous():
     N = n_samples(Q, 10)
     t, C, Cd, _ = damped(dt, N)
     vals, sol = with_sol(run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(q, [1, 2, 3]), quadrature="product", samples_per_interval=Q, continuous=True, y0=-1.0))
-    assert np.allclose(sol(t), vals, atol=1e-10)
+    assert np.allclose(sol(t), vals, atol=1e-12, rtol=0)
     assert abs(sol(0.0) + 1.0) < 1e-12
     assert len(sol) == (N - 1) // Q
-    assert np.allclose(sol.mesh_breakpoints, np.arange((N - 1) // Q + 1) * Q * dt)
+    assert np.allclose(sol.mesh_breakpoints, np.arange((N - 1) // Q + 1) * Q * dt, rtol=0, atol=1e-14)
 
 
 def test_uncompiled_setting_works_with_product_quadrature():
@@ -334,7 +334,7 @@ def test_uncompiled_setting_works_with_product_quadrature():
     N = n_samples(q, 30)
     t, C, Cd, Kex = damped(dt, N)
     vals = run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(q, [1, 2, 3, 4, 5]), quadrature="product").y
-    assert np.max(np.abs(vals - Kex)) < 1e-4
+    assert np.max(np.abs(vals - Kex)) < 2e-5
 
 
 def test_complex_passthrough():
@@ -345,7 +345,7 @@ def test_complex_passthrough():
     gc = Cd * (1.0 + 0.5j)
     vals = run(solve_vie1, show_warnings=False, kernel=Kc, g=gc, dt=dt, coll_setting=(q, [1, 2]), quadrature="product").y
     real = run(solve_vie1, show_warnings=False, kernel=C, g=Cd, dt=dt, coll_setting=(q, [1, 2]), quadrature="product").y
-    assert np.allclose(vals, real, atol=1e-10)
+    assert np.allclose(vals, real, atol=1e-12, rtol=0)
 
 
 # ---------------------------------------------------------------------------
@@ -436,8 +436,6 @@ def test_rho_plus_one_setting_warns_about_reduced_order(quadrature, voles_warnin
     kw = dict(kernel=K, g=g, dt=0.01, coll_setting=(3, [1, 2]), quadrature=quadrature)
     solve_vie1(**kw).y
     assert "order 1 rather than 2" in voles_warnings.text()
-    run(solve_vie1, show_warnings=False, **kw).y
-    assert voles_warnings.text() == ""
     solve_vie1(**{**kw, "coll_setting": (3, [1, 2, 3])}).y      # rho_m = 0
     assert voles_warnings.text() == ""
 
@@ -475,9 +473,7 @@ def test_stale_extension_fallback_is_announced_and_agrees(monkeypatch, voles_war
     monkeypatch.setattr(_dlang, "have_block_driver", lambda name: False)
     slow = solve_vie1(**kw).y
     assert "falling back to the NumPy stepper" in voles_warnings.text()
-    assert np.max(np.abs(fast - slow)) < 1e-9
-    run(solve_vie1, show_warnings=False, **kw).y
-    assert voles_warnings.text() == ""
+    assert np.max(np.abs(fast - slow)) < 1e-12
 
 
 def test_numpy_fallback_lu_matches_the_extension_singularity_test():

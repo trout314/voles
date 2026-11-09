@@ -3,8 +3,6 @@ import warnings
 import numpy as np
 import pytest
 
-TOLERANCE = 1e-3
-
 
 class _VolesWarningLog:
     """What a test sees of voles' diagnostics: ``text()`` returns the voles
@@ -27,6 +25,14 @@ class _VolesWarningLog:
 
     def records(self):
         return self._new()
+
+
+@pytest.fixture(params=["product", "collocation"])
+def quadrature(request):
+    """Run a sampled-input test under both schemes. Tests that omit
+    ``quadrature`` get the default, product, and never reach the collocation
+    drivers (compiled settings, d > 8 runtime path, Numba fallback)."""
+    return request.param
 
 
 @pytest.fixture

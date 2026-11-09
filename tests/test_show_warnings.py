@@ -1,9 +1,8 @@
-"""voles diagnostics go through `warnings`, and show_warnings silences them.
+"""voles diagnostics go through `warnings`.
 
 Every diagnostic is a `voles.VolesWarning` subclass, emitted with
 `warnings.warn`, attributed to the caller's line, emitted at most once per
-call and only from the calling thread. ``show_warnings=False`` (0.10 API)
-emits nothing. Nothing is ever printed.
+call and only from the calling thread. Nothing is ever printed.
 """
 import contextlib
 import threading
@@ -21,7 +20,7 @@ from voles import (
     AccuracyWarning,
     PerformanceWarning,
 )
-from conftest import run, values_fn
+from conftest import values_fn
 
 
 @contextlib.contextmanager
@@ -66,26 +65,23 @@ class TestOddLengthIsSilent:
     """Lengths that don't end on a mesh point used to be truncated with a
     warning; the final interval now absorbs the leftover samples."""
 
-    @pytest.mark.parametrize("show", [True, False])
-    def test_vie1(self, show):
+    def test_vie1(self):
         kernel, g, h = _make_data(90)
         g[0] = 0.0
         with recorded() as rec:
-            y = run(solve_vie1, show_warnings=show, kernel=kernel, g=g, dt=h, coll_setting=(3, [1, 2, 3])).y
+            y = solve_vie1(kernel=kernel, g=g, dt=h, coll_setting=(3, [1, 2, 3])).y
         assert len(y) == len(kernel) and _voles(rec) == []
 
-    @pytest.mark.parametrize("show", [True, False])
-    def test_vie2(self, show):
+    def test_vie2(self):
         kernel, g, h = _make_data(90)
         with recorded() as rec:
-            y = run(solve_vie2, show_warnings=show, kernel=kernel, g=g, dt=h, coll_setting=(3, [0, 1, 2, 3])).y
+            y = solve_vie2(kernel=kernel, g=g, dt=h, coll_setting=(3, [0, 1, 2, 3])).y
         assert len(y) == len(kernel) and _voles(rec) == []
 
-    @pytest.mark.parametrize("show", [True, False])
-    def test_vide(self, show):
+    def test_vide(self):
         kernel, g, h = _make_data(90)
         with recorded() as rec:
-            y = run(solve_vide, show_warnings=show, kernel=kernel, g=g, y0=0.0, dt=h, coll_setting=(3, [0, 1, 2])).y
+            y = solve_vide(kernel=kernel, g=g, y0=0.0, dt=h, coll_setting=(3, [0, 1, 2])).y
         assert len(y) == len(kernel) and _voles(rec) == []
 
     def test_matrix_vie2_and_vide(self):
@@ -188,12 +184,6 @@ def test_matrix_solve_warns_once_from_the_calling_thread(monkeypatch):
         solve_vie1(coll_setting=(3, [1, 2]), **kw)     # two diagnostics: g(0), rho = 1
     assert len(_voles(rec)) == 2
     assert threads and all(t is threading.main_thread() for t in threads)
-
-
-def test_show_warnings_false_silences_matrix_workers():
-    with recorded() as rec:
-        run(solve_vie1, show_warnings=False, **_g0_nonzero_matrix()).y
-    assert _voles(rec) == []
 
 
 def test_standard_filter_silences_voles():

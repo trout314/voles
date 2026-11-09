@@ -79,12 +79,6 @@ def test_dt_must_be_positive_and_finite(solver, bad):
         solver(dt=bad)
 
 
-@pytest.mark.parametrize("quad", ["collocation", "product"])
-def test_dt_non_finite_both_quadratures(quad):
-    with pytest.raises(ValueError, match="dt must be positive and finite"):
-        _vie2(dt=np.inf, quadrature=quad)
-
-
 # ---------------------------------------------------------------------------
 # coll_setting
 # ---------------------------------------------------------------------------
@@ -144,11 +138,10 @@ _N = 51                                  # 1 * 5**2 + 1
 _COLL_IDX = 5                            # the first collocation sample of mesh 0
 
 
-@pytest.mark.parametrize("which", ["kernel", "g", "a"])
-@pytest.mark.parametrize("solver", ["vie1", "vie2", "vide"])
+@pytest.mark.parametrize("solver, which", [("vie1", "kernel"), ("vie1", "g"), ("vie2", "kernel"),
+                                           ("vie2", "g"), ("vide", "kernel"), ("vide", "g"),
+                                           ("vide", "a")])
 def test_nan_input_is_rejected(solver, which):
-    if which == "a" and solver != "vide":
-        pytest.skip("a is a VIDE input")
     data = dict(kernel=np.ones(_N), g=np.arange(_N, dtype=float) if solver == "vie1" else np.ones(_N))
     if solver == "vide":
         data.update(a=np.zeros(_N), y0=0.0)
@@ -163,35 +156,35 @@ def test_nan_input_is_rejected(solver, which):
 # Singular coefficient matrix raises numpy.linalg.LinAlgError.
 #
 # VIE-1's coefficient matrix is dt * BN_vec(kernel); a zero kernel makes it
-# the zero matrix, which is singular. d=9 exercises the runtime LU path;
-# d=1 (scalar) and d=2 exercise the compile-time path, whose lin_solve used
+# the zero matrix, which is singular. Under quadrature="collocation", d=9
+# exercises the runtime LU path; scalar and d=2 exercise the compile-time path, whose lin_solve used
 # to abort the whole process via a D assert escaping extern(C) rather than
 # reporting failure (regression tests below).
 # ---------------------------------------------------------------------------
 
 # K = 0 makes each step's collocation matrix exactly singular; these tests
 # check that the solver raises LinAlgError rather than returning garbage.
-def test_vie1_singular_matrix_raises_linalgerror():
+def test_vie1_singular_matrix_raises_linalgerror(quadrature):
     d = 9
     coll_divs = 3
     N = coll_divs**2 + 1  # one mesh interval
     kernel = np.zeros((N, d, d))
     g = np.outer(np.arange(N), np.ones(d))
     with pytest.raises(np.linalg.LinAlgError):
-        run(solve_vie1, show_warnings=False, kernel=kernel, g=g, coll_setting=(coll_divs, [1, 2, 3])).y
+        run(solve_vie1, show_warnings=False, kernel=kernel, g=g, quadrature=quadrature, coll_setting=(coll_divs, [1, 2, 3])).y
 
 
-def test_vie1_singular_matrix_scalar_raises_linalgerror():
-    # Compile-time (d <= 8) path, scalar driver.
+def test_vie1_singular_matrix_scalar_raises_linalgerror(quadrature):
+    # Scalar driver under collocation.
     with pytest.raises(np.linalg.LinAlgError):
-        run(solve_vie1, show_warnings=False, kernel=np.zeros(10), g=np.arange(10.0), coll_setting=(3, [1, 2, 3])).y
+        run(solve_vie1, show_warnings=False, kernel=np.zeros(10), g=np.arange(10.0), quadrature=quadrature, coll_setting=(3, [1, 2, 3])).y
 
 
-def test_vie1_singular_matrix_d2_raises_linalgerror():
-    # Compile-time (d <= 8) path, vector driver.
+def test_vie1_singular_matrix_d2_raises_linalgerror(quadrature):
+    # Compile-time (d <= 8) vector driver under collocation.
     N = 10
     with pytest.raises(np.linalg.LinAlgError):
-        run(solve_vie1, show_warnings=False, kernel=np.zeros((N, 2, 2)), g=np.outer(np.arange(N), np.ones(2)), coll_setting=(3, [1, 2, 3])).y
+        run(solve_vie1, show_warnings=False, kernel=np.zeros((N, 2, 2)), g=np.outer(np.arange(N), np.ones(2)), quadrature=quadrature, coll_setting=(3, [1, 2, 3])).y
 
 
 def _near_singular_kernel(d, N=10):
@@ -208,14 +201,14 @@ def _near_singular_kernel(d, N=10):
 
 
 @pytest.mark.parametrize("d", [2, 9], ids=["compile-time", "runtime"])
-def test_vie1_near_singular_matrix_raises_linalgerror(d):
+def test_vie1_near_singular_matrix_raises_linalgerror(d, quadrature):
     """Near-singular (not exactly singular) systems must raise on both LU
     backends: the pure-D path uses a relative pivot threshold, and the
     LAPACK path applies the same threshold to dgesv_'s U diagonal (dgesv_
     itself only reports exactly-zero pivots)."""
     K = _near_singular_kernel(d)
     with pytest.raises(np.linalg.LinAlgError):
-        run(solve_vie1, show_warnings=False, kernel=K, g=np.outer(np.arange(len(K)), np.ones(d)), coll_setting=(3, [1, 2, 3])).y
+        run(solve_vie1, show_warnings=False, kernel=K, g=np.outer(np.arange(len(K)), np.ones(d)), quadrature=quadrature, coll_setting=(3, [1, 2, 3])).y
 
 
 # ---------------------------------------------------------------------------
@@ -260,23 +253,15 @@ def test_list_g_values(solver):
 # coll_choices must not be mutated
 # ---------------------------------------------------------------------------
 
-def test_coll_choices_not_mutated_vie1():
-    # coll_divs=2, choices [1,2] but supplied reversed; _K has 9 pts = 2*4+1
-    choices = [2, 1]
-    solve_vie1(kernel=_K, g=_G1, coll_setting=(2, choices)).y
-    assert choices == [2, 1]
-
-
-def test_coll_choices_not_mutated_vie2():
-    choices = [2, 0, 1]
-    solve_vie2(kernel=_K, g=_G, coll_setting=(2, choices)).y
-    assert choices == [2, 0, 1]
-
-
-def test_coll_choices_not_mutated_vide():
-    choices = [2, 0, 1]
-    solve_vide(kernel=_K, g=_G, a=_A, y0=0.0, coll_setting=(2, choices)).y
-    assert choices == [2, 0, 1]
+@pytest.mark.parametrize("solve, kw, choices", [
+    (solve_vie1, dict(g=_G1), [2, 1]),
+    (solve_vie2, dict(g=_G), [2, 0, 1]),
+    (solve_vide, dict(g=_G, a=_A, y0=0.0), [2, 0, 1]),
+], ids=["vie1", "vie2", "vide"])
+def test_coll_choices_not_mutated(solve, kw, choices):
+    original = list(choices)
+    solve(kernel=_K, coll_setting=(2, choices), **kw)
+    assert choices == original
 
 
 # ---------------------------------------------------------------------------

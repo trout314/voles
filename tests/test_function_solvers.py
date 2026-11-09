@@ -6,6 +6,8 @@ to D in a follow-up commit. These tests pin the math and the API; they should
 continue to pass after the D port.
 """
 
+import sys
+
 import numpy as np
 import pytest
 
@@ -47,7 +49,7 @@ def test_smooth_exponential_growth():
     mesh = np.linspace(0, 1, 21)
     y = solve_vie2(kernel=lambda u: 1.0, g=lambda t: 1.0, mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
     err = _collect_node_values(y, mesh, 2, [0, 1, 2], np.exp)
-    assert err < 1e-6
+    assert err < 5e-7
 
 
 def test_smooth_matches_exact_solution(vie2_callable_smooth):
@@ -56,7 +58,7 @@ def test_smooth_matches_exact_solution(vie2_callable_smooth):
     y = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"],
                                p["y_exact"])
-    assert err < 1e-6
+    assert err < 1e-7
 
 
 def test_smooth_matches_exp_exact_solution(vie2_callable_exp):
@@ -66,7 +68,7 @@ def test_smooth_matches_exp_exact_solution(vie2_callable_exp):
     y = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"],
                                p["y_exact"])
-    assert err < 1e-5
+    assert err < 2e-6
 
 
 @pytest.mark.parametrize("coll_divs,coll_choices", [
@@ -80,7 +82,7 @@ def test_smooth_different_coll_settings(vie2_callable_smooth, coll_divs, coll_ch
     mesh = np.linspace(0, 1, 11)
     y = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(coll_choices) / coll_divs).node_values
     err = _collect_node_values(y, mesh, coll_divs, coll_choices, p["y_exact"])
-    assert err < 1e-3
+    assert err < 2e-5
 
 
 @pytest.mark.parametrize("M_target", [10, 20, 40])
@@ -102,7 +104,7 @@ def test_smooth_g_none_treated_as_zero():
     """g=None is equivalent to g(t)=0; the trivial solution is y=0."""
     mesh = np.linspace(0, 1, 11)
     y = solve_vie2(kernel=lambda u: np.exp(-u), mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
-    assert np.allclose(y, 0.0, atol=1e-12)
+    assert np.allclose(y, 0.0, atol=1e-12, rtol=0)
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +117,7 @@ def test_non_uniform_geometric_mesh(vie2_callable_smooth):
     y = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"],
                                p["y_exact"])
-    assert err < 1e-5
+    assert err < 5e-7
 
 
 def test_non_uniform_random_breakpoints(vie2_callable_smooth):
@@ -126,7 +128,7 @@ def test_non_uniform_random_breakpoints(vie2_callable_smooth):
     y = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"],
                                p["y_exact"])
-    assert err < 1e-3
+    assert err < 5e-5
 
 
 def test_single_interval_mesh(vie2_callable_smooth):
@@ -191,7 +193,7 @@ def test_singular_list_form_equals_scalar_form(vie2_callable_abel):
     common = dict(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"])
     y_scalar = solve_vie2(kernel_singularity=0.0, **common).node_values
     y_list = solve_vie2(kernel_singularity=[0.0], **common).node_values
-    assert np.allclose(y_scalar, y_list, atol=1e-14)
+    assert np.allclose(y_scalar, y_list, atol=1e-14, rtol=0)
 
 
 def test_singular_callable_form_equals_scalar_form(vie2_callable_abel):
@@ -202,7 +204,7 @@ def test_singular_callable_form_equals_scalar_form(vie2_callable_abel):
     y_scalar = solve_vie2(kernel_singularity=0.0, **common).node_values
     # Convolution u=0 in callable form returns the single s-location s=t
     y_callable = solve_vie2(kernel_singularity=lambda t: [t], **common).node_values
-    assert np.allclose(y_scalar, y_callable, atol=1e-14)
+    assert np.allclose(y_scalar, y_callable, atol=1e-14, rtol=0)
 
 
 def test_singular_at_nonzero_location():
@@ -240,7 +242,7 @@ def test_callable_scalar_evaluation(vie2_callable_smooth):
     mesh = np.linspace(0, 1, 21)
     _, y_func = with_sol(solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]))
     assert isinstance(y_func(0.37), float)
-    assert abs(y_func(0.37) - p["y_exact"](0.37)) < 1e-5
+    assert abs(y_func(0.37) - p["y_exact"](0.37)) < 5e-6
 
 
 def test_callable_array_evaluation(vie2_callable_smooth):
@@ -250,7 +252,7 @@ def test_callable_array_evaluation(vie2_callable_smooth):
     ts = np.array([0.1, 0.37, 0.5, 0.9])
     vals = y_func(ts)
     assert vals.shape == ts.shape
-    assert np.max(np.abs(vals - p["y_exact"](ts))) < 1e-5
+    assert np.max(np.abs(vals - p["y_exact"](ts))) < 5e-6
 
 
 def test_callable_exposes_polynomials_and_mesh(vie2_callable_smooth):
@@ -261,18 +263,6 @@ def test_callable_exposes_polynomials_and_mesh(vie2_callable_smooth):
     assert np.array_equal(y_func.mesh_breakpoints, mesh)
 
 
-@pytest.mark.parametrize("solver_call", [
-    lambda: solve_vie2(kernel=lambda u: np.exp(-u), g=lambda t: t, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([0, 1, 2]) / 2).node_values,
-    lambda: solve_vie1(kernel=lambda u: np.exp(u), g=lambda t: t, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([1, 2, 3]) / 3).node_values,
-    lambda: solve_vide(kernel=lambda u: 0.0, g=lambda t: t, y0=0.0, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([0, 1, 2]) / 2).node_values,
-])
-def test_return_function_default_is_false(solver_call):
-    """Without `return_function=True`, the solvers return just the array, not a tuple."""
-    result = solver_call()
-    assert isinstance(result, np.ndarray)
-    assert not isinstance(result, tuple)
-
-
 def test_callable_at_breakpoint_continuous(vie2_callable_smooth):
     """At an interior breakpoint, the wrapper should give a value close to the
     exact solution (the piecewise polynomial is near-continuous there)."""
@@ -280,7 +270,7 @@ def test_callable_at_breakpoint_continuous(vie2_callable_smooth):
     mesh = np.linspace(0, 1, 21)
     _, y_func = with_sol(solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]))
     t = mesh[5]
-    assert abs(y_func(t) - p["y_exact"](t)) < 1e-5
+    assert abs(y_func(t) - p["y_exact"](t)) < 1e-8
 
 
 # ---------------------------------------------------------------------------
@@ -297,11 +287,6 @@ def test_validation_mesh_not_starting_at_zero():
         solve_vie2(kernel=lambda u: 1.0, mesh=np.array([0.1, 0.5, 1.0]), coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
 
 
-def test_validation_coll_choices_out_of_range():
-    with pytest.raises(ValueError, match=r"coll_nodes must lie in \[0, 1\]"):
-        solve_vie2(kernel=lambda u: 1.0, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([0, 1, 5]) / 2).node_values
-
-
 def test_validation_kernel_not_callable():
     # An array kernel makes the problem sampled, where mesh= does not apply.
     with pytest.raises(ValueError, match="apply only to callable inputs"):
@@ -311,11 +296,6 @@ def test_validation_kernel_not_callable():
 def test_validation_g_not_callable():
     with pytest.raises(NotImplementedError, match="mixed inputs"):
         solve_vie2(kernel=lambda u: 1.0, g=np.zeros(10), mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
-
-
-def test_validation_coll_choices_duplicates():
-    with pytest.raises(ValueError, match="distinct"):
-        solve_vie2(kernel=lambda u: 1.0, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([1, 1, 2]) / 2).node_values
 
 
 @pytest.mark.parametrize("solver_kwargs_fn", [
@@ -330,7 +310,7 @@ def test_mesh_breakpoints_accepts_plain_list(solver_kwargs_fn):
     y_list = bundle["solver"](**bundle["kw"])
     bundle_arr = solver_kwargs_fn(np.asarray(mesh_list))
     y_arr = bundle_arr["solver"](**bundle_arr["kw"])
-    assert np.allclose(y_list, y_arr, atol=1e-14)
+    assert np.allclose(y_list, y_arr, atol=1e-14, rtol=0)
 
 
 # ---------------------------------------------------------------------------
@@ -359,11 +339,12 @@ def test_nan_from_g_is_rejected():
 # expected collocation points (catches off-by-one bugs in the future D port).
 # ---------------------------------------------------------------------------
 
-def test_coll_choices_not_mutated():
-    """coll_choices reversed → solver should sort internally but leave caller's list alone."""
-    choices = [2, 0, 1]
-    solve_vie2(kernel=lambda u: 1.0, g=lambda t: 1.0, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray(choices) / 2).node_values
-    assert choices == [2, 0, 1]
+def test_unsorted_coll_nodes_are_sorted_and_the_input_is_left_alone():
+    nodes = np.array([1.0, 0.0, 0.5])
+    kw = dict(kernel=lambda u: np.exp(-u), g=np.cos, mesh=np.linspace(0, 1, 5))
+    y = solve_vie2(**kw, coll_nodes=nodes).node_values
+    assert np.array_equal(nodes, [1.0, 0.0, 0.5])
+    assert np.array_equal(y, solve_vie2(**kw, coll_nodes=[0.0, 0.5, 1.0]).node_values)
 
 
 def test_g_called_at_expected_collocation_points():
@@ -393,20 +374,11 @@ def test_g_called_at_expected_collocation_points():
 
 def test_scipy_missing_friendly_import_error(monkeypatch, vie2_callable_abel):
     """When scipy can't be imported, the adaptive-quad path raises a clear
-    ImportError directing users to the [callable] extra."""
+    ImportError saying what is missing."""
     p = vie2_callable_abel
-
-    def raise_import(*_args, **_kwargs):
-        raise ImportError(
-            "function_solve_* requires scipy. Install via "
-            "`pip install volterra-equation-solvers[callable]`.")
-
-    monkeypatch.setattr(
-        "voles._functional._import_scipy_quad",
-        raise_import)
-
-    with pytest.raises(ImportError, match=r"\[callable\]"):
-        solve_vie2(kernel=p["kernel"], g=p["g"], mesh=np.linspace(0, 1, 11) ** 3, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"], kernel_singularity=p["kernel_singularity"]).node_values
+    monkeypatch.setitem(sys.modules, "scipy.integrate", None)
+    with pytest.raises(ImportError, match="requires scipy"):
+        solve_vie2(kernel=p["kernel"], g=p["g"], mesh=np.linspace(0, 1, 11) ** 3, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"], kernel_singularity=p["kernel_singularity"])
 
 
 # ---------------------------------------------------------------------------
@@ -423,8 +395,8 @@ def test_vec_diagonal_matches_scalar(vie2_callable_smooth, vie2_callable_vec_dia
     y_vec = solve_vie2(kernel=vp["kernel"], g=vp["g"], mesh=mesh, coll_nodes=np.asarray(vp["coll_choices"]) / vp["coll_divs"]).node_values
 
     assert y_vec.shape == (len(mesh) - 1, len(sp["coll_choices"]), vp["d"])
-    assert np.allclose(y_vec[..., 0], y_scalar, atol=1e-12)
-    assert np.allclose(y_vec[..., 1], y_scalar, atol=1e-12)
+    assert np.allclose(y_vec[..., 0], y_scalar, atol=1e-12, rtol=0)
+    assert np.allclose(y_vec[..., 1], y_scalar, atol=1e-12, rtol=0)
 
 
 def test_vec_diagonal_matches_exact(vie2_callable_vec_diagonal):
@@ -432,7 +404,7 @@ def test_vec_diagonal_matches_exact(vie2_callable_vec_diagonal):
     mesh = np.linspace(0, 1, 21)
     y = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-6
+    assert err < 1e-7
 
 
 def test_vec_coupled_kernel_matches_exact(vie2_callable_vec_coupled):
@@ -441,7 +413,7 @@ def test_vec_coupled_kernel_matches_exact(vie2_callable_vec_coupled):
     mesh = np.linspace(0, 1, 21)
     y = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-6
+    assert err < 5e-9
 
 
 def test_vec_constant_coupled_kernel_polynomial_exact():
@@ -462,7 +434,7 @@ def test_vec_non_uniform_mesh(vie2_callable_vec_coupled):
     mesh = np.linspace(0, 1, 21) ** 1.5
     y = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-5
+    assert err < 2e-8
 
 
 def test_vec_g_none_treated_as_zero(vie2_callable_vec_diagonal):
@@ -471,7 +443,7 @@ def test_vec_g_none_treated_as_zero(vie2_callable_vec_diagonal):
     mesh = np.linspace(0, 1, 11)
     y = solve_vie2(kernel=p["kernel"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     assert y.shape == (10, 3, p["d"])
-    assert np.allclose(y, 0.0, atol=1e-12)
+    assert np.allclose(y, 0.0, atol=1e-12, rtol=0)
 
 
 def test_vec_callable_solution_wrapper(vie2_callable_vec_diagonal):
@@ -482,14 +454,14 @@ def test_vec_callable_solution_wrapper(vie2_callable_vec_diagonal):
     # Scalar t -> (d,) array
     val = y_func(0.37)
     assert val.shape == (p["d"],)
-    assert np.allclose(val, p["y_exact"](0.37), atol=1e-5)
+    assert np.allclose(val, p["y_exact"](0.37), atol=5e-6, rtol=0)
 
     # Array t -> (len(t), d) array
     ts = np.array([0.1, 0.37, 0.5, 0.9])
     vals = y_func(ts)
     assert vals.shape == (len(ts), p["d"])
     expected = np.stack([p["y_exact"](t) for t in ts])
-    assert np.max(np.abs(vals - expected)) < 1e-5
+    assert np.max(np.abs(vals - expected)) < 5e-6
 
     # Polynomials list has M entries, each a (d,) object array of Polynomials
     assert len(y_func.polynomials) == len(mesh) - 1
@@ -531,7 +503,7 @@ def test_vie2_complex_scalar_matches_exact():
     y = solve_vie2(kernel=K, g=g, mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
     assert y.dtype == np.complex128
     err = _collect_node_values(y, mesh, 2, [0, 1, 2], lambda t: np.exp(1j * t))
-    assert err < 1e-6
+    assert err < 2e-7
 
 
 def test_vie2_complex_return_function():
@@ -542,11 +514,11 @@ def test_vie2_complex_return_function():
     y_arr, y_func = with_sol(solve_vie2(kernel=K, g=g, mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2))
     val = y_func(0.5)
     assert isinstance(val, complex)
-    assert abs(val - np.exp(1j * 0.5)) < 1e-6
+    assert abs(val - np.exp(1j * 0.5)) < 5e-8
     ts = np.array([0.1, 0.5, 1.0])
     vals = y_func(ts)
     assert vals.dtype == np.complex128
-    assert np.max(np.abs(vals - np.exp(1j * ts))) < 1e-6
+    assert np.max(np.abs(vals - np.exp(1j * ts))) < 1e-7
 
 
 def test_vie2_complex_vector_diagonal():
@@ -560,7 +532,7 @@ def test_vie2_complex_vector_diagonal():
     err = _collect_node_values(
         y, mesh, 2, [0, 1, 2],
         lambda t: np.array([np.exp(1j * t), np.exp(1j * t)]))
-    assert err < 1e-6
+    assert err < 2e-7
 
 
 def test_vide_complex_matches_exact():
@@ -572,7 +544,7 @@ def test_vide_complex_matches_exact():
     y = solve_vide(kernel=K, a=a, g=g, y0=1.0 + 0j, mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
     assert y.dtype == np.complex128
     err = _collect_node_values(y, mesh, 2, [0, 1, 2], lambda t: np.exp(1j * t))
-    assert err < 1e-6
+    assert err < 2e-7
 
 
 def test_vie1_complex_matches_exact():
@@ -583,7 +555,7 @@ def test_vie1_complex_matches_exact():
     y = solve_vie1(kernel=K, g=g, mesh=mesh, coll_nodes=np.asarray([1, 2, 3]) / 3).node_values
     assert y.dtype == np.complex128
     err = _collect_node_values(y, mesh, 3, [1, 2, 3], lambda t: np.exp(1j * t))
-    assert err < 1e-4
+    assert err < 1e-5
 
 
 def test_complex_detection_catches_late_complex_returns():
@@ -593,10 +565,14 @@ def test_complex_detection_catches_late_complex_returns():
         if u >= 1.5:
             return 0.5 + 0.1j
         return 0.5
-    g = lambda t: 1.0 + 0j  # explicitly complex so the result is unambiguously complex
+    g = lambda t: 1.0                     # real: only the kernel can trigger the dispatch
     mesh = np.linspace(0, 2.0, 41)
     y = solve_vie2(kernel=K, g=g, mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
     assert y.dtype == np.complex128
+    # the same problem with a kernel that is complex-typed everywhere
+    ref = solve_vie2(kernel=lambda u: complex(K(u)), g=g, mesh=mesh,
+                     coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
+    np.testing.assert_allclose(y, ref, rtol=0, atol=1e-12)
 
 
 def test_complex_detection_via_init_only(vie2_callable_smooth):
@@ -606,7 +582,7 @@ def test_complex_detection_via_init_only(vie2_callable_smooth):
     # Trivial VIDE with K=0, a=0, g=0, y_0 = 1+i -> y(t) = 1+i constant
     y = solve_vide(kernel=lambda u: 0.0, y0=1.0 + 1j, mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
     assert y.dtype == np.complex128
-    assert np.allclose(y, 1.0 + 1j, atol=1e-12)
+    assert np.allclose(y, 1.0 + 1j, atol=1e-12, rtol=0)
 
 
 def test_complex_late_detection_raises_clear_error(monkeypatch):
@@ -703,7 +679,7 @@ def test_vie1_complex_force_continuous():
     assert abs(y_func(0.0) - (1.0 + 0j)) < 1e-12
     # And the full solution matches the closed form
     err = _collect_node_values(y_arr, mesh, 3, [1, 2, 3], lambda t: np.exp(1j * t))
-    assert err < 1e-4
+    assert err < 1e-7
 
 
 def test_complex_real_matches_real_path(vie2_callable_smooth):
@@ -717,8 +693,8 @@ def test_complex_real_matches_real_path(vie2_callable_smooth):
     y_complex = solve_vie2(kernel=K_complex, g=g_complex, mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     y_real = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     assert y_complex.dtype == np.complex128
-    assert np.allclose(y_complex.real, y_real, atol=1e-10)
-    assert np.allclose(y_complex.imag, 0.0, atol=1e-10)
+    assert np.allclose(y_complex.real, y_real, atol=1e-12, rtol=0)
+    assert np.allclose(y_complex.imag, 0.0, atol=1e-12, rtol=0)
 
 
 # ---------------------------------------------------------------------------
@@ -731,7 +707,7 @@ def test_vide_pure_ode_matches_exact(vide_callable_ode):
     mesh = np.linspace(0, 1, 21)
     y = solve_vide(kernel=p["kernel"], a=p["a"], g=p["g"], y0=p["soln_init_value"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-6
+    assert err < 5e-7
 
 
 def test_vide_smooth_matches_exact(vide_callable_smooth):
@@ -739,7 +715,7 @@ def test_vide_smooth_matches_exact(vide_callable_smooth):
     mesh = np.linspace(0, 1, 21)
     y = solve_vide(kernel=p["kernel"], a=p["a"], g=p["g"], y0=p["soln_init_value"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-6
+    assert err < 1e-7
 
 
 @pytest.mark.parametrize("M_target", [10, 20, 40])
@@ -774,7 +750,7 @@ def test_vide_g_none_treated_as_zero():
     """g=None with K=0, a=0: y'(t) = 0, so y(t) = y_0 constant."""
     mesh = np.linspace(0, 1, 11)
     y = solve_vide(kernel=lambda u: 0.0, y0=3.0, mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
-    assert np.allclose(y, 3.0, atol=1e-12)
+    assert np.allclose(y, 3.0, atol=1e-12, rtol=0)
 
 
 def test_vide_non_uniform_mesh(vide_callable_smooth):
@@ -782,7 +758,7 @@ def test_vide_non_uniform_mesh(vide_callable_smooth):
     mesh = np.linspace(0, 1, 21) ** 1.5
     y = solve_vide(kernel=p["kernel"], a=p["a"], g=p["g"], y0=p["soln_init_value"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-5
+    assert err < 5e-7
 
 
 def test_vide_callable_solution_wrapper(vide_callable_smooth):
@@ -790,11 +766,11 @@ def test_vide_callable_solution_wrapper(vide_callable_smooth):
     mesh = np.linspace(0, 1, 21)
     y_arr, y_func = with_sol(solve_vide(kernel=p["kernel"], a=p["a"], g=p["g"], y0=p["soln_init_value"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]))
     assert isinstance(y_func(0.37), float)
-    assert abs(y_func(0.37) - p["y_exact"](0.37)) < 1e-5
+    assert abs(y_func(0.37) - p["y_exact"](0.37)) < 1e-7
     ts = np.array([0.1, 0.5, 0.9])
     vals = y_func(ts)
     assert vals.shape == ts.shape
-    assert np.max(np.abs(vals - p["y_exact"](ts))) < 1e-5
+    assert np.max(np.abs(vals - p["y_exact"](ts))) < 5e-8
     # Initial condition should be honored exactly via y_boundary[0].
     assert abs(y_func(0.0) - p["soln_init_value"]) < 1e-12
 
@@ -807,8 +783,8 @@ def test_vide_vec_diagonal_matches_scalar(vide_callable_smooth, vide_callable_ve
     y_scalar = solve_vide(kernel=sp["kernel"], a=sp["a"], g=sp["g"], y0=sp["soln_init_value"], mesh=mesh, coll_nodes=np.asarray(sp["coll_choices"]) / sp["coll_divs"]).node_values
     y_vec = solve_vide(kernel=vp["kernel"], a=vp["a"], g=vp["g"], y0=vp["soln_init_value"], mesh=mesh, coll_nodes=np.asarray(vp["coll_choices"]) / vp["coll_divs"]).node_values
     assert y_vec.shape == (len(mesh) - 1, len(sp["coll_choices"]), vp["d"])
-    assert np.allclose(y_vec[..., 0], y_scalar, atol=1e-12)
-    assert np.allclose(y_vec[..., 1], y_scalar, atol=1e-12)
+    assert np.allclose(y_vec[..., 0], y_scalar, atol=1e-12, rtol=0)
+    assert np.allclose(y_vec[..., 1], y_scalar, atol=1e-12, rtol=0)
 
 
 def test_vide_vec_matches_exact(vide_callable_vec_diagonal):
@@ -816,7 +792,7 @@ def test_vide_vec_matches_exact(vide_callable_vec_diagonal):
     mesh = np.linspace(0, 1, 21)
     y = solve_vide(kernel=p["kernel"], a=p["a"], g=p["g"], y0=p["soln_init_value"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-6
+    assert err < 1e-7
 
 
 def test_vide_vec_callable_wrapper(vide_callable_vec_diagonal):
@@ -825,13 +801,7 @@ def test_vide_vec_callable_wrapper(vide_callable_vec_diagonal):
     _, y_func = with_sol(solve_vide(kernel=p["kernel"], a=p["a"], g=p["g"], y0=p["soln_init_value"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]))
     val = y_func(0.37)
     assert val.shape == (p["d"],)
-    assert np.max(np.abs(val - p["y_exact"](0.37))) < 1e-5
-
-
-def test_vide_validation_soln_init_required():
-    """soln_init_value is required (no default)."""
-    with pytest.raises(TypeError):
-        solve_vide(kernel=lambda u: 0.0, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
+    assert np.max(np.abs(val - p["y_exact"](0.37))) < 1e-7
 
 
 def test_vide_vec_validation_init_wrong_shape(vide_callable_vec_diagonal):
@@ -866,7 +836,7 @@ def test_vie1_polynomial_exact(vie1_callable_poly):
     mesh = np.linspace(0, 1, 11)
     y = solve_vie1(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-10
+    assert err < 1e-12
 
 
 @pytest.mark.parametrize("M_target", [10, 20, 40])
@@ -886,7 +856,7 @@ def test_vie1_g_none_treated_as_zero():
     """g=None: trivial solution y=0."""
     mesh = np.linspace(0, 1, 11)
     y = solve_vie1(kernel=lambda u: np.exp(u), mesh=mesh, coll_nodes=np.asarray([1, 2, 3]) / 3).node_values
-    assert np.allclose(y, 0.0, atol=1e-12)
+    assert np.allclose(y, 0.0, atol=1e-12, rtol=0)
 
 
 def test_vie1_non_uniform_mesh(vie1_callable_smooth):
@@ -894,7 +864,7 @@ def test_vie1_non_uniform_mesh(vie1_callable_smooth):
     mesh = np.linspace(0, 1, 21) ** 1.5
     y = solve_vie1(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-4
+    assert err < 5e-5
 
 
 def test_vie1_callable_solution_wrapper(vie1_callable_smooth):
@@ -902,7 +872,7 @@ def test_vie1_callable_solution_wrapper(vie1_callable_smooth):
     mesh = np.linspace(0, 1, 21)
     _, y_func = with_sol(solve_vie1(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]))
     assert isinstance(y_func(0.37), float)
-    assert abs(y_func(0.37) - p["y_exact"](0.37)) < 1e-4
+    assert abs(y_func(0.37) - p["y_exact"](0.37)) < 2e-6
 
 
 def test_vie1_force_continuous_matches_exact(vie1_callable_smooth):
@@ -911,7 +881,7 @@ def test_vie1_force_continuous_matches_exact(vie1_callable_smooth):
     mesh = np.linspace(0, 1, 21)
     y = run(solve_vie1, show_warnings=False, kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"], y0=p["y_exact"](0.0), continuous=True).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-4
+    assert err < 1e-7
 
 
 def test_vie1_force_continuous_callable(vie1_callable_smooth):
@@ -929,8 +899,8 @@ def test_vie1_vec_diagonal_matches_scalar(vie1_callable_smooth, vie1_callable_ve
     y_scalar = solve_vie1(kernel=sp["kernel"], g=sp["g"], mesh=mesh, coll_nodes=np.asarray(sp["coll_choices"]) / sp["coll_divs"]).node_values
     y_vec = solve_vie1(kernel=vp["kernel"], g=vp["g"], mesh=mesh, coll_nodes=np.asarray(vp["coll_choices"]) / vp["coll_divs"]).node_values
     assert y_vec.shape == (len(mesh) - 1, len(sp["coll_choices"]), vp["d"])
-    assert np.allclose(y_vec[..., 0], y_scalar, atol=1e-12)
-    assert np.allclose(y_vec[..., 1], y_scalar, atol=1e-12)
+    assert np.allclose(y_vec[..., 0], y_scalar, atol=1e-12, rtol=0)
+    assert np.allclose(y_vec[..., 1], y_scalar, atol=1e-12, rtol=0)
 
 
 def test_vie1_vec_matches_exact(vie1_callable_vec_diagonal):
@@ -946,19 +916,7 @@ def test_vie1_vec_force_continuous(vie1_callable_vec_diagonal):
     mesh = np.linspace(0, 1, 21)
     y = run(solve_vie1, show_warnings=False, kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"], y0=p["y_exact"](0.0), continuous=True).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-4
-
-
-def test_vie1_validation_zero_in_coll_choices():
-    """Zero is invalid for VIE-1 (both sides of equation vanish at t=0)."""
-    with pytest.raises(ValueError, match=r"coll_nodes must lie in \(0, 1\]"):
-        solve_vie1(kernel=lambda u: 1.0, g=lambda t: t, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([0, 1]) / 2).node_values
-
-
-def test_vie1_validation_nonconvergent_setting():
-    """Empirically-known non-convergent settings are rejected."""
-    with pytest.raises(ValueError, match="convergent"):
-        solve_vie1(kernel=lambda u: 1.0, g=lambda t: t, mesh=np.linspace(0, 1, 10), coll_nodes=np.asarray([1]) / 3).node_values
+    assert err < 1e-7
 
 
 def test_vie1_validation_force_continuous_no_init():
@@ -971,11 +929,6 @@ def test_vie1_rejects_y0_without_continuous():
     with pytest.raises(ValueError, match="y0 is used only by the continuous method"):
         solve_vie1(kernel=lambda u: 1.0, g=lambda t: t, y0=1.0, mesh=np.linspace(0, 1, 5),
                    coll_nodes=np.asarray([1, 2, 3]) / 3)
-
-
-def test_vie1_silent_when_show_warnings_false(voles_warnings):
-    run(solve_vie1, show_warnings=False, kernel=lambda u: 1.0, g=lambda t: t, mesh=np.linspace(0, 1, 5), coll_nodes=np.asarray([1, 2, 3]) / 3).node_values
-    assert voles_warnings.text() == ""
 
 
 # ---------------------------------------------------------------------------
@@ -1007,7 +960,7 @@ def test_graded_mesh_alpha_zero_is_uniform():
     expected = np.linspace(0.0, 1.0, 11)
     for order in (1, 3, 5):
         mesh = optimal_graded_mesh(alpha=0.0, t_end=1.0, n_intervals=10, order=order)
-        assert np.allclose(mesh, expected)
+        assert np.allclose(mesh, expected, rtol=0, atol=1e-14)
 
 
 def test_graded_mesh_validation():
@@ -1065,12 +1018,6 @@ def test_smooth_kernel_uniform_mesh_does_not_warn(voles_warnings, vie2_callable_
     assert voles_warnings.text() == ""
 
 
-def test_singularity_warning_silenced_by_show_warnings_false(voles_warnings, vie2_callable_abel):
-    p = vie2_callable_abel
-    run(solve_vie2, show_warnings=False, kernel=p["kernel"], g=p["g"], mesh=np.linspace(0, 1, 21), coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"], kernel_singularity=p["kernel_singularity"]).node_values
-    assert voles_warnings.text() == ""
-
-
 def test_uniform_mesh_with_singularity_warns_vie1(voles_warnings, vie1_callable_abel):
     """VIE-1 fires the same foot-gun warning as VIE-2."""
     p = vie1_callable_abel
@@ -1118,7 +1065,7 @@ def test_vide_singular_kernel_graded_mesh(vide_callable_abel):
     y = run(solve_vide, show_warnings=False, kernel=p["kernel"], a=p["a"], g=p["g"], y0=p["soln_init_value"], mesh=graded, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"], kernel_singularity=p["kernel_singularity"]).node_values
     err = _collect_node_values(y, graded, p["coll_divs"],
                                p["coll_choices"], p["y_exact"])
-    assert err < 1e-3
+    assert err < 1e-5
 
 
 def test_vie1_singular_undeclared_raises():
@@ -1161,14 +1108,6 @@ def test_abel_convergence_with_graded_mesh(vie2_callable_abel):
 # Package-level exports (smoke test that import-path works for users).
 # ---------------------------------------------------------------------------
 
-def test_package_level_exports():
-    import voles as ves
-    assert ves.solve_vie1 is solve_vie1
-    assert ves.solve_vie2 is solve_vie2
-    assert ves.solve_vide is solve_vide
-    assert ves.optimal_graded_mesh is optimal_graded_mesh
-
-
 # ---------------------------------------------------------------------------
 # Non-uniform mesh stress tests
 #
@@ -1187,7 +1126,7 @@ def test_stress_extreme_width_ratio_vie2(vie2_callable_smooth):
     y = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     assert np.all(np.isfinite(y))
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-2  # loose -- large intervals limit overall accuracy
+    assert err < 2e-6
 
 
 def test_stress_many_intervals_vie2(vie2_callable_smooth):
@@ -1196,7 +1135,7 @@ def test_stress_many_intervals_vie2(vie2_callable_smooth):
     mesh = np.linspace(0, 1, 501)
     y = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-10
+    assert err < 1e-12
 
 
 def test_stress_strong_grading_vie2(vie2_callable_abel):
@@ -1217,7 +1156,7 @@ def test_stress_vide_extreme_width_ratio(vide_callable_smooth):
     y = solve_vide(kernel=p["kernel"], a=p["a"], g=p["g"], y0=p["soln_init_value"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     assert np.all(np.isfinite(y))
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-2
+    assert err < 2e-6
 
 
 def test_stress_vie1_extreme_width_ratio(vie1_callable_smooth):
@@ -1228,7 +1167,7 @@ def test_stress_vie1_extreme_width_ratio(vie1_callable_smooth):
     y = solve_vie1(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     assert np.all(np.isfinite(y))
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-2
+    assert err < 1e-4
 
 
 def test_stress_single_long_interval(vie2_callable_smooth):
@@ -1257,7 +1196,7 @@ def test_stress_t_large_via_mesh():
         for i, pos in enumerate(node_pos):
             t = t_n + pos * h_n
             err = max(err, abs(y[n, i] - np.sin(t)))
-    assert err < 1e-3
+    assert err < 2e-6
 
 
 # ---------------------------------------------------------------------------
@@ -1295,7 +1234,7 @@ def test_matrix_vie2_matches_per_column_vector(vie2_callable_vec_diagonal):
     for j in range(shifts.shape[1]):
         g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
         y_col = solve_vie2(kernel=p["kernel"], g=g_col, mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
-        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12, rtol=0)
 
 
 def test_matrix_vie2_single_column_equals_vector(vie2_callable_vec_diagonal):
@@ -1306,7 +1245,7 @@ def test_matrix_vie2_single_column_equals_vector(vie2_callable_vec_diagonal):
     y_mat = solve_vie2(kernel=p["kernel"], g=g_col, mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     y_vec = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     assert y_mat.shape == y_vec.shape + (1,)
-    assert np.allclose(y_mat[..., 0], y_vec, atol=1e-12)
+    assert np.allclose(y_mat[..., 0], y_vec, atol=1e-12, rtol=0)
 
 
 def test_matrix_vie2_return_function(vie2_callable_vec_diagonal):
@@ -1330,7 +1269,7 @@ def test_matrix_vie2_return_function(vie2_callable_vec_diagonal):
     for j in range(m):
         g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
         _, f_col = with_sol(solve_vie2(kernel=p["kernel"], g=g_col, mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]))
-        assert np.allclose(vals[..., j], f_col(ts), atol=1e-10)
+        assert np.allclose(vals[..., j], f_col(ts), atol=1e-12, rtol=0)
 
     # Polynomials list: M entries, each a (d, m) object array.
     assert len(y_func.polynomials) == len(mesh) - 1
@@ -1347,7 +1286,7 @@ def test_matrix_vie2_breakpoint_continuous(vie2_callable_vec_diagonal):
     for bp in mesh[1:-1]:
         left = y_func(bp - 1e-9)
         right = y_func(bp + 1e-9)
-        assert np.allclose(left, right, atol=1e-6)
+        assert np.allclose(left, right, atol=5e-8, rtol=0)
 
 
 def test_matrix_vie2_matches_array_solver():
@@ -1377,7 +1316,7 @@ def test_matrix_vie2_matches_array_solver():
 
     mesh = np.linspace(0, T, 21)
     _, y_func = with_sol(solve_vie2(kernel=kernel, g=g_mat, mesh=mesh, coll_nodes=np.asarray(coll_choices) / coll_divs))
-    assert np.max(np.abs(y_func(times) - soln_arr)) < 1e-3
+    assert np.max(np.abs(y_func(times) - soln_arr)) < 5e-5
 
 
 def test_matrix_vie2_g_wrong_shape_raises(vie2_callable_vec_diagonal):
@@ -1403,7 +1342,7 @@ def test_matrix_vide_matches_per_column_vector(vide_callable_vec_diagonal):
     for j in range(m):
         g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
         y_col = solve_vide(kernel=p["kernel"], a=p["a"], g=g_col, y0=init[:, j], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
-        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12, rtol=0)
 
 
 def test_matrix_vide_return_function(vide_callable_vec_diagonal):
@@ -1423,7 +1362,7 @@ def test_matrix_vide_return_function(vide_callable_vec_diagonal):
     for j in range(m):
         g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
         _, f_col = with_sol(solve_vide(kernel=p["kernel"], a=p["a"], g=g_col, y0=init[:, j], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]))
-        assert np.allclose(vals[..., j], f_col(ts), atol=1e-10)
+        assert np.allclose(vals[..., j], f_col(ts), atol=1e-12, rtol=0)
 
 
 def test_matrix_vide_init_wrong_shape_raises(vide_callable_vec_diagonal):
@@ -1452,7 +1391,7 @@ def test_matrix_vie1_matches_per_column_vector(vie1_callable_vec_diagonal):
         assert err < 1e-5     # discretization error (~2e-6 here)
         g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j] * t
         y_col = solve_vie1(kernel=p["kernel"], g=g_col, mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
-        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12, rtol=0)
 
 
 def test_matrix_vie1_force_continuous(vie1_callable_vec_diagonal):
@@ -1471,10 +1410,10 @@ def test_matrix_vie1_force_continuous(vie1_callable_vec_diagonal):
         err = _collect_node_values(
             y_mat[..., j], mesh, p["coll_divs"], p["coll_choices"],
             lambda t, j=j: p["y_exact"](t) + shifts[:, j] * (1 - t))
-        assert err < 1e-5     # discretization error (~2e-6 here)
+        assert err < 1e-7     # discretization error (~2e-6 here)
         g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j] * t
         y_col = solve_vie1(kernel=p["kernel"], g=g_col, y0=init[:, j], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"], continuous=True).node_values
-        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12, rtol=0)
 
 
 def test_matrix_complex_vie2_matches_per_column():
@@ -1502,8 +1441,8 @@ def test_matrix_complex_vie2_matches_per_column():
     assert y_mat.shape[2:] == (d, m)
     for j in range(m):
         y_col, f_col = with_sol(solve_vie2(kernel=kernel, g=lambda t, j=j: g_col(t, j), mesh=mesh))
-        assert np.allclose(y_mat[..., j], y_col, atol=1e-10)
-        assert np.allclose(f_mat(ts)[..., j], f_col(ts), atol=1e-10)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12, rtol=0)
+        assert np.allclose(f_mat(ts)[..., j], f_col(ts), atol=1e-12, rtol=0)
 
 
 def test_matrix_complex_vide_matches_per_column():
@@ -1531,7 +1470,7 @@ def test_matrix_complex_vide_matches_per_column():
     assert y_mat.dtype == np.complex128
     for j in range(m):
         y_col = solve_vide(kernel=kernel, a=lambda t: a_mat, g=lambda t, j=j: g_col(t, j), y0=init[:, j], mesh=mesh).node_values
-        assert np.allclose(y_mat[..., j], y_col, atol=1e-10)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12, rtol=0)
 
 
 # ---------------------------------------------------------------------------
@@ -1547,7 +1486,7 @@ def test_vie1_vec_coupled_matches_exact(vie1_callable_vec_coupled):
     mesh = np.linspace(0, 1, 21)
     y = solve_vie1(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-6
+    assert err < 1e-12
 
 
 def test_vie1_vec_coupled_non_uniform_mesh(vie1_callable_vec_coupled):
@@ -1555,7 +1494,7 @@ def test_vie1_vec_coupled_non_uniform_mesh(vie1_callable_vec_coupled):
     mesh = np.linspace(0, 1, 21) ** 1.5
     y = solve_vie1(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-5
+    assert err < 1e-12
 
 
 def test_vide_vec_coupled_matches_exact(vide_callable_vec_coupled):
@@ -1563,7 +1502,7 @@ def test_vide_vec_coupled_matches_exact(vide_callable_vec_coupled):
     mesh = np.linspace(0, 1, 21)
     y = solve_vide(kernel=p["kernel"], a=p["a"], g=p["g"], y0=p["soln_init_value"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-6
+    assert err < 1e-12
 
 
 def test_vide_vec_coupled_non_uniform_mesh(vide_callable_vec_coupled):
@@ -1571,7 +1510,7 @@ def test_vide_vec_coupled_non_uniform_mesh(vide_callable_vec_coupled):
     mesh = np.linspace(0, 1, 21) ** 1.5
     y = solve_vide(kernel=p["kernel"], a=p["a"], g=p["g"], y0=p["soln_init_value"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-5
+    assert err < 1e-12
 
 
 def test_matrix_vie1_coupled_matches_exact_and_columns(vie1_callable_vec_coupled):
@@ -1591,10 +1530,10 @@ def test_matrix_vie1_coupled_matches_exact_and_columns(vie1_callable_vec_coupled
     for j in range(shifts.shape[1]):
         err = _collect_node_values(y_mat[..., j], mesh, p["coll_divs"], p["coll_choices"],
                                    lambda t, j=j: p["y_exact"](t) + y_shift[:, j])
-        assert err < 1e-6
+        assert err < 1e-12
         g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j] * t
         y_col = solve_vie1(kernel=p["kernel"], g=g_col, mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
-        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12, rtol=0)
 
 
 def test_matrix_vide_coupled_matches_exact_and_columns(vide_callable_vec_coupled):
@@ -1615,12 +1554,12 @@ def test_matrix_vide_coupled_matches_exact_and_columns(vide_callable_vec_coupled
 
     err0 = _collect_node_values(y_mat[..., 0], mesh, p["coll_divs"],
                                 p["coll_choices"], p["y_exact"])
-    assert err0 < 1e-6
+    assert err0 < 1e-12
 
     for j in range(init.shape[1]):
         g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j]
         y_col = solve_vide(kernel=p["kernel"], a=p["a"], g=g_col, y0=init[:, j], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
-        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12, rtol=0)
 
 
 def test_matrix_vie1_return_function(vie1_callable_vec_coupled):
@@ -1648,11 +1587,11 @@ def test_matrix_vie1_return_function(vie1_callable_vec_coupled):
     for j in range(m):
         assert np.allclose(vals[..., j],
                            np.stack([p["y_exact"](t) + y_shift[:, j] for t in ts]),
-                           atol=1e-5)
+                           atol=1e-12, rtol=0)
     for j in range(m):
         g_col = lambda t, j=j: np.asarray(p["g"](t)) + shifts[:, j] * t
         _, f_col = with_sol(solve_vie1(kernel=p["kernel"], g=g_col, mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]))
-        assert np.allclose(vals[..., j], f_col(ts), atol=1e-10)
+        assert np.allclose(vals[..., j], f_col(ts), atol=1e-12, rtol=0)
 
 
 # ---------------------------------------------------------------------------
@@ -1672,7 +1611,7 @@ def test_vec_larger_d_diagonal_matches_scalar():
     y_vec = solve_vie2(kernel=kernel, g=g, mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
     assert y_vec.shape == (len(mesh) - 1, 3, d)
     for r in range(d):
-        assert np.allclose(y_vec[..., r], y_scalar, atol=1e-10)
+        assert np.allclose(y_vec[..., r], y_scalar, atol=1e-12, rtol=0)
 
 
 # ---------------------------------------------------------------------------
@@ -1717,7 +1656,7 @@ def test_matrix_complex_vie1_matches_per_column():
     assert y_mat.shape[2:] == (d, m)
     for j in range(m):
         y_col = solve_vie1(kernel=kernel, g=lambda t, j=j: g_col(t, j), mesh=mesh).node_values
-        assert np.allclose(y_mat[..., j], y_col, atol=1e-10)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12, rtol=0)
 
     # force_continuous mode with a complex (d, m) initial value, consistent
     # with the data: g'(0) = K(0) y(0), and g_col is linear in t.
@@ -1727,8 +1666,8 @@ def test_matrix_complex_vie1_matches_per_column():
     ts = np.array([0.3, 1.1, 1.9])
     for j in range(m):
         y_col, f_col = with_sol(solve_vie1(kernel=kernel, g=lambda t, j=j: g_col(t, j), y0=init[:, j], mesh=mesh, continuous=True))
-        assert np.allclose(y_mat_fc[..., j], y_col, atol=1e-10)
-        assert np.allclose(f_mat(ts)[..., j], f_col(ts), atol=1e-10)
+        assert np.allclose(y_mat_fc[..., j], y_col, atol=1e-12, rtol=0)
+        assert np.allclose(f_mat(ts)[..., j], f_col(ts), atol=1e-12, rtol=0)
 
 
 # ===========================================================================
@@ -1758,7 +1697,7 @@ def test_vec_singular_graded_mesh_recovers_high_order():
     mesh = optimal_graded_mesh(alpha=0.5, t_end=1.0, n_intervals=30, order=len(coll_choices))
     y = solve_vie2(kernel=kernel, g=g, mesh=mesh, coll_nodes=np.asarray(coll_choices) / 2, kernel_singularity=0.0).node_values
     err = _collect_node_values(y, mesh, 2, coll_choices, y_exact)
-    assert err < 1e-3
+    assert err < 5e-4
 
 
 def test_matrix_singular_graded_mesh():
@@ -1783,11 +1722,11 @@ def test_matrix_singular_graded_mesh():
     assert y_mat.shape == (len(mesh) - 1, len(coll_choices), d, m)
     err0 = _collect_node_values(y_mat[..., 0], mesh, 2, coll_choices,
                                 lambda t: np.full(d, np.sqrt(t)))
-    assert err0 < 1e-3
+    assert err0 < 5e-4
     for j in range(m):
         g_col = lambda t, j=j: g_vec(t) + shifts[:, j]
         y_col = solve_vie2(kernel=kernel, g=g_col, mesh=mesh, coll_nodes=np.asarray(coll_choices) / 2, kernel_singularity=0.0).node_values
-        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12, rtol=0)
 
 
 def test_vec_nonfinite_kernel_raises():
@@ -1802,18 +1741,12 @@ def test_vec_nonfinite_kernel_raises():
 
 # --- (2) NaN from a(t) in VIDE ---------------------------------------------
 
-def test_nan_from_a_propagates_vide():
-    """A NaN returned by a(t) at a collocation point must not silently vanish:
-    it either raises or propagates into the solution (matches the array suite)."""
+def test_nan_from_a_is_rejected_vide():
+    """A NaN returned by a(t) at a collocation point must not silently vanish."""
     def a_nan(t):
-        if 0.3 < t < 0.4:
-            return float("nan")
-        return 0.0
-    try:
-        y = solve_vide(kernel=lambda u: np.exp(-u), a=a_nan, g=lambda t: 1.0, y0=0.0, mesh=np.linspace(0, 1, 11), coll_nodes=np.asarray([0, 1, 2]) / 2).node_values
-    except (ValueError, FloatingPointError):
-        return  # raised — acceptable
-    assert np.any(~np.isfinite(y))  # otherwise it must have propagated
+        return float("nan") if 0.3 < t < 0.4 else 0.0
+    with pytest.raises(ValueError, match=r"a\(t\) returned a non-finite value"):
+        solve_vide(kernel=lambda u: np.exp(-u), a=a_nan, g=lambda t: 1.0, y0=0.0, mesh=np.linspace(0, 1, 11), coll_nodes=np.asarray([0, 1, 2]) / 2)
 
 
 # --- (3) a not callable -----------------------------------------------------
@@ -1838,7 +1771,7 @@ def test_matrix_vide_g_none(vide_callable_vec_diagonal):
     assert y_mat.shape == (len(mesh) - 1, len(p["coll_choices"]), d, m)
     for j in range(m):
         y_col = solve_vide(kernel=p["kernel"], a=p["a"], y0=init[:, j], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
-        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12, rtol=0)
 
 
 # --- (5) Exceeding the compiled p / d limits -------------------------------
@@ -1871,14 +1804,14 @@ def test_vectorized_and_scalar_kernel_agree():
     common = dict(g=g, mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2)
     y_vec = solve_vie2(kernel=lambda u: np.exp(-u), **common).node_values  # broadcasts
     y_sca = solve_vie2(kernel=lambda u: math.exp(-u), **common).node_values  # scalar-only
-    assert np.allclose(y_vec, y_sca, atol=1e-12)
+    assert np.allclose(y_vec, y_sca, atol=1e-12, rtol=0)
 
 
 # --- (7) Breakpoint continuity for vector / VIDE / VIE-1 wrappers ----------
 
-def _assert_breakpoint_continuous(y_func, mesh, atol=1e-6):
+def _assert_breakpoint_continuous(y_func, mesh):
     for bp in mesh[1:-1]:
-        assert np.allclose(y_func(bp - 1e-9), y_func(bp + 1e-9), atol=atol)
+        assert np.allclose(y_func(bp - 1e-9), y_func(bp + 1e-9), atol=5e-8, rtol=0)
 
 
 def test_vec_vie2_breakpoint_continuous(vie2_callable_vec_diagonal):
@@ -1902,7 +1835,7 @@ def test_vec_vie1_breakpoint_continuous_force_continuous(vie1_callable_vec_diago
     p = vie1_callable_vec_diagonal
     mesh = np.linspace(0, 1, 19)
     _, y_func = with_sol(solve_vie1(kernel=p["kernel"], g=p["g"], y0=p["y_exact"](0.0), mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"], continuous=True))
-    _assert_breakpoint_continuous(y_func, mesh, atol=1e-5)
+    _assert_breakpoint_continuous(y_func, mesh)
 
 
 # --- (8) Mixed real/complex inputs -----------------------------------------
@@ -1920,7 +1853,7 @@ def test_vie2_real_kernel_complex_g():
     assert y.dtype == np.complex128
     y_re = solve_vie2(kernel=kernel, g=gr, **common).node_values
     y_im = solve_vie2(kernel=kernel, g=gi, **common).node_values
-    assert np.allclose(y, y_re + 1j * y_im, atol=1e-10)
+    assert np.allclose(y, y_re + 1j * y_im, atol=1e-12, rtol=0)
 
 
 def test_vide_real_kernel_complex_a_matches_array_solver():
@@ -1942,7 +1875,7 @@ def test_vide_real_kernel_complex_a_matches_array_solver():
 
     mesh = np.linspace(0, T, 21)
     _, y_func = with_sol(solve_vide(kernel=kernel, a=a, g=g, y0=init, mesh=mesh, coll_nodes=np.asarray(coll_choices) / coll_divs))
-    assert np.max(np.abs(y_func(times) - soln_arr)) < 1e-3
+    assert np.max(np.abs(y_func(times) - soln_arr)) < 2e-6
 
 
 # ---------------------------------------------------------------------------
@@ -1952,7 +1885,7 @@ def test_vide_real_kernel_complex_a_matches_array_solver():
 # flag must be a strict no-op off the uniform-mesh convolution fast path.
 # ---------------------------------------------------------------------------
 
-from conftest import (TOLERANCE, as_callable, values_fn,
+from conftest import (as_callable, values_fn,
                       VIE1_SPEC_ABEL, VIE2_SPEC_ABEL, VIDE_SPEC_ABEL)
 from conftest import run, with_sol
 
@@ -1966,15 +1899,15 @@ def test_reuse_adaptive_blocks_vie1_close_and_accurate():
     p = as_callable(VIE1_SPEC_ABEL, coll_divs=3, coll_choices=[1, 2, 3])
     mesh = _uniform_mesh(25)
     kw = dict(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray([1, 2, 3]) / 3, kernel_singularity=p["kernel_singularity"])
-    y0 = solve_vie1(**kw).node_values
+    y0 = solve_vie1(**kw, reuse_adaptive_blocks=False).node_values
     y1 = solve_vie1(**kw, reuse_adaptive_blocks=True).node_values
-    assert np.max(np.abs(y1 - y0)) < 1e-6
+    assert np.max(np.abs(y1 - y0)) < 2e-9
     # accuracy vs the exact solution is limited by the uniform-mesh
     # discretization of the nonsmooth sqrt(t) solution, identically in both
     # modes: the flag must not change it measurably.
     e0 = _collect_node_values(y0, mesh, 3, [1, 2, 3], p["y_exact"])
     e1 = _collect_node_values(y1, mesh, 3, [1, 2, 3], p["y_exact"])
-    assert abs(e1 - e0) < 1e-6
+    assert abs(e1 - e0) < 1e-11
 
 
 @_QUIET_SINGULAR_ON_UNIFORM
@@ -1982,12 +1915,12 @@ def test_reuse_adaptive_blocks_vie2_close_and_accurate():
     p = as_callable(VIE2_SPEC_ABEL, coll_divs=2, coll_choices=[0, 1, 2])
     mesh = _uniform_mesh(25)
     kw = dict(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2, kernel_singularity=p["kernel_singularity"])
-    y0 = solve_vie2(**kw).node_values
+    y0 = solve_vie2(**kw, reuse_adaptive_blocks=False).node_values
     y1 = solve_vie2(**kw, reuse_adaptive_blocks=True).node_values
-    assert np.max(np.abs(y1 - y0)) < 1e-6
+    assert np.max(np.abs(y1 - y0)) < 5e-9
     e0 = _collect_node_values(y0, mesh, 2, [0, 1, 2], p["y_exact"])
     e1 = _collect_node_values(y1, mesh, 2, [0, 1, 2], p["y_exact"])
-    assert abs(e1 - e0) < 1e-6
+    assert abs(e1 - e0) < 2e-9
 
 
 @_QUIET_SINGULAR_ON_UNIFORM
@@ -1995,12 +1928,12 @@ def test_reuse_adaptive_blocks_vide_close_and_accurate():
     p = as_callable(VIDE_SPEC_ABEL, coll_divs=2, coll_choices=[0, 1, 2])
     mesh = _uniform_mesh(25)
     kw = dict(kernel=p["kernel"], a=p["a"], g=p["g"], y0=p["soln_init_value"], mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2, kernel_singularity=p["kernel_singularity"])
-    y0 = solve_vide(**kw).node_values
+    y0 = solve_vide(**kw, reuse_adaptive_blocks=False).node_values
     y1 = solve_vide(**kw, reuse_adaptive_blocks=True).node_values
-    assert np.max(np.abs(y1 - y0)) < 1e-6
+    assert np.max(np.abs(y1 - y0)) < 1e-12
     e0 = _collect_node_values(y0, mesh, 2, [0, 1, 2], p["y_exact"])
     e1 = _collect_node_values(y1, mesh, 2, [0, 1, 2], p["y_exact"])
-    assert abs(e1 - e0) < 1e-6
+    assert abs(e1 - e0) < 1e-12
 
 
 @_QUIET_SINGULAR_ON_UNIFORM
@@ -2015,11 +1948,11 @@ def test_reuse_adaptive_blocks_vector_close():
         return np.array([v, v])
 
     kw = dict(kernel=kernel, g=g, mesh=_uniform_mesh(20), coll_nodes=np.asarray([0, 1, 2]) / 2, kernel_singularity=0.0)
-    y0 = solve_vie2(**kw).node_values
+    y0 = solve_vie2(**kw, reuse_adaptive_blocks=False).node_values
     y1 = solve_vie2(**kw, reuse_adaptive_blocks=True).node_values
     # quad_vec (no extrapolation) has larger genuine error on the singular
     # blocks than scalar quad, so the on/off gap is larger here.
-    assert np.max(np.abs(y1 - y0)) < 1e-6
+    assert np.max(np.abs(y1 - y0)) < 2e-7
 
 
 def test_reuse_adaptive_blocks_noop_on_graded_mesh():
@@ -2028,7 +1961,7 @@ def test_reuse_adaptive_blocks_noop_on_graded_mesh():
     mesh = optimal_graded_mesh(alpha=p["alpha"], t_end=1.0, n_intervals=20, order=3)
     kw = dict(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2, kernel_singularity=p["kernel_singularity"])
     assert np.array_equal(
-        solve_vie2(**kw).node_values,
+        solve_vie2(**kw, reuse_adaptive_blocks=False).node_values,
         solve_vie2(**kw, reuse_adaptive_blocks=True).node_values)
 
 
@@ -2036,7 +1969,7 @@ def test_reuse_adaptive_blocks_noop_smooth_kernel():
     """With no adaptive blocks (smooth kernel) the flag is a strict no-op."""
     kw = dict(kernel=lambda u: np.exp(-u), g=lambda t: 0.5 * (np.sin(t) + np.cos(t) - np.exp(-t)), mesh=_uniform_mesh(20), coll_nodes=np.asarray([0, 1, 2]) / 2)
     assert np.array_equal(
-        solve_vie2(**kw).node_values,
+        solve_vie2(**kw, reuse_adaptive_blocks=False).node_values,
         solve_vie2(**kw, reuse_adaptive_blocks=True).node_values)
 
 
@@ -2051,7 +1984,7 @@ def test_reuse_adaptive_blocks_noop_undeclared_kernel_with_fallbacks(kernel):
     path and the flag is bit-identical, not merely close."""
     kw = dict(kernel=kernel, g=lambda t: 1.0 + np.sin(t), mesh=_uniform_mesh(40), coll_nodes=np.asarray([0, 1, 2]) / 2)
     assert np.array_equal(
-        solve_vie2(**kw).node_values,
+        solve_vie2(**kw, reuse_adaptive_blocks=False).node_values,
         solve_vie2(**kw, reuse_adaptive_blocks=True).node_values)
 
 
@@ -2092,7 +2025,7 @@ def test_jacobi_power_law_matches_adaptive(spec, solver, choices):
     y_adaptive = solver(**kw, kernel_singularity=p["kernel_singularity"])
     y_jacobi = solver(**kw,
                       kernel_singularity={p["kernel_singularity"]: p["alpha"]})
-    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-6
+    assert np.max(np.abs(y_jacobi - y_adaptive)) < 5e-11
 
 
 @_QUIET_SINGULAR_ON_UNIFORM
@@ -2102,7 +2035,7 @@ def test_jacobi_makes_reuse_flag_a_bitwise_noop():
     default strict policy -- reuse_adaptive_blocks must change nothing."""
     kw, _ = _abel_vie1_kw({0.0: 0.5})
     assert np.array_equal(
-        solve_vie1(**kw).node_values,
+        solve_vie1(**kw, reuse_adaptive_blocks=False).node_values,
         solve_vie1(**kw, reuse_adaptive_blocks=True).node_values)
 
 
@@ -2113,7 +2046,7 @@ def test_jacobi_on_graded_mesh():
     kw = dict(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray([1, 2, 3]) / 3)
     y_adaptive = solve_vie1(**kw, kernel_singularity=0.0).node_values
     y_jacobi = solve_vie1(**kw, kernel_singularity={0.0: 0.5}).node_values
-    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-6
+    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-9
 
 
 @_QUIET_SINGULAR_ON_UNIFORM
@@ -2148,7 +2081,7 @@ def test_jacobi_vector_diagonal_matches_scalar():
     kern = p["kernel"]
     y_vec = run(solve_vie2, show_warnings=False, kernel=lambda u: np.array([[kern(u), 0.0], [0.0, kern(u)]]), g=lambda t: np.array([p["g"](t), p["g"](t)]), mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2, kernel_singularity={0.0: 0.5}).node_values
     for comp in range(2):
-        assert np.max(np.abs(y_vec[:, :, comp] - y_scalar)) < 1e-8
+        assert np.max(np.abs(y_vec[:, :, comp] - y_scalar)) < 1e-12
 
 
 def test_jacobi_alpha_validation():
@@ -2195,7 +2128,7 @@ def test_jacobi_interior_singularity_matches_adaptive():
     y_adaptive = solve_vie2(**kw, kernel_singularity=0.5).node_values
     y_jacobi = solve_vie2(**kw, kernel_singularity={0.5: 0.4}).node_values
     assert np.isfinite(y_jacobi).all()
-    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-6
+    assert np.max(np.abs(y_jacobi - y_adaptive)) < 5e-12
 
 
 @_QUIET_SINGULAR_ON_UNIFORM
@@ -2207,7 +2140,7 @@ def test_jacobi_two_declared_locations_matches_adaptive():
     y_adaptive = solve_vie2(**kw, kernel_singularity=[0.0, 0.5]).node_values
     y_jacobi = solve_vie2(**kw, kernel_singularity={0.0: 0.5, 0.5: 0.5}).node_values
     assert np.isfinite(y_jacobi).all()
-    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-6
+    assert np.max(np.abs(y_jacobi - y_adaptive)) < 5e-7
 
 
 @_QUIET_SINGULAR_ON_UNIFORM
@@ -2220,7 +2153,7 @@ def test_jacobi_close_locations_sharing_a_block():
     y_adaptive = solve_vie2(**kw, kernel_singularity=[0.0, 0.02]).node_values
     y_jacobi = solve_vie2(**kw, kernel_singularity={0.0: 0.5, 0.02: 0.5}).node_values
     assert np.isfinite(y_jacobi).all()
-    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-6
+    assert np.max(np.abs(y_jacobi - y_adaptive)) < 1e-12
 
 
 @_QUIET_SINGULAR_ON_UNIFORM
@@ -2310,7 +2243,7 @@ def test_jacobi_matrix_matches_per_column_vector():
     for j in range(m):
         g_col = lambda t, j=j: g_vec(t) + shifts[:, j]
         y_col = run(solve_vie2, show_warnings=False, kernel=kernel, g=g_col, mesh=mesh, coll_nodes=np.asarray([0, 1, 2]) / 2, kernel_singularity={0.0: 0.5}).node_values
-        assert np.allclose(y_mat[..., j], y_col, atol=1e-12)
+        assert np.allclose(y_mat[..., j], y_col, atol=1e-12, rtol=0)
 
 
 @_QUIET_SINGULAR_ON_UNIFORM
@@ -2338,9 +2271,9 @@ def _diag_abel_vec_kw(solver_spec, M=20):
 @_QUIET_SINGULAR_ON_UNIFORM
 def test_reuse_adaptive_blocks_vie1_vector_close():
     kw, _ = _diag_abel_vec_kw(VIE1_SPEC_ABEL)
-    y0 = solve_vie1(**kw).node_values
+    y0 = solve_vie1(**kw, reuse_adaptive_blocks=False).node_values
     y1 = solve_vie1(**kw, reuse_adaptive_blocks=True).node_values
-    assert np.max(np.abs(y1 - y0)) < 1e-6
+    assert np.max(np.abs(y1 - y0)) < 5e-7
 
 
 @_QUIET_SINGULAR_ON_UNIFORM
@@ -2348,9 +2281,9 @@ def test_reuse_adaptive_blocks_vide_vector_close():
     kw, p = _diag_abel_vec_kw(VIDE_SPEC_ABEL)
     kw.update(a=lambda t: np.zeros((2, 2)),
               y0=np.full(2, p["soln_init_value"]))
-    y0 = solve_vide(**kw).node_values
+    y0 = solve_vide(**kw, reuse_adaptive_blocks=False).node_values
     y1 = solve_vide(**kw, reuse_adaptive_blocks=True).node_values
-    assert np.max(np.abs(y1 - y0)) < 1e-6
+    assert np.max(np.abs(y1 - y0)) < 5e-8
 
 
 def test_vie1_zero_kernel_singular_system_raises_linalgerror():
@@ -2493,3 +2426,93 @@ def test_vie1_callable_matrix_g_start_warning_names_column(voles_warnings):
                          [2 * np.sin(s), 2 * np.sin(s), 2 * np.sin(s)]])
     solve_vie1(kernel=lambda u: np.exp(-u) * A, g=g, mesh=mesh).node_values
     assert "g(0) is not zero in 1 of 3 columns; worst column 1" in voles_warnings.text()
+
+
+# ---------------------------------------------------------------------------
+# Declared singularities: forms and vector branches not exercised above
+# ---------------------------------------------------------------------------
+
+def _abel_scalar_kw():
+    return _abel_vie1_kw(0.0)[0]
+
+
+@_QUIET_SINGULAR_ON_UNIFORM
+def test_singularity_dict_none_is_the_location_only_form():
+    kw = _abel_scalar_kw()
+    del kw["kernel_singularity"]
+    assert np.array_equal(solve_vie1(**kw, kernel_singularity={0.0: None}).node_values,
+                          solve_vie1(**kw, kernel_singularity=0.0).node_values)
+
+
+@_QUIET_SINGULAR_ON_UNIFORM
+def test_singularity_mixed_dict_matches_adaptive():
+    kw = dict(kernel=lambda u: np.maximum(np.abs(u), 1e-300) ** -0.5
+              + np.maximum(np.abs(u - 0.5), 1e-300) ** -0.5,
+              g=lambda t: np.ones_like(np.asarray(t, dtype=float)),
+              mesh=_uniform_mesh(25), coll_nodes=np.asarray([0, 1, 2]) / 2)
+    y_mixed = solve_vie2(**kw, kernel_singularity={0.0: 0.5, 0.5: None}).node_values
+    y_adaptive = solve_vie2(**kw, kernel_singularity=[0.0, 0.5]).node_values
+    assert np.max(np.abs(y_mixed - y_adaptive)) < 5e-7
+
+
+def _diag_kernel(scalar):
+    return lambda u: scalar(u) * np.eye(2)
+
+
+@_QUIET_SINGULAR_ON_UNIFORM
+def test_vector_jacobi_interior_singularity_matches_scalar():
+    """The vector builder's own interior-split and one-sided Jacobi rules."""
+    k = lambda u: np.maximum(np.abs(u - 0.5), 1e-300) ** -0.4       # noqa: E731
+    common = dict(mesh=_uniform_mesh(25), coll_nodes=np.asarray([0, 1, 2]) / 2,
+                  kernel_singularity={0.5: 0.4})
+    scalar = solve_vie2(kernel=k, g=lambda t: 1.0, **common).node_values
+    vector = solve_vie2(kernel=_diag_kernel(k), g=lambda t: np.ones(2), **common).node_values
+    assert np.max(np.abs(vector[..., 0] - scalar)) < 1e-12
+    assert np.max(np.abs(vector[..., 1] - scalar)) < 1e-12
+
+
+@_QUIET_SINGULAR_ON_UNIFORM
+@pytest.mark.parametrize("alpha", [0.9, 0.25])
+def test_vector_jacobi_wrong_alpha_falls_back_bitwise(alpha):
+    k = lambda u: 1.0 / np.sqrt(u) if u > 0 else 0.0                # noqa: E731
+    kw = dict(kernel=_diag_kernel(k), g=lambda t: np.array([1.0, 2.0]) * np.sqrt(t),
+              mesh=_uniform_mesh(20), coll_nodes=np.asarray([1, 2]) / 2,
+              reuse_adaptive_blocks=False)
+    assert np.array_equal(solve_vie1(**kw, kernel_singularity={0.0: alpha}).node_values,
+                          solve_vie1(**kw, kernel_singularity=0.0).node_values)
+
+
+# ---------------------------------------------------------------------------
+# Accepted callables and the 1 x 1 vector problem
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("make", [
+    lambda: np.polynomial.Polynomial([1.0, -0.5]),
+    lambda: np.vectorize(lambda u: 1.0 - 0.5 * u),
+], ids=["Polynomial", "vectorize"])
+def test_other_callable_kinds_match_a_plain_function(make):
+    kw = dict(g=np.cos, mesh=_uniform_mesh(10))
+    np.testing.assert_allclose(solve_vie2(kernel=make(), **kw).node_values,
+                               solve_vie2(kernel=lambda u: 1.0 - 0.5 * u, **kw).node_values,
+                               rtol=0, atol=1e-12)
+
+
+def test_one_by_one_kernel_matches_scalar():
+    kw = dict(mesh=_uniform_mesh(10))
+    k = lambda u: np.exp(-u)                                         # noqa: E731
+    vec = solve_vie2(kernel=lambda u: np.array([[k(u)]]), g=lambda t: np.array([np.cos(t)]), **kw)
+    np.testing.assert_allclose(vec.node_values[..., 0],
+                               solve_vie2(kernel=k, g=np.cos, **kw).node_values,
+                               rtol=0, atol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# optimal_graded_mesh formula
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("alpha, order, t_end, M, r", [
+    (0.5, 3, 1.0, 20, 6.0), (0.25, 2, 2.5, 7, 8.0 / 3.0), (0.5, 1, 4.0, 1, 2.0), (0.0, 3, 2.0, 5, 1.0),
+])
+def test_graded_mesh_formula(alpha, order, t_end, M, r):
+    mesh = optimal_graded_mesh(alpha=alpha, t_end=t_end, n_intervals=M, order=order)
+    np.testing.assert_allclose(mesh, t_end * (np.arange(M + 1) / M) ** r, rtol=1e-14, atol=0)
