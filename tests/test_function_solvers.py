@@ -1126,7 +1126,7 @@ def test_stress_extreme_width_ratio_vie2(vie2_callable_smooth):
     y = solve_vie2(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     assert np.all(np.isfinite(y))
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-2  # loose -- large intervals limit overall accuracy
+    assert err < 2e-6
 
 
 def test_stress_many_intervals_vie2(vie2_callable_smooth):
@@ -1156,7 +1156,7 @@ def test_stress_vide_extreme_width_ratio(vide_callable_smooth):
     y = solve_vide(kernel=p["kernel"], a=p["a"], g=p["g"], y0=p["soln_init_value"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     assert np.all(np.isfinite(y))
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-2
+    assert err < 2e-6
 
 
 def test_stress_vie1_extreme_width_ratio(vie1_callable_smooth):
@@ -1167,7 +1167,7 @@ def test_stress_vie1_extreme_width_ratio(vie1_callable_smooth):
     y = solve_vie1(kernel=p["kernel"], g=p["g"], mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"]).node_values
     assert np.all(np.isfinite(y))
     err = _collect_node_values(y, mesh, p["coll_divs"], p["coll_choices"], p["y_exact"])
-    assert err < 1e-2
+    assert err < 1e-4
 
 
 def test_stress_single_long_interval(vie2_callable_smooth):
@@ -1316,7 +1316,7 @@ def test_matrix_vie2_matches_array_solver():
 
     mesh = np.linspace(0, T, 21)
     _, y_func = with_sol(solve_vie2(kernel=kernel, g=g_mat, mesh=mesh, coll_nodes=np.asarray(coll_choices) / coll_divs))
-    assert np.max(np.abs(y_func(times) - soln_arr)) < 1e-3
+    assert np.max(np.abs(y_func(times) - soln_arr)) < 5e-5
 
 
 def test_matrix_vie2_g_wrong_shape_raises(vie2_callable_vec_diagonal):
@@ -1809,9 +1809,9 @@ def test_vectorized_and_scalar_kernel_agree():
 
 # --- (7) Breakpoint continuity for vector / VIDE / VIE-1 wrappers ----------
 
-def _assert_breakpoint_continuous(y_func, mesh, atol=1e-6):
+def _assert_breakpoint_continuous(y_func, mesh):
     for bp in mesh[1:-1]:
-        assert np.allclose(y_func(bp - 1e-9), y_func(bp + 1e-9), atol=atol, rtol=0)
+        assert np.allclose(y_func(bp - 1e-9), y_func(bp + 1e-9), atol=5e-8, rtol=0)
 
 
 def test_vec_vie2_breakpoint_continuous(vie2_callable_vec_diagonal):
@@ -1835,7 +1835,7 @@ def test_vec_vie1_breakpoint_continuous_force_continuous(vie1_callable_vec_diago
     p = vie1_callable_vec_diagonal
     mesh = np.linspace(0, 1, 19)
     _, y_func = with_sol(solve_vie1(kernel=p["kernel"], g=p["g"], y0=p["y_exact"](0.0), mesh=mesh, coll_nodes=np.asarray(p["coll_choices"]) / p["coll_divs"], continuous=True))
-    _assert_breakpoint_continuous(y_func, mesh, atol=1e-5)
+    _assert_breakpoint_continuous(y_func, mesh)
 
 
 # --- (8) Mixed real/complex inputs -----------------------------------------
@@ -1875,7 +1875,7 @@ def test_vide_real_kernel_complex_a_matches_array_solver():
 
     mesh = np.linspace(0, T, 21)
     _, y_func = with_sol(solve_vide(kernel=kernel, a=a, g=g, y0=init, mesh=mesh, coll_nodes=np.asarray(coll_choices) / coll_divs))
-    assert np.max(np.abs(y_func(times) - soln_arr)) < 1e-3
+    assert np.max(np.abs(y_func(times) - soln_arr)) < 2e-6
 
 
 # ---------------------------------------------------------------------------

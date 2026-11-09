@@ -206,15 +206,16 @@ def test_continuous_fourth_order_on_rubin_model(quadrature):
     assert np.all(rates > 3.6), (errs, rates)
 
 
-@pytest.mark.parametrize("coll_divs, coll_choices", [(2, [1, 2]), (4, [1, 2, 3, 4])])
-def test_continuous_even_m_equispaced_converges(coll_divs, coll_choices, quadrature):
+@pytest.mark.parametrize("coll_divs, coll_choices, bound", [(2, [1, 2], 1e-3),
+                                                            (4, [1, 2, 3, 4], 2e-5)])
+def test_continuous_even_m_equispaced_converges(coll_divs, coll_choices, bound, quadrature):
     """rho_{m-1} = +1 for these sets: convergent (order m) by Theorem 2.4.5.
     The previous discretisation amplified the boundary value by 3 and 335/111
     per mesh interval and diverged for both."""
     d = as_array(VIE1_SPEC_DAMPED, time_step=0.01, coll_divs=coll_divs,
                  coll_choices=coll_choices, num_blocks=40)
     soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"]), continuous=True, y0=d["exact"][0]).y
-    assert np.max(np.abs(soln - d["exact"])) < 1e-3
+    assert np.max(np.abs(soln - d["exact"])) < bound
 
 
 @needs_numba

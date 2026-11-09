@@ -129,7 +129,7 @@ def test_vie2_return_function_callable_and_list_semantics(vie2_data, quadrature)
     assert len(sol) == len(sol.polynomials)
     assert list(sol) == sol.polynomials
     # Callable agrees with the array solution at the final node.
-    assert sol(d["time_step"] * (len(soln) - 1)) == pytest.approx(soln[-1], abs=1e-3)
+    assert sol(d["time_step"] * (len(soln) - 1)) == pytest.approx(soln[-1], abs=1e-12)
 
 
 # ---------------------------------------------------------------------------
