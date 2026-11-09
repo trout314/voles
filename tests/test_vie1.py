@@ -31,24 +31,24 @@ def _make_vec_data(time_step=0.01, coll_divs=3, n_mesh=10):
                 coll_divs=coll_divs, coll_choices=[1, 2, 3])
 
 
-def test_vie1_vec_diagonal_matches_scalar():
+def test_vie1_vec_diagonal_matches_scalar(quadrature):
     """Diagonal 2×2 kernel: vector result equals two independent scalar solves."""
     d = _make_vec_data()
     times = d["times"]
 
     # Vector solve
-    soln_vec = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    soln_vec = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert soln_vec.shape == d["exact"].shape
 
     # Scalar solve for component 0
-    soln_s = solve_vie1(kernel=d["kernel"][:, 0, 0], g=d["g"][:, 0], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    soln_s = solve_vie1(kernel=d["kernel"][:, 0, 0], g=d["g"][:, 0], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
 
     assert np.max(np.abs(soln_vec[:, 0] - soln_s)) < TOLERANCE
     assert np.max(np.abs(soln_vec[:, 1] - soln_s)) < TOLERANCE
     assert np.max(np.abs(soln_vec - d["exact"])) < TOLERANCE
 
 
-def test_vie1_vec_analytic_2d():
+def test_vie1_vec_analytic_2d(quadrature):
     """2×2 case with known analytic solution; K_rs=2+t, g_r=t²+t³/6, y_r=t."""
     time_step = 0.1
     coll_divs = 3
@@ -66,11 +66,11 @@ def test_vie1_vec_analytic_2d():
     exact[:, 0] = times
     exact[:, 1] = times
 
-    soln = solve_vie1(kernel=kernel, g=g, dt=time_step, coll_setting=(coll_divs, [1, 2, 3])).y
+    soln = solve_vie1(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [1, 2, 3])).y
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
-def test_vie1_vec_analytic_d9_runtime_path():
+def test_vie1_vec_analytic_d9_runtime_path(quadrature):
     """d=9 forces the runtime LU path (max_d_compile=8). Exercises lin_solve_rt
     (or LAPACK dgesv_) on a well-conditioned matrix, verifying not just the
     singularity branch but the actual factor-and-solve correctness."""
@@ -88,11 +88,11 @@ def test_vie1_vec_analytic_d9_runtime_path():
     exact = np.zeros((num_pts, d))
     exact[:] = times[:, None]
 
-    soln = solve_vie1(kernel=kernel, g=g, dt=time_step, coll_setting=(coll_divs, [1, 2, 3])).y
+    soln = solve_vie1(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [1, 2, 3])).y
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
 
-def test_vie1_vec_force_continuous():
+def test_vie1_vec_force_continuous(quadrature):
     """Vector force_continuous=True: result should still match analytic solution.
 
     K=2+t, g=t²+t³/6, exact=t — exact solution starts at 0, consistent with
@@ -113,7 +113,7 @@ def test_vie1_vec_force_continuous():
     exact[:, 0] = times
     exact[:, 1] = times
 
-    soln = solve_vie1(kernel=kernel, g=g, dt=time_step, coll_setting=(coll_divs, [1, 2, 3]), y0=np.array([0.0, 0.0]), continuous=True).y
+    soln = solve_vie1(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [1, 2, 3]), y0=np.array([0.0, 0.0]), continuous=True).y
     assert soln.shape == exact.shape
     assert np.max(np.abs(soln - exact)) < TOLERANCE
 
@@ -122,7 +122,7 @@ def test_vie1_vec_force_continuous():
     ("poly_a", "poly_b"),   # -> [1+2t, 1], constant coupled kernel
     ("smooth", "poly_b"),   # -> [cos t - sin t + t, cos t - sin t - t]
 ])
-def test_vie1_vec_coupled_generated_accuracy(coupled_vie1, pair):
+def test_vie1_vec_coupled_generated_accuracy(coupled_vie1, pair, quadrature):
     """Coupled 2x2 VIE-1 generated from pairs of scalar solutions via the
     Z = P Y change of coordinates (P=[[1,1],[1,-1]]). Replaces the former
     hand-written coupled test; the transform is validated by
@@ -132,7 +132,7 @@ def test_vie1_vec_coupled_generated_accuracy(coupled_vie1, pair):
         spec_a, spec_b, [[1, 1], [1, -1]],
         time_step=0.01, coll_divs=3, coll_choices=[1, 2, 3],
     )
-    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -154,21 +154,21 @@ def test_make_coupled_vie1_reproduces_handwritten(coupled_vie1):
     assert np.max(np.abs(d["exact"] - hand_exact)) < 1e-14
 
 
-def test_vie1_accuracy(vie1_data):
+def test_vie1_accuracy(vie1_data, quadrature):
     d = vie1_data
-    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
-def test_vie1_damped_accuracy(vie1_damped_data):
+def test_vie1_damped_accuracy(vie1_damped_data, quadrature):
     d = vie1_damped_data
-    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
-def test_vie1_return_polys(vie1_data):
+def test_vie1_return_polys(vie1_data, quadrature):
     d = vie1_data
-    result = with_sol(solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])))
+    result = with_sol(solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])))
     assert isinstance(result, tuple) and len(result) == 2
     soln, polys = result
     assert isinstance(soln, np.ndarray)
@@ -176,29 +176,29 @@ def test_vie1_return_polys(vie1_data):
     assert hasattr(polys[0], "__call__")
 
 
-def test_vie1_poly_accuracy(vie1_poly_data):
+def test_vie1_poly_accuracy(vie1_poly_data, quadrature):
     d = vie1_poly_data
-    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
-def test_vie1_poly_force_continuous(vie1_poly_data):
+def test_vie1_poly_force_continuous(vie1_poly_data, quadrature):
     d = vie1_poly_data
-    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"]), y0=float(d["exact"][0]), continuous=True).y
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"]), y0=float(d["exact"][0]), continuous=True).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
-def test_vie1_polys_continuous_at_mesh_boundaries(vie1_data):
+def test_vie1_polys_continuous_at_mesh_boundaries(vie1_data, quadrature):
     """force_continuous=True: adjacent polynomial pieces must agree at shared endpoints."""
     d = vie1_data
-    _, polys = with_sol(solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"]), y0=float(d["exact"][0]), continuous=True))
+    _, polys = with_sol(solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"]), y0=float(d["exact"][0]), continuous=True))
     h = d["coll_divs"] ** 2 * d["time_step"]
     for n in range(len(polys) - 1):
         t_boundary = (n + 1) * h
         assert abs(polys[n](t_boundary) - polys[n + 1](t_boundary)) < 1e-12
 
 
-def test_vie1_vec_polys_continuous_at_mesh_boundaries():
+def test_vie1_vec_polys_continuous_at_mesh_boundaries(quadrature):
     """Vector force_continuous=True: each component poly must be continuous at mesh boundaries."""
     time_step = 0.1
     coll_divs = 3
@@ -212,7 +212,7 @@ def test_vie1_vec_polys_continuous_at_mesh_boundaries():
     g[:, 0] = times**2 + times**3 / 6
     g[:, 1] = times**2 + times**3 / 6
 
-    _, polys = with_sol(solve_vie1(kernel=kernel, g=g, dt=time_step, coll_setting=(coll_divs, [1, 2, 3]), y0=np.array([0.0, 0.0]), continuous=True))
+    _, polys = with_sol(solve_vie1(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [1, 2, 3]), y0=np.array([0.0, 0.0]), continuous=True))
 
     h = coll_divs**2 * time_step
     for n in range(len(polys) - 1):
@@ -221,7 +221,7 @@ def test_vie1_vec_polys_continuous_at_mesh_boundaries():
             assert abs(polys[n][r](t_boundary) - polys[n + 1][r](t_boundary)) < 1e-12
 
 
-def test_vie1_matrix_polys_continuous_at_mesh_boundaries():
+def test_vie1_matrix_polys_continuous_at_mesh_boundaries(quadrature):
     """Matrix force_continuous=True: each (component, column) poly must be continuous at mesh boundaries."""
     time_step = 0.1
     coll_divs = 3
@@ -238,7 +238,7 @@ def test_vie1_matrix_polys_continuous_at_mesh_boundaries():
     g_matrix[:, 0, 1] = g_col
     g_matrix[:, 1, 1] = g_col
 
-    _, polys = with_sol(solve_vie1(kernel=kernel, g=g_matrix, dt=time_step, coll_setting=(coll_divs, [1, 2, 3]), y0=np.zeros((2, 2)), continuous=True))
+    _, polys = with_sol(solve_vie1(kernel=kernel, g=g_matrix, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, [1, 2, 3]), y0=np.zeros((2, 2)), continuous=True))
 
     h = coll_divs**2 * time_step
     for n in range(len(polys) - 1):
@@ -248,9 +248,9 @@ def test_vie1_matrix_polys_continuous_at_mesh_boundaries():
                 assert abs(polys[n][r, j](t_boundary) - polys[n + 1][r, j](t_boundary)) < 1e-12
 
 
-def test_vie1_force_continuous(vie1_data):
+def test_vie1_force_continuous(vie1_data, quadrature):
     d = vie1_data
-    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"]), y0=d["exact"][0], continuous=True).y
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"]), y0=d["exact"][0], continuous=True).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -294,7 +294,7 @@ def test_no_kernel_start_warning_for_product_or_when_silenced(kw, voles_warnings
 @pytest.mark.parametrize("d", [0, 3])
 def test_no_kernel_start_warning_for_resolved_kernel(d, voles_warnings):
     """K(0) = 1 with the same slope: ratio H*K'(0)/K(0) = 0.09, stable."""
-    y = solve_vie1(**_k0_problem(1.0, d=d)).y
+    y = solve_vie1(quadrature="collocation", **_k0_problem(1.0, d=d)).y
     assert _K0_MSG not in voles_warnings.text()
     assert np.all(np.isfinite(y))
 

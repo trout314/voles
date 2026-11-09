@@ -127,15 +127,15 @@ def test_continuous_one_node_uses_initial_value():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("coll_divs, coll_choices, _rho", CONTINUOUS_SETTINGS)
-def test_continuous_reproduces_degree_m_polynomial(coll_divs, coll_choices, _rho):
+def test_continuous_reproduces_degree_m_polynomial(coll_divs, coll_choices, _rho, quadrature):
     m = len(coll_choices)
     t, kernel, g, exact = _polynomial_problem(coll_divs, m)
-    soln = solve_vie1(kernel=kernel, g=g, dt=0.1, coll_setting=(coll_divs, coll_choices), continuous=True, y0=0.0).y
+    soln = solve_vie1(kernel=kernel, g=g, dt=0.1, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=0.0).y
     assert np.max(np.abs(soln - exact)) < 1e-9
 
 
 @pytest.mark.parametrize("d", [2, 9])
-def test_continuous_reproduces_polynomial_vector(d):
+def test_continuous_reproduces_polynomial_vector(d, quadrature):
     """d = 2 takes the compile-time driver, d = 9 the runtime (LAPACK /
     lin_solve_rt) driver; both must be exact on the trial space."""
     coll_divs, coll_choices = 3, [1, 2, 3]
@@ -145,18 +145,18 @@ def test_continuous_reproduces_polynomial_vector(d):
     for r in range(d):
         kernel_d[:, r, r] = 1.0
     scale = 1.0 + np.arange(d)
-    soln = solve_vie1(kernel=kernel_d, g=g[:, None] * scale, dt=0.1, coll_setting=(coll_divs, coll_choices), continuous=True, y0=np.zeros(d)).y
+    soln = solve_vie1(kernel=kernel_d, g=g[:, None] * scale, dt=0.1, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=np.zeros(d)).y
     assert np.max(np.abs(soln - exact[:, None] * scale)) < 1e-9
 
 
-def test_continuous_reproduces_polynomial_matrix():
+def test_continuous_reproduces_polynomial_matrix(quadrature):
     coll_divs, coll_choices = 2, [1, 2]
     t, kernel, g, exact = _polynomial_problem(coll_divs, len(coll_choices))
     N = len(t)
     kernel_d = np.zeros((N, 2, 2))
     kernel_d[:, 0, 0] = kernel_d[:, 1, 1] = 1.0
     scale = np.array([[1.0, 3.0], [2.0, 4.0]])          # (d, m_cols)
-    soln = solve_vie1(kernel=kernel_d, g=g[:, None, None] * scale, dt=0.1, coll_setting=(coll_divs, coll_choices), continuous=True, y0=np.zeros((2, 2))).y
+    soln = solve_vie1(kernel=kernel_d, g=g[:, None, None] * scale, dt=0.1, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=np.zeros((2, 2))).y
     assert np.max(np.abs(soln - exact[:, None, None] * scale)) < 1e-9
 
 
@@ -166,7 +166,7 @@ def test_continuous_reproduces_polynomial_numba_fallback():
     dispatches to the Numba fallback."""
     coll_divs, coll_choices = 5, [1, 2, 3, 4, 5]
     t, kernel, g, exact = _polynomial_problem(coll_divs, 5, num_blocks=4)
-    soln = run(solve_vie1, show_warnings=False, kernel=kernel, g=g, dt=0.1, coll_setting=(coll_divs, coll_choices), continuous=True, y0=0.0).y
+    soln = run(solve_vie1, show_warnings=False, kernel=kernel, g=g, dt=0.1, quadrature="collocation", coll_setting=(coll_divs, coll_choices), continuous=True, y0=0.0).y
     assert np.max(np.abs(soln - exact)) < 1e-6
 
 
@@ -175,13 +175,13 @@ def test_continuous_reproduces_polynomial_numba_fallback():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("coll_divs, coll_choices, rho", CONTINUOUS_SETTINGS)
-def test_continuous_amplification_factor(coll_divs, coll_choices, rho):
+def test_continuous_amplification_factor(coll_divs, coll_choices, rho, quadrature):
     """K == 1, g == 0, y(0) = 1: the collocation equations force the local
     polynomial to y_n phi(v) with phi(0) = 1 and vanishing integrals over
     [0, c_i], and phi(1) = rho_{m-1}; hence y_n = rho_{m-1}^n at mesh points."""
     num_blocks = 6
     N = num_blocks * coll_divs**2 + 1
-    soln = solve_vie1(kernel=np.ones(N), g=np.zeros(N), dt=0.1, coll_setting=(coll_divs, coll_choices), continuous=True, y0=1.0).y
+    soln = solve_vie1(kernel=np.ones(N), g=np.zeros(N), dt=0.1, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=1.0).y
     mesh_values = soln[::coll_divs**2]
     assert np.max(np.abs(mesh_values - rho ** np.arange(num_blocks + 1))) < 1e-10
 
@@ -190,7 +190,7 @@ def test_continuous_amplification_factor(coll_divs, coll_choices, rho):
 # Order of convergence
 # ---------------------------------------------------------------------------
 
-def test_continuous_fourth_order_on_rubin_model():
+def test_continuous_fourth_order_on_rubin_model(quadrature):
     """(3, [1, 2, 3]) has rho_{m-1} = -1, so Theorem 2.4.5 gives order
     m + 1 = 4 (the discontinuous method with the same nodes is order 3, and
     the previous m-point discretisation of the continuous method reached
@@ -199,7 +199,7 @@ def test_continuous_fourth_order_on_rubin_model():
     errs = []
     for time_step in (0.125, 0.0625, 0.03125):
         C, C_dot, K_exact = _rubin_model(time_step, T=36.0)
-        soln = solve_vie1(kernel=C, g=C_dot, dt=time_step, coll_setting=(coll_divs, coll_choices), continuous=True, y0=K_exact[0]).y
+        soln = solve_vie1(kernel=C, g=C_dot, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=K_exact[0]).y
         errs.append(np.max(np.abs(soln - K_exact)))
     rates = np.log2(np.array(errs[:-1]) / np.array(errs[1:]))
     assert errs[-1] < 1e-4
@@ -207,13 +207,13 @@ def test_continuous_fourth_order_on_rubin_model():
 
 
 @pytest.mark.parametrize("coll_divs, coll_choices", [(2, [1, 2]), (4, [1, 2, 3, 4])])
-def test_continuous_even_m_equispaced_converges(coll_divs, coll_choices):
+def test_continuous_even_m_equispaced_converges(coll_divs, coll_choices, quadrature):
     """rho_{m-1} = +1 for these sets: convergent (order m) by Theorem 2.4.5.
     The previous discretisation amplified the boundary value by 3 and 335/111
     per mesh interval and diverged for both."""
     d = as_array(VIE1_SPEC_DAMPED, time_step=0.01, coll_divs=coll_divs,
                  coll_choices=coll_choices, num_blocks=40)
-    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"]), continuous=True, y0=d["exact"][0]).y
+    soln = solve_vie1(kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature=quadrature, coll_setting=(d["coll_divs"], d["coll_choices"]), continuous=True, y0=d["exact"][0]).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -232,24 +232,24 @@ def test_continuous_numba_matches_d_extension():
 # Node-set validation
 # ---------------------------------------------------------------------------
 
-def test_continuous_rejects_interior_last_node():
+def test_continuous_rejects_interior_last_node(quadrature):
     N = 9 * 3 + 1
     with pytest.raises(ValueError, match="needs a node at the right end of each interval"):
-        solve_vie1(kernel=np.ones(N), g=np.zeros(N), dt=0.1, coll_setting=(3, [1, 2]), continuous=True, y0=0.0).y
+        solve_vie1(kernel=np.ones(N), g=np.zeros(N), dt=0.1, quadrature=quadrature, coll_setting=(3, [1, 2]), continuous=True, y0=0.0).y
 
 
 @pytest.mark.parametrize("coll_divs, coll_choices", [(3, [1, 3]), (4, [1, 4]), (4, [1, 2, 4])])
-def test_continuous_rejects_divergent_node_sets(coll_divs, coll_choices):
+def test_continuous_rejects_divergent_node_sets(coll_divs, coll_choices, quadrature):
     N = coll_divs**2 * 3 + 1
     with pytest.raises(ValueError, match="rho"):
-        solve_vie1(kernel=np.ones(N), g=np.zeros(N), dt=0.1, coll_setting=(coll_divs, coll_choices), continuous=True, y0=0.0).y
+        solve_vie1(kernel=np.ones(N), g=np.zeros(N), dt=0.1, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=0.0).y
 
 
-def test_discontinuous_mode_unaffected_by_continuous_validation():
+def test_discontinuous_mode_unaffected_by_continuous_validation(quadrature):
     """The new checks apply to force_continuous=True only."""
     N = 9 * 3 + 1
     t = 0.1 * np.arange(N)
-    soln = solve_vie1(kernel=np.ones(N), g=t**2 / 2, dt=0.1, coll_setting=(3, [1, 3])).y
+    soln = solve_vie1(kernel=np.ones(N), g=t**2 / 2, dt=0.1, quadrature=quadrature, coll_setting=(3, [1, 3])).y
     assert soln.shape == (N,)
 
 
@@ -257,7 +257,7 @@ def test_discontinuous_mode_unaffected_by_continuous_validation():
 # Follow-ups to the continuous-quadrature fix
 # ---------------------------------------------------------------------------
 
-def test_continuous_nonzero_initial_value_long_history():
+def test_continuous_nonzero_initial_value_long_history(quadrature):
     """A nonzero y(0) with enough mesh intervals to reach the FFT history
     path: the initial value enters through its own term, separately from the
     folded history blocks. With K = 1 a polynomial solution of degree <= m is
@@ -267,12 +267,12 @@ def test_continuous_nonzero_initial_value_long_history():
     h = 0.005
     t = h * np.arange(N)
     exact = 1 + t - t**2
-    soln = solve_vie1(kernel=np.ones(N), g=t + t**2 / 2 - t**3 / 3, dt=h, coll_setting=(coll_divs, coll_choices), continuous=True, y0=1.0).y
+    soln = solve_vie1(kernel=np.ones(N), g=t + t**2 / 2 - t**3 / 3, dt=h, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=1.0).y
     assert np.max(np.abs(soln - exact)) < 1e-9
 
 
 @pytest.mark.parametrize("d", [2, 9])   # compile-time and runtime-dimension drivers
-def test_continuous_vector_nonzero_initial_value(d):
+def test_continuous_vector_nonzero_initial_value(d, quadrature):
     """Coupled system with a non-diagonal constant kernel M and y(0) != 0:
     g(t) = M int_0^t y with y_r(t) = (r + 1)(1 - t^2) + t^3, degree m = 3, so
     the solution is reproduced to roundoff. 60 intervals reaches the FFT
@@ -285,7 +285,7 @@ def test_continuous_vector_nonzero_initial_value(d):
     amp = np.arange(1, d + 1, dtype=float)
     exact = amp * (1 - t**2) + t**3
     integ = amp * (t - t**3 / 3) + t**4 / 4
-    soln = solve_vie1(kernel=np.broadcast_to(M, (N, d, d)).copy(), g=integ @ M.T, dt=h, coll_setting=(coll_divs, coll_choices), continuous=True, y0=exact[0]).y
+    soln = solve_vie1(kernel=np.broadcast_to(M, (N, d, d)).copy(), g=integ @ M.T, dt=h, quadrature=quadrature, coll_setting=(coll_divs, coll_choices), continuous=True, y0=exact[0]).y
     assert np.max(np.abs(soln - exact)) < 1e-9
 
 
@@ -308,13 +308,13 @@ def test_empty_coll_choices_raises_value_error(force_continuous):
 # The exact |rho| <= 1 criterion, applied to both methods
 # ---------------------------------------------------------------------------
 
-def test_discontinuous_rejects_divergent_uncompiled_setting():
+def test_discontinuous_rejects_divergent_uncompiled_setting(quadrature):
     """(5, [1]) has |rho_m| = 4. It is not compiled into the D extension, so
     it used to reach the Numba fallback (only the three compiled divergent
     settings were blacklisted) and diverge silently."""
     N = 25 * 4 + 1
     with pytest.raises(ValueError, match="convergent"):
-        run(solve_vie1, show_warnings=False, kernel=np.ones(N), g=np.zeros(N), dt=0.1, coll_setting=(5, [1])).y
+        run(solve_vie1, show_warnings=False, kernel=np.ones(N), g=np.zeros(N), dt=0.1, quadrature=quadrature, coll_setting=(5, [1])).y
 
 
 def test_rho_criterion_is_exact_and_reproduces_the_old_blacklist():
@@ -335,7 +335,7 @@ def test_boundary_rho_setting_still_admitted_on_numba_fallback():
     coll_divs, coll_choices = 6, [2, 4]
     N = 36 * 4 + 1
     t = 0.01 * np.arange(N)
-    soln = run(solve_vie1, show_warnings=False, kernel=np.ones(N), g=t, dt=0.01, coll_setting=(coll_divs, coll_choices)).y
+    soln = run(solve_vie1, show_warnings=False, kernel=np.ones(N), g=t, dt=0.01, quadrature="collocation", coll_setting=(coll_divs, coll_choices)).y
     assert np.max(np.abs(soln - 1.0)) < 1e-9
 
 

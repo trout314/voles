@@ -47,13 +47,13 @@ class TestVIE2Complex:
         integral = (1 - 1j) / 2 * (np.exp(1j * self.times) - np.exp(-self.times))
         self.g = self.exact - integral
 
-    def test_accuracy(self):
-        soln = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
+    def test_accuracy(self, quadrature):
+        soln = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
 
-    def test_return_polys(self):
-        soln, polys = with_sol(solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)))
+    def test_return_polys(self, quadrature):
+        soln, polys = with_sol(solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)))
         assert np.iscomplexobj(soln)
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
         # Polynomials should evaluate to complex values
@@ -81,8 +81,8 @@ class TestVIE2ComplexPurelyImaginaryKernel:
         self.exact = np.exp(1j * self.times)
         self.g = self.exact - (np.exp(1j * self.times) - 1)  # = 1+0j
 
-    def test_accuracy(self):
-        soln = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
+    def test_accuracy(self, quadrature):
+        soln = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
 
 
@@ -105,16 +105,16 @@ class TestVIE2ComplexVector:
         self.g = np.column_stack([g1d, g1d])
         self.exact = np.column_stack([self.exact_1d, self.exact_1d])
 
-    def test_accuracy(self):
-        soln = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
+    def test_accuracy(self, quadrature):
+        soln = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
         assert soln.shape == self.exact.shape
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
 
-    def test_matches_scalar(self):
+    def test_matches_scalar(self, quadrature):
         """Vector solve with diagonal kernel should match scalar solve."""
-        soln_vec = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
-        soln_scalar = solve_vie2(kernel=self.kernel[:, 0, 0], g=self.g[:, 0], dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
+        soln_vec = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
+        soln_scalar = solve_vie2(kernel=self.kernel[:, 0, 0], g=self.g[:, 0], dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.max(np.abs(soln_vec[:, 0] - soln_scalar)) < TOLERANCE
         assert np.max(np.abs(soln_vec[:, 1] - soln_scalar)) < TOLERANCE
 
@@ -145,13 +145,13 @@ class TestVIE1Complex:
         self.g = (np.exp(self.times) - np.exp(1j * self.times)) * (1 + 1j) / 2
         self.g[0] = 0.0  # g(0) = 0 for VIE-1
 
-    def test_accuracy(self):
-        soln = solve_vie1(kernel=self.kernel, g=self.g, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
+    def test_accuracy(self, quadrature):
+        soln = solve_vie1(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
 
-    def test_return_polys(self):
-        soln, polys = with_sol(solve_vie1(kernel=self.kernel, g=self.g, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)))
+    def test_return_polys(self, quadrature):
+        soln, polys = with_sol(solve_vie1(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)))
         assert np.iscomplexobj(soln)
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
         h = self.coll_divs**2 * self.time_step
@@ -159,8 +159,8 @@ class TestVIE1Complex:
         val = polys[0](t_mid)
         assert np.iscomplexobj(val)
 
-    def test_force_continuous(self):
-        soln = solve_vie1(kernel=self.kernel, g=self.g, y0=1.0 + 0j, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices), continuous=True).y
+    def test_force_continuous(self, quadrature):
+        soln = solve_vie1(kernel=self.kernel, g=self.g, y0=1.0 + 0j, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices), continuous=True).y
         assert np.iscomplexobj(soln)
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
 
@@ -184,8 +184,8 @@ class TestVIE1ComplexVector:
         self.g = np.column_stack([g1d, g1d])
         self.exact = np.column_stack([exact_1d, exact_1d])
 
-    def test_accuracy(self):
-        soln = solve_vie1(kernel=self.kernel, g=self.g, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
+    def test_accuracy(self, quadrature):
+        soln = solve_vie1(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
         assert soln.shape == self.exact.shape
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
@@ -228,13 +228,13 @@ class TestVIDEComplex:
                   + np.exp(-self.times) / (2 + 1j))
         self.soln_init = 1.0 + 0j
 
-    def test_accuracy(self):
-        soln = solve_vide(kernel=self.kernel, a=self.a, g=self.g, y0=self.soln_init, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
+    def test_accuracy(self, quadrature):
+        soln = solve_vide(kernel=self.kernel, a=self.a, g=self.g, y0=self.soln_init, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
 
-    def test_return_polys(self):
-        soln, polys = with_sol(solve_vide(kernel=self.kernel, a=self.a, g=self.g, y0=self.soln_init, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)))
+    def test_return_polys(self, quadrature):
+        soln, polys = with_sol(solve_vide(kernel=self.kernel, a=self.a, g=self.g, y0=self.soln_init, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)))
         assert np.iscomplexobj(soln)
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
         h = self.coll_divs**2 * self.time_step
@@ -267,8 +267,8 @@ class TestVIDEComplexVector:
         self.exact = np.column_stack([exact_1d, exact_1d])
         self.soln_init = np.array([1.0 + 0j, 1.0 + 0j])
 
-    def test_accuracy(self):
-        soln = solve_vide(kernel=self.kernel, a=self.a, g=self.g, y0=self.soln_init, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
+    def test_accuracy(self, quadrature):
+        soln = solve_vide(kernel=self.kernel, a=self.a, g=self.g, y0=self.soln_init, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
         assert soln.shape == self.exact.shape
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
@@ -323,7 +323,7 @@ def test_list_complex_g_values(solver):
 class TestMixedInputs:
     """Real kernel + complex g should promote to complex output."""
 
-    def test_vie2_real_kernel_complex_g(self):
+    def test_vie2_real_kernel_complex_g(self, quadrature):
         time_step = 0.05
         coll_divs = 3
         coll_choices = [0, 1, 2, 3]
@@ -332,11 +332,11 @@ class TestMixedInputs:
         exact = np.exp(1j * times)
         integral = (1 - 1j) / 2 * (np.exp(1j * times) - np.exp(-times))
         g = exact - integral  # complex
-        soln = solve_vie2(kernel=kernel, g=g, dt=time_step, coll_setting=(coll_divs, coll_choices)).y
+        soln = solve_vie2(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, coll_choices)).y
         assert np.iscomplexobj(soln)
         assert np.max(np.abs(soln - exact)) < TOLERANCE
 
-    def test_vide_real_kernel_complex_a(self):
+    def test_vide_real_kernel_complex_a(self, quadrature):
         """Real kernel, complex a, complex init."""
         time_step = 0.01
         coll_divs = 3
@@ -347,7 +347,7 @@ class TestMixedInputs:
         a = 1j * np.ones(N)  # complex
         exact = np.exp((1 + 1j) * times)
         g = (exact * (1 + 1j) / (2 + 1j) + np.exp(-times) / (2 + 1j))
-        soln = solve_vide(kernel=kernel, a=a, g=g, y0=1.0 + 0j, dt=time_step, coll_setting=(coll_divs, coll_choices)).y
+        soln = solve_vide(kernel=kernel, a=a, g=g, y0=1.0 + 0j, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, coll_choices)).y
         assert np.iscomplexobj(soln)
         assert np.max(np.abs(soln - exact)) < TOLERANCE
 
@@ -356,7 +356,7 @@ class TestMixedInputs:
 # Real inputs still produce real outputs
 # ---------------------------------------------------------------------------
 
-def test_real_inputs_stay_real():
+def test_real_inputs_stay_real(quadrature):
     """Passing real arrays must return real (not complex) arrays."""
     time_step = 0.05
     coll_divs = 3
@@ -364,7 +364,7 @@ def test_real_inputs_stay_real():
     times = _times(time_step, coll_divs)
     kernel = np.exp(-times)
     g = np.sin(times) - 0.5 * (np.exp(-times) + np.sin(times) - np.cos(times))
-    soln = solve_vie2(kernel=kernel, g=g, dt=time_step, coll_setting=(coll_divs, coll_choices)).y
+    soln = solve_vie2(kernel=kernel, g=g, dt=time_step, quadrature=quadrature, coll_setting=(coll_divs, coll_choices)).y
     assert not np.iscomplexobj(soln)
     assert soln.dtype == np.float64
 
@@ -401,8 +401,8 @@ class TestVIE2ComplexMatrix:
         self.exact[:, 0, 1] = exact_1d
         self.exact[:, 1, 1] = exact_1d
 
-    def test_accuracy(self):
-        soln = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, coll_setting=(self.coll_divs, self.coll_choices)).y
+    def test_accuracy(self, quadrature):
+        soln = solve_vie2(kernel=self.kernel, g=self.g, dt=self.time_step, quadrature=quadrature, coll_setting=(self.coll_divs, self.coll_choices)).y
         assert np.iscomplexobj(soln)
         assert soln.shape == self.exact.shape
         assert np.max(np.abs(soln - self.exact)) < TOLERANCE
@@ -418,7 +418,7 @@ class TestVIE2ComplexMatrix:
 # to confirm the workflow itself runs cleanly when N >= coll_divs**2 + 1.
 # ---------------------------------------------------------------------------
 
-def test_complex_matrix_valued_d49_workflow_smoke():
+def test_complex_matrix_valued_d49_workflow_smoke(quadrature):
     d = 49
     N = 19  # = 2 * coll_divs**2 + 1 for coll_divs=3, so mesh_divs = 2
 
@@ -434,13 +434,13 @@ def test_complex_matrix_valued_d49_workflow_smoke():
     L = (rng.standard_normal((d, d))
          + 1j * rng.standard_normal((d, d))).astype(np.complex128)
 
-    K = solve_vie1(g=lhs, kernel=C, dt=1.0, coll_setting=(3, [1, 2, 3])).y
+    K = solve_vie1(g=lhs, kernel=C, dt=1.0, quadrature=quadrature, coll_setting=(3, [1, 2, 3])).y
     assert K.shape == (N, d, d)
     assert K.dtype == np.complex128
     assert np.all(np.isfinite(K))
 
     a_arr = np.broadcast_to(L, K.shape).copy()
-    soln = solve_vide(kernel=K, a=a_arr, y0=C[0], dt=1.0, coll_setting=(3, [0, 1, 2, 3])).y
+    soln = solve_vide(kernel=K, a=a_arr, y0=C[0], dt=1.0, quadrature=quadrature, coll_setting=(3, [0, 1, 2, 3])).y
     assert soln.shape == (N, d, d)
     assert soln.dtype == np.complex128
     assert np.all(np.isfinite(soln))
@@ -456,7 +456,7 @@ def test_complex_matrix_valued_d49_workflow_smoke():
 # polynomial coefficients).
 # ---------------------------------------------------------------------------
 
-def test_complex_vector_d5_runtime_return_function_matches_scalar():
+def test_complex_vector_d5_runtime_return_function_matches_scalar(quadrature):
     N, ts, d = 91, 0.01, 5
     t = np.linspace(0.0, ts * (N - 1), N)
     K = np.zeros((N, d, d), dtype=complex)
@@ -465,11 +465,11 @@ def test_complex_vector_d5_runtime_return_function_matches_scalar():
         K[:, i, i] = (0.5 + 0.3j) * np.exp(-(1 + 0.1 * i) * t)
         g[:, i] = np.sin(t + 0.1 * i) + 1j * np.cos(0.2 * i * t)
 
-    soln, f_vec = with_sol(run(solve_vie2, show_warnings=False, kernel=K, g=g, dt=ts, coll_setting=(3, [0, 1, 2])))
+    soln, f_vec = with_sol(run(solve_vie2, show_warnings=False, kernel=K, g=g, dt=ts, quadrature=quadrature, coll_setting=(3, [0, 1, 2])))
     assert soln.dtype == np.complex128
 
     for i in range(d):
-        s_soln, f_s = with_sol(run(solve_vie2, show_warnings=False, kernel=K[:, i, i].copy(), g=g[:, i].copy(), dt=ts, coll_setting=(3, [0, 1, 2])))
+        s_soln, f_s = with_sol(run(solve_vie2, show_warnings=False, kernel=K[:, i, i].copy(), g=g[:, i].copy(), dt=ts, quadrature=quadrature, coll_setting=(3, [0, 1, 2])))
         assert np.max(np.abs(soln[:, i] - s_soln)) < 1e-9
         for tt in (0.13, 0.45, 0.77):
             v_vec = np.asarray(f_vec(tt)).ravel()[i]

@@ -29,6 +29,14 @@ class _VolesWarningLog:
         return self._new()
 
 
+@pytest.fixture(params=["product", "collocation"])
+def quadrature(request):
+    """Run a sampled-input test under both schemes. Tests that omit
+    ``quadrature`` get the default, product, and never reach the collocation
+    drivers (compiled settings, d > 8 runtime path, Numba fallback)."""
+    return request.param
+
+
 @pytest.fixture
 def voles_warnings():
     """Record every warning for the duration of the test (overriding the

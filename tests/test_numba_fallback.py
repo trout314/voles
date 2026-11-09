@@ -3,8 +3,8 @@ compiled into the D extension, i.e. coll_divs >= 5).
 
 The rest of the suite only checks the fallback's *warning text* (see
 test_show_warnings.py); nothing asserted that the fallback actually solves
-the equations. These tests compare against analytic solutions, skipping when
-numba is not installed (the scalar dispatch then raises NotImplementedError).
+the equations. These tests compare against analytic solutions. They need
+quadrature="collocation": product quadrature has no use for the fallback.
 
 Also pins the error behavior just past the compiled range for the vector
 path, which has no fallback.
@@ -17,19 +17,11 @@ from conftest import (TOLERANCE, as_array,
 from conftest import run
 
 
-def _skip_if_no_numba(exc):
-    if "numba" in str(exc).lower() or isinstance(exc, NotImplementedError):
-        pytest.skip("numba not available")
-    raise exc
-
-
 def test_numba_vie2_accuracy():
     d = as_array(VIE2_SPEC_SMOOTH, time_step=0.002, coll_divs=5,
                  coll_choices=[0, 1, 2], num_blocks=8)
-    try:
-        soln = run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    except NotImplementedError as exc:
-        _skip_if_no_numba(exc)
+    pytest.importorskip("numba")
+    soln = run(solve_vie2, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature="collocation", coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -38,20 +30,16 @@ def test_numba_vie1_accuracy():
     # nodes (3/5, 4/5, 1) give amplification |rho_m| = 0.
     d = as_array(VIE1_SPEC_DAMPED, time_step=0.002, coll_divs=5,
                  coll_choices=[3, 4, 5], num_blocks=8)
-    try:
-        soln = run(solve_vie1, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    except (NotImplementedError, ValueError) as exc:
-        _skip_if_no_numba(exc)
+    pytest.importorskip("numba")
+    soln = run(solve_vie1, show_warnings=False, kernel=d["kernel"], g=d["g"], dt=d["time_step"], quadrature="collocation", coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
 def test_numba_vide_accuracy():
     d = as_array(VIDE_SPEC_SMOOTH, time_step=0.002, coll_divs=5,
                  coll_choices=[1, 2, 3], num_blocks=8)
-    try:
-        soln = run(solve_vide, show_warnings=False, kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], coll_setting=(d["coll_divs"], d["coll_choices"])).y
-    except NotImplementedError as exc:
-        _skip_if_no_numba(exc)
+    pytest.importorskip("numba")
+    soln = run(solve_vide, show_warnings=False, kernel=d["kernel"], a=d["a"], g=d["g"], y0=d["soln_init_value"], dt=d["time_step"], quadrature="collocation", coll_setting=(d["coll_divs"], d["coll_choices"])).y
     assert np.max(np.abs(soln - d["exact"])) < TOLERANCE
 
 
@@ -68,4 +56,3 @@ def test_vector_beyond_compiled_settings_raises():
     g = np.stack([d["g"], d["g"]], axis=1)
     with pytest.raises(NotImplementedError, match="is not compiled into the extension"):
         run(solve_vie2, show_warnings=False, kernel=kernel, g=g, dt=d["time_step"], coll_setting=(5, [0, 1, 2]), quadrature="collocation").y
-    assert issubclass(NotImplementedError, RuntimeError)

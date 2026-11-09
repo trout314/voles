@@ -171,27 +171,27 @@ def test_nan_input_is_rejected(solver, which):
 
 # K = 0 makes each step's collocation matrix exactly singular; these tests
 # check that the solver raises LinAlgError rather than returning garbage.
-def test_vie1_singular_matrix_raises_linalgerror():
+def test_vie1_singular_matrix_raises_linalgerror(quadrature):
     d = 9
     coll_divs = 3
     N = coll_divs**2 + 1  # one mesh interval
     kernel = np.zeros((N, d, d))
     g = np.outer(np.arange(N), np.ones(d))
     with pytest.raises(np.linalg.LinAlgError):
-        run(solve_vie1, show_warnings=False, kernel=kernel, g=g, coll_setting=(coll_divs, [1, 2, 3])).y
+        run(solve_vie1, show_warnings=False, kernel=kernel, g=g, quadrature=quadrature, coll_setting=(coll_divs, [1, 2, 3])).y
 
 
-def test_vie1_singular_matrix_scalar_raises_linalgerror():
-    # Compile-time (d <= 8) path, scalar driver.
+def test_vie1_singular_matrix_scalar_raises_linalgerror(quadrature):
+    # Scalar driver under collocation.
     with pytest.raises(np.linalg.LinAlgError):
-        run(solve_vie1, show_warnings=False, kernel=np.zeros(10), g=np.arange(10.0), coll_setting=(3, [1, 2, 3])).y
+        run(solve_vie1, show_warnings=False, kernel=np.zeros(10), g=np.arange(10.0), quadrature=quadrature, coll_setting=(3, [1, 2, 3])).y
 
 
-def test_vie1_singular_matrix_d2_raises_linalgerror():
-    # Compile-time (d <= 8) path, vector driver.
+def test_vie1_singular_matrix_d2_raises_linalgerror(quadrature):
+    # Compile-time (d <= 8) vector driver under collocation.
     N = 10
     with pytest.raises(np.linalg.LinAlgError):
-        run(solve_vie1, show_warnings=False, kernel=np.zeros((N, 2, 2)), g=np.outer(np.arange(N), np.ones(2)), coll_setting=(3, [1, 2, 3])).y
+        run(solve_vie1, show_warnings=False, kernel=np.zeros((N, 2, 2)), g=np.outer(np.arange(N), np.ones(2)), quadrature=quadrature, coll_setting=(3, [1, 2, 3])).y
 
 
 def _near_singular_kernel(d, N=10):
@@ -208,14 +208,14 @@ def _near_singular_kernel(d, N=10):
 
 
 @pytest.mark.parametrize("d", [2, 9], ids=["compile-time", "runtime"])
-def test_vie1_near_singular_matrix_raises_linalgerror(d):
+def test_vie1_near_singular_matrix_raises_linalgerror(d, quadrature):
     """Near-singular (not exactly singular) systems must raise on both LU
     backends: the pure-D path uses a relative pivot threshold, and the
     LAPACK path applies the same threshold to dgesv_'s U diagonal (dgesv_
     itself only reports exactly-zero pivots)."""
     K = _near_singular_kernel(d)
     with pytest.raises(np.linalg.LinAlgError):
-        run(solve_vie1, show_warnings=False, kernel=K, g=np.outer(np.arange(len(K)), np.ones(d)), coll_setting=(3, [1, 2, 3])).y
+        run(solve_vie1, show_warnings=False, kernel=K, g=np.outer(np.arange(len(K)), np.ones(d)), quadrature=quadrature, coll_setting=(3, [1, 2, 3])).y
 
 
 # ---------------------------------------------------------------------------
