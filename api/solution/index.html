@@ -1509,7 +1509,7 @@ the solution anywhere in <code>[0, T]</code>.</p>
           <tr class="doc-section-item">
             <td><code><span title="voles.VolterraSolution.t">t</span></code></td>
             <td>
-                  <code>(<span title="ndarray">ndarray</span>, <span title="shape">shape</span>(<span title="K">K</span>))</code>
+                  <code>(ndarray, shape(K))</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1521,7 +1521,7 @@ sampled inputs, the mesh breakpoints for callable inputs. Read-only.</p>
           <tr class="doc-section-item">
             <td><code><span title="voles.VolterraSolution.y">y</span></code></td>
             <td>
-                  <code>(<span title="ndarray">ndarray</span>, <span title="shape">shape</span>(<span title="K">K</span>, *<span title="shape">shape</span>))</code>
+                  <code>(ndarray, shape(K, *shape))</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1535,7 +1535,7 @@ solution.</p>
           <tr class="doc-section-item">
             <td><code><span title="voles.VolterraSolution.mesh">mesh</span></code></td>
             <td>
-                  <code>(<span title="ndarray">ndarray</span>, <span title="shape">shape</span>(<span title="M">M</span> + 1))</code>
+                  <code>(ndarray, shape(M + 1))</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1546,7 +1546,7 @@ solution.</p>
           <tr class="doc-section-item">
             <td><code><span title="voles.VolterraSolution.node_times">node_times</span></code></td>
             <td>
-                  <code>(<span title="ndarray">ndarray</span>, <span title="shape">shape</span>(<span title="M">M</span>, <span title="p">p</span>))</code>
+                  <code>(ndarray, shape(M, p))</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1559,7 +1559,7 @@ own sample grid, so they can differ from <code>mesh[n] + nodes * h_n</code>.</p>
           <tr class="doc-section-item">
             <td><code><span title="voles.VolterraSolution.node_values">node_values</span></code></td>
             <td>
-                  <code>(<span title="ndarray">ndarray</span>, <span title="shape">shape</span>(<span title="M">M</span>, <span title="p">p</span>, *<span title="shape">shape</span>))</code>
+                  <code>(ndarray, shape(M, p, *shape))</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1570,7 +1570,7 @@ own sample grid, so they can differ from <code>mesh[n] + nodes * h_n</code>.</p>
           <tr class="doc-section-item">
             <td><code><span title="voles.VolterraSolution.coefficients">coefficients</span></code></td>
             <td>
-                  <code>(<span title="ndarray">ndarray</span>, <span title="shape">shape</span>(<span title="M">M</span>, <span title="P">P</span>, *<span title="shape">shape</span>))</code>
+                  <code>(ndarray, shape(M, P, *shape))</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -1583,7 +1583,7 @@ monomial coefficients, lowest degree first.</p>
           <tr class="doc-section-item">
             <td><code><span title="voles.VolterraSolution.nodes">nodes</span></code></td>
             <td>
-                  <code>(<span title="ndarray">ndarray</span>, <span title="shape">shape</span>(<span title="p">p</span>))</code>
+                  <code>(ndarray, shape(p))</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2524,7 +2524,7 @@ breakpoint; <code>sol(t)</code> gives their mean unless asked otherwise:</p>
                 <code>t</code>
             </td>
             <td>
-                  <code><span title="float">float</span> or <span title="array_like">array_like</span></code>
+                  <code><span title="float">float</span> or array_like</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -2571,7 +2571,7 @@ solution the three agree to rounding.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code>(<span title="float">float</span>, <span title="complex">complex</span> or <span title="ndarray">ndarray</span>)</code>
+                  <code>(<span title="float">float</span>, <span title="complex">complex</span> or ndarray)</code>
             </td>
             <td>
               <div class="doc-md-description">
