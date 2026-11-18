@@ -16,6 +16,13 @@
 - The Numba fallback (collocation settings not compiled into the extension)
   applies the same singularity test. It used `np.linalg.solve`, which reports
   only exactly singular systems.
+- Error and warning messages no longer use internal or 0.10 names. A singular
+  collocation system raises `LinAlgError` naming the public solver
+  (`solve_vie2: singular or nearly singular coefficient matrix ...`), with the
+  internal routine's error kept as the cause; it named the internal routine,
+  for callable inputs a `function_solve_*` D entry point. The missing-SciPy
+  `ImportError` no longer mentions `function_solve_*`, and the rho = 1
+  `AccuracyWarning` writes the setting as `coll_setting=(divs, choices)`.
 
 ### Documentation
 - The API contract (§6) said a callable kernel that is non-finite where the

@@ -37,7 +37,7 @@ needs_numba = pytest.mark.skipif(not HAVE_NUMBA, reason="numba not available")
 # Several settings here have rho_{m-1} = +1 on purpose (admitted at one order
 # lower); their AccuracyWarning is tested in test_vie1_product.py.
 pytestmark = pytest.mark.filterwarnings(
-    "ignore:collocation setting .* has amplification factor rho = 1:voles.AccuracyWarning")
+    "ignore:coll_setting=.* has amplification factor rho = 1:voles.AccuracyWarning")
 
 # Node sets with c_m = 1 and |rho_{m-1}| <= 1, with rho_{m-1}.
 CONTINUOUS_SETTINGS = [

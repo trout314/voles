@@ -71,10 +71,12 @@ def test_numba_numerically_singular_systems_raise(relative_offset):
     pytest.importorskip("numba")
     c = 4.0 * (1.0 + relative_offset) * np.ones(_NB_N)
     kw = dict(g=np.ones(_NB_N), dt=0.01, quadrature="collocation", coll_setting=(5, [5]))
-    with pytest.raises(np.linalg.LinAlgError, match="numba fallback: singular"):
+    with pytest.raises(np.linalg.LinAlgError, match="^solve_vie2: singular") as exc:
         solve_vie2(kernel=c, **kw)
-    with pytest.raises(np.linalg.LinAlgError, match="numba fallback: singular"):
+    assert "numba fallback: singular" in str(exc.value.__cause__)
+    with pytest.raises(np.linalg.LinAlgError, match="^solve_vide: singular") as exc:
         solve_vide(kernel=np.zeros(_NB_N), a=c, y0=1.0, **kw)
+    assert "numba fallback: singular" in str(exc.value.__cause__)
 
 
 @pytest.mark.filterwarnings("ignore::voles.PerformanceWarning")

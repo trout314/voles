@@ -105,9 +105,9 @@ def _escalate_complex_warning(fn):
 
 
 _SCIPY_IMPORT_ERR = (
-    "function_solve_* requires scipy, which is a core dependency and should "
-    "normally be present. If you used a slim/--no-deps install, add it via "
-    "`pip install scipy`."
+    "Solving with callable inputs (kernel/g/a given as functions) requires "
+    "scipy, which is a core dependency and should normally be present. If you "
+    "used a slim/--no-deps install, add it via `pip install scipy`."
 )
 
 

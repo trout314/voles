@@ -230,7 +230,7 @@ def _singular_data(K_value, d, m, N=9):
 @_SINGULAR_SHAPES
 def test_vie2_singular_system_raises_linalgerror(d, m, quadrature):
     K, g, _ = _singular_data(4.0, d, m)
-    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+    with pytest.raises(np.linalg.LinAlgError, match="^solve_vie2: singular"):
         solve_vie2(kernel=K, g=g, dt=0.25, quadrature=quadrature, coll_setting=(1, [1]))
 
 
@@ -240,14 +240,14 @@ def test_vie2_singular_system_raises_linalgerror(d, m, quadrature):
 @pytest.mark.parametrize("relative_offset", [0.0, 1e-15])
 def test_vie2_numerically_singular_raises(relative_offset, d, m, quadrature):
     K, g, _ = _singular_data(4.0 * (1.0 + relative_offset), d, m)
-    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+    with pytest.raises(np.linalg.LinAlgError, match="^solve_vie2: singular"):
         solve_vie2(kernel=K, g=g, dt=0.25, quadrature=quadrature, coll_setting=(1, [1]))
 
 
 @pytest.mark.parametrize("quadrature", ["collocation", "product"])
 def test_vide_numerically_singular_raises(quadrature):
     a = 4.0 * (1.0 + 1e-15) * np.ones(9)
-    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+    with pytest.raises(np.linalg.LinAlgError, match="^solve_vide: singular"):
         solve_vide(kernel=np.zeros(9), g=np.ones(9), a=a, y0=1.0, dt=0.25, quadrature=quadrature,
                    coll_setting=(1, [1]))
 
@@ -256,18 +256,18 @@ def test_vide_numerically_singular_raises(quadrature):
 def test_numerically_singular_callable_problems_raise(d):
     eye, one = (np.eye(d), np.ones(d)) if d else (1.0, 1.0)
     kw = dict(mesh=np.linspace(0, 1, 5), coll_nodes=[1.0])
-    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+    with pytest.raises(np.linalg.LinAlgError, match="^solve_vie2: singular"):
         solve_vie2(kernel=lambda u: 4.0 * eye, g=lambda t: one, **kw)
-    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+    with pytest.raises(np.linalg.LinAlgError, match="^solve_vide: singular"):
         solve_vide(kernel=lambda u: 0.0 * eye, a=lambda t: 4.0 * eye, g=lambda t: one, y0=one, **kw)
 
 
 def test_numerically_singular_final_interval_raises():
     """dt = 1/3 with three leftover samples: a final interval of width 1."""
     kw = dict(g=np.ones(4), dt=1 / 3, quadrature="product", coll_setting=(1, [1]), samples_per_interval=2)
-    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+    with pytest.raises(np.linalg.LinAlgError, match="^solve_vie2: singular"):
         solve_vie2(kernel=np.ones(4), **kw)
-    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+    with pytest.raises(np.linalg.LinAlgError, match="^solve_vide: singular"):
         solve_vide(kernel=np.zeros(4), a=np.ones(4), y0=1.0, **kw)
 
 
@@ -297,7 +297,7 @@ def test_vide_singular_system_raises_linalgerror(d, m, quadrature):
     a = 4.0 * np.ones(len(K))
     if d:
         a = a[:, None, None] * np.eye(d)
-    with pytest.raises(np.linalg.LinAlgError, match="singular"):
+    with pytest.raises(np.linalg.LinAlgError, match="^solve_vide: singular"):
         solve_vide(kernel=K, g=g, a=a, y0=y0, dt=0.25, quadrature=quadrature, coll_setting=(1, [1]))
 
 

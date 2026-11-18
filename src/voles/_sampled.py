@@ -65,7 +65,7 @@ def _warn_reduced_order(coll_divs, coll_choices, force_continuous, diagnose):
     if diagnose and _vie1_rho(coll_divs, coll_choices, continuous=force_continuous) == 1:
         m = len(coll_choices)
         nominal = m + 1 if force_continuous else m
-        _warn(f"collocation setting ({coll_divs}, {coll_choices}) "
+        _warn(f"coll_setting=({coll_divs}, {coll_choices}) "
               f"has amplification factor rho = 1 exactly, so the "
               f"{'continuous' if force_continuous else 'discontinuous'} VIE-1 method converges "
               f"at order {nominal - 1} rather than {nominal}.", AccuracyWarning)
