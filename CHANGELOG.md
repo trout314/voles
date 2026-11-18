@@ -23,6 +23,14 @@
   for callable inputs a `function_solve_*` D entry point. The missing-SciPy
   `ImportError` no longer mentions `function_solve_*`, and the rho = 1
   `AccuracyWarning` writes the setting as `coll_setting=(divs, choices)`.
+- A solve with callable inputs no longer clears Python's record of warnings
+  already shown, so in a loop each voles warning appears once per call site
+  (Python's default), as it already did for sampled inputs; before, every
+  solve repeated it. The solver changed the warning filters on every call.
+  A callable that returns a complex value the multi-point sampling missed
+  now raises the documented `ValueError` on every path: under adaptive
+  quadrature it raised `TypeError` or `UFuncTypeError`, or lost the
+  imaginary part.
 
 ### Documentation
 - The API contract (§6) said a callable kernel that is non-finite where the
