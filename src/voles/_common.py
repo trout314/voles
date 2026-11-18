@@ -181,6 +181,6 @@ def _scalar_init(value):
     arr = np.asarray(value, dtype=float)
     if arr.size != 1:
         raise ValueError(
-            f"soln_init_value must be a single number for a scalar equation, "
+            f"y0 must be a single number for a scalar equation, "
             f"got shape {arr.shape}")
     return float(arr.reshape(()))

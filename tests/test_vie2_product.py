@@ -258,7 +258,7 @@ def test_blocks_are_transformed_in_place_without_a_second_copy():
 
 
 def test_linalg_error_names_the_second_kind_solver(monkeypatch):
-    """A singular local system is reported for solve_VIE_2, not for the
+    """A singular local system is reported for solve_vie2, not for the
     first-kind block driver it reuses. The diagonal block is zeroed after
     assembly so the singularity is exact on every platform."""
     real_init = _product.ProductSetup.__init__
@@ -269,7 +269,7 @@ def test_linalg_error_names_the_second_kind_solver(monkeypatch):
     monkeypatch.setattr(_product.ProductSetup, "__init__", zero_diagonal)
     dt, q = 0.05, 1
     N = n_samples(1, 5)
-    with pytest.raises(np.linalg.LinAlgError, match="solve_vie2"):
+    with pytest.raises(np.linalg.LinAlgError, match="^solve_vie2: singular"):
         run(solve_vie2, show_warnings=False, kernel=np.exp(-dt * np.arange(N)), g=np.ones(N), dt=dt, coll_setting=(q, [1]), quadrature="product").y
 
 

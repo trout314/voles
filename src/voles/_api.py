@@ -474,13 +474,23 @@ def _solve(equation, *, kernel, g, a=None, y0=None, continuous=False, dt, coll_s
     if equation == "vide" and y0 is None:
         raise TypeError("solve_vide: y0 is required")
     common = dict(kernel=kernel, g=g, a=a, y0=y0, continuous=continuous, a_const=a_const)
-    if regime == "sampled":
-        return _solve_sampled(equation, dt=dt, coll_setting=coll_setting, quadrature=quadrature,
-                              samples_per_interval=samples_per_interval,
-                              kernel_interp_degree=kernel_interp_degree, **common)
-    return _solve_functional(equation, mesh=mesh, coll_nodes=coll_nodes,
-                             kernel_singularity=kernel_singularity,
-                             reuse_adaptive_blocks=reuse_adaptive_blocks, **common)
+    try:
+        if regime == "sampled":
+            return _solve_sampled(equation, dt=dt, coll_setting=coll_setting,
+                                  quadrature=quadrature,
+                                  samples_per_interval=samples_per_interval,
+                                  kernel_interp_degree=kernel_interp_degree, **common)
+        return _solve_functional(equation, mesh=mesh, coll_nodes=coll_nodes,
+                                 kernel_singularity=kernel_singularity,
+                                 reuse_adaptive_blocks=reuse_adaptive_blocks, **common)
+    except np.linalg.LinAlgError as e:
+        # The engines name the internal routine that failed (a D entry point,
+        # a NumPy stepper, the numba fallback); report it for the public
+        # solver and keep the internal error as the cause.
+        raise np.linalg.LinAlgError(
+            f"solve_{equation}: singular or nearly singular coefficient matrix in a "
+            f"collocation step; the discretized equation cannot be solved reliably "
+            f"with this kernel and step size") from e
 
 
 # ---------------------------------------------------------------------------
