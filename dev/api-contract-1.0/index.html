@@ -1852,7 +1852,9 @@ solve_vie1(*, kernel, g=None, continuous=False, y0=None,
     error.</li>
 <li>Callable kernels are <strong>not</strong> checked: a weakly singular kernel
     legitimately returns inf at u = 0, which the quadrature never samples.
-    Non-finite kernel values elsewhere give non-finite results.</li>
+    A kernel that is non-finite where the quadrature does sample it raises
+    <code>ValueError</code>, suggesting <code>kernel_singularity</code> in case the kernel is
+    singular there.</li>
 </ul>
 <h2 id="7-kernel-convention-and-reserved-extensions">7. Kernel convention and reserved extensions</h2>
 <ul>
