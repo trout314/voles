@@ -22,9 +22,7 @@ solvers work without it.
 
 from __future__ import annotations
 
-import contextlib
 import functools
-import warnings
 from concurrent.futures import ThreadPoolExecutor
 
 from ._common import (_column_workers, _warn_g_start_columns,
@@ -36,13 +34,6 @@ from numpy.polynomial import polynomial as npp
 from ._solution import _Pieces, _complex_solution
 from . import _validate as _v
 from ._warnings import _warn, AccuracyWarning, PerformanceWarning, VolesWarning
-
-
-_ComplexWarning: type[Warning]
-try:
-    _ComplexWarning = np.exceptions.ComplexWarning
-except AttributeError:  # numpy < 1.25
-    _ComplexWarning = np.ComplexWarning  # type: ignore[attr-defined, unused-ignore]
 
 
 # Gauss-Legendre order of the smooth-block quadrature (formerly the private
@@ -70,38 +61,43 @@ def _scalar_callable_value(value, t, name="g"):
 _scalar_g_value = _scalar_callable_value
 
 
-def _escalate_complex_warning(fn):
-    """Decorator: while ``fn`` runs, escalate numpy ComplexWarning to an
-    exception, then catch it and re-raise as a clear ValueError.
+_LATE_COMPLEX_MSG = (
+    "Complex values were encountered during the real-path solver build, but "
+    "multi-point sampling of kernel/g/a did not detect them. Make your callables "
+    "return a consistent dtype (either always complex or always real) across the "
+    "integration domain and re-run.")
 
-    Multi-point sampling can miss kernels whose complex range falls outside the
-    sample u-values (a real false negative of any finite sampling scheme). When
-    the real-path build then encounters a complex value, numpy's default behavior
-    is to lossy-cast it to float64 with a ``ComplexWarning`` -- which most users
-    won't see. This wrapper turns that silent data loss into a loud, actionable
-    error: detection guarantees become "either fast path via sampling, or clean
-    error" with no third path of silently wrong answers.
 
-    Note: the complex dispatch happens *inside* fn (before the real-path build),
-    so the wrapped function still routes complex inputs through block
-    decomposition normally. This wrapper only fires when sampling missed and the
-    real-path build hits a complex value.
-    """
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        with warnings.catch_warnings():
-            warnings.filterwarnings('error', category=_ComplexWarning)
-            try:
-                return fn(*args, **kwargs)
-            except _ComplexWarning as e:
-                raise ValueError(
-                    "Complex values were encountered during the real-path "
-                    "solver build, but multi-point sampling of kernel/g/a "
-                    "did not detect them. Make your callables return a "
-                    "consistent dtype (either always complex or always real) "
-                    "across the integration domain and re-run."
-                ) from e
-    return wrapper
+def _real_only(fn):
+    """Wrap a user callable on the real path so a complex return raises a
+    clear ValueError.
+
+    Multi-point sampling can miss callables whose complex range falls outside
+    the sample points (a false negative of any finite sampling scheme). The
+    real-path build would then cast the value to float64 and drop its imaginary
+    part (numpy's ComplexWarning) or fail inside quad with a TypeError. Checking
+    each return here turns both into the same actionable error, with no path
+    to a silently wrong answer.
+
+    This replaces escalating ComplexWarning with ``warnings.catch_warnings``:
+    changing the warning filters clears Python's record of warnings already
+    shown, so every solve repeated every warning in a loop, and it is not
+    thread-safe."""
+    if fn is None:
+        return None
+
+    def checked(*args):
+        value = fn(*args)
+        # The kernel is called once per quadrature point on adaptive blocks,
+        # so the common real returns (a float, a real ndarray) skip
+        # np.iscomplexobj, which is slow on a Python float.
+        if isinstance(value, float) or (type(value) is np.ndarray
+                                        and value.dtype.kind != "c"):
+            return value
+        if np.iscomplexobj(value):
+            raise ValueError(_LATE_COMPLEX_MSG)
+        return value
+    return checked
 
 
 _SCIPY_IMPORT_ERR = (
@@ -152,25 +148,6 @@ _QUAD_VEC_OPTS_REUSE = {'limit': 200, 'epsabs': 1e-200, 'epsrel': 1e-12}
 # subdivision limit; the vector builder therefore keeps the 1e-200 floor in
 # its default options too.
 _QUAD_VEC_OPTS_DEFAULT = {'limit': 100, 'epsabs': 1e-200, 'epsrel': 1.49e-8}
-
-
-@contextlib.contextmanager
-def _reuse_quad_warnings_suppressed(active):
-    """Silence scipy's IntegrationWarning around a tightened reuse quadrature.
-
-    The 1e-12 reuse tolerances sit near QUADPACK's roundoff floor, so on
-    harder singular integrands quad/quad_vec may report non-convergence while
-    still returning its best-obtainable value -- which is exactly what the
-    reuse policy wants stored. The default-tolerance path never triggers
-    these, so with ``active`` False this is a no-op and any warning from a
-    default-tolerance quadrature propagates as before."""
-    if not active:
-        yield
-        return
-    from scipy.integrate import IntegrationWarning
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', IntegrationWarning)
-        yield
 
 
 # ---------------------------------------------------------------------------
@@ -769,10 +746,16 @@ def _build_w_with_basis_scalar(kernel, mesh_breakpoints: np.ndarray,
             kwargs = dict(sing_quad_opts)
             if interior_sing:
                 kwargs['points'] = interior_sing
-            with _reuse_quad_warnings_suppressed(reuse_sing):
-                val, _err = get_quad()(make_integrand(tau, t_l, h_l, k, sing_pts),
-                                       a_int, b_int, **kwargs)
-            W[n, i, l, k] = val
+            # The 1e-12 reuse tolerances sit near QUADPACK's roundoff floor, so
+            # on harder singular integrands quad may report non-convergence
+            # while still returning its best obtainable value, which is what
+            # the reuse policy wants stored. full_output makes quad return that
+            # report instead of issuing an IntegrationWarning (silencing it with
+            # warnings.catch_warnings would clear Python's record of warnings
+            # already shown). The default-tolerance path keeps the warning.
+            W[n, i, l, k] = get_quad()(make_integrand(tau, t_l, h_l, k, sing_pts),
+                                       a_int, b_int, full_output=int(reuse_sing),
+                                       **kwargs)[0]
 
     def jacobi_vals(tau, t_l, h_l, a_int, b_int, s0, alpha):
         """Two-order Gauss-Jacobi estimates for a block touched by one
@@ -1145,10 +1128,10 @@ def _build_w_with_basis_vector(kernel, mesh_breakpoints: np.ndarray,
             kwargs = dict(sing_quad_opts)
             if interior_sing:
                 kwargs['points'] = interior_sing
-            with _reuse_quad_warnings_suppressed(reuse_sing):
-                val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, k,
-                                                          sing_pts),
-                                           a_int, b_int, **kwargs)
+            # quad_vec reports non-convergence only through full_output; it
+            # never issues an IntegrationWarning.
+            val, _err = get_quad_vec()(make_integrand(tau, t_l, h_l, k, sing_pts),
+                                       a_int, b_int, **kwargs)
             W[n, i, l, k, :, :] = val
 
     def jacobi_vals(tau, t_l, h_l, a_int, b_int, s0, alpha):
@@ -1663,7 +1646,6 @@ def _recombine_complex_y(y_real: np.ndarray, d_orig: int) -> np.ndarray:
     return y_real[..., :d_orig] + 1j * y_real[..., d_orig:]
 
 
-@_escalate_complex_warning
 def vie2(*, kernel, g, mesh, nodes, kernel_singularity, reuse_adaptive_blocks):
     """y = g + K * y on ``mesh`` with collocation ``nodes`` (the 1.0 layer's
     validated inputs). Returns ``(node_values, pieces)``."""
@@ -1676,6 +1658,8 @@ def vie2(*, kernel, g, mesh, nodes, kernel_singularity, reuse_adaptive_blocks):
             mesh=mesh_breakpoints, nodes=node_pos, kernel_singularity=kernel_singularity,
             reuse_adaptive_blocks=reuse_adaptive_blocks)
         return _recombine_complex_y(y_real, d_orig), _complex_solution(pieces, d_orig)
+    # Sampling found no complex values; a complex return from here on is an error.
+    kernel, g = _real_only(kernel), _real_only(g)
 
     M = len(mesh_breakpoints) - 1
     p = len(node_pos)
@@ -1758,7 +1742,6 @@ def _vide_solution(y_prime: np.ndarray, y_boundary: np.ndarray,
     return _Pieces.from_unit_coefs(unit, mesh_breakpoints, d=d, m=m)
 
 
-@_escalate_complex_warning
 def vide(*, kernel, a, g, y0, mesh, nodes, kernel_singularity, reuse_adaptive_blocks):
     """y' = a y + g + K * y, y(0) = y0, on ``mesh`` with collocation ``nodes``
     (the 1.0 layer's validated inputs). Returns ``(node_values, pieces)``."""
@@ -1772,6 +1755,8 @@ def vide(*, kernel, a, g, y0, mesh, nodes, kernel_singularity, reuse_adaptive_bl
             mesh=mesh_breakpoints, nodes=node_pos, kernel_singularity=kernel_singularity,
             reuse_adaptive_blocks=reuse_adaptive_blocks)
         return _recombine_complex_y(y_real, d_orig), _complex_solution(pieces, d_orig)
+    # Sampling found no complex values; a complex return from here on is an error.
+    kernel, a, g = _real_only(kernel), _real_only(a), _real_only(g)
 
     M = len(mesh_breakpoints) - 1
     p = len(node_pos)
@@ -2206,7 +2191,6 @@ def _warn_vie1_g_start_callable(g, g_samples, show_warnings):
     _warn_g_start_columns(g0, scale)
 
 
-@_escalate_complex_warning
 def vie1(*, kernel, g, y0, mesh, nodes, kernel_singularity, reuse_adaptive_blocks, continuous):
     """g = K * y on ``mesh`` with collocation ``nodes`` (the 1.0 layer's
     validated inputs; ``continuous``: the S_m^(0) method with y(0) = y0).
@@ -2223,6 +2207,8 @@ def vie1(*, kernel, g, y0, mesh, nodes, kernel_singularity, reuse_adaptive_block
             mesh=mesh_breakpoints, nodes=node_pos, kernel_singularity=kernel_singularity,
             reuse_adaptive_blocks=reuse_adaptive_blocks, continuous=continuous)
         return _recombine_complex_y(y_real, d_orig), _complex_solution(pieces, d_orig)
+    # Sampling found no complex values; a complex return from here on is an error.
+    kernel, g = _real_only(kernel), _real_only(g)
 
     M = len(mesh_breakpoints) - 1
     p = len(node_pos)
