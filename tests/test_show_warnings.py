@@ -204,3 +204,35 @@ def test_nothing_is_printed(capsys):
     with recorded():
         solve_vie1(**_g0_nonzero_matrix()).y
     assert capsys.readouterr().out == ""
+
+
+_LOOP_CASES = {
+    "vie2 scalar": lambda: solve_vie2(kernel=lambda u: u ** -0.5, g=lambda t: 1.0,
+                                      mesh=np.linspace(0, 1, 9), kernel_singularity=0.0),
+    "vie2 vector": lambda: solve_vie2(kernel=lambda u: u ** -0.5 * np.eye(2) / 4,
+                                      g=lambda t: np.ones(2), mesh=np.linspace(0, 1, 9),
+                                      kernel_singularity=0.0),
+    "vide scalar": lambda: solve_vide(kernel=lambda u: u ** -0.5, a=lambda t: -1.0,
+                                      g=lambda t: 0.0, y0=1.0, mesh=np.linspace(0, 1, 9),
+                                      kernel_singularity=0.0),
+}
+
+
+@pytest.mark.parametrize("case", list(_LOOP_CASES))
+def test_repeated_callable_solve_warns_once_under_default_filter(case):
+    """Python's "default" action shows a warning once per call site, which
+    keeps a solve in a loop from repeating it. That relies on the warning
+    filters not changing in between: any change (warnings.catch_warnings
+    inside the solver included) clears the record of warnings already shown.
+    The callable-input solvers used to do that on every solve, through
+    their ComplexWarning escalation and their IntegrationWarning
+    suppression on the adaptive-reuse path that this mesh exercises."""
+    solve = _LOOP_CASES[case]
+    with warnings.catch_warnings():         # first call: lazy scipy imports
+        warnings.simplefilter("ignore", VolesWarning)
+        solve()
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("default")
+        for _ in range(3):
+            solve()
+    assert len(_voles(rec, AccuracyWarning)) == 1
